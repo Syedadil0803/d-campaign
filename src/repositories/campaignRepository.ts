@@ -5,19 +5,26 @@ import { CampaignConfig } from '@/types/campaign';
 
 export const campaignRepository = {
   async getConfig(): Promise<CampaignConfig | null> {
-    const result = await db.select().from(campaignConfig).where(eq(campaignConfig.id, 'default')).limit(1);
-    
-    if (result.length === 0) {
+    try {
+      const result = await db.select().from(campaignConfig).where(eq(campaignConfig.id, 'default')).limit(1);
+      
+      if (result.length === 0) {
+        console.log('No config found in database');
+        return null;
+      }
+
+      const row = result[0];
+      console.log('Config loaded from database:', row.id);
+      return {
+        version: row.version,
+        announcementBar: row.announcementBar as CampaignConfig['announcementBar'],
+        promoCard: row.promoCard as CampaignConfig['promoCard'],
+        lastUpdated: row.lastUpdated.toISOString(),
+      };
+    } catch (error) {
+      console.error('Database query error:', error);
       return null;
     }
-
-    const row = result[0];
-    return {
-      version: row.version,
-      announcementBar: row.announcementBar as CampaignConfig['announcementBar'],
-      promoCard: row.promoCard as CampaignConfig['promoCard'],
-      lastUpdated: row.lastUpdated.toISOString(),
-    };
   },
 
   async saveConfig(config: CampaignConfig): Promise<boolean> {
@@ -41,6 +48,7 @@ export const campaignRepository = {
           },
         });
       
+      console.log('Config saved to database');
       return true;
     } catch (error) {
       console.error('Failed to save config:', error);
