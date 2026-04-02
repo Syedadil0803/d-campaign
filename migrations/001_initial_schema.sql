@@ -4,15 +4,17 @@ CREATE SCHEMA IF NOT EXISTS "campaign";
 -- Create campaign_config table
 CREATE TABLE IF NOT EXISTS "campaign"."campaign_config" (
   "id" TEXT PRIMARY KEY DEFAULT 'default',
+  "version" TEXT NOT NULL DEFAULT '1.0',
   "announcement_bar" JSONB NOT NULL,
   "promo_card" JSONB NOT NULL,
   "last_updated" TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 -- Insert default config
-INSERT INTO "campaign"."campaign_config" (id, announcement_bar, promo_card, last_updated)
+INSERT INTO "campaign"."campaign_config" (id, version, announcement_bar, promo_card, last_updated)
 VALUES (
   'default',
+  '1.0',
   '{
     "enabled": false,
     "announcements": [

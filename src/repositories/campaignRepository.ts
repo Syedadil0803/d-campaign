@@ -13,6 +13,7 @@ export const campaignRepository = {
 
     const row = result[0];
     return {
+      version: row.version,
       announcementBar: row.announcementBar as CampaignConfig['announcementBar'],
       promoCard: row.promoCard as CampaignConfig['promoCard'],
       lastUpdated: row.lastUpdated.toISOString(),
@@ -25,6 +26,7 @@ export const campaignRepository = {
         .insert(campaignConfig)
         .values({
           id: 'default',
+          version: config.version,
           announcementBar: config.announcementBar as any,
           promoCard: config.promoCard as any,
           lastUpdated: new Date(config.lastUpdated),
@@ -32,6 +34,7 @@ export const campaignRepository = {
         .onConflictDoUpdate({
           target: campaignConfig.id,
           set: {
+            version: config.version,
             announcementBar: config.announcementBar as any,
             promoCard: config.promoCard as any,
             lastUpdated: new Date(config.lastUpdated),
