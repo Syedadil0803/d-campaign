@@ -9,6 +9,7 @@ interface HeaderProps {
   isDarkMode: boolean;
   toggleDarkMode: () => void;
   handleSave: () => void;
+  handleLogout: () => void;
 }
 
 export function Header({
@@ -19,6 +20,7 @@ export function Header({
   isDarkMode,
   toggleDarkMode,
   handleSave,
+  handleLogout,
 }: HeaderProps) {
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 z-20 shadow-sm sticky top-0 dark:bg-gray-800 dark:border-gray-700">
@@ -103,6 +105,21 @@ export function Header({
           <Save className="w-4 h-4 mr-2" />
           <span className="hidden sm:inline">{hasChanges ? 'Save Changes' : 'Saved'}</span>
           <span className="sm:hidden">Save</span>
+        </button>
+        <button
+          onClick={() => {
+            if (hasChanges) {
+              if (confirm('You have unsaved changes. Are you sure you want to logout? Any unsaved changes will be lost.')) {
+                handleLogout();
+              }
+            } else {
+              handleLogout();
+            }
+          }}
+          className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
+          title="Logout"
+        >
+          <LogOut className="w-5 h-5" />
         </button>
       </div>
     </header>

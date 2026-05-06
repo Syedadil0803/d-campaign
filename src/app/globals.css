@@ -22,6 +22,24 @@
   }
 }
 
+/* Scrolling animation for announcement bar */
+.animate-scroll-left {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: scrollLeft var(--scroll-duration, 30s) linear infinite;
+}
+
+/* Pause animation on hover */
+.group:hover .animate-scroll-left,
+.announcement-bar-container:hover .animate-scroll-left {
+  animation-play-state: paused;
+}
+
+@keyframes scrollLeft {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-25%); }
+}
+
 /* Contenteditable placeholder */
 [contenteditable]:empty:before {
   content: attr(data-placeholder);

@@ -7,6 +7,96 @@ import { Dashboard } from '@/components/Dashboard';
 import { AnnouncementSection } from '@/components/AnnouncementSection';
 import { PromoSection } from '@/components/PromoSection';
 import { Toast } from '@/components/Toast';
+import { Code, ChevronDown } from 'lucide-react';
+
+// Migration functions
+function migrateAnnouncements(config: any): CampaignConfig['announcementBar']['announcements'] {
+  if (!Array.isArray(config.announcementBar.announcements)) {
+    // Convert old string format to new object format
+    const oldAnnouncements = config.announcementBar.announcements;
+    return oldAnnouncements.map((text: string, index: number) => ({
+      text,
+      richText: false
+    }));
+  }
+  return config.announcementBar.announcements;
+}
+
+function normalizePromoCardFontSizes(promoCard: any): CampaignConfig['promoCard'] {
+  // Ensure all text fields have explicit font-size in HTML
+  const fieldsToNormalize = ['title', 'subtitle', 'description', 'buttonText'] as const;
+  const normalized = { ...promoCard };
+  
+  fieldsToNormalize.forEach(field => {
+    if (normalized[field] && typeof normalized[field] === 'string') {
+      // Wrap bare text with default font size if no font-size spans exist
+      if (!normalized[field].includes('font-size')) {
+        normalized[field] = `<span style="font-size: 1rem;">${normalized[field]}</span>`;
+      }
+    }
+  });
+  
+  return normalized;
+}
+
+function migrateTimerText(promoCard: any): CampaignConfig['promoCard'] {
+  // Ensure timerText has proper placeholder structure
+  if (!promoCard.timerText || !promoCard.timerText.includes('data-timer-placeholder')) {
+    return {
+      ...promoCard,
+      timerText: 'Ends in <span data-timer-placeholder="hhh" style="font-size:1rem;">hh</span>:<span data-timer-placeholder="mmm" style="font-size:1rem;">mm</span>:<span data-timer-placeholder="sss" style="font-size:1rem;">ss</span>'
+    };
+  }
+  return promoCard;
+}
+
+function migrateButtonStyle(promoCard: any): CampaignConfig['promoCard'] {
+  // Add default buttonStyle if missing
+  if (!promoCard.style.buttonStyle) {
+    return {
+      ...promoCard,
+      style: {
+        ...promoCard.style,
+        buttonStyle: {
+          background: { type: 'solid', startColor: '#6366f1', endColor: '#6366f1' },
+          textColor: '#ffffff',
+          textAlign: 'center'
+        }
+      }
+    };
+  }
+  return promoCard;
+}
+
+function migrateButtonFullWidth(promoCard: any): CampaignConfig['promoCard'] {
+  // Add default buttonFullWidth if missing
+  if (promoCard.buttonFullWidth === undefined) {
+    return {
+      ...promoCard,
+      buttonFullWidth: true
+    };
+  }
+  return promoCard;
+}
+
+function migrateConfig(config: any, version: string): CampaignConfig {
+  let migrated = { ...config };
+  
+  // Check version and apply appropriate migrations
+  if (!version || version === '1.0') {
+    // Apply all v1.0+ migrations
+    migrated.announcementBar.announcements = migrateAnnouncements(migrated);
+    migrated.promoCard = normalizePromoCardFontSizes(migrated.promoCard);
+    migrated.promoCard = migrateTimerText(migrated.promoCard);
+    migrated.promoCard = migrateButtonStyle(migrated.promoCard);
+    migrated.promoCard = migrateButtonFullWidth(migrated.promoCard);
+    
+    // Update version
+    migrated.version = '1.1';
+  }
+  
+  return migrated;
+}
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'announcement' | 'promo'>('dashboard');
@@ -41,7 +131,8 @@ export default function Home() {
       const response = await fetch('/api/config');
       if (response.ok) {
         const data = await response.json();
-        setConfig(data);
+        const migrated = migrateConfig(data, data.version);
+        setConfig(migrated);
       }
     } catch (error) {
       console.error('Failed to load config:', error);
@@ -81,6 +172,14 @@ export default function Home() {
     localStorage.setItem('darkMode', newMode.toString());
   }
 
+  function handleLogout() {
+    // Clear any user session data
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userEmail');
+    // Redirect to login page or handle logout logic
+    window.location.href = '/login';
+  }
+
   function markChanged() {
     setHasChanges(true);
   }
@@ -96,6 +195,7 @@ export default function Home() {
           isDarkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode}
           handleSave={handleSave}
+          handleLogout={handleLogout}
         />
 
         <main className="flex-1 overflow-y-auto bg-gray-50 p-6 dark:bg-gray-900">
@@ -120,6 +220,20 @@ export default function Home() {
                 toast={toast}
               />
             )}
+
+            {/* Raw Data (Collapsed) */}
+            <details className="group bg-white rounded-lg border border-gray-200 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+              <summary className="flex items-center justify-between p-4 cursor-pointer">
+                <h3 className="text-sm font-medium text-gray-700 font-mono flex items-center dark:text-gray-300">
+                  <Code className="w-4 h-4 mr-2" />
+                  JSON Configuration
+                </h3>
+                <ChevronDown className="w-4 h-4 text-gray-400 group-open:rotate-180 transition-transform dark:text-gray-500" />
+              </summary>
+              <div className="p-4 bg-gray-50 border-t border-gray-200 font-mono text-xs overflow-x-auto text-gray-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300">
+                <pre>{JSON.stringify(config, null, 2)}</pre>
+              </div>
+            </details>
           </div>
         </main>
       </div>

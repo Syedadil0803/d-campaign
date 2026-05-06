@@ -9,12 +9,11 @@ export const campaignRepository = {
       const result = await db.select().from(campaignConfig).where(eq(campaignConfig.id, 'default')).limit(1);
       
       if (result.length === 0) {
-        console.log('No config found in database');
         return null;
       }
 
       const row = result[0];
-      console.log('Config loaded from database:', row.id);
+
       return {
         version: row.version,
         announcementBar: row.announcementBar as CampaignConfig['announcementBar'],
@@ -48,7 +47,7 @@ export const campaignRepository = {
           },
         });
       
-      console.log('Config saved to database');
+
       return true;
     } catch (error) {
       console.error('Failed to save config:', error);
