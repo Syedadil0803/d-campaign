@@ -118,7 +118,7 @@ export default function PresetColorPicker({
   return (
     <div 
       ref={containerRef}
-      className="absolute top-full right-0 mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl p-2 w-[228px]"
+      className="absolute top-full left-full ml-2 mt-1 z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl p-2 w-[228px]"
     >
       <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mb-1.5 px-0.5">
         Text color

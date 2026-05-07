@@ -10,12 +10,9 @@ import { wrapBareTextWithFontSize } from '@/lib/richTextUtils';
 import RichTextToolbar from './RichTextToolbar';
 import { 
   getDefaultTimerStorageHTML, 
-  cleanTimerForStorage, 
-  buildTimerEditorHTML, 
-  ensureTimerPlaceholders,
-  hasTimerPlaceholders,
-  TIMER_EDITOR_COLOR_MAP,
-  TIMER_EDITOR_BASE_STYLE
+  normalizeTimerTemplate,
+  formatTimerText,
+  calculateTimeRemaining as calcTimerRemaining,
 } from '@/lib/timerUtils';
 
 interface PromoSectionProps {
@@ -59,8 +56,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       if (descRef.current) descRef.current.innerHTML = pc.description || '';
       if (buttonRef.current) buttonRef.current.innerHTML = pc.buttonText || '';
       if (timerRef.current) {
-        const timerHtml = pc.timerText || getDefaultTimerStorageHTML();
-        timerRef.current.innerHTML = buildTimerEditorHTML(timerHtml);
+        timerRef.current.innerHTML = normalizeTimerTemplate(pc.timerText || getDefaultTimerStorageHTML()) || 'Ends in {hh}:{mm}:{ss}';
       }
     }, 0);
   }
@@ -71,58 +67,13 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     setTimeout(() => { detectFormats(); ensureDefaultFontSize(); }, 0);
   }
 
-  function insertTimerPlaceholder(placeholder: 'hhh' | 'mmm' | 'sss') {
-    const el = timerRef.current;
-    if (!el) return;
-    
-    const span = document.createElement('span');
-    span.setAttribute('data-timer-placeholder', placeholder);
-    span.setAttribute('contenteditable', 'false');
-    
-    const displayText: Record<string, string> = { hhh: 'hh', mmm: 'mm', sss: 'ss' };
-    span.textContent = displayText[placeholder];
-    
-    // Apply editor styling
-    const style = (TIMER_EDITOR_COLOR_MAP[placeholder] || '') + TIMER_EDITOR_BASE_STYLE;
-    span.setAttribute('style', style);
-    
-    insertNodeAtCursor(span);
-    onFieldInput('timer');
-  }
-
-  function insertTimerText(text: string) {
-    const el = timerRef.current;
-    if (!el) return;
-    
-    const textNode = document.createTextNode(text);
-    insertNodeAtCursor(textNode);
-    onFieldInput('timer');
-  }
-
-  function insertNodeAtCursor(node: Node) {
-    const el = timerRef.current;
-    if (!el) return;
-    
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
-      el.appendChild(node);
-    } else {
-      const range = selection.getRangeAt(0);
-      range.deleteContents();
-      range.insertNode(node);
-      range.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-    el.focus();
-  }
-
   function onFieldInput(field: 'title'|'subtitle'|'description'|'button'|'timer') {
     if (field === 'timer') {
       const el = timerRef.current;
       if (!el) return;
-      const html = cleanTimerForStorage(el.innerHTML);
-      setConfig({ ...config, promoCard: { ...config.promoCard, timerText: html } });
+      const html = wrapBareTextWithFontSize(el.innerHTML);
+      const text = normalizeTimerTemplate(html);
+      setConfig({ ...config, promoCard: { ...config.promoCard, timerText: text } });
       markChanged();
       detectFormats();
       return;
@@ -217,6 +168,21 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     updateFieldStyle({ textAlign: align });
   }
 
+  // Direct style update for a specific style key (used by timer controls)
+  function updateFieldStyleDirect(styleKey: string, patch: Record<string, any>) {
+    setConfig({
+      ...config,
+      promoCard: {
+        ...config.promoCard,
+        style: {
+          ...config.promoCard.style,
+          [styleKey]: { ...(config.promoCard.style as any)[styleKey], ...patch },
+        },
+      },
+    });
+    markChanged();
+  }
+
   // Card-level background update
   function updateCardBg(patch: Record<string, any>) {
     setConfig({
@@ -290,56 +256,53 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }
 
   function getFormattedTimerText(): string {
-    const timerValue = calculateTimeRemaining();
-    const [hours, minutes, seconds] = timerValue.split(':');
-    const template = config.promoCard.timerText || getDefaultTimerStorageHTML();
+    const rawHtml = config.promoCard.timerText || 'Ends in {hh}:{mm}:{ss}';
+    const timerValue = calcTimerRemaining(config.promoCard.endDate || '');
+
+    if ([timerValue.hours, timerValue.minutes, timerValue.seconds, timerValue.days ?? 0].some(Number.isNaN)) {
+      // Replace tokens with dashes, preserving HTML structure
+      return rawHtml.replace(/\{hhh\}|\{hh\}|\{h\}|\{mmm\}|\{mm\}|\{m\}|\{sss\}|\{ss\}|\{s\}|\{ddd\}|\{dd\}|\{d\}/g, '--');
+    }
+
+    // Replace tokens in the HTML while preserving inline styles and spans
+    let formattedHtml = rawHtml;
     
-    // If template doesn't have timer placeholders, use default
-    if (!hasTimerPlaceholders(template)) {
-      return getDefaultTimerStorageHTML()
-        .replace(/data-timer-placeholder="hhh"[^>]*>hh<\/span>/g, `<span data-timer-placeholder="hhh" style="color: inherit">${hours}</span>`)
-        .replace(/data-timer-placeholder="mmm"[^>]*>mm<\/span>/g, `<span data-timer-placeholder="mmm" style="color: inherit">${minutes}</span>`)
-        .replace(/data-timer-placeholder="sss"[^>]*>ss<\/span>/g, `<span data-timer-placeholder="sss" style="color: inherit">${seconds}</span>`);
+    const days = timerValue.days ?? 0;
+    
+    if (timerValue.hours !== undefined) {
+      const hhh = String(timerValue.hours).padStart(3, '0');
+      const hh = String(timerValue.hours).padStart(2, '0');
+      const h = String(timerValue.hours);
+      formattedHtml = formattedHtml.replace(/\{hhh\}/g, hhh).replace(/\{hh\}/g, hh).replace(/\{h\}/g, h);
     }
     
-    // Parse HTML and replace placeholder content while preserving styles
-    if (typeof document !== 'undefined') {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(`<div>${template}</div>`, 'text/html');
-      const container = doc.body.firstElementChild as HTMLElement;
-      
-      if (container) {
-        // Apply current text color to all timer placeholders
-        const currentTextColor = config.promoCard.style.dateStyle.textColor;
-        container.querySelectorAll('[data-timer-placeholder]').forEach(el => {
-          const htmlEl = el as HTMLElement;
-          if (!htmlEl.style.color || htmlEl.style.color === 'inherit') {
-            htmlEl.style.color = currentTextColor;
-          }
-        });
-        
-        // Find and update timer placeholders
-        const hhPlaceholder = container.querySelector('[data-timer-placeholder="hhh"]');
-        const mmPlaceholder = container.querySelector('[data-timer-placeholder="mmm"]');
-        const ssPlaceholder = container.querySelector('[data-timer-placeholder="sss"]');
-        
-        if (hhPlaceholder) hhPlaceholder.textContent = hours;
-        if (mmPlaceholder) mmPlaceholder.textContent = minutes;
-        if (ssPlaceholder) ssPlaceholder.textContent = seconds;
-        
-        return container.innerHTML;
-      }
+    if (timerValue.minutes !== undefined) {
+      const mmm = String(timerValue.minutes).padStart(3, '0');
+      const mm = String(timerValue.minutes).padStart(2, '0');
+      const m = String(timerValue.minutes);
+      formattedHtml = formattedHtml.replace(/\{mmm\}/g, mmm).replace(/\{mm\}/g, mm).replace(/\{m\}/g, m);
     }
     
-    // Fallback to simple string replacement if DOM parsing fails
-    return template
-      .replace(/data-timer-placeholder="hhh"[^>]*>hh<\/span>/g, `<span data-timer-placeholder="hhh" style="color: inherit">${hours}</span>`)
-      .replace(/data-timer-placeholder="mmm"[^>]*>mm<\/span>/g, `<span data-timer-placeholder="mmm" style="color: inherit">${minutes}</span>`)
-      .replace(/data-timer-placeholder="sss"[^>]*>ss<\/span>/g, `<span data-timer-placeholder="sss" style="color: inherit">${seconds}</span>`);
+    if (timerValue.seconds !== undefined) {
+      const sss = String(timerValue.seconds).padStart(3, '0');
+      const ss = String(timerValue.seconds).padStart(2, '0');
+      const s = String(timerValue.seconds);
+      formattedHtml = formattedHtml.replace(/\{sss\}/g, sss).replace(/\{ss\}/g, ss).replace(/\{s\}/g, s);
+    }
+    
+    if (timerValue.days !== undefined) {
+      const ddd = String(days).padStart(3, '0');
+      const dd = String(days).padStart(2, '0');
+      const d = String(days);
+      formattedHtml = formattedHtml.replace(/\{ddd\}/g, ddd).replace(/\{dd\}/g, dd).replace(/\{d\}/g, d);
+    }
+    
+    return formattedHtml;
   }
 
   function applyTemplate(template: PromoCard, templateName: string) {
     const cloned = JSON.parse(JSON.stringify(template));
+    cloned.timerText = normalizeTimerTemplate(cloned.timerText || getDefaultTimerStorageHTML()) || 'Ends in {hh}:{mm}:{ss}';
     setConfig({ ...config, promoCard: cloned });
     syncEditorsFromConfig(cloned);
     markChanged();
@@ -385,10 +348,12 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
               onFormat={(format) => {
                 saveSelection();
                 formatText(format);
+                if (currentField) onFieldInput(currentField as 'title'|'subtitle'|'description'|'button'|'timer');
               }}
               onColorSelect={(color) => {
                 saveSelection();
                 applyColor(color);
+                if (currentField) onFieldInput(currentField as 'title'|'subtitle'|'description'|'button'|'timer');
               }}
               showAlignment={currentField !== null}
               alignment={getFieldStyle()?.textAlign || 'left'}
@@ -530,62 +495,55 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
             </button>
           </div>
 
-          {/* Timer Text Editor */}
+          {/* Timer Controls — rich text editor */}
           {config.promoCard.showTimer && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 dark:text-gray-300">Timer Text</label>
-              
-              {/* Timer Placeholder Buttons */}
-              <div className="flex flex-wrap gap-1 mb-2">
-                <button
-                  onClick={() => insertTimerPlaceholder('hhh')}
-                  className="px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 dark:bg-indigo-900 dark:text-indigo-300 dark:hover:bg-indigo-800 transition-colors"
-                  title="Insert hours placeholder"
-                >
-                  hhh
-                </button>
-                <button
-                  onClick={() => insertTimerPlaceholder('mmm')}
-                  className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 dark:bg-green-900 dark:text-green-300 dark:hover:bg-green-800 transition-colors"
-                  title="Insert minutes placeholder"
-                >
-                  mmm
-                </button>
-                <button
-                  onClick={() => insertTimerPlaceholder('sss')}
-                  className="px-2 py-1 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200 dark:bg-orange-900 dark:text-orange-300 dark:hover:bg-orange-800 transition-colors"
-                  title="Insert seconds placeholder"
-                >
-                  sss
-                </button>
-                <button
-                  onClick={() => insertTimerText(':')}
-                  className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 transition-colors"
-                  title="Insert separator"
-                >
-                  :
-                </button>
-              </div>
-              
-              <div 
-                ref={timerRef} 
-                contentEditable 
-                suppressContentEditableWarning
-                onInput={() => onFieldInput('timer')} 
-                onMouseUp={detectFormats} 
-                onKeyUp={detectFormats}
-                onFocus={() => onFieldFocus('timer', timerRef)}
-                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 min-h-[48px] outline-none break-words overflow-wrap-anywhere"
-                data-placeholder="Click buttons above to insert placeholders or type your text" 
-              />
-              <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-block px-1 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-mono dark:bg-indigo-900 dark:text-indigo-300">hhh</span>
-                  <span className="inline-block px-1 py-0.5 bg-green-100 text-green-700 rounded text-[10px] font-mono dark:bg-green-900 dark:text-green-300">mmm</span>
-                  <span className="inline-block px-1 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-mono dark:bg-orange-900 dark:text-orange-300">sss</span>
-                  are timer placeholders — click buttons to insert them.
-                </span>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Timer Text</label>
+              <div ref={timerRef} contentEditable suppressContentEditableWarning
+                onInput={()=>onFieldInput('timer')} onFocus={()=>onFieldFocus('timer',timerRef)}
+                onMouseUp={detectFormats} onKeyUp={detectFormats}
+                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 outline-none break-words min-h-[48px]"
+                data-placeholder="Ends in {hh}:{mm}:{ss}" />
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Use tokens like {`{d}`}, {`{hh}`}, {`{mm}`}, {`{ss}`}. Select text to apply colors and sizes.
               </p>
+              <div className="flex flex-wrap gap-1">
+                {['{d}', '{hh}', '{mm}', '{ss}'].map((token) => (
+                  <button
+                    key={token}
+                    onMouseDown={(e) => {
+                      e.preventDefault(); // Prevent button from stealing focus
+                      const el = timerRef.current;
+                      if (!el) return;
+                      const sel = window.getSelection();
+                      if (!sel || sel.rangeCount === 0) {
+                        // No selection, append to end
+                        el.innerHTML += token;
+                      } else {
+                        const range = sel.getRangeAt(0);
+                        if (el.contains(range.commonAncestorContainer)) {
+                          // Insert at cursor position
+                          const textNode = document.createTextNode(token);
+                          range.deleteContents();
+                          range.insertNode(textNode);
+                          // Move cursor after inserted token
+                          range.setStartAfter(textNode);
+                          range.setEndAfter(textNode);
+                          sel.removeAllRanges();
+                          sel.addRange(range);
+                        } else {
+                          // Selection outside editor, append to end
+                          el.innerHTML += token;
+                        }
+                      }
+                      onFieldInput('timer');
+                    }}
+                    className="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors dark:bg-indigo-900 dark:text-indigo-300 dark:hover:bg-indigo-800"
+                  >
+                    {token}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -758,7 +716,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
 
                   {config.promoCard.showTimer && (
                     <div
-                      className="text-base mb-4 px-2 py-1 rounded break-words"
+                      className="mb-4 px-2 py-1 rounded break-words"
                       style={{
                         background: getBackgroundStyle(config.promoCard.style.dateStyle.background),
                         color: config.promoCard.style.dateStyle.textColor,

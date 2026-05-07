@@ -29,7 +29,7 @@ export function Header({
         <h1 className="text-xl font-bold text-gray-800 tracking-tight dark:text-gray-100">Campaign Admin</h1>
       </div>
 
-      <nav className="hidden md:flex items-center space-x-1 ml-8">
+      <nav className="flex items-center gap-1 ml-4 overflow-x-auto whitespace-nowrap md:ml-8">
         <button
           onClick={() => setActiveTab('dashboard')}
           className={`px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center ${

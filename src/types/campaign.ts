@@ -48,6 +48,7 @@ export interface PromoCard {
       background: GradientStyle;
       textColor: string;
       textAlign?: 'left' | 'center' | 'right';
+      fontSize?: number;
     };
     buttonStyle: {
       background: GradientStyle;
@@ -108,7 +109,7 @@ export const defaultConfig: CampaignConfig = {
     endDate: '',
     showTimer: false,
     showButton: false,
-    timerText: 'Ends in <span data-timer-placeholder="hhh" style="font-size:1rem;">hh</span>:<span data-timer-placeholder="mmm" style="font-size:1rem;">mm</span>:<span data-timer-placeholder="sss" style="font-size:1rem;">ss</span>',
+    timerText: 'Ends in {hh}:{mm}:{ss}',
     style: {
       position: 'bottom-right',
       background: {

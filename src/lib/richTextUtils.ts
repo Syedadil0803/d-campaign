@@ -335,23 +335,42 @@ export function applyFontSize(size: string): void {
   const markerId = `fs-${Date.now()}`;
 
   if (existingFontSpan) {
-    // Reuse existing span — select it, replace via insertHTML
-    const innerHtml = existingFontSpan.innerHTML;
-    const spanRange = document.createRange();
-    spanRange.selectNode(existingFontSpan);
+    // Reuse existing span — update its font-size while preserving color and other styles
+    existingFontSpan.style.fontSize = size;
+    // Re-select the content
+    const selectRange = document.createRange();
+    selectRange.selectNodeContents(existingFontSpan);
     selection.removeAllRanges();
-    selection.addRange(spanRange);
-    document.execCommand(
-      'insertHTML',
-      false,
-      `<span style="font-size: ${size}" data-fs-marker="${markerId}">${innerHtml}</span>`
-    );
+    selection.addRange(selectRange);
+    return;
   } else {
-    // New: clone selection, unwrap inner font-size spans, wrap in new span
+    // Check if selection is inside a color/bold/italic span - need to preserve it
+    let colorToPreserve = '';
+    let hasBold = false;
+    let hasItalic = false;
+    let walkForStyle: Node | null = range.commonAncestorContainer;
+    if (walkForStyle.nodeType === Node.TEXT_NODE) walkForStyle = walkForStyle.parentElement;
+    while (walkForStyle && walkForStyle instanceof HTMLElement && walkForStyle.contentEditable !== 'true') {
+      const el = walkForStyle;
+      if (el.style.color && !el.style.fontSize) {
+        colorToPreserve = el.style.color;
+      }
+      if (el.tagName === 'B' || el.tagName === 'STRONG' || el.style.fontWeight === 'bold') {
+        hasBold = true;
+      }
+      if (el.tagName === 'I' || el.tagName === 'EM' || el.style.fontStyle === 'italic') {
+        hasItalic = true;
+      }
+      if (el.style.fontSize) break; // Stop at font-size boundary
+      walkForStyle = el.parentElement;
+    }
+
+    // New: clone selection, unwrap inner font-size spans (keeping color/bold/italic), wrap in new span
     const fragment = range.cloneContents();
     const tempDiv = document.createElement('div');
     tempDiv.appendChild(fragment);
 
+    // Flatten nested font-size spans while preserving color/bold/italic
     const innerFontSpans = tempDiv.querySelectorAll('span[style]');
     for (const fs of innerFontSpans) {
       if (fs instanceof HTMLElement && fs.style.fontSize) {
@@ -363,22 +382,39 @@ export function applyFontSize(size: string): void {
       }
     }
 
-    const selectedHtml = tempDiv.innerHTML;
+    let selectedHtml = tempDiv.innerHTML;
+
+    // Re-add bold/italic wrappers if they were present
+    if (hasBold) {
+      selectedHtml = `<b>${selectedHtml}</b>`;
+    }
+    if (hasItalic) {
+      selectedHtml = `<i>${selectedHtml}</i>`;
+    }
+
+    const markerId = `fs-${Date.now()}`;
+
+    // Include preserved color in the new span if found
+    const styleAttr = colorToPreserve
+      ? `style="font-size: ${size}; color: ${colorToPreserve}"`
+      : `style="font-size: ${size}"`;
+
     document.execCommand(
       'insertHTML',
       false,
-      `<span style="font-size: ${size}" data-fs-marker="${markerId}">${selectedHtml}</span>`
+      `<span ${styleAttr} data-fs-marker="${markerId}">${selectedHtml}</span>`
     );
-  }
 
-  // Re-select the inserted content via marker
-  const insertedSpan = document.querySelector(`[data-fs-marker="${markerId}"]`) as HTMLElement;
-  if (insertedSpan) {
-    insertedSpan.removeAttribute('data-fs-marker');
-    const selectRange = document.createRange();
-    selectRange.selectNodeContents(insertedSpan);
-    selection.removeAllRanges();
-    selection.addRange(selectRange);
+    // Re-select the inserted content via marker
+    const insertedSpan = document.querySelector(`[data-fs-marker="${markerId}"]`);
+    if (insertedSpan) {
+      insertedSpan.removeAttribute('data-fs-marker');
+      const selectRange = document.createRange();
+      selectRange.selectNodeContents(insertedSpan);
+      selection.removeAllRanges();
+      selection.addRange(selectRange);
+    }
+    return;
   }
 }
 

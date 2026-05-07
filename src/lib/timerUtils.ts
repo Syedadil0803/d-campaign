@@ -78,6 +78,23 @@ export function formatTimerText(template: string, timerValue: TimerValue): strin
     .replace(/\{sss\}/g, seconds.toString().padStart(3, '0'))
     .replace(/\{ss\}/g, seconds.toString().padStart(2, '0'))
     .replace(/\{s\}/g, seconds.toString());
+  }
+
+/**
+ * Normalize a timer template to the plain token string used by the input box.
+ * Supports legacy HTML templates that wrap placeholders in span tags.
+ */
+export function normalizeTimerTemplate(template?: string): string {
+  if (!template) return '';
+
+  return template
+    .replace(/<span[^>]*data-timer-placeholder="hhh"[^>]*>.*?<\/span>/gi, '{hh}')
+    .replace(/<span[^>]*data-timer-placeholder="mmm"[^>]*>.*?<\/span>/gi, '{mm}')
+    .replace(/<span[^>]*data-timer-placeholder="sss"[^>]*>.*?<\/span>/gi, '{ss}')
+    .replace(/<span[^>]*data-timer-placeholder="ddd"[^>]*>.*?<\/span>/gi, '{d}')
+    .replace(/<span[^>]*data-timer-placeholder="dd"[^>]*>.*?<\/span>/gi, '{d}')
+    .replace(/<span[^>]*data-timer-placeholder="d"[^>]*>.*?<\/span>/gi, '{d}')
+    .trim();
 }
 
 /**
@@ -101,6 +118,31 @@ export function isTimerActive(startDate?: string, endDate?: string): boolean {
   const end = new Date(endDate);
   
   return now >= start && now <= end;
+}
+
+/**
+ * Strip inline font-size and color styles from timer HTML.
+ * This ensures dateStyle settings take precedence over editor inline styles.
+ */
+export function stripTimerInlineStyles(html: string): string {
+  if (!html) return '';
+  
+  // Remove font-size and color from style attributes while preserving other styles
+  return html
+    .replace(/style="([^"]*)"/gi, (match, styles) => {
+      // Remove font-size and color properties, keep others
+      const cleaned = styles
+        .split(';')
+        .filter((s: string) => {
+          const prop = s.split(':')[0].trim().toLowerCase();
+          return prop !== 'font-size' && prop !== 'color';
+        })
+        .join(';')
+        .trim();
+      return cleaned ? `style="${cleaned}"` : '';
+    })
+    .replace(/\s+>/g, '>')  // Clean up extra spaces before >
+    .replace(/\s+/g, ' ');   // Normalize whitespace
 }
 
 /**

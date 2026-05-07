@@ -261,6 +261,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     onColorSelect={(color) => {
                       saveSelection();
                       applyColor(color);
+                      onRichTextInput();
                     }}
                   />
                 </div>

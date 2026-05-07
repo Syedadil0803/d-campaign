@@ -243,7 +243,12 @@ export function useRichTextEditor(
       const editor = editorRef.current;
       if (!editor || !savedRangeRef.current) return;
 
-      applyInlineColor(color, savedRangeRef.current);
+      // Verify the saved range is still within the current editor
+      const range = savedRangeRef.current;
+      const container = range.commonAncestorContainer;
+      if (!editor.contains(container)) return;
+
+      applyInlineColor(color, range);
 
       // Update the saved range to the newly-selected content
       const sel = window.getSelection();

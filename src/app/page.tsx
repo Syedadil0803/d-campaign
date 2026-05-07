@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { CampaignConfig, defaultConfig } from '@/types/campaign';
 import { Header } from '@/components/Header';
 import { Dashboard } from '@/components/Dashboard';
@@ -40,14 +40,21 @@ function normalizePromoCardFontSizes(promoCard: any): CampaignConfig['promoCard'
 }
 
 function migrateTimerText(promoCard: any): CampaignConfig['promoCard'] {
-  // Ensure timerText has proper placeholder structure
-  if (!promoCard.timerText || !promoCard.timerText.includes('data-timer-placeholder')) {
-    return {
-      ...promoCard,
-      timerText: 'Ends in <span data-timer-placeholder="hhh" style="font-size:1rem;">hh</span>:<span data-timer-placeholder="mmm" style="font-size:1rem;">mm</span>:<span data-timer-placeholder="sss" style="font-size:1rem;">ss</span>'
-    };
-  }
-  return promoCard;
+  const normalizedTimerText = (promoCard.timerText || '')
+    .replace(/<span[^>]*data-timer-placeholder="hhh"[^>]*>.*?<\/span>/gi, '{hh}')
+    .replace(/<span[^>]*data-timer-placeholder="mmm"[^>]*>.*?<\/span>/gi, '{mm}')
+    .replace(/<span[^>]*data-timer-placeholder="sss"[^>]*>.*?<\/span>/gi, '{ss}')
+    .replace(/<span[^>]*data-timer-placeholder="ddd"[^>]*>.*?<\/span>/gi, '{d}')
+    .replace(/<span[^>]*data-timer-placeholder="dd"[^>]*>.*?<\/span>/gi, '{d}')
+    .replace(/<span[^>]*data-timer-placeholder="d"[^>]*>.*?<\/span>/gi, '{d}')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim() || 'Ends in {hh}:{mm}:{ss}';
+
+  return {
+    ...promoCard,
+    timerText: normalizedTimerText,
+  };
 }
 
 function migrateButtonStyle(promoCard: any): CampaignConfig['promoCard'] {
@@ -106,6 +113,7 @@ export default function Home() {
   const [toastMessage, setToastMessage] = useState('');
   const [toastIsError, setToastIsError] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const mainScrollRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     loadConfig();
@@ -125,6 +133,10 @@ export default function Home() {
       document.documentElement.classList.remove('dark');
     }
   }, [isDarkMode]);
+
+  useEffect(() => {
+    mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeTab]);
 
   async function loadConfig() {
     try {
@@ -198,7 +210,7 @@ export default function Home() {
           handleLogout={handleLogout}
         />
 
-        <main className="flex-1 overflow-y-auto bg-gray-50 p-6 dark:bg-gray-900">
+        <main ref={mainScrollRef} className="flex-1 overflow-y-auto bg-gray-50 p-6 dark:bg-gray-900">
           <div className="max-w-[1400px] mx-auto space-y-8 pb-12">
             {activeTab === 'dashboard' && (
               <Dashboard config={config} setActiveTab={setActiveTab} />
