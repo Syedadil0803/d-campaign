@@ -264,40 +264,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       return rawHtml.replace(/\{hhh\}|\{hh\}|\{h\}|\{mmm\}|\{mm\}|\{m\}|\{sss\}|\{ss\}|\{s\}|\{ddd\}|\{dd\}|\{d\}/g, '--');
     }
 
-    // Replace tokens in the HTML while preserving inline styles and spans
-    let formattedHtml = rawHtml;
-    
-    const days = timerValue.days ?? 0;
-    
-    if (timerValue.hours !== undefined) {
-      const hhh = String(timerValue.hours).padStart(3, '0');
-      const hh = String(timerValue.hours).padStart(2, '0');
-      const h = String(timerValue.hours);
-      formattedHtml = formattedHtml.replace(/\{hhh\}/g, hhh).replace(/\{hh\}/g, hh).replace(/\{h\}/g, h);
-    }
-    
-    if (timerValue.minutes !== undefined) {
-      const mmm = String(timerValue.minutes).padStart(3, '0');
-      const mm = String(timerValue.minutes).padStart(2, '0');
-      const m = String(timerValue.minutes);
-      formattedHtml = formattedHtml.replace(/\{mmm\}/g, mmm).replace(/\{mm\}/g, mm).replace(/\{m\}/g, m);
-    }
-    
-    if (timerValue.seconds !== undefined) {
-      const sss = String(timerValue.seconds).padStart(3, '0');
-      const ss = String(timerValue.seconds).padStart(2, '0');
-      const s = String(timerValue.seconds);
-      formattedHtml = formattedHtml.replace(/\{sss\}/g, sss).replace(/\{ss\}/g, ss).replace(/\{s\}/g, s);
-    }
-    
-    if (timerValue.days !== undefined) {
-      const ddd = String(days).padStart(3, '0');
-      const dd = String(days).padStart(2, '0');
-      const d = String(days);
-      formattedHtml = formattedHtml.replace(/\{ddd\}/g, ddd).replace(/\{dd\}/g, dd).replace(/\{d\}/g, d);
-    }
-    
-    return formattedHtml;
+    return formatTimerText(rawHtml, timerValue);
   }
 
   function applyTemplate(template: PromoCard, templateName: string) {

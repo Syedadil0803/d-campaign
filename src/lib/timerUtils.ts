@@ -60,6 +60,8 @@ export function calculateTimeRemaining(endDate: string): TimerValue {
  */
 export function formatTimerText(template: string, timerValue: TimerValue): string {
   const { hours, minutes, seconds, days = 0 } = timerValue;
+  const includesDayTokens = /\{ddd\}|\{dd\}|\{d\}/.test(template);
+  const displayHours = includesDayTokens ? hours : (days * 24) + hours;
 
   return template
     // Days
@@ -67,9 +69,9 @@ export function formatTimerText(template: string, timerValue: TimerValue): strin
     .replace(/\{dd\}/g, days.toString().padStart(2, '0'))
     .replace(/\{d\}/g, days.toString())
     // Hours
-    .replace(/\{hhh\}/g, hours.toString().padStart(3, '0'))
-    .replace(/\{hh\}/g, hours.toString().padStart(2, '0'))
-    .replace(/\{h\}/g, hours.toString())
+    .replace(/\{hhh\}/g, displayHours.toString().padStart(3, '0'))
+    .replace(/\{hh\}/g, displayHours.toString().padStart(2, '0'))
+    .replace(/\{h\}/g, displayHours.toString())
     // Minutes
     .replace(/\{mmm\}/g, minutes.toString().padStart(3, '0'))
     .replace(/\{mm\}/g, minutes.toString().padStart(2, '0'))
