@@ -76,7 +76,8 @@ export interface CampaignConfig {
 
 export const defaultConfig: CampaignConfig = {
   version: '1.0',
-  lastUpdated: new Date().toISOString(),
+  // Keep deterministic for SSR/CSR hydration; API load will set real value.
+  lastUpdated: '',
   announcementBar: {
     active: false,
     announcements: [

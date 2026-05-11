@@ -12,26 +12,26 @@ export function Dashboard({ config, setActiveTab }: DashboardProps) {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div
         onClick={() => setActiveTab('announcement')}
-        className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 cursor-pointer hover:shadow-md hover:border-indigo-200 transition-all group dark:bg-gray-800 dark:border-gray-700 dark:hover:border-indigo-500"
+        className="bg-surface-elevated rounded-lg border border-border shadow-[0_0_20px_rgba(51,65,85,0.3)] p-6 cursor-pointer hover:shadow-[0_0_30px_rgba(51,65,85,0.5)] hover:border-primary/70 transition-all group"
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
-            <div className="p-2 bg-indigo-100 rounded-lg mr-3">
-              <Megaphone className="w-5 h-5 text-indigo-600" />
+            <div className="p-2 bg-background rounded-lg mr-3 border border-border">
+              <Megaphone className="w-5 h-5 text-primary" />
             </div>
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Announcement Bar</h3>
+            <h3 className="text-base font-semibold text-on-surface">Announcement Bar</h3>
           </div>
           <span
             className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
               config.announcementBar.active
-                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
-                : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                ? 'bg-primary/15 text-primary border border-primary/40'
+                : 'bg-surface text-on-surface-variant border border-border'
             }`}
           >
             {config.announcementBar.active ? 'Active' : 'Inactive'}
           </span>
         </div>
-        <p className="text-sm text-gray-500 mb-3 line-clamp-2 dark:text-gray-400">
+        <p className="text-sm text-on-surface-variant mb-3 line-clamp-2">
           {config.announcementBar.announcements.length === 0 ? (
             'No announcements set'
           ) : config.announcementBar.announcements.length === 1 ? (
@@ -43,46 +43,46 @@ export function Dashboard({ config, setActiveTab }: DashboardProps) {
             </>
           )}
         </p>
-        <div className="flex items-center text-xs text-gray-400">
+        <div className="flex items-center text-xs text-on-surface-variant">
           <Megaphone className="w-3.5 h-3.5 mr-1" />
           <span>
             {config.announcementBar.announcements.length} announcement
             {config.announcementBar.announcements.length !== 1 ? 's' : ''}
           </span>
         </div>
-        <div className="mt-3 text-xs text-indigo-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity dark:text-indigo-400">
+        <div className="mt-3 text-xs text-primary font-medium opacity-0 group-hover:opacity-100 transition-opacity">
           Click to edit →
         </div>
       </div>
 
       <div
         onClick={() => setActiveTab('promo')}
-        className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 cursor-pointer hover:shadow-md hover:border-pink-200 transition-all group dark:bg-gray-800 dark:border-gray-700 dark:hover:border-pink-500"
+        className="bg-surface-elevated rounded-lg border border-border shadow-[0_0_20px_rgba(51,65,85,0.3)] p-6 cursor-pointer hover:shadow-[0_0_30px_rgba(51,65,85,0.5)] hover:border-primary/70 transition-all group"
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
-            <div className="p-2 bg-pink-100 rounded-lg mr-3">
-              <Gift className="w-5 h-5 text-pink-600" />
+            <div className="p-2 bg-background rounded-lg mr-3 border border-border">
+              <Gift className="w-5 h-5 text-primary" />
             </div>
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Promo Card</h3>
+            <h3 className="text-base font-semibold text-on-surface">Promo Card</h3>
           </div>
           <span
             className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
               config.promoCard.active
-                ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
-                : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                ? 'bg-primary/15 text-primary border border-primary/40'
+                : 'bg-surface text-on-surface-variant border border-border'
             }`}
           >
             {config.promoCard.active ? 'Active' : 'Inactive'}
           </span>
         </div>
-        <p className="text-sm text-gray-500 mb-1 font-medium dark:text-gray-400">
+        <p className="text-sm text-on-surface-variant mb-1 font-medium">
           {stripHtml(config.promoCard.title) || 'No title set'}
         </p>
-        <p className="text-sm text-gray-400 mb-3 line-clamp-2 dark:text-gray-500">
+        <p className="text-sm text-on-surface-variant mb-3 line-clamp-2">
           {stripHtml(config.promoCard.description) || 'No description set'}
         </p>
-        <div className="flex items-center text-xs text-gray-400">
+        <div className="flex items-center text-xs text-on-surface-variant">
           <Calendar className="w-3.5 h-3.5 mr-1" />
           <span>
             {config.promoCard.startDate
@@ -90,7 +90,7 @@ export function Dashboard({ config, setActiveTab }: DashboardProps) {
               : 'No schedule set'}
           </span>
         </div>
-        <div className="mt-3 text-xs text-pink-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity dark:text-pink-400">
+        <div className="mt-3 text-xs text-primary font-medium opacity-0 group-hover:opacity-100 transition-opacity">
           Click to edit →
         </div>
       </div>

@@ -186,14 +186,14 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
   
   return (
-    <section className="bg-white shadow rounded-lg border border-gray-200 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
+    <section className="bg-surface-elevated shadow rounded-lg border border-border overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-3 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between dark:border-gray-700 dark:bg-gray-700/50">
+      <div className="px-6 py-3 border-b border-border bg-surface/60 flex items-center justify-between">
         <div className="flex items-center">
           <div className="p-2 bg-indigo-100 rounded-lg mr-4"><Megaphone className="w-5 h-5 text-indigo-600" /></div>
           <div>
-            <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100">Announcement Bar</h3>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">Top banner for site-wide alerts.</p>
+            <h3 className="text-lg leading-6 font-medium text-on-surface">Announcement Bar</h3>
+            <p className="mt-1 max-w-2xl text-sm text-on-surface-variant">Top banner for site-wide alerts.</p>
           </div>
         </div>
         <button onClick={toggleActive} className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors duration-200 ${config.announcementBar.active ? 'bg-indigo-600' : 'bg-gray-200'}`}>

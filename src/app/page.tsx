@@ -197,7 +197,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 font-sans text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+    <div className="campaign-page-bg flex h-screen text-on-surface">
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <Header
           activeTab={activeTab}
@@ -210,7 +210,7 @@ export default function Home() {
           handleLogout={handleLogout}
         />
 
-        <main ref={mainScrollRef} className="flex-1 overflow-y-auto bg-gray-50 p-6 dark:bg-gray-900">
+        <main ref={mainScrollRef} className="flex-1 overflow-y-auto bg-transparent p-6">
           <div className="max-w-[1400px] mx-auto space-y-8 pb-12">
             {activeTab === 'dashboard' && (
               <Dashboard config={config} setActiveTab={setActiveTab} />
@@ -234,15 +234,15 @@ export default function Home() {
             )}
 
             {/* Raw Data (Collapsed) */}
-            <details className="group bg-white rounded-lg border border-gray-200 shadow-sm dark:bg-gray-800 dark:border-gray-700">
+            <details className="group bg-surface-elevated rounded-lg border border-border shadow-sm">
               <summary className="flex items-center justify-between p-4 cursor-pointer">
-                <h3 className="text-sm font-medium text-gray-700 font-mono flex items-center dark:text-gray-300">
+                <h3 className="text-sm font-medium text-on-surface-variant font-mono flex items-center">
                   <Code className="w-4 h-4 mr-2" />
                   JSON Configuration
                 </h3>
-                <ChevronDown className="w-4 h-4 text-gray-400 group-open:rotate-180 transition-transform dark:text-gray-500" />
+                <ChevronDown className="w-4 h-4 text-on-surface-variant group-open:rotate-180 transition-transform" />
               </summary>
-              <div className="p-4 bg-gray-50 border-t border-gray-200 font-mono text-xs overflow-x-auto text-gray-600 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300">
+              <div className="p-4 bg-surface-subtle border-t border-border font-mono text-xs overflow-x-auto text-on-surface-variant">
                 <pre>{JSON.stringify(config, null, 2)}</pre>
               </div>
             </details>

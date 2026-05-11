@@ -23,10 +23,10 @@ export function Header({
   handleLogout,
 }: HeaderProps) {
   return (
-    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 z-20 shadow-sm sticky top-0 dark:bg-gray-800 dark:border-gray-700">
+    <header className="h-16 bg-surface border-b border-border flex items-center justify-between px-4 sm:px-6 z-20 shadow-sm sticky top-0">
       <div className="flex items-center">
-        <LayoutDashboard className="w-6 h-6 text-indigo-600 mr-3 hidden sm:block" />
-        <h1 className="text-xl font-bold text-gray-800 tracking-tight dark:text-gray-100">Campaign Admin</h1>
+        <LayoutDashboard className="w-6 h-6 text-primary mr-3 hidden sm:block" />
+        <h1 className="text-xl font-bold text-on-surface tracking-tight">Campaign Admin</h1>
       </div>
 
       <nav className="flex items-center gap-1 ml-4 overflow-x-auto whitespace-nowrap md:ml-8">

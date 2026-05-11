@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+@import '../styles/theme.css';
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+@layer base {
+  body {
+    @apply bg-background text-on-surface font-sans;
+  }
+}
+
 @layer utilities {
   .animate-bounce-in {
     animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);

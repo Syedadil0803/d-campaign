@@ -310,15 +310,15 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }
 
   return (
-    <section className="bg-white shadow rounded-lg border border-gray-200 overflow-hidden dark:bg-gray-800 dark:border-gray-700">
-      <div className="px-6 py-3 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between dark:border-gray-700 dark:bg-gray-700/50">
+    <section className="bg-surface-elevated shadow rounded-lg border border-border overflow-hidden">
+      <div className="px-6 py-3 border-b border-border bg-surface/60 flex items-center justify-between">
         <div className="flex items-center">
           <div className="p-2 bg-pink-100 rounded-lg mr-4">
             <Gift className="w-5 h-5 text-pink-600" />
           </div>
           <div>
-            <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100">Promo Card</h3>
-            <p className="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">Floating widget for special offers.</p>
+            <h3 className="text-lg leading-6 font-medium text-on-surface">Promo Card</h3>
+            <p className="mt-1 max-w-2xl text-sm text-on-surface-variant">Floating widget for special offers.</p>
           </div>
         </div>
 
