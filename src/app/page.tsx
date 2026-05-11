@@ -211,7 +211,7 @@ export default function Home() {
         />
 
         <main ref={mainScrollRef} className="flex-1 overflow-y-auto bg-transparent p-6">
-          <div className="max-w-[1400px] mx-auto space-y-8 pb-12">
+          <div className="max-w-[1840px] mx-auto space-y-8 pb-12">
             {activeTab === 'dashboard' && (
               <Dashboard config={config} setActiveTab={setActiveTab} />
             )}

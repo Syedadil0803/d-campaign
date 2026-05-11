@@ -18,7 +18,11 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const [newAnnouncementText, setNewAnnouncementText] = useState('');
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [selectedUrl, setSelectedUrl] = useState('');
-  const [isRichText, setIsRichText] = useState(false);
+  const [selectedStartDate, setSelectedStartDate] = useState('');
+  const [selectedEndDate, setSelectedEndDate] = useState('');
+  const [showScheduleFields, setShowScheduleFields] = useState(false);
+  const [showRichToolbar, setShowRichToolbar] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const richEditorRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -37,14 +41,11 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     if (scrollContainerRef.current && config.announcementBar.active) {
       const container = scrollContainerRef.current;
       const track = container.querySelector('.animate-scroll-left') as HTMLElement;
-      
+
       if (track) {
-        // Calculate scroll duration based on content width
         const contentWidth = track.scrollWidth;
-        const pixelsPerSecond = 60; // Same as Vue widget
-        const duration = (contentWidth / 2) / pixelsPerSecond; // Half width / speed
-        
-        // Set CSS variable for animation duration
+        const pixelsPerSecond = 60;
+        const duration = (contentWidth / 2) / pixelsPerSecond;
         container.style.setProperty('--scroll-duration', duration + 's');
       }
     }
@@ -61,28 +62,46 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
   // ── Add / Update announcement ──
   function addAnnouncement() {
-    let text = '';
-    if (isRichText && richEditorRef.current) {
-      text = getNormalizedHTML();
-    } else {
-      text = newAnnouncementText.trim();
-    }
+    const text = getNormalizedHTML();
     if (!text) return;
 
     if (selectedIndex !== null) {
       const updated = [...config.announcementBar.announcements];
-      updated[selectedIndex] = { ...updated[selectedIndex], text, richText: isRichText };
+      updated[selectedIndex] = {
+        ...updated[selectedIndex],
+        text,
+        richText: true,
+        url: selectedUrl || undefined,
+        startDate: selectedStartDate || undefined,
+        endDate: selectedEndDate || undefined,
+      };
       setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
       setSelectedIndex(null);
       setSelectedUrl('');
+      setSelectedStartDate('');
+      setSelectedEndDate('');
+      setShowScheduleFields(false);
     } else {
       setConfig({
         ...config,
         announcementBar: {
           ...config.announcementBar,
-          announcements: [...config.announcementBar.announcements, { text, richText: isRichText }],
+          announcements: [
+            ...config.announcementBar.announcements,
+            {
+              text,
+              richText: true,
+              url: selectedUrl || undefined,
+              startDate: selectedStartDate || undefined,
+              endDate: selectedEndDate || undefined,
+            },
+          ],
         },
       });
+      setSelectedUrl('');
+      setSelectedStartDate('');
+      setSelectedEndDate('');
+      setShowScheduleFields(false);
     }
     setNewAnnouncementText('');
     if (richEditorRef.current) richEditorRef.current.innerHTML = '';
@@ -93,8 +112,34 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   function removeAnnouncement(index: number) {
     const updated = config.announcementBar.announcements.filter((_, i) => i !== index);
     setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-    if (selectedIndex === index) { setSelectedIndex(null); setSelectedUrl(''); }
+    if (selectedIndex === index) {
+      setSelectedIndex(null);
+      setSelectedUrl('');
+      setSelectedStartDate('');
+      setSelectedEndDate('');
+      setShowScheduleFields(false);
+    }
     else if (selectedIndex !== null && selectedIndex > index) setSelectedIndex(selectedIndex - 1);
+    markChanged();
+  }
+
+  function reorderAnnouncements(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return;
+    const updated = [...config.announcementBar.announcements];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+
+    setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+
+    if (selectedIndex !== null) {
+      if (selectedIndex === fromIndex) {
+        setSelectedIndex(toIndex);
+      } else if (fromIndex < selectedIndex && selectedIndex <= toIndex) {
+        setSelectedIndex(selectedIndex - 1);
+      } else if (toIndex <= selectedIndex && selectedIndex < fromIndex) {
+        setSelectedIndex(selectedIndex + 1);
+      }
+    }
     markChanged();
   }
 
@@ -103,26 +148,24 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     const ann = config.announcementBar.announcements[index];
     setSelectedIndex(index);
     setSelectedUrl(ann.url || '');
-    setIsRichText(ann.richText || false);
-
-    if (ann.richText) {
-      setNewAnnouncementText(ann.text);
-      setTimeout(() => {
-        if (richEditorRef.current) {
-          richEditorRef.current.innerHTML = ann.text;
-          richEditorRef.current.focus();
-          const range = document.createRange();
-          range.selectNodeContents(richEditorRef.current);
-          range.collapse(false);
-          const sel = window.getSelection();
-          sel?.removeAllRanges();
-          sel?.addRange(range);
-          detectFormats();
-        }
-      }, 0);
-    } else {
-      setNewAnnouncementText(stripHtml(ann.text));
-    }
+    setSelectedStartDate(ann.startDate || '');
+    setSelectedEndDate(ann.endDate || '');
+    setShowScheduleFields(Boolean(ann.startDate || ann.endDate));
+    const normalizedText = ann.richText ? ann.text : wrapBareTextWithFontSize(ann.text);
+    setNewAnnouncementText(normalizedText);
+    setTimeout(() => {
+      if (richEditorRef.current) {
+        richEditorRef.current.innerHTML = normalizedText;
+        richEditorRef.current.focus();
+        const range = document.createRange();
+        range.selectNodeContents(richEditorRef.current);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+        detectFormats();
+      }
+    }, 0);
   }
 
   // ── Rich text input handler ──
@@ -136,35 +179,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       markChanged();
     }
     detectFormats();
-  }
-
-  // ── Toggle rich text mode ──
-  function toggleRichText() {
-    const next = !isRichText;
-    setIsRichText(next);
-
-    if (selectedIndex !== null) {
-      const updated = [...config.announcementBar.announcements];
-      updated[selectedIndex] = { ...updated[selectedIndex], richText: next };
-      if (!next) {
-        const plain = stripHtml(updated[selectedIndex].text);
-        updated[selectedIndex].text = plain;
-        setNewAnnouncementText(plain);
-      }
-      setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-      markChanged();
-    }
-
-    if (next) {
-      setTimeout(() => {
-        if (richEditorRef.current) {
-          richEditorRef.current.innerHTML = newAnnouncementText;
-          richEditorRef.current.focus();
-        }
-      }, 0);
-    } else {
-      setNewAnnouncementText(stripHtml(newAnnouncementText));
-    }
   }
 
   // ── Style helpers ──
@@ -183,10 +197,26 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   }
 
   const bg = config.announcementBar.style.background;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const isAnnouncementInWindow = (startDate?: string, endDate?: string) => {
+    if (!startDate && !endDate) return true;
+    const start = startDate ? new Date(startDate) : new Date(0);
+    start.setHours(0, 0, 0, 0);
+    const end = endDate ? new Date(endDate) : new Date(8640000000000000);
+    end.setHours(23, 59, 59, 999);
+    return today >= start && today <= end;
+  };
+
+  const visibleAnnouncements = config.announcementBar.announcements.filter((ann) =>
+    isAnnouncementInWindow(ann.startDate, ann.endDate)
+  );
+  const hasAnnouncementText = newAnnouncementText.trim().length > 0;
 
   
   return (
-    <section className="bg-surface-elevated shadow rounded-lg border border-border overflow-hidden">
+    <section className="bg-surface-elevated shadow rounded-2xl border border-border overflow-hidden">
       {/* Header */}
       <div className="px-6 py-3 border-b border-border bg-surface/60 flex items-center justify-between">
         <div className="flex items-center">
@@ -201,12 +231,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
         </button>
       </div>
 
-      <div className="p-4 space-y-6">
+      <div className="p-5 space-y-6">
         {/* Preview */}
         <div className="bg-gray-100 p-4 border border-gray-200 rounded-md dark:bg-gray-700 dark:border-gray-600">
           <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 dark:text-gray-400">Preview</h4>
           <div className="w-full bg-white border border-gray-300 rounded shadow-sm overflow-hidden dark:bg-gray-800 dark:border-gray-600">
-            {config.announcementBar.active && config.announcementBar.announcements.length > 0 && (
+            {config.announcementBar.active && visibleAnnouncements.length > 0 && (
               <div ref={scrollContainerRef} className="h-10 px-4 text-center text-sm font-medium overflow-hidden flex items-center justify-center group"
                 style={{
                   background: getBackgroundStyle(config.announcementBar.style.background),
@@ -214,7 +244,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 }}>
                 <div className="animate-scroll-left">
                   {[...Array(4)].map((_, setIndex) =>
-                    config.announcementBar.announcements.map((ann, i) => (
+                    visibleAnnouncements.map((ann, i) => (
                       <span key={`${setIndex}-${i}`} className="inline-block px-4">
                         {ann.url ? (
                           <a href={ann.url} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline" dangerouslySetInnerHTML={{ __html: ann.text }} />
@@ -233,25 +263,22 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left: Input + Style */}
-          <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Left: Input + Chips + Link */}
+          <div className="space-y-4 rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm">
+            <div className="border-b border-border pb-3">
+              <h4 className="text-lg font-semibold text-on-surface">Announcement Content</h4>
+              <p className="mt-1 text-xs text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
+            </div>
             {/* Announcement Input */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Announcement Text</label>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">Rich Text</span>
-                  <button onClick={toggleRichText}
-                    className={`px-2 py-0.5 text-xs rounded-md transition-colors ${isRichText ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                    {isRichText ? 'ON' : 'OFF'}
-                  </button>
-                </div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Message</label>
               </div>
 
               {/* Rich Text Toolbar */}
-              {isRichText && (
-                <div className="mb-2">
+              <div className={`mb-2 transition-all ${showRichToolbar ? 'opacity-100 max-h-16' : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'}`}>
+                <div>
                   <RichTextToolbar
                     activeFormats={activeFormats}
                     onFormat={(format) => {
@@ -265,29 +292,190 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     }}
                   />
                 </div>
-              )}
+              </div>
 
               <div className="flex gap-2">
-                {isRichText ? (
+                <div className="flex-1">
                   <div ref={richEditorRef} contentEditable suppressContentEditableWarning
                     onInput={onRichTextInput}
                     onMouseUp={detectFormats} onKeyUp={detectFormats}
-                    onFocus={() => setTimeout(ensureDefaultFontSize, 0)}
-                    className="flex-1 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-3 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 min-h-[56px] outline-none overflow-auto"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        addAnnouncement();
+                      }
+                    }}
+                    onFocus={() => {
+                      setShowRichToolbar(true);
+                      setTimeout(ensureDefaultFontSize, 0);
+                    }}
+                    onBlur={() => setShowRichToolbar(false)}
+                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-3 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 outline-none overflow-auto h-[44px] min-h-[44px] max-h-[360px] resize-y"
                     data-placeholder="Type announcement text..." />
-                ) : (
-                  <textarea value={newAnnouncementText}
-                    onChange={(e) => setNewAnnouncementText(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && addAnnouncement()}
-                    rows={2}
-                    className="flex-1 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-3 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                    placeholder="Type announcement and press Enter..." />
-                )}
+                </div>
                 <button onClick={addAnnouncement}
-                  disabled={!isRichText && !newAnnouncementText.trim()}
+                  disabled={!newAnnouncementText.trim()}
                   className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                  Add
+                  Add Message
                 </button>
+              </div>
+            </div>
+
+            {/* Announcements List */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message List</label>
+              <div className={`flex flex-wrap gap-2 ${config.announcementBar.announcements.length > 2 ? 'max-h-20 overflow-y-auto pr-1' : ''}`}>
+                {config.announcementBar.announcements.map((ann, index) => (
+                  <div key={index}
+                    draggable
+                    onDragStart={(e) => {
+                      setDraggedIndex(index);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (draggedIndex !== null) reorderAnnouncements(draggedIndex, index);
+                      setDraggedIndex(null);
+                    }}
+                    onDragEnd={() => setDraggedIndex(null)}
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 group relative cursor-move ${selectedIndex === index ? 'ring-1 ring-indigo-300/60 dark:ring-indigo-400/40' : ''} ${draggedIndex === index ? 'opacity-60' : ''}`}>
+                    <span onClick={() => selectAnnouncement(index)} className="cursor-pointer flex-1 truncate max-w-[250px]" title={stripHtml(ann.text)}>
+                      {stripHtml(ann.text)}
+                    </span>
+                    {ann.url && <a href={ann.url} target="_blank" rel="noopener noreferrer" className="ml-1 text-xs underline hover:no-underline" onClick={(e) => e.stopPropagation()}>🔗</a>}
+                    <button onClick={(e) => { e.stopPropagation(); removeAnnouncement(index); }}
+                      className="ml-2 text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-100 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">Message Link</label>
+              <div className="space-y-2">
+                <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">
+                  {selectedIndex !== null
+                    ? `Link for "${stripHtml(config.announcementBar.announcements[selectedIndex].text)}"`
+                    : 'Link URL (Optional)'}
+                </label>
+                <input type="url" value={selectedUrl}
+                  onChange={(e) => {
+                    const nextUrl = e.target.value;
+                    setSelectedUrl(nextUrl);
+                    if (selectedIndex !== null) {
+                      const updated = [...config.announcementBar.announcements];
+                      updated[selectedIndex] = { ...updated[selectedIndex], url: nextUrl };
+                      setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+                      markChanged();
+                    }
+                  }}
+                  disabled={!hasAnnouncementText}
+                  className="block w-full border-gray-300 rounded-md p-2.5 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                  placeholder="https://example.com" />
+                <p className="text-xs text-gray-500 dark:text-gray-400">Add message text first, then link this specific message.</p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">Message Schedule (Optional)</label>
+              <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">If no timing is set, this message appears whenever the announcement bar is active.</p>
+              {!showScheduleFields ? (
+                <button
+                  type="button"
+                  onClick={() => setShowScheduleFields(true)}
+                  disabled={!hasAnnouncementText}
+                  className="text-xs font-medium text-indigo-600 hover:text-indigo-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                >
+                  + Add schedule for this message only
+                </button>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Start Date</label>
+                      <input
+                        type="date"
+                        value={selectedStartDate}
+                        onChange={(e) => {
+                          const nextStart = e.target.value;
+                          setSelectedStartDate(nextStart);
+                          if (selectedIndex !== null) {
+                            const updated = [...config.announcementBar.announcements];
+                            updated[selectedIndex] = { ...updated[selectedIndex], startDate: nextStart || undefined };
+                            setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+                            markChanged();
+                          }
+                          if (!nextStart && !selectedEndDate) setShowScheduleFields(false);
+                        }}
+                        disabled={!hasAnnouncementText}
+                        className="block w-full border-gray-300 rounded-md p-2.5 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">End Date</label>
+                      <input
+                        type="date"
+                        value={selectedEndDate}
+                        onChange={(e) => {
+                          const nextEnd = e.target.value;
+                          setSelectedEndDate(nextEnd);
+                          if (selectedIndex !== null) {
+                            const updated = [...config.announcementBar.announcements];
+                            updated[selectedIndex] = { ...updated[selectedIndex], endDate: nextEnd || undefined };
+                            setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+                            markChanged();
+                          }
+                          if (!selectedStartDate && !nextEnd) setShowScheduleFields(false);
+                        }}
+                        disabled={!hasAnnouncementText}
+                        className="block w-full border-gray-300 rounded-md p-2.5 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                      />
+                    </div>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">If both dates are empty, this message stays active whenever the bar is active.</p>
+                </>
+              )}
+            </div>
+
+          </div>
+
+          {/* Right: Style */}
+          <div className="space-y-4 rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm">
+            <div className="border-b border-border pb-3">
+              <h4 className="text-lg font-semibold text-on-surface">Style</h4>
+              <p className="mt-1 text-xs text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">Background Type Guide</label>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <div
+                    className="h-16 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                    style={{ background: '#b91c1c' }}
+                  />
+                  <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Solid</p>
+                </div>
+                <div className="space-y-1">
+                  <div
+                    className="h-16 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                    style={{ background: 'linear-gradient(90deg, #111111 0%, #7f1d1d 55%, #ef4444 100%)' }}
+                  />
+                  <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Linear</p>
+                </div>
+                <div className="space-y-1">
+                  <div
+                    className="h-16 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                    style={{ background: 'radial-gradient(circle at 50% 45%, #ef4444 8%, #7f1d1d 45%, #111111 100%)' }}
+                  />
+                  <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Radial</p>
+                </div>
               </div>
             </div>
 
@@ -304,7 +492,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 </select>
               </div>
 
-              {/* Solid */}
               {bg.type === 'solid' && (
                 <div className="mt-4">
                   <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Background Color</label>
@@ -313,7 +500,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 </div>
               )}
 
-              {/* Linear Gradient */}
               {bg.type === 'linear' && (
                 <>
                   <div className="grid grid-cols-3 gap-4 mt-4">
@@ -351,7 +537,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 </>
               )}
 
-              {/* Radial Gradient */}
               {bg.type === 'radial' && (
                 <>
                   <div className="grid grid-cols-2 gap-4 mt-4">
@@ -373,82 +558,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" />
                   </div>
                 </>
-              )}
-            </div>
-          </div>
-
-          {/* Right: Schedule + List + URL */}
-          <div className="space-y-6">
-            {/* Schedule */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Schedule</label>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date</label>
-                  <input type="date" value={config.announcementBar.startDate}
-                    onChange={(e) => { setConfig({ ...config, announcementBar: { ...config.announcementBar, startDate: e.target.value } }); markChanged(); }}
-                    className="mt-1 block w-full border-gray-300 rounded-md p-2.5 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date</label>
-                  <input type="date" value={config.announcementBar.endDate}
-                    onChange={(e) => { setConfig({ ...config, announcementBar: { ...config.announcementBar, endDate: e.target.value } }); markChanged(); }}
-                    className="mt-1 block w-full border-gray-300 rounded-md p-2.5 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100" />
-                </div>
-              </div>
-            </div>
-
-            {/* Announcements List */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Announcements</label>
-              <div className={`flex flex-wrap gap-2 mb-4 ${config.announcementBar.announcements.length > 2 ? 'max-h-20 overflow-y-auto pr-1' : ''}`}>
-                {config.announcementBar.announcements.map((ann, index) => (
-                  <div key={index}
-                    className={`inline-flex items-center px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 group relative ${selectedIndex === index ? 'ring-1 ring-indigo-300/60 dark:ring-indigo-400/40' : ''}`}>
-                    <span onClick={() => selectAnnouncement(index)} className="cursor-pointer flex-1 truncate max-w-[250px]" title={stripHtml(ann.text)}>
-                      {stripHtml(ann.text)}
-                    </span>
-                    {ann.url && <a href={ann.url} target="_blank" rel="noopener noreferrer" className="ml-1 text-xs underline hover:no-underline" onClick={(e) => e.stopPropagation()}>🔗</a>}
-                    <button onClick={(e) => { e.stopPropagation(); removeAnnouncement(index); }}
-                      className="ml-2 text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-100 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Link Management */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">Link Management</label>
-              {selectedIndex !== null ? (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">
-                      Link URL for &quot;{stripHtml(config.announcementBar.announcements[selectedIndex].text)}&quot;
-                    </label>
-                    <input type="url" value={selectedUrl}
-                      onChange={(e) => {
-                        setSelectedUrl(e.target.value);
-                        const updated = [...config.announcementBar.announcements];
-                        updated[selectedIndex] = { ...updated[selectedIndex], url: e.target.value };
-                        setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-                        markChanged();
-                      }}
-                      className="block w-full border-gray-300 rounded-md p-2.5 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                      placeholder="https://example.com (optional)" />
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">These settings apply only to the selected announcement above.</p>
-                </div>
-              ) : (
-                <div className="text-center py-2 border-2 border-dashed border-gray-300 rounded-lg">
-                  <div className="text-gray-400">
-                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                    </svg>
-                    <p className="mt-2 text-sm">Click an announcement to add URL or enable rich text</p>
-                  </div>
-                </div>
               )}
             </div>
           </div>

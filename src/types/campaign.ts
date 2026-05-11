@@ -10,6 +10,8 @@ export interface Announcement {
   text: string;
   url?: string;
   richText?: boolean;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface PromoCard {
