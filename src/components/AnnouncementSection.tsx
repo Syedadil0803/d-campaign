@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Megaphone, X } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml } from '@/lib/utils';
@@ -20,13 +21,21 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const [selectedUrl, setSelectedUrl] = useState('');
   const [selectedStartDate, setSelectedStartDate] = useState('');
   const [selectedEndDate, setSelectedEndDate] = useState('');
-  const [showScheduleFields, setShowScheduleFields] = useState(false);
-  const [showLinkField, setShowLinkField] = useState(true);
   const [showRichToolbar, setShowRichToolbar] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
+  // Popup state
+  const [showLinkPopup, setShowLinkPopup] = useState(false);
+  const [showSchedulePopup, setShowSchedulePopup] = useState(false);
+  const [linkPos, setLinkPos] = useState<{ top: number; left: number } | null>(null);
+  const [schedulePos, setSchedulePos] = useState<{ top: number; left: number } | null>(null);
+
   const richEditorRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const linkBtnRef = useRef<HTMLButtonElement>(null);
+  const scheduleBtnRef = useRef<HTMLButtonElement>(null);
+  const linkPopupRef = useRef<HTMLDivElement>(null);
+  const schedulePopupRef = useRef<HTMLDivElement>(null);
   const {
     activeFormats,
     formatText,
@@ -51,6 +60,45 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       }
     }
   }, [config.announcementBar.announcements, config.announcementBar.active]);
+
+  // Position link popup below its button
+  useLayoutEffect(() => {
+    if (showLinkPopup && linkBtnRef.current) {
+      const rect = linkBtnRef.current.getBoundingClientRect();
+      setLinkPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
+    }
+  }, [showLinkPopup]);
+
+  // Position schedule popup below its button
+  useLayoutEffect(() => {
+    if (showSchedulePopup && scheduleBtnRef.current) {
+      const rect = scheduleBtnRef.current.getBoundingClientRect();
+      setSchedulePos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
+    }
+  }, [showSchedulePopup]);
+
+  // Click outside to close both popups
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        showLinkPopup &&
+        linkPopupRef.current && !linkPopupRef.current.contains(target) &&
+        linkBtnRef.current && !linkBtnRef.current.contains(target)
+      ) {
+        setShowLinkPopup(false);
+      }
+      if (
+        showSchedulePopup &&
+        schedulePopupRef.current && !schedulePopupRef.current.contains(target) &&
+        scheduleBtnRef.current && !scheduleBtnRef.current.contains(target)
+      ) {
+        setShowSchedulePopup(false);
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [showLinkPopup, showSchedulePopup]);
 
   // ── Toggle active ──
   function toggleActive() {
@@ -81,8 +129,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       setSelectedUrl('');
       setSelectedStartDate('');
       setSelectedEndDate('');
-      setShowScheduleFields(false);
-      setShowLinkField(false);
     } else {
       setConfig({
         ...config,
@@ -103,8 +149,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       setSelectedUrl('');
       setSelectedStartDate('');
       setSelectedEndDate('');
-      setShowScheduleFields(false);
-      setShowLinkField(false);
     }
     setNewAnnouncementText('');
     if (richEditorRef.current) richEditorRef.current.innerHTML = '';
@@ -120,8 +164,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       setSelectedUrl('');
       setSelectedStartDate('');
       setSelectedEndDate('');
-      setShowScheduleFields(false);
-      setShowLinkField(false);
     }
     else if (selectedIndex !== null && selectedIndex > index) setSelectedIndex(selectedIndex - 1);
     markChanged();
@@ -154,8 +196,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     setSelectedUrl(ann.url || '');
     setSelectedStartDate(ann.startDate || '');
     setSelectedEndDate(ann.endDate || '');
-    setShowScheduleFields(Boolean(ann.startDate || ann.endDate));
-    setShowLinkField(Boolean(ann.url));
     const normalizedText = ann.richText ? ann.text : wrapBareTextWithFontSize(ann.text);
     setNewAnnouncementText(normalizedText);
     setTimeout(() => {
@@ -217,7 +257,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const visibleAnnouncements = config.announcementBar.announcements.filter((ann) =>
     isAnnouncementInWindow(ann.startDate, ann.endDate)
   );
-  const hasAnnouncementText = newAnnouncementText.trim().length > 0;
 
   
   return (
@@ -286,21 +325,62 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message</label>
 
-              {/* Rich Text Toolbar */}
+              {/* Rich Text Toolbar + Link/Schedule buttons — same row, show/hide with focus */}
               <div className={`mb-2 transition-all ${showRichToolbar ? 'opacity-100 max-h-16' : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'}`}>
-                <div>
-                  <RichTextToolbar
-                    activeFormats={activeFormats}
-                    onFormat={(format) => {
-                      saveSelection();
-                      formatText(format);
+                <div className="flex items-center gap-1">
+                  <div className="flex-1 min-w-0">
+                    <RichTextToolbar
+                      activeFormats={activeFormats}
+                      onFormat={(format) => {
+                        saveSelection();
+                        formatText(format);
+                      }}
+                      onColorSelect={(color) => {
+                        saveSelection();
+                        applyColor(color);
+                        onRichTextInput();
+                      }}
+                    />
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-l border-gray-300 h-4 mx-0.5 shrink-0" />
+
+                  {/* Link button */}
+                  <button
+                    ref={linkBtnRef}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      if (!newAnnouncementText.trim()) return;
+                      setShowLinkPopup(!showLinkPopup);
+                      setShowSchedulePopup(false);
                     }}
-                    onColorSelect={(color) => {
-                      saveSelection();
-                      applyColor(color);
-                      onRichTextInput();
+                    disabled={!newAnnouncementText.trim()}
+                    className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${selectedUrl ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' : 'border-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 dark:border-gray-600 text-gray-600 dark:text-gray-300'}`}
+                    title={newAnnouncementText.trim() ? 'Add link' : 'Enter text first'}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                  </button>
+
+                  {/* Schedule button */}
+                  <button
+                    ref={scheduleBtnRef}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      if (!newAnnouncementText.trim()) return;
+                      setShowSchedulePopup(!showSchedulePopup);
+                      setShowLinkPopup(false);
                     }}
-                  />
+                    disabled={!newAnnouncementText.trim()}
+                    className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${(selectedStartDate || selectedEndDate) ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' : 'border-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 dark:border-gray-600 text-gray-600 dark:text-gray-300'}`}
+                    title={newAnnouncementText.trim() ? 'Schedule' : 'Enter text first'}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </button>
                 </div>
               </div>
 
@@ -333,193 +413,141 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   Add
                 </button>
               </div>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 italic">
-                The background color shown above reflects your current bar background. Change it anytime under <span className="font-medium not-italic">Style → Background</span>.
-              </p>
             </div>
 
-            {/* Link Section */}
-            <div>
-              {!showLinkField ? (
-                <button
-                  type="button"
-                  onClick={() => setShowLinkField(true)}
-                  disabled={!hasAnnouncementText}
-                  className="text-xs font-medium text-indigo-600 hover:text-indigo-700 disabled:text-gray-400 disabled:cursor-not-allowed"
-                >
-                  + Add link to this message (Optional)
-                </button>
-              ) : (
-                <>
-                  <div className="space-y-2">
-                    <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">
-                      {selectedIndex !== null
-                        ? `Link for "${stripHtml(config.announcementBar.announcements[selectedIndex].text)}"`
-                        : 'Link URL (Optional)'}
-                    </label>
-                    <input type="url" value={selectedUrl}
-                      onChange={(e) => {
-                        const nextUrl = e.target.value;
-                        setSelectedUrl(nextUrl);
+            {/* Link popup portal */}
+            {showLinkPopup && linkPos && typeof document !== 'undefined' && createPortal(
+              <div
+                ref={linkPopupRef}
+                onMouseDown={(e) => e.stopPropagation()}
+                style={{ position: 'absolute', top: linkPos.top, left: linkPos.left, zIndex: 9999 }}
+                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl p-3 w-[260px]"
+              >
+                <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Link URL</p>
+                <input
+                  type="url"
+                  value={selectedUrl}
+                  onChange={(e) => {
+                    const nextUrl = e.target.value;
+                    setSelectedUrl(nextUrl);
+                    if (selectedIndex !== null) {
+                      const updated = [...config.announcementBar.announcements];
+                      updated[selectedIndex] = { ...updated[selectedIndex], url: nextUrl || undefined };
+                      setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+                      markChanged();
+                    }
+                  }}
+                  className="block w-full border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 text-sm"
+                  placeholder="https://example.com"
+                  autoFocus
+                />
+                <div className="flex justify-between items-center mt-2">
+                  {selectedUrl && (
+                    <button
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setSelectedUrl('');
                         if (selectedIndex !== null) {
                           const updated = [...config.announcementBar.announcements];
-                          updated[selectedIndex] = { ...updated[selectedIndex], url: nextUrl };
+                          updated[selectedIndex] = { ...updated[selectedIndex], url: undefined };
+                          setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+                          markChanged();
+                        }
+                        setShowLinkPopup(false);
+                      }}
+                      className="text-xs text-red-500 hover:text-red-600"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    onMouseDown={(e) => { e.preventDefault(); setShowLinkPopup(false); }}
+                    className="ml-auto text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>,
+              document.body
+            )}
+
+            {/* Schedule popup portal */}
+            {showSchedulePopup && schedulePos && typeof document !== 'undefined' && createPortal(
+              <div
+                ref={schedulePopupRef}
+                onMouseDown={(e) => e.stopPropagation()}
+                style={{ position: 'absolute', top: schedulePos.top, left: schedulePos.left, zIndex: 9999 }}
+                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl p-3 w-[260px]"
+              >
+                <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Schedule (optional)</p>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5">Start Date</label>
+                    <input
+                      type="date"
+                      value={selectedStartDate}
+                      onChange={(e) => {
+                        const nextStart = e.target.value;
+                        setSelectedStartDate(nextStart);
+                        if (selectedIndex !== null) {
+                          const updated = [...config.announcementBar.announcements];
+                          updated[selectedIndex] = { ...updated[selectedIndex], startDate: nextStart || undefined };
                           setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
                           markChanged();
                         }
                       }}
-                      disabled={!hasAnnouncementText}
-                      className="block w-full border-gray-300 rounded-md p-2.5 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-60 disabled:cursor-not-allowed"
-                      placeholder="https://example.com" />
-                  
+                      className="block w-full border-gray-300 rounded-md p-1.5 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 text-sm"
+                    />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowLinkField(false)}
-                    className="mt-2 text-xs font-medium text-indigo-600 hover:text-indigo-700"
-                  >
-                    - Hide link
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* Date Scheduling */}
-            <div>
-              {!showScheduleFields ? (
-                <button
-                  type="button"
-                  onClick={() => setShowScheduleFields(true)}
-                  disabled={!hasAnnouncementText}
-                  className="text-xs font-medium text-indigo-600 hover:text-indigo-700 disabled:text-gray-400 disabled:cursor-not-allowed"
-                >
-                  + Add schedule for this message only (Optional)
-                </button>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Start Date</label>
-                      <input
-                        type="date"
-                        value={selectedStartDate}
-                        onChange={(e) => {
-                          const nextStart = e.target.value;
-                          setSelectedStartDate(nextStart);
-                          if (selectedIndex !== null) {
-                            const updated = [...config.announcementBar.announcements];
-                            updated[selectedIndex] = { ...updated[selectedIndex], startDate: nextStart || undefined };
-                            setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-                            markChanged();
-                          }
-                          if (!nextStart && !selectedEndDate) setShowScheduleFields(false);
-                        }}
-                        disabled={!hasAnnouncementText}
-                        className="block w-full border-gray-300 rounded-md p-2.5 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">End Date</label>
-                      <input
-                        type="date"
-                        value={selectedEndDate}
-                        onChange={(e) => {
-                          const nextEnd = e.target.value;
-                          setSelectedEndDate(nextEnd);
-                          if (selectedIndex !== null) {
-                            const updated = [...config.announcementBar.announcements];
-                            updated[selectedIndex] = { ...updated[selectedIndex], endDate: nextEnd || undefined };
-                            setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-                            markChanged();
-                          }
-                          if (!selectedStartDate && !nextEnd) setShowScheduleFields(false);
-                        }}
-                        disabled={!hasAnnouncementText}
-                        className="block w-full border-gray-300 rounded-md p-2.5 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5">End Date</label>
+                    <input
+                      type="date"
+                      value={selectedEndDate}
+                      onChange={(e) => {
+                        const nextEnd = e.target.value;
+                        setSelectedEndDate(nextEnd);
+                        if (selectedIndex !== null) {
+                          const updated = [...config.announcementBar.announcements];
+                          updated[selectedIndex] = { ...updated[selectedIndex], endDate: nextEnd || undefined };
+                          setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+                          markChanged();
+                        }
+                      }}
+                      className="block w-full border-gray-300 rounded-md p-1.5 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 text-sm"
+                    />
                   </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">If both dates are empty, this message stays active whenever the bar is active.</p>
-                  <button
-                    type="button"
-                    onClick={() => setShowScheduleFields(false)}
-                    className="mt-2 text-xs font-medium text-indigo-600 hover:text-indigo-700"
-                  >
-                    - Hide schedule
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* Announcements List - Now at the bottom */}
-            <div className="flex-1 flex flex-col border-t border-border pt-4 mt-auto">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message List</label>
-              <div className={`flex flex-wrap gap-2 overflow-y-auto pr-1 ${config.announcementBar.announcements.length > 2 ? 'max-h-40' : ''}`}>
-                {config.announcementBar.announcements.map((ann, index) => (
-                  <div key={index}
-                    draggable
-                    onDragStart={(e) => {
-                      setDraggedIndex(index);
-                      e.dataTransfer.effectAllowed = 'move';
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = 'move';
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      if (draggedIndex !== null) reorderAnnouncements(draggedIndex, index);
-                      setDraggedIndex(null);
-                    }}
-                    onDragEnd={() => setDraggedIndex(null)}
-                    className={`inline-flex items-center px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 group relative cursor-move ${selectedIndex === index ? 'ring-1 ring-indigo-300/60 dark:ring-indigo-400/40' : ''} ${draggedIndex === index ? 'opacity-60' : ''}`}>
-                    <span onClick={() => selectAnnouncement(index)} className="cursor-pointer flex-1 truncate max-w-[250px]" title={stripHtml(ann.text)}>
-                      {stripHtml(ann.text)}
-                    </span>
-                    <button onClick={(e) => { e.stopPropagation(); removeAnnouncement(index); }}
-                      className="ml-2 text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-100 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <X className="w-3 h-3" />
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500">Leave empty to always show when bar is active.</p>
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  {(selectedStartDate || selectedEndDate) && (
+                    <button
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setSelectedStartDate('');
+                        setSelectedEndDate('');
+                        if (selectedIndex !== null) {
+                          const updated = [...config.announcementBar.announcements];
+                          updated[selectedIndex] = { ...updated[selectedIndex], startDate: undefined, endDate: undefined };
+                          setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+                          markChanged();
+                        }
+                      }}
+                      className="text-xs text-red-500 hover:text-red-600"
+                    >
+                      Clear
                     </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-
-          {/* Right: Style */}
-          <div className="space-y-4 rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm">
-            <div className="border-b border-border pb-3">
-              <h4 className="text-lg font-semibold text-on-surface">Style</h4>
-              <p className="mt-1 text-xs text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">Background Type Guide</label>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <div
-                    className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
-                    style={{ background: '#b91c1c' }}
-                  />
-                  <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Solid</p>
+                  )}
+                  <button
+                    onMouseDown={(e) => { e.preventDefault(); setShowSchedulePopup(false); }}
+                    className="ml-auto text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700"
+                  >
+                    Done
+                  </button>
                 </div>
-                <div className="space-y-1">
-                  <div
-                    className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
-                    style={{ background: 'linear-gradient(90deg, #111111 0%, #7f1d1d 55%, #ef4444 100%)' }}
-                  />
-                  <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Linear</p>
-                </div>
-                <div className="space-y-1">
-                  <div
-                    className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
-                    style={{ background: 'radial-gradient(circle at 50% 45%, #ef4444 8%, #7f1d1d 45%, #111111 100%)' }}
-                  />
-                  <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Radial</p>
-                </div>
-              </div>
-            </div>
+              </div>,
+              document.body
+            )}
 
             {/* Style Customization */}
             <div>
@@ -602,6 +630,82 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 </>
               )}
             </div>
+
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 italic">
+              The background color shown above reflects your current bar background. Change it anytime under <span className="font-medium not-italic">Style → Background</span>.
+            </p>
+
+          </div>
+
+          {/* Right: Message List + Style */}
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message List</label>
+              <div className={`flex flex-wrap gap-2 overflow-y-auto pr-1 ${config.announcementBar.announcements.length > 2 ? 'max-h-40' : ''}`}>
+                {config.announcementBar.announcements.map((ann, index) => (
+                  <div key={index}
+                    draggable
+                    onDragStart={(e) => {
+                      setDraggedIndex(index);
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (draggedIndex !== null) reorderAnnouncements(draggedIndex, index);
+                      setDraggedIndex(null);
+                    }}
+                    onDragEnd={() => setDraggedIndex(null)}
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 group relative cursor-move ${selectedIndex === index ? 'ring-1 ring-indigo-300/60 dark:ring-indigo-400/40' : ''} ${draggedIndex === index ? 'opacity-60' : ''}`}>
+                    <span onClick={() => selectAnnouncement(index)} className="cursor-pointer flex-1 truncate max-w-[250px]" title={stripHtml(ann.text)}>
+                      {stripHtml(ann.text)}
+                    </span>
+                    <button onClick={(e) => { e.stopPropagation(); removeAnnouncement(index); }}
+                      className="ml-2 text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-100 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm">
+            <div className="border-b border-border pb-3">
+              <h4 className="text-lg font-semibold text-on-surface">Style</h4>
+              <p className="mt-1 text-xs text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">Background Type Guide</label>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <div
+                    className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                    style={{ background: '#b91c1c' }}
+                  />
+                  <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Solid</p>
+                </div>
+                <div className="space-y-1">
+                  <div
+                    className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                    style={{ background: 'linear-gradient(90deg, #111111 0%, #7f1d1d 55%, #ef4444 100%)' }}
+                  />
+                  <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Linear</p>
+                </div>
+                <div className="space-y-1">
+                  <div
+                    className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                    style={{ background: 'radial-gradient(circle at 50% 45%, #ef4444 8%, #7f1d1d 45%, #111111 100%)' }}
+                  />
+                  <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Radial</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
           </div>
         </div>
       </div>
