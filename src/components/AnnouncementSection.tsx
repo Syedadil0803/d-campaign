@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Megaphone, X } from 'lucide-react';
+import { Megaphone, MoreVertical } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
@@ -23,6 +23,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const [selectedEndDate, setSelectedEndDate] = useState('');
   const [showRichToolbar, setShowRichToolbar] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [actionMenuIndex, setActionMenuIndex] = useState<number | null>(null);
+  const [actionMenuPos, setActionMenuPos] = useState<{ top: number; left: number } | null>(null);
 
   // Popup state
   const [showLinkPopup, setShowLinkPopup] = useState(false);
@@ -36,6 +38,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const scheduleBtnRef = useRef<HTMLButtonElement>(null);
   const linkPopupRef = useRef<HTMLDivElement>(null);
   const schedulePopupRef = useRef<HTMLDivElement>(null);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
   const {
     activeFormats,
     formatText,
@@ -95,96 +98,105 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       ) {
         setShowSchedulePopup(false);
       }
+      if (actionMenuIndex !== null && actionMenuRef.current && !actionMenuRef.current.contains(target)) {
+        setActionMenuIndex(null);
+        setActionMenuPos(null);
+      }
     };
     document.addEventListener('mousedown', handleMouseDown);
     return () => document.removeEventListener('mousedown', handleMouseDown);
-  }, [showLinkPopup, showSchedulePopup]);
+  }, [showLinkPopup, showSchedulePopup, actionMenuIndex]);
 
-  // ── Toggle active ──
-  function toggleActive() {
-    setConfig({
-      ...config,
-      announcementBar: { ...config.announcementBar, active: !config.announcementBar.active },
-    });
-    markChanged();
-  }
-
-  // ── Add / Update announcement ──
   function addAnnouncement() {
-    const text = getNormalizedHTML();
-    if (!text) return;
+    const html = getNormalizedHTML();
+    const updated = [...config.announcementBar.announcements];
 
     if (selectedIndex !== null) {
-      const updated = [...config.announcementBar.announcements];
       updated[selectedIndex] = {
         ...updated[selectedIndex],
-        text,
-        richText: true,
+        text: html,
         url: selectedUrl || undefined,
         startDate: selectedStartDate || undefined,
         endDate: selectedEndDate || undefined,
+        richText: true,
       };
-      setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-      setSelectedIndex(null);
-      setSelectedUrl('');
-      setSelectedStartDate('');
-      setSelectedEndDate('');
     } else {
-      setConfig({
-        ...config,
-        announcementBar: {
-          ...config.announcementBar,
-          announcements: [
-            ...config.announcementBar.announcements,
-            {
-              text,
-              richText: true,
-              url: selectedUrl || undefined,
-              startDate: selectedStartDate || undefined,
-              endDate: selectedEndDate || undefined,
-            },
-          ],
-        },
+      updated.push({
+        text: html,
+        url: selectedUrl || undefined,
+        startDate: selectedStartDate || undefined,
+        endDate: selectedEndDate || undefined,
+        richText: true,
       });
-      setSelectedUrl('');
-      setSelectedStartDate('');
-      setSelectedEndDate('');
     }
+
+    setConfig({
+      ...config,
+      announcementBar: {
+        ...config.announcementBar,
+        announcements: updated,
+      },
+    });
+
     setNewAnnouncementText('');
-    if (richEditorRef.current) richEditorRef.current.innerHTML = '';
+    setSelectedIndex(null);
+    setSelectedUrl('');
+    setSelectedStartDate('');
+    setSelectedEndDate('');
+    if (richEditorRef.current) {
+      richEditorRef.current.innerHTML = '';
+      richEditorRef.current.focus();
+    }
+    detectFormats();
     markChanged();
   }
 
-  // ── Remove announcement ──
   function removeAnnouncement(index: number) {
-    const updated = config.announcementBar.announcements.filter((_, i) => i !== index);
-    setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+    const updated = config.announcementBar.announcements.filter((_, currentIndex) => currentIndex !== index);
+    setConfig({
+      ...config,
+      announcementBar: {
+        ...config.announcementBar,
+        announcements: updated,
+      },
+    });
+
     if (selectedIndex === index) {
       setSelectedIndex(null);
+      setNewAnnouncementText('');
       setSelectedUrl('');
       setSelectedStartDate('');
       setSelectedEndDate('');
+      if (richEditorRef.current) {
+        richEditorRef.current.innerHTML = '';
+      }
+    } else if (selectedIndex !== null && selectedIndex > index) {
+      setSelectedIndex(selectedIndex - 1);
     }
-    else if (selectedIndex !== null && selectedIndex > index) setSelectedIndex(selectedIndex - 1);
+
     markChanged();
   }
 
   function reorderAnnouncements(fromIndex: number, toIndex: number) {
-    if (fromIndex === toIndex) return;
     const updated = [...config.announcementBar.announcements];
-    const [moved] = updated.splice(fromIndex, 1);
-    updated.splice(toIndex, 0, moved);
+    const [movedAnnouncement] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, movedAnnouncement);
+    const currentSelectedIndex = selectedIndex;
 
-    setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+    setConfig({
+      ...config,
+      announcementBar: {
+        ...config.announcementBar,
+        announcements: updated,
+      },
+    });
 
-    if (selectedIndex !== null) {
-      if (selectedIndex === fromIndex) {
-        setSelectedIndex(toIndex);
-      } else if (fromIndex < selectedIndex && selectedIndex <= toIndex) {
-        setSelectedIndex(selectedIndex - 1);
-      } else if (toIndex <= selectedIndex && selectedIndex < fromIndex) {
-        setSelectedIndex(selectedIndex + 1);
-      }
+    if (currentSelectedIndex === fromIndex) {
+      setSelectedIndex(toIndex);
+    } else if (currentSelectedIndex !== null && fromIndex < currentSelectedIndex && currentSelectedIndex <= toIndex) {
+      setSelectedIndex(currentSelectedIndex - 1);
+    } else if (currentSelectedIndex !== null && toIndex <= currentSelectedIndex && currentSelectedIndex < fromIndex) {
+      setSelectedIndex(currentSelectedIndex + 1);
     }
     markChanged();
   }
@@ -213,6 +225,45 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     }, 0);
   }
 
+  function openActionMenu(index: number, button: HTMLButtonElement) {
+    const rect = button.getBoundingClientRect();
+    setActionMenuIndex(index);
+    setActionMenuPos({
+      top: rect.bottom + window.scrollY + 6,
+      left: Math.max(12, rect.right + window.scrollX - 180),
+    });
+    setShowLinkPopup(false);
+    setShowSchedulePopup(false);
+  }
+
+  function handleMenuEdit(index: number) {
+    selectAnnouncement(index);
+    setActionMenuIndex(null);
+    setActionMenuPos(null);
+  }
+
+  function handleMenuAddLink(index: number) {
+    selectAnnouncement(index);
+    setShowLinkPopup(true);
+    setShowSchedulePopup(false);
+    setActionMenuIndex(null);
+    setActionMenuPos(null);
+  }
+
+  function handleMenuSchedule(index: number) {
+    selectAnnouncement(index);
+    setShowSchedulePopup(true);
+    setShowLinkPopup(false);
+    setActionMenuIndex(null);
+    setActionMenuPos(null);
+  }
+
+  function handleMenuDelete(index: number) {
+    removeAnnouncement(index);
+    setActionMenuIndex(null);
+    setActionMenuPos(null);
+  }
+
   // ── Rich text input handler ──
   function onRichTextInput() {
     const html = getNormalizedHTML();
@@ -237,6 +288,14 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           background: { ...config.announcementBar.style.background, ...patch },
         },
       },
+    });
+    markChanged();
+  }
+
+  function toggleActive() {
+    setConfig({
+      ...config,
+      announcementBar: { ...config.announcementBar, active: !config.announcementBar.active },
     });
     markChanged();
   }
@@ -313,16 +372,16 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
           {/* Left: Input + Chips + Link */}
-          <div className="space-y-4 rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col">
+          <div className="space-y-4 rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col h-full">
             <div className="border-b border-border pb-3">
               <h4 className="text-lg font-semibold text-on-surface">Announcement Content</h4>
               <p className="mt-1 text-xs text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
             </div>
             
             {/* Announcement Input */}
-            <div>
+            <div className="flex-1 flex flex-col justify-between">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message</label>
 
               {/* Rich Text Toolbar + Link/Schedule buttons — same row, show/hide with focus */}
@@ -412,8 +471,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed self-end">
                   Add
                 </button>
+                </div>
               </div>
-            </div>
 
             {/* Link popup portal */}
             {showLinkPopup && linkPos && typeof document !== 'undefined' && createPortal(
@@ -549,6 +608,46 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
               document.body
             )}
 
+            {actionMenuIndex !== null && actionMenuPos && typeof document !== 'undefined' && createPortal(
+              <div
+                ref={actionMenuRef}
+                onMouseDown={(e) => e.stopPropagation()}
+                style={{ position: 'absolute', top: actionMenuPos.top, left: actionMenuPos.left, zIndex: 9999 }}
+                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl py-1 w-[180px]"
+              >
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); handleMenuEdit(actionMenuIndex); }}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); handleMenuAddLink(actionMenuIndex); }}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Add link
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); handleMenuSchedule(actionMenuIndex); }}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Schedule
+                </button>
+                <div className="my-1 h-px bg-gray-200 dark:bg-gray-700" />
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); handleMenuDelete(actionMenuIndex); }}
+                  className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                >
+                  Delete
+                </button>
+              </div>,
+              document.body
+            )}
+
             {/* Style Customization */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">Style Customization</label>
@@ -637,75 +736,90 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
           </div>
 
-          {/* Right: Message List + Style */}
+          {/* Right: Message List + Style (single card split into equal halves) */}
           <div className="space-y-4">
-            <div className="rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message List</label>
-              <div className={`flex flex-wrap gap-2 overflow-y-auto pr-1 ${config.announcementBar.announcements.length > 2 ? 'max-h-40' : ''}`}>
-                {config.announcementBar.announcements.map((ann, index) => (
-                  <div key={index}
-                    draggable
-                    onDragStart={(e) => {
-                      setDraggedIndex(index);
-                      e.dataTransfer.effectAllowed = 'move';
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = 'move';
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      if (draggedIndex !== null) reorderAnnouncements(draggedIndex, index);
-                      setDraggedIndex(null);
-                    }}
-                    onDragEnd={() => setDraggedIndex(null)}
-                    className={`inline-flex items-center px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 group relative cursor-move ${selectedIndex === index ? 'ring-1 ring-indigo-300/60 dark:ring-indigo-400/40' : ''} ${draggedIndex === index ? 'opacity-60' : ''}`}>
-                    <span onClick={() => selectAnnouncement(index)} className="cursor-pointer flex-1 truncate max-w-[250px]" title={stripHtml(ann.text)}>
-                      {stripHtml(ann.text)}
-                    </span>
-                    <button onClick={(e) => { e.stopPropagation(); removeAnnouncement(index); }}
-                      className="ml-2 text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-100 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <X className="w-3 h-3" />
-                    </button>
+            <div className="rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col h-full min-h-0">
+              <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message List</label>
+                {config.announcementBar.announcements.length === 0 ? (
+                  <div className="h-36 flex items-center justify-center text-center text-sm text-gray-400 dark:text-gray-500">
+                    Added text will appear here once added
                   </div>
-                ))}
+                ) : (
+                  <div className={`flex flex-wrap gap-2 ${config.announcementBar.announcements.length > 2 ? 'max-h-64 overflow-y-auto' : ''}`}>
+                    {config.announcementBar.announcements.map((ann, index) => (
+                      <div key={index}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedIndex(index);
+                          e.dataTransfer.effectAllowed = 'move';
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (draggedIndex !== null) reorderAnnouncements(draggedIndex, index);
+                          setDraggedIndex(null);
+                        }}
+                        onDragEnd={() => setDraggedIndex(null)}
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 group relative cursor-move ${selectedIndex === index ? 'ring-1 ring-indigo-300/60 dark:ring-indigo-400/40' : ''} ${draggedIndex === index ? 'opacity-60' : ''}`}>
+                        <span className="flex-1 truncate max-w-[250px]" title={stripHtml(ann.text)}>
+                          {stripHtml(ann.text)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openActionMenu(index, e.currentTarget);
+                          }}
+                          className="ml-2 text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Message actions"
+                        >
+                          <MoreVertical className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 min-h-0 border-t border-border pt-4 overflow-auto">
+                <div className="border-b border-border pb-3">
+                  <h4 className="text-lg font-semibold text-on-surface">Style</h4>
+                  <p className="mt-1 text-xs text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">Background Type Guide</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <div
+                        className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                        style={{ background: '#b91c1c' }}
+                      />
+                      <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Solid</p>
+                    </div>
+                    <div className="space-y-1">
+                      <div
+                        className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                        style={{ background: 'linear-gradient(90deg, #111111 0%, #7f1d1d 55%, #ef4444 100%)' }}
+                      />
+                      <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Linear</p>
+                    </div>
+                    <div className="space-y-1">
+                      <div
+                        className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                        style={{ background: 'radial-gradient(circle at 50% 45%, #ef4444 8%, #7f1d1d 45%, #111111 100%)' }}
+                      />
+                      <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Radial</p>
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </div>
-
-            <div className="rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm">
-            <div className="border-b border-border pb-3">
-              <h4 className="text-lg font-semibold text-on-surface">Style</h4>
-              <p className="mt-1 text-xs text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">Background Type Guide</label>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <div
-                    className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
-                    style={{ background: '#b91c1c' }}
-                  />
-                  <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Solid</p>
-                </div>
-                <div className="space-y-1">
-                  <div
-                    className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
-                    style={{ background: 'linear-gradient(90deg, #111111 0%, #7f1d1d 55%, #ef4444 100%)' }}
-                  />
-                  <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Linear</p>
-                </div>
-                <div className="space-y-1">
-                  <div
-                    className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
-                    style={{ background: 'radial-gradient(circle at 50% 45%, #ef4444 8%, #7f1d1d 45%, #111111 100%)' }}
-                  />
-                  <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Radial</p>
-                </div>
-              </div>
-            </div>
-
-          </div>
           </div>
         </div>
       </div>
