@@ -729,11 +729,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 </>
               )}
             </div>
-
-            <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 italic">
-              The background color shown above reflects your current bar background. Change it anytime under <span className="font-medium not-italic">Style → Background</span>.
-            </p>
-
           </div>
 
           {/* Right: Message List + Style (single card split into equal halves) */}
@@ -743,7 +738,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message List</label>
                 {config.announcementBar.announcements.length === 0 ? (
                   <div className="h-36 flex items-center justify-center text-center text-sm text-gray-400 dark:text-gray-500">
-                    Added text will appear here once added
+                    Added text from the left input box will be displayed here
                   </div>
                 ) : (
                   <div className={`flex flex-wrap gap-2 ${config.announcementBar.announcements.length > 2 ? 'max-h-64 overflow-y-auto' : ''}`}>
@@ -796,21 +791,21 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1">
                       <div
-                        className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                        className="h-16 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
                         style={{ background: '#b91c1c' }}
                       />
                       <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Solid</p>
                     </div>
                     <div className="space-y-1">
                       <div
-                        className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                        className="h-16 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
                         style={{ background: 'linear-gradient(90deg, #111111 0%, #7f1d1d 55%, #ef4444 100%)' }}
                       />
                       <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Linear</p>
                     </div>
                     <div className="space-y-1">
                       <div
-                        className="h-10 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                        className="h-16 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
                         style={{ background: 'radial-gradient(circle at 50% 45%, #ef4444 8%, #7f1d1d 45%, #111111 100%)' }}
                       />
                       <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Radial</p>
