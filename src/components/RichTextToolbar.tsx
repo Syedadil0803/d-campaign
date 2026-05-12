@@ -8,7 +8,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import PresetColorPicker from './PresetColorPicker';
 
 interface ActiveFormats {
@@ -44,6 +44,7 @@ export default function RichTextToolbar({
   onButtonWidthChange,
 }: RichTextToolbarProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const colorBtnRef = useRef<HTMLButtonElement>(null);
 
   const handleFormat = (format: string) => {
     onFormat(format);
@@ -60,6 +61,7 @@ export default function RichTextToolbar({
         {/* Color Picker */}
         <div className="relative flex items-center">
           <button
+            ref={colorBtnRef}
             className="cursor-pointer flex flex-col items-center px-1.5 py-1 border rounded transition-colors border-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 dark:border-gray-600"
             title="Text Color"
             onMouseDown={(e) => {
@@ -76,6 +78,7 @@ export default function RichTextToolbar({
 
           {showColorPicker && (
             <PresetColorPicker
+              anchorEl={colorBtnRef.current}
               currentColor={activeFormats.color}
               onColorSelect={handleColorSelect}
               onClose={() => setShowColorPicker(false)}
