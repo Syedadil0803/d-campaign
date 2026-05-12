@@ -56,8 +56,13 @@
   pointer-events: none;
 }
 
-/* Rich text editor — default bg #d6d6d6, overridden inline per-editor
-   to match the actual card/bar background so editing is WYSIWYG */
+/* Hide scrollbar on rich editor but keep scroll functional */
 .rich-editor {
   background-color: #d6d6d6;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.rich-editor::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
 }
