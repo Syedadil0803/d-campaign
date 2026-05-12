@@ -304,8 +304,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 </div>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-end">
                 <div className="flex-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Enter text below</p>
                   <div ref={richEditorRef} contentEditable suppressContentEditableWarning
                     onInput={onRichTextInput}
                     onMouseUp={detectFormats} onKeyUp={detectFormats}
@@ -320,15 +321,18 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       setTimeout(ensureDefaultFontSize, 0);
                     }}
                     onBlur={() => setShowRichToolbar(false)}
-                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-3 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 outline-none overflow-auto h-[44px] min-h-[44px] max-h-[360px] resize-y"
-                    data-placeholder="Type announcement text..." />
+                    className="rich-editor shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-3 border dark:border-gray-600 outline-none overflow-auto h-[44px] min-h-[44px] max-h-[360px] resize-y"
+                    style={{ background: getBackgroundStyle(config.announcementBar.style.background) }} />
                 </div>
                 <button onClick={addAnnouncement}
                   disabled={!newAnnouncementText.trim()}
-                  className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                  className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed self-end">
                   Add
                 </button>
               </div>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 italic">
+                The background color shown above reflects your current bar background. Change it anytime under <span className="font-medium not-italic">Style → Background</span>.
+              </p>
             </div>
 
             {/* Link Section */}

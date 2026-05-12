@@ -49,9 +49,15 @@
   100% { transform: translateX(-25%); }
 }
 
-/* Contenteditable placeholder */
+/* Contenteditable placeholder — default gray for plain editors */
 [contenteditable]:empty:before {
   content: attr(data-placeholder);
   color: #9ca3af;
   pointer-events: none;
+}
+
+/* Rich text editor — default bg #d6d6d6, overridden inline per-editor
+   to match the actual card/bar background so editing is WYSIWYG */
+.rich-editor {
+  background-color: #d6d6d6;
 }

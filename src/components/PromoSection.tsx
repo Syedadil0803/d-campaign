@@ -414,29 +414,35 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-1">Enter text below</p>
               <div ref={titleRef} contentEditable suppressContentEditableWarning
                 onInput={()=>onFieldInput('title')} onFocus={()=>onFieldFocus('title',titleRef)}
                 onMouseUp={detectFormats} onKeyUp={detectFormats}
-                className="mt-1 block w-full border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 min-h-[38px] outline-none break-words focus:ring-indigo-500 focus:border-indigo-500"
-                data-placeholder="Get 20% OFF" />
+                className="rich-editor block w-full border-gray-300 rounded-md p-2 border dark:border-gray-600 min-h-[38px] outline-none break-words focus:ring-indigo-500 focus:border-indigo-500"
+                style={{ background: getBackgroundStyle(config.promoCard.style.background) }} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Subtitle</label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-1">Enter text below</p>
               <div ref={subtitleRef} contentEditable suppressContentEditableWarning
                 onInput={()=>onFieldInput('subtitle')} onFocus={()=>onFieldFocus('subtitle',subtitleRef)}
                 onMouseUp={detectFormats} onKeyUp={detectFormats}
-                className="mt-1 block w-full border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 min-h-[38px] outline-none break-words focus:ring-indigo-500 focus:border-indigo-500"
-                data-placeholder="Limited time offer" />
+                className="rich-editor block w-full border-gray-300 rounded-md p-2 border dark:border-gray-600 min-h-[38px] outline-none break-words focus:ring-indigo-500 focus:border-indigo-500"
+                style={{ background: getBackgroundStyle(config.promoCard.style.background) }} />
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-1">Enter text below</p>
             <div ref={descRef} contentEditable suppressContentEditableWarning
               onInput={()=>onFieldInput('description')} onFocus={()=>onFieldFocus('description',descRef)}
               onMouseUp={detectFormats} onKeyUp={detectFormats}
-              className="mt-1 block w-full border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 min-h-[48px] outline-none break-words focus:ring-indigo-500 focus:border-indigo-500"
-              data-placeholder="Sign up for our newsletter today!" />
+              className="rich-editor block w-full border-gray-300 rounded-md p-2 border dark:border-gray-600 min-h-[48px] outline-none break-words focus:ring-indigo-500 focus:border-indigo-500"
+              style={{ background: getBackgroundStyle(config.promoCard.style.background) }} />
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1.5 italic">
+              The background color shown in the editors reflects your card background. Change it anytime under <span className="font-medium not-italic">Card Appearance → Background</span>.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -499,11 +505,12 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
           {config.promoCard.showTimer && (
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Timer Text</label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-1">Enter text below</p>
               <div ref={timerRef} contentEditable suppressContentEditableWarning
                 onInput={()=>onFieldInput('timer')} onFocus={()=>onFieldFocus('timer',timerRef)}
                 onMouseUp={detectFormats} onKeyUp={detectFormats}
-                className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 outline-none break-words min-h-[48px]"
-                data-placeholder="Ends in {hh}:{mm}:{ss}" />
+                className="rich-editor shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-2 border dark:border-gray-600 outline-none break-words min-h-[48px]"
+                style={{ background: getBackgroundStyle(config.promoCard.style.background) }} />
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Use tokens like {`{d}`}, {`{hh}`}, {`{mm}`}, {`{ss}`}. Select text to apply colors and sizes.
               </p>
@@ -567,11 +574,12 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Button Text</label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-1">Enter text below</p>
                 <div ref={buttonRef} contentEditable suppressContentEditableWarning
                   onInput={()=>onFieldInput('button')} onFocus={()=>onFieldFocus('button',buttonRef)}
                   onMouseUp={detectFormats} onKeyUp={detectFormats}
-                  className="mt-1 block w-full border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 min-h-[38px] outline-none break-words focus:ring-indigo-500 focus:border-indigo-500"
-                  data-placeholder="Shop Now" />
+                  className="rich-editor block w-full border-gray-300 rounded-md p-2 border dark:border-gray-600 min-h-[38px] outline-none break-words focus:ring-indigo-500 focus:border-indigo-500"
+                  style={{ background: getBackgroundStyle(config.promoCard.style.buttonStyle?.background || config.promoCard.style.background) }} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Button URL</label>
