@@ -91,7 +91,7 @@ export const defaultConfig: CampaignConfig = {
     endDate: '',
     style: {
       background: {
-        type: 'linear',
+        type: 'solid',
         startColor: '#dc2626',
         endColor: '#dc2626',
         direction: 'to right',

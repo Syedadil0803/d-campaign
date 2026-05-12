@@ -86,8 +86,38 @@ function migrateButtonFullWidth(promoCard: any): CampaignConfig['promoCard'] {
   return promoCard;
 }
 
+function normalizeAnnouncementBackgroundType(config: any): CampaignConfig['announcementBar'] {
+  const announcementBar = { ...config.announcementBar };
+  const background = announcementBar?.style?.background;
+
+  if (!background) return announcementBar;
+
+  const normalizedBackground = { ...background };
+  const validTypes = ['solid', 'linear', 'radial'];
+
+  if (!validTypes.includes(normalizedBackground.type)) {
+    normalizedBackground.type = 'solid';
+  }
+
+  // Root-level normalization: same start/end color should persist as solid type.
+  if (normalizedBackground.startColor === normalizedBackground.endColor) {
+    normalizedBackground.type = 'solid';
+  }
+
+  return {
+    ...announcementBar,
+    style: {
+      ...announcementBar.style,
+      background: normalizedBackground,
+    },
+  };
+}
+
 function migrateConfig(config: any, version: string): CampaignConfig {
   let migrated = { ...config };
+
+  // Always normalize announcement background style regardless of version.
+  migrated.announcementBar = normalizeAnnouncementBackgroundType(migrated);
   
   // Check version and apply appropriate migrations
   if (!version || version === '1.0') {
