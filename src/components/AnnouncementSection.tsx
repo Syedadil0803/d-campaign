@@ -35,6 +35,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
   const richEditorRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const selectedIndexRef = useRef<number | null>(null);
+  selectedIndexRef.current = selectedIndex;
+  const configRef = useRef(config);
+  configRef.current = config;
   const linkBtnRef = useRef<HTMLButtonElement>(null);
   const scheduleBtnRef = useRef<HTMLButtonElement>(null);
   const linkPopupRef = useRef<HTMLDivElement>(null);
@@ -80,6 +84,40 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       setSchedulePos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
     }
   }, [showSchedulePopup]);
+
+  // Delete selected announcement on Delete/Backspace key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const idx = selectedIndexRef.current;
+      if (idx === null) return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const target = e.target as HTMLElement;
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
+        e.preventDefault();
+        // Remove from config
+        const currentConfig = configRef.current;
+        const updated = currentConfig.announcementBar.announcements.filter((_, i) => i !== idx);
+        setConfig({
+          ...currentConfig,
+          announcementBar: { ...currentConfig.announcementBar, announcements: updated },
+        });
+        // Clear editor and selection state
+        setSelectedIndex(null);
+        setNewAnnouncementText('');
+        setSelectedUrl('');
+        setSelectedOpenInNewTab(false);
+        setSelectedStartDate('');
+        setSelectedEndDate('');
+        if (richEditorRef.current) {
+          richEditorRef.current.innerHTML = '';
+        }
+        markChanged();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Click outside to close both popups
   useEffect(() => {
@@ -220,12 +258,27 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       if (richEditorRef.current) {
         richEditorRef.current.innerHTML = normalizedText;
         richEditorRef.current.focus();
-        const range = document.createRange();
-        range.selectNodeContents(richEditorRef.current);
-        range.collapse(false);
+
+        // Place cursor at end of the last text node (inside the styled span)
         const sel = window.getSelection();
-        sel?.removeAllRanges();
-        sel?.addRange(range);
+        if (sel) {
+          sel.removeAllRanges();
+          const range = document.createRange();
+          // Find the deepest last text node
+          let lastNode: Node = richEditorRef.current;
+          while (lastNode.lastChild) {
+            lastNode = lastNode.lastChild;
+          }
+          if (lastNode.nodeType === Node.TEXT_NODE) {
+            range.setStart(lastNode, lastNode.textContent?.length || 0);
+            range.collapse(true);
+          } else {
+            range.selectNodeContents(richEditorRef.current);
+            range.collapse(false);
+          }
+          sel.addRange(range);
+        }
+
         detectFormats();
       }
     }, 0);
@@ -274,12 +327,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   function onRichTextInput() {
     const html = getNormalizedHTML();
     setNewAnnouncementText(html);
-    if (selectedIndex !== null) {
-      const updated = [...config.announcementBar.announcements];
-      updated[selectedIndex] = { ...updated[selectedIndex], text: html };
-      setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-      markChanged();
-    }
     detectFormats();
   }
 
@@ -463,7 +510,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     }}
                     onFocus={() => {
                       setShowRichToolbar(true);
-                      setTimeout(ensureDefaultFontSize, 0);
+                      setTimeout(() => {
+                        ensureDefaultFontSize();
+                        detectFormats();
+                      }, 0);
                     }}
                     onBlur={() => {
                       // Keep toolbar visible if a popup is open
@@ -671,13 +721,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
               >
                 <button
                   type="button"
-                  onMouseDown={(e) => { e.preventDefault(); handleMenuEdit(actionMenuIndex); }}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
                   onMouseDown={(e) => { e.preventDefault(); handleMenuAddLink(actionMenuIndex); }}
                   className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
@@ -795,7 +838,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     Added text from the left input box will be displayed here
                   </div>
                 ) : (
-                  <div className={`flex flex-wrap gap-2 ${config.announcementBar.announcements.length > 2 ? 'max-h-64 overflow-y-auto' : ''}`}>
+                  <div className={`flex flex-wrap gap-2 p-1 ${config.announcementBar.announcements.length > 2 ? 'max-h-64 overflow-y-auto' : ''}`}>
                     {config.announcementBar.announcements.map((ann, index) => (
                       <div key={index}
                         draggable
@@ -813,8 +856,23 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           setDraggedIndex(null);
                         }}
                         onDragEnd={() => setDraggedIndex(null)}
-                        className={`inline-flex items-center px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 group relative cursor-move ${selectedIndex === index ? 'ring-1 ring-indigo-300/60 dark:ring-indigo-400/40' : ''} ${draggedIndex === index ? 'opacity-60' : ''}`}>
-                        <span className="flex-1 truncate max-w-[250px]" title={stripHtml(ann.text)}>
+                        onClick={() => {
+                          if (selectedIndex === index) {
+                            setSelectedIndex(null);
+                            setNewAnnouncementText('');
+                            setSelectedUrl('');
+                            setSelectedOpenInNewTab(false);
+                            setSelectedStartDate('');
+                            setSelectedEndDate('');
+                            if (richEditorRef.current) {
+                              richEditorRef.current.innerHTML = '';
+                            }
+                          } else {
+                            selectAnnouncement(index);
+                          }
+                        }}
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 group relative cursor-pointer transition-all ${selectedIndex === index ? 'ring-[1.5px] ring-indigo-500/80 dark:ring-indigo-400/60 bg-indigo-200/80 dark:bg-indigo-800/80' : 'hover:bg-indigo-150 dark:hover:bg-indigo-850'} ${draggedIndex === index ? 'opacity-60' : ''}`}>
+                        <span className="flex-1 truncate max-w-[200px]" title={stripHtml(ann.text)}>
                           {stripHtml(ann.text)}
                         </span>
                         <button
@@ -823,8 +881,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                             e.stopPropagation();
                             openActionMenu(index, e.currentTarget);
                           }}
-                          className="ml-2 text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-100 opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Message actions"
+                          className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-100 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                          title="More options"
                         >
                           <MoreVertical className="w-3 h-3" />
                         </button>
