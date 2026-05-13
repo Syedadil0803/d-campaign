@@ -45,6 +45,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const schedulePopupRef = useRef<HTMLDivElement>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
   const messageListRef = useRef<HTMLDivElement>(null);
+  const editorPanelRef = useRef<HTMLDivElement>(null);
   const {
     activeFormats,
     formatText,
@@ -142,25 +143,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
         setActionMenuIndex(null);
         setActionMenuPos(null);
       }
-      // Deselect message when clicking outside message list
-      if (
-        selectedIndexRef.current !== null &&
-        messageListRef.current && !messageListRef.current.contains(target) &&
-        richEditorRef.current && !richEditorRef.current.contains(target) &&
-        (!linkPopupRef.current || !linkPopupRef.current.contains(target)) &&
-        (!schedulePopupRef.current || !schedulePopupRef.current.contains(target)) &&
-        (!actionMenuRef.current || !actionMenuRef.current.contains(target))
-      ) {
-        setSelectedIndex(null);
-        setNewAnnouncementText('');
-        setSelectedUrl('');
-        setSelectedOpenInNewTab(false);
-        setSelectedStartDate('');
-        setSelectedEndDate('');
-        if (richEditorRef.current) {
-          richEditorRef.current.innerHTML = '';
-        }
-      }
     };
     document.addEventListener('mousedown', handleMouseDown);
     return () => document.removeEventListener('mousedown', handleMouseDown);
@@ -205,9 +187,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     setSelectedOpenInNewTab(false);
     setSelectedStartDate('');
     setSelectedEndDate('');
+    setShowRichToolbar(false);
     if (richEditorRef.current) {
       richEditorRef.current.innerHTML = '';
-      richEditorRef.current.focus();
     }
     detectFormats();
     markChanged();
@@ -274,6 +256,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     setSelectedEndDate(ann.endDate || '');
     const normalizedText = ann.richText ? ann.text : wrapBareTextWithFontSize(ann.text);
     setNewAnnouncementText(normalizedText);
+    setShowRichToolbar(true);
     setTimeout(() => {
       if (richEditorRef.current) {
         richEditorRef.current.innerHTML = normalizedText;
@@ -423,7 +406,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     visibleAnnouncements.map((ann, i) => (
                       <span key={`${setIndex}-${i}`} className="inline-block px-4">
                         {ann.url ? (
-                          <a href={ann.url} target={ann.openInNewTab ? '_blank' : '_self'} rel={ann.openInNewTab ? 'noopener noreferrer' : ''} className="underline hover:no-underline" dangerouslySetInnerHTML={{ __html: ann.text }} />
+                          <a href={ann.url} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline" dangerouslySetInnerHTML={{ __html: ann.text }} />
                         ) : (
                           <span dangerouslySetInnerHTML={{ __html: ann.text }} />
                         )}
@@ -447,7 +430,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
           {/* Left: Input + Chips + Link */}
-          <div className="space-y-4 rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col h-full">
+          <div ref={editorPanelRef} className="space-y-4 rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col h-full">
             <div className="border-b border-border pb-3">
               <h4 className="text-lg font-semibold text-on-surface">Announcement Content</h4>
               <p className="mt-1 text-xs text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
@@ -536,9 +519,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       }, 0);
                     }}
                     onBlur={() => {
-                      // Keep toolbar visible if a popup is open
-                      if (!showLinkPopup && !showSchedulePopup) {
+                      const text = richEditorRef.current?.textContent?.replace(/\u200B/g, '').trim();
+                      if (!text) {
                         setShowRichToolbar(false);
+                        if (richEditorRef.current) richEditorRef.current.innerHTML = '';
                       }
                     }}
                     className="rich-editor shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-3 border dark:border-gray-600 outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[360px] resize-y break-words"
@@ -600,6 +584,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   />
                   <label htmlFor="openInNewTab" className="ml-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">Open in new tab</label>
                 </div>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">In this editor, links always open in a new tab. This setting applies to your live site only.</p>
                 <div className="flex justify-between items-center mt-2">
                   {selectedUrl && (
                     <button
@@ -884,6 +869,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                             setSelectedOpenInNewTab(false);
                             setSelectedStartDate('');
                             setSelectedEndDate('');
+                            setShowRichToolbar(false);
                             if (richEditorRef.current) {
                               richEditorRef.current.innerHTML = '';
                             }
