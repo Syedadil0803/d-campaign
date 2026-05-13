@@ -44,6 +44,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const linkPopupRef = useRef<HTMLDivElement>(null);
   const schedulePopupRef = useRef<HTMLDivElement>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
   const {
     activeFormats,
     formatText,
@@ -140,6 +141,25 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       if (actionMenuIndex !== null && actionMenuRef.current && !actionMenuRef.current.contains(target)) {
         setActionMenuIndex(null);
         setActionMenuPos(null);
+      }
+      // Deselect message when clicking outside message list
+      if (
+        selectedIndexRef.current !== null &&
+        messageListRef.current && !messageListRef.current.contains(target) &&
+        richEditorRef.current && !richEditorRef.current.contains(target) &&
+        (!linkPopupRef.current || !linkPopupRef.current.contains(target)) &&
+        (!schedulePopupRef.current || !schedulePopupRef.current.contains(target)) &&
+        (!actionMenuRef.current || !actionMenuRef.current.contains(target))
+      ) {
+        setSelectedIndex(null);
+        setNewAnnouncementText('');
+        setSelectedUrl('');
+        setSelectedOpenInNewTab(false);
+        setSelectedStartDate('');
+        setSelectedEndDate('');
+        if (richEditorRef.current) {
+          richEditorRef.current.innerHTML = '';
+        }
       }
     };
     document.addEventListener('mousedown', handleMouseDown);
@@ -838,7 +858,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     Added text from the left input box will be displayed here
                   </div>
                 ) : (
-                  <div className={`flex flex-wrap gap-2 p-1 ${config.announcementBar.announcements.length > 2 ? 'max-h-64 overflow-y-auto' : ''}`}>
+                  <div ref={messageListRef} className={`flex flex-wrap gap-2 p-1 ${config.announcementBar.announcements.length > 2 ? 'max-h-64 overflow-y-auto' : ''}`}>
                     {config.announcementBar.announcements.map((ann, index) => (
                       <div key={index}
                         draggable
