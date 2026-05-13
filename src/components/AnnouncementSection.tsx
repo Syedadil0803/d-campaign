@@ -18,6 +18,7 @@ interface AnnouncementSectionProps {
 export function AnnouncementSection({ config, setConfig, markChanged }: AnnouncementSectionProps) {
   const [newAnnouncementText, setNewAnnouncementText] = useState('');
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [selectedUrl, setSelectedUrl] = useState('');
   const [selectedOpenInNewTab, setSelectedOpenInNewTab] = useState(false);
   const [selectedStartDate, setSelectedStartDate] = useState('');
@@ -44,8 +45,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const linkPopupRef = useRef<HTMLDivElement>(null);
   const schedulePopupRef = useRef<HTMLDivElement>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
-  const messageListRef = useRef<HTMLDivElement>(null);
-  const editorPanelRef = useRef<HTMLDivElement>(null);
+
   const {
     activeFormats,
     formatText,
@@ -104,16 +104,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           ...currentConfig,
           announcementBar: { ...currentConfig.announcementBar, announcements: updated },
         });
-        // Clear editor and selection state
-        setSelectedIndex(null);
-        setNewAnnouncementText('');
-        setSelectedUrl('');
-        setSelectedOpenInNewTab(false);
-        setSelectedStartDate('');
-        setSelectedEndDate('');
-        if (richEditorRef.current) {
-          richEditorRef.current.innerHTML = '';
-        }
+        clearSelection();
         markChanged();
       }
     };
@@ -181,16 +172,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       },
     });
 
-    setNewAnnouncementText('');
-    setSelectedIndex(null);
-    setSelectedUrl('');
-    setSelectedOpenInNewTab(false);
-    setSelectedStartDate('');
-    setSelectedEndDate('');
-    setShowRichToolbar(false);
-    if (richEditorRef.current) {
-      richEditorRef.current.innerHTML = '';
-    }
+    clearSelection();
     detectFormats();
     markChanged();
   }
@@ -206,15 +188,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     });
 
     if (selectedIndex === index) {
-      setSelectedIndex(null);
-      setNewAnnouncementText('');
-      setSelectedUrl('');
-      setSelectedOpenInNewTab(false);
-      setSelectedStartDate('');
-      setSelectedEndDate('');
-      if (richEditorRef.current) {
-        richEditorRef.current.innerHTML = '';
-      }
+      clearSelection();
     } else if (selectedIndex !== null && selectedIndex > index) {
       setSelectedIndex(selectedIndex - 1);
     }
@@ -246,10 +220,28 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     markChanged();
   }
 
-  // ── Select announcement ──
+  // ── Clear all selection/editing state ──
+  function clearSelection() {
+    setSelectedIndex(null);
+    setIsEditing(false);
+    setNewAnnouncementText('');
+    setSelectedUrl('');
+    setSelectedOpenInNewTab(false);
+    setSelectedStartDate('');
+    setSelectedEndDate('');
+    setShowRichToolbar(false);
+    if (richEditorRef.current) {
+      richEditorRef.current.innerHTML = '';
+      richEditorRef.current.blur();
+    }
+    window.getSelection()?.removeAllRanges();
+  }
+
+  // ── Select announcement (selection mode — no cursor) ──
   function selectAnnouncement(index: number) {
     const ann = config.announcementBar.announcements[index];
     setSelectedIndex(index);
+    setIsEditing(false);
     setSelectedUrl(ann.url || '');
     setSelectedOpenInNewTab(ann.openInNewTab || false);
     setSelectedStartDate(ann.startDate || '');
@@ -257,21 +249,28 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     const normalizedText = ann.richText ? ann.text : wrapBareTextWithFontSize(ann.text);
     setNewAnnouncementText(normalizedText);
     setShowRichToolbar(true);
+    // Remove focus/cursor — just display content
+    if (richEditorRef.current) {
+      richEditorRef.current.innerHTML = normalizedText;
+      richEditorRef.current.blur();
+    }
+    // Clear any browser selection from the editor
+    window.getSelection()?.removeAllRanges();
+  }
+
+  // ── Enter edit mode (cursor active) ──
+  function enterEditMode() {
+    if (isEditing || selectedIndex === null) return;
+    setIsEditing(true);
     setTimeout(() => {
       if (richEditorRef.current) {
-        richEditorRef.current.innerHTML = normalizedText;
         richEditorRef.current.focus();
-
-        // Place cursor at end of the last text node (inside the styled span)
         const sel = window.getSelection();
         if (sel) {
           sel.removeAllRanges();
           const range = document.createRange();
-          // Find the deepest last text node
           let lastNode: Node = richEditorRef.current;
-          while (lastNode.lastChild) {
-            lastNode = lastNode.lastChild;
-          }
+          while (lastNode.lastChild) lastNode = lastNode.lastChild;
           if (lastNode.nodeType === Node.TEXT_NODE) {
             range.setStart(lastNode, lastNode.textContent?.length || 0);
             range.collapse(true);
@@ -281,10 +280,33 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           }
           sel.addRange(range);
         }
-
         detectFormats();
       }
     }, 0);
+  }
+
+  // ── Apply format to entire content (selection mode) ──
+  const applyingFormatRef = useRef(false);
+  function applyFormatToAll(action: () => void) {
+    if (!richEditorRef.current) return;
+    applyingFormatRef.current = true;
+    richEditorRef.current.focus();
+    const sel = window.getSelection();
+    if (sel) {
+      sel.removeAllRanges();
+      const range = document.createRange();
+      range.selectNodeContents(richEditorRef.current);
+      sel.addRange(range);
+      // Also save the range so applyColor can use it
+      saveSelection();
+    }
+    action();
+    // Stay in selection mode
+    window.getSelection()?.removeAllRanges();
+    richEditorRef.current.blur();
+    applyingFormatRef.current = false;
+    // Sync back
+    onRichTextInput();
   }
 
   function openActionMenu(index: number, button: HTMLButtonElement) {
@@ -298,24 +320,18 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     setShowSchedulePopup(false);
   }
 
-  function handleMenuEdit(index: number) {
-    selectAnnouncement(index);
-    setActionMenuIndex(null);
-    setActionMenuPos(null);
-  }
-
   function handleMenuAddLink(index: number) {
-    selectAnnouncement(index);
-    setShowLinkPopup(true);
-    setShowSchedulePopup(false);
-    setActionMenuIndex(null);
-    setActionMenuPos(null);
+    openMenuAction(index, 'link');
   }
 
   function handleMenuSchedule(index: number) {
+    openMenuAction(index, 'schedule');
+  }
+
+  function openMenuAction(index: number, type: 'link' | 'schedule') {
     selectAnnouncement(index);
-    setShowSchedulePopup(true);
-    setShowLinkPopup(false);
+    setShowLinkPopup(type === 'link');
+    setShowSchedulePopup(type === 'schedule');
     setActionMenuIndex(null);
     setActionMenuPos(null);
   }
@@ -324,6 +340,20 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     removeAnnouncement(index);
     setActionMenuIndex(null);
     setActionMenuPos(null);
+  }
+
+  function closePopupAndFocusEditor() {
+    setShowLinkPopup(false);
+    setShowSchedulePopup(false);
+    if (richEditorRef.current) {
+      richEditorRef.current.focus();
+      const range = document.createRange();
+      range.selectNodeContents(richEditorRef.current);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
   }
 
   // ── Rich text input handler ──
@@ -430,7 +460,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
           {/* Left: Input + Chips + Link */}
-          <div ref={editorPanelRef} className="space-y-4 rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col h-full">
+          <div className="space-y-4 rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col h-full">
             <div className="border-b border-border pb-3">
               <h4 className="text-lg font-semibold text-on-surface">Announcement Content</h4>
               <p className="mt-1 text-xs text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
@@ -447,13 +477,21 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     <RichTextToolbar
                       activeFormats={activeFormats}
                       onFormat={(format) => {
-                        saveSelection();
-                        formatText(format);
+                        if (!isEditing && selectedIndex !== null) {
+                          applyFormatToAll(() => formatText(format));
+                        } else {
+                          saveSelection();
+                          formatText(format);
+                        }
                       }}
                       onColorSelect={(color) => {
-                        saveSelection();
-                        applyColor(color);
-                        onRichTextInput();
+                        if (!isEditing && selectedIndex !== null) {
+                          applyFormatToAll(() => applyColor(color));
+                        } else {
+                          saveSelection();
+                          applyColor(color);
+                          onRichTextInput();
+                        }
                       }}
                     />
                   </div>
@@ -504,7 +542,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Enter text below</p>
                   <div ref={richEditorRef} contentEditable suppressContentEditableWarning
                     onInput={onRichTextInput}
-                    onMouseUp={detectFormats} onKeyUp={detectFormats}
+                    onMouseUp={detectFormats}
+                    onKeyUp={detectFormats}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -512,6 +551,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       }
                     }}
                     onFocus={() => {
+                      if (applyingFormatRef.current) return;
+                      if (!isEditing && selectedIndex !== null) {
+                        // Clicked inside editor while in selection mode → enter edit mode
+                        enterEditMode();
+                        return;
+                      }
                       setShowRichToolbar(true);
                       setTimeout(() => {
                         ensureDefaultFontSize();
@@ -520,12 +565,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     }}
                     onBlur={() => {
                       const text = richEditorRef.current?.textContent?.replace(/\u200B/g, '').trim();
-                      if (!text) {
+                      if (!text && selectedIndex === null) {
                         setShowRichToolbar(false);
                         if (richEditorRef.current) richEditorRef.current.innerHTML = '';
                       }
                     }}
-                    className="rich-editor shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-3 border dark:border-gray-600 outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[360px] resize-y break-words"
+                    className={`rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border dark:border-gray-600 outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[360px] resize-y break-words ${selectedIndex !== null && !isEditing ? 'ring-2 ring-indigo-400 border-indigo-400 cursor-default caret-transparent' : 'focus:ring-indigo-500 focus:border-indigo-500 border-gray-300'}`}
                     style={{ background: getBackgroundStyle(config.announcementBar.style.background), wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%' }} />
                 </div>
                 <button onMouseDown={(e) => {
@@ -607,16 +652,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   <button
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      setShowLinkPopup(false);
-                      if (richEditorRef.current) {
-                        richEditorRef.current.focus();
-                        const range = document.createRange();
-                        range.selectNodeContents(richEditorRef.current);
-                        range.collapse(false);
-                        const sel = window.getSelection();
-                        sel?.removeAllRanges();
-                        sel?.addRange(range);
-                      }
+                      closePopupAndFocusEditor();
                     }}
                     className="ml-auto text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700"
                   >
@@ -697,16 +733,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   <button
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      setShowSchedulePopup(false);
-                      if (richEditorRef.current) {
-                        richEditorRef.current.focus();
-                        const range = document.createRange();
-                        range.selectNodeContents(richEditorRef.current);
-                        range.collapse(false);
-                        const sel = window.getSelection();
-                        sel?.removeAllRanges();
-                        sel?.addRange(range);
-                      }
+                      closePopupAndFocusEditor();
                     }}
                     className="ml-auto text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700"
                   >
@@ -843,7 +870,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     Added text from the left input box will be displayed here
                   </div>
                 ) : (
-                  <div ref={messageListRef} className={`flex flex-wrap gap-2 p-1 ${config.announcementBar.announcements.length > 2 ? 'max-h-64 overflow-y-auto' : ''}`}>
+                  <div className={`flex flex-wrap gap-2 p-1 ${config.announcementBar.announcements.length > 2 ? 'max-h-64 overflow-y-auto' : ''}`}>
                     {config.announcementBar.announcements.map((ann, index) => (
                       <div key={index}
                         draggable
@@ -863,16 +890,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         onDragEnd={() => setDraggedIndex(null)}
                         onClick={() => {
                           if (selectedIndex === index) {
-                            setSelectedIndex(null);
-                            setNewAnnouncementText('');
-                            setSelectedUrl('');
-                            setSelectedOpenInNewTab(false);
-                            setSelectedStartDate('');
-                            setSelectedEndDate('');
-                            setShowRichToolbar(false);
-                            if (richEditorRef.current) {
-                              richEditorRef.current.innerHTML = '';
-                            }
+                            clearSelection();
                           } else {
                             selectAnnouncement(index);
                           }
