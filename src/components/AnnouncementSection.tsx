@@ -870,7 +870,14 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           <div className="space-y-4">
             <div className="rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col h-full min-h-0">
               <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message List</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Message List</label>
+                  {config.announcementBar.announcements.length > 0 && (
+                    <span className="text-[11px] text-yellow-600 font-medium flex items-center animate-pulse">
+                      💡 hover a chip & click ••• to manage
+                    </span>
+                  )}
+                </div>
                 {config.announcementBar.announcements.length === 0 ? (
                   <div className="h-36 flex items-center justify-center text-center text-sm text-gray-400 dark:text-gray-500">
                     Added text from the left input box will be displayed here
