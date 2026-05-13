@@ -19,7 +19,7 @@ export function Dashboard({ config, setActiveTab }: DashboardProps) {
             <div className="p-2 bg-background rounded-lg mr-3 border border-border">
               <Megaphone className="w-5 h-5 text-primary" />
             </div>
-            <h3 className="text-base font-semibold text-on-surface">Announcement Bar</h3>
+            <h3 className="text-lg font-semibold text-on-surface">Announcement Bar</h3>
           </div>
           <span
             className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -64,7 +64,7 @@ export function Dashboard({ config, setActiveTab }: DashboardProps) {
             <div className="p-2 bg-background rounded-lg mr-3 border border-border">
               <Gift className="w-5 h-5 text-primary" />
             </div>
-            <h3 className="text-base font-semibold text-on-surface">Promo Card</h3>
+            <h3 className="text-lg font-semibold text-on-surface">Promo Card</h3>
           </div>
           <span
             className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${

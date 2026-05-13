@@ -471,22 +471,22 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       {/* Header */}
       <div className="px-4 py-2 border-b border-border bg-surface/60 flex items-center justify-between">
         <div className="flex items-center">
-          <div className="p-1 bg-indigo-100 rounded-lg mr-3"><Megaphone className="w-4 h-4 text-indigo-600" /></div>
+          <div className="p-1 bg-primary/15 rounded-lg mr-3 border border-primary/30"><Megaphone className="w-4 h-4 text-primary" /></div>
           <div>
-            <h3 className="text-base leading-5 font-medium text-on-surface">Announcement Bar</h3>
+            <h3 className="text-lg leading-6 font-semibold text-on-surface">Announcement Bar</h3>
             <p className="mt-0.5 max-w-2xl text-xs text-on-surface-variant">Top banner for site-wide alerts.</p>
           </div>
         </div>
-        <button onClick={toggleActive} className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors duration-200 ${config.announcementBar.active ? 'bg-indigo-600' : 'bg-gray-200'}`}>
+        <button onClick={toggleActive} className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors duration-200 ${config.announcementBar.active ? 'bg-primary' : 'bg-surface-subtle'}`}>
           <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition duration-200 ${config.announcementBar.active ? 'translate-x-5' : 'translate-x-0'}`} />
         </button>
       </div>
 
       <div className="p-5 space-y-6">
         {/* Preview */}
-        <div className="bg-gray-100 p-4 border border-gray-200 rounded-md dark:bg-gray-700 dark:border-gray-600">
-          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 dark:text-gray-400">Preview</h4>
-          <div className="w-full bg-white border border-gray-300 rounded shadow-sm overflow-hidden dark:bg-gray-800 dark:border-gray-600">
+        <div className="bg-surface-subtle p-4 border border-border rounded-md">
+          <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">Preview</h4>
+          <div className="w-full bg-surface-elevated border border-border rounded shadow-sm overflow-hidden">
             {config.announcementBar.active && visibleAnnouncements.length > 0 && (
               <div ref={scrollContainerRef} className="h-10 px-4 text-center text-sm font-medium overflow-hidden flex items-center justify-center group"
                 style={{
@@ -509,11 +509,11 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
               </div>
             )}
             {!(config.announcementBar.active && visibleAnnouncements.length > 0) && (
-              <div className="h-12 bg-white flex items-center justify-between px-4 border-b border-gray-100 dark:bg-gray-900 dark:border-gray-700">
-                <div className="w-24 h-4 bg-gray-200 rounded" />
+              <div className="h-12 bg-surface-elevated flex items-center justify-between px-4 border-b border-border">
+                <div className="w-24 h-4 bg-surface-subtle rounded" />
                 <div className="flex space-x-2">
-                  <div className="w-12 h-4 bg-gray-100 rounded" />
-                  <div className="w-12 h-4 bg-gray-100 rounded" />
+                  <div className="w-12 h-4 bg-surface-subtle rounded" />
+                  <div className="w-12 h-4 bg-surface-subtle rounded" />
                 </div>
               </div>
             )}
@@ -522,15 +522,15 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
           {/* Left: Input + Chips + Link */}
-          <div className="space-y-4 rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col h-full">
+          <div className="space-y-4 rounded-2xl border border-border bg-surface-elevated p-4 shadow-sm flex flex-col h-full">
             <div className="border-b border-border pb-3">
-              <h4 className="text-lg font-semibold text-on-surface">Announcement Content</h4>
+              <h4 className="text-base font-semibold text-on-surface">Announcement Content</h4>
               <p className="mt-1 text-xs text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
             </div>
             
             {/* Announcement Input */}
             <div className="flex-1 flex flex-col justify-between">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message</label>
+              <label className="block text-sm font-medium text-on-surface mb-2">Message</label>
 
               {/* Rich Text Toolbar + Link/Schedule buttons — same row, show/hide with focus */}
               <div className={`mb-2 transition-all ${showRichToolbar ? 'opacity-100 max-h-16' : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'}`}>
@@ -559,7 +559,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   </div>
 
                   {/* Divider */}
-                  <div className="border-l border-gray-300 h-4 mx-0.5 shrink-0" />
+                  <div className="border-l border-border h-4 mx-0.5 shrink-0" />
 
                   {/* Link button */}
                   <button
@@ -571,7 +571,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       setShowSchedulePopup(false);
                     }}
                     disabled={!newAnnouncementText.trim()}
-                    className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${selectedUrl ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' : 'border-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 dark:border-gray-600 text-gray-600 dark:text-gray-300'}`}
+                    className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${selectedUrl ? 'border-primary/50 bg-primary/10 text-primary' : 'border-border hover:bg-surface-subtle text-on-surface-variant'}`}
                     title={newAnnouncementText.trim() ? 'Add link' : 'Enter text first'}
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -589,7 +589,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       setShowLinkPopup(false);
                     }}
                     disabled={!newAnnouncementText.trim()}
-                    className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${(selectedStartDate || selectedEndDate) ? 'border-indigo-500 bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' : 'border-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 dark:border-gray-600 text-gray-600 dark:text-gray-300'}`}
+                    className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${(selectedStartDate || selectedEndDate) ? 'border-primary/50 bg-primary/10 text-primary' : 'border-border hover:bg-surface-subtle text-on-surface-variant'}`}
                     title={newAnnouncementText.trim() ? 'Schedule' : 'Enter text first'}
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -601,7 +601,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
               <div className="flex gap-2 items-end">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Enter text below</p>
+                  <p className="text-xs text-on-surface-variant mb-1">Enter text below</p>
                   <div ref={richEditorRef} contentEditable suppressContentEditableWarning
                     onInput={onRichTextInput}
                     onMouseUp={detectFormats}
@@ -636,7 +636,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         if (richEditorRef.current) richEditorRef.current.innerHTML = '';
                       }
                     }}
-                    className={`rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border dark:border-gray-600 outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[360px] resize-y break-words ${selectedIndex !== null && !isEditing ? 'ring-2 ring-indigo-400 border-indigo-400 cursor-default caret-transparent' : 'focus:ring-indigo-500 focus:border-indigo-500 border-gray-300'}`}
+                    className={`rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[360px] resize-y break-words ${selectedIndex !== null && !isEditing ? 'ring-2 ring-primary/50 border-primary/50 cursor-default caret-transparent' : 'focus:ring-primary/40 focus:border-primary/50 border-border'}`}
                     style={{ background: getBackgroundStyle(config.announcementBar.style.background), wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%' }} />
                 </div>
                 <button onMouseDown={(e) => {
@@ -644,7 +644,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     addAnnouncement();
                   }}
                   disabled={!newAnnouncementText.trim()}
-                  className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed self-end">
+                  className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed self-end">
                   Add
                 </button>
                 </div>
@@ -656,9 +656,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 ref={linkPopupRef}
                 onMouseDown={(e) => e.stopPropagation()}
                 style={{ position: 'absolute', top: linkPos.top, left: linkPos.left, zIndex: 9999 }}
-                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl p-3 w-[260px]"
+                className="bg-surface-elevated border border-border rounded-lg shadow-xl p-3 w-[260px]"
               >
-                <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Link URL</p>
+                <p className="text-xs font-medium text-on-surface mb-2">Link URL</p>
                 <input
                   type="url"
                   value={selectedUrl}
@@ -672,7 +672,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       markChanged();
                     }
                   }}
-                  className="block w-full border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 text-sm"
+                  className="block w-full border-border rounded-md p-2 border bg-surface text-on-surface text-sm"
                   placeholder="https://example.com"
                   autoFocus
                 />
@@ -691,11 +691,11 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         markChanged();
                       }
                     }}
-                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 dark:border-gray-600"
+                    className="w-4 h-4 rounded border-border text-primary"
                   />
-                  <label htmlFor="openInNewTab" className="ml-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">Open in new tab</label>
+                  <label htmlFor="openInNewTab" className="ml-2 text-xs text-on-surface cursor-pointer">Open in new tab</label>
                 </div>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">In this editor, links always open in a new tab. This setting applies to your live site only.</p>
+                <p className="text-[10px] text-on-surface-variant mt-1">In this editor, links always open in a new tab. This setting applies to your live site only.</p>
                 <div className="flex justify-between items-center mt-2">
                   {selectedUrl && (
                     <button
@@ -710,7 +710,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         }
                         setShowLinkPopup(false);
                       }}
-                      className="text-xs text-red-500 hover:text-red-600"
+                      className="text-xs text-primary hover:opacity-80"
                     >
                       Clear
                     </button>
@@ -720,7 +720,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       e.preventDefault();
                       closePopupAndFocusEditor();
                     }}
-                    className="ml-auto text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700"
+                    className="ml-auto text-xs bg-primary text-white px-3 py-1 rounded hover:opacity-95"
                   >
                     Done
                   </button>
@@ -735,12 +735,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 ref={schedulePopupRef}
                 onMouseDown={(e) => e.stopPropagation()}
                 style={{ position: 'absolute', top: schedulePos.top, left: schedulePos.left, zIndex: 9999 }}
-                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl p-3 w-[260px]"
+                className="bg-surface-elevated border border-border rounded-lg shadow-xl p-3 w-[260px]"
               >
-                <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Schedule (optional)</p>
+                <p className="text-xs font-medium text-on-surface mb-2">Schedule (optional)</p>
                 <div className="space-y-2">
                   <div>
-                    <label className="block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5">Start Date</label>
+                    <label className="block text-[11px] text-on-surface-variant mb-0.5">Start Date</label>
                     <input
                       type="date"
                       value={selectedStartDate}
@@ -754,11 +754,11 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           markChanged();
                         }
                       }}
-                      className="block w-full border-gray-300 rounded-md p-1.5 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 text-sm"
+                      className="block w-full border-border rounded-md p-1.5 border bg-surface text-on-surface text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-gray-500 dark:text-gray-400 mb-0.5">End Date</label>
+                    <label className="block text-[11px] text-on-surface-variant mb-0.5">End Date</label>
                     <input
                       type="date"
                       value={selectedEndDate}
@@ -772,10 +772,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           markChanged();
                         }
                       }}
-                      className="block w-full border-gray-300 rounded-md p-1.5 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 text-sm"
+                      className="block w-full border-border rounded-md p-1.5 border bg-surface text-on-surface text-sm"
                     />
                   </div>
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500">Leave empty to always show when bar is active.</p>
+                  <p className="text-[10px] text-on-surface-variant">Leave empty to always show when bar is active.</p>
                 </div>
                 <div className="flex justify-between items-center mt-2">
                   {(selectedStartDate || selectedEndDate) && (
@@ -791,7 +791,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           markChanged();
                         }
                       }}
-                      className="text-xs text-red-500 hover:text-red-600"
+                      className="text-xs text-primary hover:opacity-80"
                     >
                       Clear
                     </button>
@@ -801,7 +801,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       e.preventDefault();
                       closePopupAndFocusEditor();
                     }}
-                    className="ml-auto text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700"
+                    className="ml-auto text-xs bg-primary text-white px-3 py-1 rounded hover:opacity-95"
                   >
                     Done
                   </button>
@@ -815,27 +815,27 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 ref={actionMenuRef}
                 onMouseDown={(e) => e.stopPropagation()}
                 style={{ position: 'absolute', top: actionMenuPos.top, left: actionMenuPos.left, zIndex: 9999 }}
-                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-xl py-1 w-[180px]"
+                className="bg-surface-elevated border border-border rounded-lg shadow-xl py-1 w-[180px]"
               >
                 <button
                   type="button"
                   onMouseDown={(e) => { e.preventDefault(); handleMenuAddLink(actionMenuIndex); }}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  className="w-full text-left px-3 py-2 text-sm text-on-surface hover:bg-surface-subtle"
                 >
                   Add link
                 </button>
                 <button
                   type="button"
                   onMouseDown={(e) => { e.preventDefault(); handleMenuSchedule(actionMenuIndex); }}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  className="w-full text-left px-3 py-2 text-sm text-on-surface hover:bg-surface-subtle"
                 >
                   Schedule
                 </button>
-                <div className="my-1 h-px bg-gray-200 dark:bg-gray-700" />
+                <div className="my-1 h-px bg-border" />
                 <button
                   type="button"
                   onMouseDown={(e) => { e.preventDefault(); handleMenuDelete(actionMenuIndex); }}
-                  className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                  className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-primary/10"
                 >
                   Delete
                 </button>
@@ -845,11 +845,11 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
             {/* Style Customization */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">Style Customization</label>
+              <label className="block text-sm font-medium text-on-surface mb-2">Style Customization</label>
               <div>
-                <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Background Type</label>
+                <label className="block text-xs text-on-surface-variant mb-1">Background Type</label>
                 <select value={bg.type || 'solid'} onChange={(e) => updateBg({ type: e.target.value })}
-                  className="block w-full border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 sm:text-sm">
+                  className="block w-full border-border rounded-md p-2 border bg-surface text-on-surface sm:text-sm">
                   <option value="solid">Solid</option>
                   <option value="linear">Linear</option>
                   <option value="radial">Gradient</option>
@@ -858,9 +858,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
               {bg.type === 'solid' && (
                 <div className="mt-4">
-                  <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Background Color</label>
+                  <label className="block text-xs text-on-surface-variant mb-1">Background Color</label>
                   <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
-                    className="h-10 w-full rounded border border-gray-300 cursor-pointer dark:border-gray-600" />
+                    className="h-10 w-full rounded border border-border cursor-pointer" />
                 </div>
               )}
 
@@ -868,19 +868,19 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 <>
                   <div className="grid grid-cols-3 gap-4 mt-4">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Start Color</label>
+                      <label className="block text-xs text-on-surface-variant mb-1">Start Color</label>
                       <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
-                        className="h-10 w-full rounded border border-gray-300 cursor-pointer dark:border-gray-600" />
+                        className="h-10 w-full rounded border border-border cursor-pointer" />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">End Color</label>
+                      <label className="block text-xs text-on-surface-variant mb-1">End Color</label>
                       <input type="color" value={bg.endColor} onChange={(e) => updateBg({ endColor: e.target.value })}
-                        className="h-10 w-full rounded border border-gray-300 cursor-pointer dark:border-gray-600" />
+                        className="h-10 w-full rounded border border-border cursor-pointer" />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Direction</label>
+                      <label className="block text-xs text-on-surface-variant mb-1">Direction</label>
                       <select value={bg.direction || 'to right'} onChange={(e) => updateBg({ direction: e.target.value })}
-                        className="block w-full border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 sm:text-sm">
+                        className="block w-full border-border rounded-md p-2 border bg-surface text-on-surface sm:text-sm">
                         <option value="to right">To Right →</option>
                         <option value="to left">To Left ←</option>
                         <option value="to bottom">To Bottom ↓</option>
@@ -893,10 +893,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     </div>
                   </div>
                   <div className="mt-4 space-y-2">
-                    <label className="block text-xs text-gray-500 dark:text-gray-400">Balance: {bg.midpoint ?? 50}%</label>
+                    <label className="block text-xs text-on-surface-variant">Balance: {bg.midpoint ?? 50}%</label>
                     <input type="range" min="0" max="100" value={bg.midpoint ?? 50}
                       onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" />
+                      className="w-full h-2 bg-surface-subtle rounded-lg appearance-none cursor-pointer" />
                   </div>
                 </>
               )}
@@ -905,21 +905,21 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 <>
                   <div className="grid grid-cols-2 gap-4 mt-4">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Center Color</label>
+                      <label className="block text-xs text-on-surface-variant mb-1">Center Color</label>
                       <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
-                        className="h-10 w-full rounded border border-gray-300 cursor-pointer dark:border-gray-600" />
+                        className="h-10 w-full rounded border border-border cursor-pointer" />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1 dark:text-gray-400">Outer Color</label>
+                      <label className="block text-xs text-on-surface-variant mb-1">Outer Color</label>
                       <input type="color" value={bg.endColor} onChange={(e) => updateBg({ endColor: e.target.value })}
-                        className="h-10 w-full rounded border border-gray-300 cursor-pointer dark:border-gray-600" />
+                        className="h-10 w-full rounded border border-border cursor-pointer" />
                     </div>
                   </div>
                   <div className="mt-4 space-y-2">
-                    <label className="block text-xs text-gray-500 dark:text-gray-400">Balance: {bg.midpoint ?? 50}%</label>
+                    <label className="block text-xs text-on-surface-variant">Balance: {bg.midpoint ?? 50}%</label>
                     <input type="range" min="0" max="100" value={bg.midpoint ?? 50}
                       onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" />
+                      className="w-full h-2 bg-surface-subtle rounded-lg appearance-none cursor-pointer" />
                   </div>
                 </>
               )}
@@ -928,18 +928,18 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
           {/* Right: Message List + Style (single card split into equal halves) */}
           <div className="space-y-4">
-            <div className="rounded-2xl border border-border bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col h-full min-h-0">
+            <div className="rounded-2xl border border-border bg-surface-elevated p-4 shadow-sm flex flex-col h-full min-h-0">
               <div className="flex-1 min-h-0 overflow-y-auto pr-1">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Message List</label>
+                  <label className="block text-sm font-medium text-on-surface">Message List</label>
                   {config.announcementBar.announcements.length > 0 && (
-                    <span className="text-[11px] text-yellow-600 font-medium flex items-center animate-pulse">
+                    <span className="text-[11px] text-primary font-medium flex items-center animate-pulse">
                       💡 hover a chip & click ••• to manage
                     </span>
                   )}
                 </div>
                 {config.announcementBar.announcements.length === 0 ? (
-                  <div className="h-36 flex items-center justify-center text-center text-sm text-gray-400 dark:text-gray-500">
+                  <div className="h-36 flex items-center justify-center text-center text-sm text-on-surface-variant">
                     Added text from the left input box will be displayed here
                   </div>
                 ) : (
@@ -968,7 +968,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                             selectAnnouncement(index);
                           }
                         }}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200 group relative cursor-pointer transition-all ${selectedIndex === index ? 'ring-[1.5px] ring-indigo-500/80 dark:ring-indigo-400/60 bg-indigo-200/80 dark:bg-indigo-800/80' : 'hover:bg-indigo-150 dark:hover:bg-indigo-850'} ${draggedIndex === index ? 'opacity-60' : ''}`}>
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm bg-primary/15 text-primary group relative cursor-pointer transition-all ${selectedIndex === index ? 'ring-[1.5px] ring-primary/60 bg-primary/25' : 'hover:bg-primary/20'} ${draggedIndex === index ? 'opacity-60' : ''}`}>
                         <span className="flex-1 truncate max-w-[200px]" title={stripHtml(ann.text)}>
                           {stripHtml(ann.text)}
                         </span>
@@ -978,7 +978,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                             e.stopPropagation();
                             openActionMenu(index, e.currentTarget);
                           }}
-                          className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-300 dark:hover:text-indigo-100 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                          className="text-primary hover:opacity-80 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                           title="More options"
                         >
                           <MoreVertical className="w-3 h-3" />
@@ -991,33 +991,33 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
               <div className="flex-1 min-h-0 border-t border-border pt-4 overflow-auto">
                 <div className="border-b border-border pb-3">
-                  <h4 className="text-lg font-semibold text-on-surface">Style</h4>
+                  <h4 className="text-base font-semibold text-on-surface">Style</h4>
                   <p className="mt-1 text-xs text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 dark:text-gray-300">Background Type Guide</label>
+                  <label className="block text-sm font-medium text-on-surface mb-2">Background Type Guide</label>
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1">
                       <div
-                        className="h-16 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                        className="h-16 rounded-lg border border-border shadow-inner"
                         style={{ background: '#b91c1c' }}
                       />
-                      <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Solid</p>
+                      <p className="text-[11px] font-semibold text-on-surface-variant text-center">Solid</p>
                     </div>
                     <div className="space-y-1">
                       <div
-                        className="h-16 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                        className="h-16 rounded-lg border border-border shadow-inner"
                         style={{ background: 'linear-gradient(90deg, #111111 0%, #7f1d1d 55%, #ef4444 100%)' }}
                       />
-                      <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Linear</p>
+                      <p className="text-[11px] font-semibold text-on-surface-variant text-center">Linear</p>
                     </div>
                     <div className="space-y-1">
                       <div
-                        className="h-16 rounded-lg border border-gray-300 dark:border-gray-600 shadow-inner"
+                        className="h-16 rounded-lg border border-border shadow-inner"
                         style={{ background: 'radial-gradient(circle at 50% 45%, #ef4444 8%, #7f1d1d 45%, #111111 100%)' }}
                       />
-                      <p className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 text-center">Radial</p>
+                      <p className="text-[11px] font-semibold text-on-surface-variant text-center">Radial</p>
                     </div>
                   </div>
                 </div>
@@ -1030,20 +1030,20 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       {/* Emoji tip toast */}
       {showShortcutsTip && (
         <div className="fixed top-5 left-5 z-50 animate-bounce-in">
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl px-5 py-4 w-[380px]">
-            <p className="text-[13px] text-gray-700 dark:text-gray-200 leading-relaxed">
-              💡 You can also add emojis!<br/>Press <kbd className="inline bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 px-1.5 py-0.5 rounded text-[11px] font-mono font-medium whitespace-nowrap">{navigator.platform?.includes('Mac') ? '⌘ + Ctrl + Space' : 'Win + .'}</kbd> to open the emoji picker
+          <div className="bg-surface-elevated border border-border rounded-2xl shadow-2xl px-5 py-4 w-[380px]">
+            <p className="text-[13px] text-on-surface leading-relaxed">
+              💡 You can also add emojis!<br/>Press <kbd className="inline bg-primary/10 text-primary border border-primary/30 px-1.5 py-0.5 rounded text-[11px] font-mono font-medium whitespace-nowrap">{navigator.platform?.includes('Mac') ? '⌘ + Ctrl + Space' : 'Win + .'}</kbd> to open the emoji picker
             </p>
             <div className="flex items-center justify-end gap-4 mt-3">
               <button
                 onClick={() => { setShowShortcutsTip(false); localStorage.setItem('ann_shortcuts_seen', 'never'); }}
-                className="text-[11px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                className="text-[11px] text-on-surface-variant hover:text-on-surface transition-colors"
               >
                 Don&apos;t show again
               </button>
               <button
                 onClick={() => setShowShortcutsTip(false)}
-                className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+                className="text-[11px] font-medium text-primary hover:opacity-85 transition-colors"
               >
                 Got it
               </button>
