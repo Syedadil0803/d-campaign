@@ -12,6 +12,7 @@ export interface Announcement {
   richText?: boolean;
   startDate?: string;
   endDate?: string;
+  openInNewTab?: boolean;
 }
 
 export interface PromoCard {

@@ -19,6 +19,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const [newAnnouncementText, setNewAnnouncementText] = useState('');
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [selectedUrl, setSelectedUrl] = useState('');
+  const [selectedOpenInNewTab, setSelectedOpenInNewTab] = useState(false);
   const [selectedStartDate, setSelectedStartDate] = useState('');
   const [selectedEndDate, setSelectedEndDate] = useState('');
   const [showRichToolbar, setShowRichToolbar] = useState(false);
@@ -116,6 +117,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
         ...updated[selectedIndex],
         text: html,
         url: selectedUrl || undefined,
+        openInNewTab: selectedOpenInNewTab || undefined,
         startDate: selectedStartDate || undefined,
         endDate: selectedEndDate || undefined,
         richText: true,
@@ -124,6 +126,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       updated.push({
         text: html,
         url: selectedUrl || undefined,
+        openInNewTab: selectedOpenInNewTab || undefined,
         startDate: selectedStartDate || undefined,
         endDate: selectedEndDate || undefined,
         richText: true,
@@ -141,6 +144,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     setNewAnnouncementText('');
     setSelectedIndex(null);
     setSelectedUrl('');
+    setSelectedOpenInNewTab(false);
     setSelectedStartDate('');
     setSelectedEndDate('');
     if (richEditorRef.current) {
@@ -165,6 +169,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       setSelectedIndex(null);
       setNewAnnouncementText('');
       setSelectedUrl('');
+      setSelectedOpenInNewTab(false);
       setSelectedStartDate('');
       setSelectedEndDate('');
       if (richEditorRef.current) {
@@ -206,6 +211,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     const ann = config.announcementBar.announcements[index];
     setSelectedIndex(index);
     setSelectedUrl(ann.url || '');
+    setSelectedOpenInNewTab(ann.openInNewTab || false);
     setSelectedStartDate(ann.startDate || '');
     setSelectedEndDate(ann.endDate || '');
     const normalizedText = ann.richText ? ann.text : wrapBareTextWithFontSize(ann.text);
@@ -350,7 +356,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     visibleAnnouncements.map((ann, i) => (
                       <span key={`${setIndex}-${i}`} className="inline-block px-4">
                         {ann.url ? (
-                          <a href={ann.url} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline" dangerouslySetInnerHTML={{ __html: ann.text }} />
+                          <a href={ann.url} target={ann.openInNewTab ? '_blank' : '_self'} rel={ann.openInNewTab ? 'noopener noreferrer' : ''} className="underline hover:no-underline" dangerouslySetInnerHTML={{ __html: ann.text }} />
                         ) : (
                           <span dangerouslySetInnerHTML={{ __html: ann.text }} />
                         )}
@@ -459,7 +465,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       setShowRichToolbar(true);
                       setTimeout(ensureDefaultFontSize, 0);
                     }}
-                    onBlur={() => setShowRichToolbar(false)}
+                    onBlur={() => {
+                      // Keep toolbar visible if a popup is open
+                      if (!showLinkPopup && !showSchedulePopup) {
+                        setShowRichToolbar(false);
+                      }
+                    }}
                     className="rich-editor shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-3 border dark:border-gray-600 outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[360px] resize-y break-words"
                     style={{ background: getBackgroundStyle(config.announcementBar.style.background), wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%' }} />
                 </div>
@@ -491,7 +502,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     setSelectedUrl(nextUrl);
                     if (selectedIndex !== null) {
                       const updated = [...config.announcementBar.announcements];
-                      updated[selectedIndex] = { ...updated[selectedIndex], url: nextUrl || undefined };
+                      updated[selectedIndex] = { ...updated[selectedIndex], url: nextUrl || undefined, richText: true };
                       setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
                       markChanged();
                     }
@@ -500,6 +511,25 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   placeholder="https://example.com"
                   autoFocus
                 />
+                <div className="flex items-center mt-3 mb-2">
+                  <input
+                    type="checkbox"
+                    id="openInNewTab"
+                    checked={selectedOpenInNewTab}
+                    onChange={(e) => {
+                      const nextValue = e.target.checked;
+                      setSelectedOpenInNewTab(nextValue);
+                      if (selectedIndex !== null) {
+                        const updated = [...config.announcementBar.announcements];
+                        updated[selectedIndex] = { ...updated[selectedIndex], openInNewTab: nextValue || undefined, richText: true };
+                        setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+                        markChanged();
+                      }
+                    }}
+                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 dark:border-gray-600"
+                  />
+                  <label htmlFor="openInNewTab" className="ml-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">Open in new tab</label>
+                </div>
                 <div className="flex justify-between items-center mt-2">
                   {selectedUrl && (
                     <button
@@ -508,7 +538,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         setSelectedUrl('');
                         if (selectedIndex !== null) {
                           const updated = [...config.announcementBar.announcements];
-                          updated[selectedIndex] = { ...updated[selectedIndex], url: undefined };
+                          updated[selectedIndex] = { ...updated[selectedIndex], url: undefined, richText: true };
                           setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
                           markChanged();
                         }
@@ -520,7 +550,19 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     </button>
                   )}
                   <button
-                    onMouseDown={(e) => { e.preventDefault(); setShowLinkPopup(false); }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setShowLinkPopup(false);
+                      if (richEditorRef.current) {
+                        richEditorRef.current.focus();
+                        const range = document.createRange();
+                        range.selectNodeContents(richEditorRef.current);
+                        range.collapse(false);
+                        const sel = window.getSelection();
+                        sel?.removeAllRanges();
+                        sel?.addRange(range);
+                      }
+                    }}
                     className="ml-auto text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700"
                   >
                     Done
@@ -550,7 +592,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         setSelectedStartDate(nextStart);
                         if (selectedIndex !== null) {
                           const updated = [...config.announcementBar.announcements];
-                          updated[selectedIndex] = { ...updated[selectedIndex], startDate: nextStart || undefined };
+                          updated[selectedIndex] = { ...updated[selectedIndex], startDate: nextStart || undefined, richText: true };
                           setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
                           markChanged();
                         }
@@ -568,7 +610,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         setSelectedEndDate(nextEnd);
                         if (selectedIndex !== null) {
                           const updated = [...config.announcementBar.announcements];
-                          updated[selectedIndex] = { ...updated[selectedIndex], endDate: nextEnd || undefined };
+                          updated[selectedIndex] = { ...updated[selectedIndex], endDate: nextEnd || undefined, richText: true };
                           setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
                           markChanged();
                         }
@@ -587,7 +629,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         setSelectedEndDate('');
                         if (selectedIndex !== null) {
                           const updated = [...config.announcementBar.announcements];
-                          updated[selectedIndex] = { ...updated[selectedIndex], startDate: undefined, endDate: undefined };
+                          updated[selectedIndex] = { ...updated[selectedIndex], startDate: undefined, endDate: undefined, richText: true };
                           setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
                           markChanged();
                         }
@@ -598,7 +640,19 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     </button>
                   )}
                   <button
-                    onMouseDown={(e) => { e.preventDefault(); setShowSchedulePopup(false); }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setShowSchedulePopup(false);
+                      if (richEditorRef.current) {
+                        richEditorRef.current.focus();
+                        const range = document.createRange();
+                        range.selectNodeContents(richEditorRef.current);
+                        range.collapse(false);
+                        const sel = window.getSelection();
+                        sel?.removeAllRanges();
+                        sel?.addRange(range);
+                      }
+                    }}
                     className="ml-auto text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700"
                   >
                     Done
