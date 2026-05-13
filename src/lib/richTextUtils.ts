@@ -430,9 +430,59 @@ export function applyFontSize(size: string): void {
  * cleaning up empty stale spans, re-selecting the colored content.
  */
 export function applyInlineColor(color: string, range: Range): void {
-  if (range.collapsed) return;
+  // CARET MODE: No text selected — insert a colored span for future typing
+  if (range.collapsed) {
+    const selection = window.getSelection();
+    if (!selection) return;
 
-  // Clone selection, unwrap existing color markup
+    // Check if already inside a color-only span with zero-width space
+    let existingColorSpan: HTMLElement | null = null;
+    let walkNode: Node | null = range.startContainer;
+    while (walkNode && walkNode !== document.body) {
+      if (
+        walkNode instanceof HTMLElement &&
+        walkNode.tagName === 'SPAN' &&
+        walkNode.style.color &&
+        walkNode.contentEditable !== 'true'
+      ) {
+        if (walkNode.textContent === '\u200B') {
+          existingColorSpan = walkNode;
+        }
+        break;
+      }
+      walkNode = walkNode.parentNode;
+    }
+
+    if (existingColorSpan) {
+      // Update existing placeholder span color
+      existingColorSpan.style.color = color;
+    } else {
+      // Create new colored span with zero-width space
+      const newSpan = document.createElement('span');
+      newSpan.style.color = color;
+      // Preserve font-size from parent
+      let parentNode: Node | null = range.startContainer;
+      while (parentNode && parentNode !== document.body) {
+        if (parentNode instanceof HTMLElement && parentNode.style.fontSize) {
+          newSpan.style.fontSize = parentNode.style.fontSize;
+          break;
+        }
+        parentNode = parentNode.parentNode;
+      }
+      const zwsp = document.createTextNode('\u200B');
+      newSpan.appendChild(zwsp);
+      range.insertNode(newSpan);
+
+      const newRange = document.createRange();
+      newRange.setStart(zwsp, 1);
+      newRange.setEnd(zwsp, 1);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    }
+    return;
+  }
+
+  // SELECTION MODE: Text is selected
   const fragment = range.cloneContents();
   const tempDiv = document.createElement('div');
   tempDiv.appendChild(fragment);
