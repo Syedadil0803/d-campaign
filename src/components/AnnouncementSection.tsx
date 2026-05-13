@@ -23,6 +23,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const [selectedOpenInNewTab, setSelectedOpenInNewTab] = useState(false);
   const [selectedStartDate, setSelectedStartDate] = useState('');
   const [selectedEndDate, setSelectedEndDate] = useState('');
+  const [showShortcutsTip, setShowShortcutsTip] = useState(false);
+  const shortcutsTipShown = useRef(false);
   const [showRichToolbar, setShowRichToolbar] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [actionMenuIndex, setActionMenuIndex] = useState<number | null>(null);
@@ -553,11 +555,15 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     onFocus={() => {
                       if (applyingFormatRef.current) return;
                       if (!isEditing && selectedIndex !== null) {
-                        // Clicked inside editor while in selection mode → enter edit mode
                         enterEditMode();
                         return;
                       }
                       setShowRichToolbar(true);
+                      // Show shortcuts tip (unless permanently dismissed)
+                      if (!shortcutsTipShown.current && localStorage.getItem('ann_shortcuts_seen') !== 'never') {
+                        shortcutsTipShown.current = true;
+                        setShowShortcutsTip(true);
+                      }
                       setTimeout(() => {
                         ensureDefaultFontSize();
                         detectFormats();
@@ -954,6 +960,30 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           </div>
         </div>
       </div>
+      {/* Emoji tip toast */}
+      {showShortcutsTip && (
+        <div className="fixed top-5 left-5 z-50 animate-bounce-in">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl px-5 py-4 w-[380px]">
+            <p className="text-[13px] text-gray-700 dark:text-gray-200 leading-relaxed">
+              💡 You can also add emojis!<br/>Press <kbd className="inline bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 px-1.5 py-0.5 rounded text-[11px] font-mono font-medium whitespace-nowrap">{navigator.platform?.includes('Mac') ? '⌘ + Ctrl + Space' : 'Win + .'}</kbd> to open the emoji picker
+            </p>
+            <div className="flex items-center justify-end gap-4 mt-3">
+              <button
+                onClick={() => { setShowShortcutsTip(false); localStorage.setItem('ann_shortcuts_seen', 'never'); }}
+                className="text-[11px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+              >
+                Don&apos;t show again
+              </button>
+              <button
+                onClick={() => setShowShortcutsTip(false)}
+                className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
