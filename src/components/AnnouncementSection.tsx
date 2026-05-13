@@ -26,6 +26,11 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const [showShortcutsTip, setShowShortcutsTip] = useState(false);
   const shortcutsTipShown = useRef(false);
   const [showRichToolbar, setShowRichToolbar] = useState(false);
+
+  // Undo/Redo history
+  const undoStackRef = useRef<CampaignConfig['announcementBar']['announcements'][]>([]);
+  const redoStackRef = useRef<CampaignConfig['announcementBar']['announcements'][]>([]);
+  const MAX_HISTORY = 30;
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [actionMenuIndex, setActionMenuIndex] = useState<number | null>(null);
   const [actionMenuPos, setActionMenuPos] = useState<{ top: number; left: number } | null>(null);
@@ -100,6 +105,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
         if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
         e.preventDefault();
         // Remove from config
+        pushUndo();
         const currentConfig = configRef.current;
         const updated = currentConfig.announcementBar.announcements.filter((_, i) => i !== idx);
         setConfig({
@@ -142,6 +148,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   }, [showLinkPopup, showSchedulePopup, actionMenuIndex]);
 
   function addAnnouncement() {
+    pushUndo();
     const html = getNormalizedHTML();
     const updated = [...config.announcementBar.announcements];
 
@@ -180,6 +187,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   }
 
   function removeAnnouncement(index: number) {
+    pushUndo();
     const updated = config.announcementBar.announcements.filter((_, currentIndex) => currentIndex !== index);
     setConfig({
       ...config,
@@ -199,6 +207,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   }
 
   function reorderAnnouncements(fromIndex: number, toIndex: number) {
+    pushUndo();
     const updated = [...config.announcementBar.announcements];
     const [movedAnnouncement] = updated.splice(fromIndex, 1);
     updated.splice(toIndex, 0, movedAnnouncement);
@@ -221,6 +230,57 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     }
     markChanged();
   }
+
+  // ── Push current state to undo stack before a change ──
+  function pushUndo() {
+    undoStackRef.current.push([...configRef.current.announcementBar.announcements]);
+    if (undoStackRef.current.length > MAX_HISTORY) undoStackRef.current.shift();
+    redoStackRef.current = [];
+  }
+
+  function undo() {
+    if (undoStackRef.current.length === 0) return;
+    redoStackRef.current.push([...configRef.current.announcementBar.announcements]);
+    const prev = undoStackRef.current.pop()!;
+    setConfig({
+      ...configRef.current,
+      announcementBar: { ...configRef.current.announcementBar, announcements: prev },
+    });
+    clearSelection();
+    markChanged();
+  }
+
+  function redo() {
+    if (redoStackRef.current.length === 0) return;
+    undoStackRef.current.push([...configRef.current.announcementBar.announcements]);
+    const next = redoStackRef.current.pop()!;
+    setConfig({
+      ...configRef.current,
+      announcementBar: { ...configRef.current.announcementBar, announcements: next },
+    });
+    clearSelection();
+    markChanged();
+  }
+
+  // ── Undo/Redo keyboard shortcut ──
+  useEffect(() => {
+    const handleUndoRedo = (e: KeyboardEvent) => {
+      const isMac = navigator.platform?.includes('Mac');
+      const mod = isMac ? e.metaKey : e.ctrlKey;
+      if (!mod || e.key.toLowerCase() !== 'z') return;
+      // Don't intercept when typing in the editor
+      const target = e.target as HTMLElement;
+      if (target.isContentEditable) return;
+      e.preventDefault();
+      if (e.shiftKey) {
+        redo();
+      } else {
+        undo();
+      }
+    };
+    document.addEventListener('keydown', handleUndoRedo);
+    return () => document.removeEventListener('keydown', handleUndoRedo);
+  }, []);
 
   // ── Clear all selection/editing state ──
   function clearSelection() {
