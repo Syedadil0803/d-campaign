@@ -27,6 +27,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const shortcutsTipShown = useRef(false);
   const [showRichToolbar, setShowRichToolbar] = useState(false);
   const [showSelectHint, setShowSelectHint] = useState(false);
+  const [loopCopies, setLoopCopies] = useState(1);
 
   // Undo/Redo history
   const undoStackRef = useRef<CampaignConfig['announcementBar']['announcements'][]>([]);
@@ -65,20 +66,34 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     getNormalizedHTML,
   } = useRichTextEditor(richEditorRef, { defaultColor: '#000000' });
 
-  // Dynamic scroll speed calculation
+  // Marquee layout: calculate copies for loop mode, or set min-width for non-loop
   useEffect(() => {
-    if (scrollContainerRef.current && config.announcementBar.active) {
-      const container = scrollContainerRef.current;
-      const track = container.querySelector('.animate-scroll-left') as HTMLElement;
+    if (!scrollContainerRef.current || !config.announcementBar.active) return;
+    const container = scrollContainerRef.current;
+    const containerWidth = container.clientWidth;
+    if (containerWidth <= 0) return;
 
-      if (track) {
-        const contentWidth = track.scrollWidth;
-        const pixelsPerSecond = 60;
-        const duration = (contentWidth / 2) / pixelsPerSecond;
-        container.style.setProperty('--scroll-duration', duration + 's');
+    const isLoopOn = config.announcementBar.loop !== false;
+
+    if (isLoopOn) {
+      // Loop ON: figure out how many copies of the announcement set fill the container
+      const track = container.querySelector('.animate-scroll-left') as HTMLElement;
+      if (!track) return;
+      // Track has loopCopies * 2 total copies. One visual half = loopCopies copies.
+      const halfWidth = track.scrollWidth / 2;
+      if (halfWidth <= 0) return;
+      const oneSetWidth = halfWidth / loopCopies; // width of one announcement set
+      if (oneSetWidth <= 0) return;
+      const needed = Math.max(1, Math.ceil(containerWidth / oneSetWidth));
+      if (needed !== loopCopies) {
+        setLoopCopies(needed);
       }
+    } else {
+      // Loop OFF: set min-width so duplicate stays off-screen
+      container.style.setProperty('--set-min-width', `${containerWidth}px`);
+      setLoopCopies(1);
     }
-  }, [config.announcementBar.announcements, config.announcementBar.active]);
+  }, [config.announcementBar.announcements, config.announcementBar.active, config.announcementBar.loop, loopCopies]);
 
   // Position link popup below its button
   useLayoutEffect(() => {
@@ -521,6 +536,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     isAnnouncementInWindow(ann.startDate, ann.endDate)
   );
 
+
+
   
   return (
     <section className="bg-surface-elevated shadow rounded-2xl border border-border overflow-hidden">
@@ -544,23 +561,30 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">Preview</h4>
           <div className="w-full bg-surface-elevated border border-border rounded shadow-sm overflow-hidden">
             {config.announcementBar.active && visibleAnnouncements.length > 0 && (
-              <div ref={scrollContainerRef} className="h-10 px-4 text-center text-sm font-medium overflow-hidden flex items-center justify-center group"
+              <div ref={scrollContainerRef} className="h-10 text-sm font-medium overflow-hidden flex items-center group"
                 style={{
                   background: getBackgroundStyle(config.announcementBar.style.background),
                   color: config.announcementBar.style.textColor,
                 }}>
                 <div className="animate-scroll-left">
-                  {[...Array(4)].map((_, setIndex) =>
-                    visibleAnnouncements.map((ann, i) => (
-                      <span key={`${setIndex}-${i}`} className="inline-block px-4">
-                        {ann.url ? (
-                          <a href={ann.url} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline" dangerouslySetInnerHTML={{ __html: ann.text }} />
-                        ) : (
-                          <span dangerouslySetInnerHTML={{ __html: ann.text }} />
-                        )}
+                  {(() => {
+                    const isLoopOn = config.announcementBar.loop !== false;
+                    const totalSets = isLoopOn ? loopCopies * 2 : 2;
+                    return [...Array(totalSets)].map((_, setIndex) => (
+                      <span key={setIndex} className="inline-flex items-center justify-center"
+                        style={!isLoopOn ? { minWidth: 'var(--set-min-width, 100%)' } : undefined}>
+                        {visibleAnnouncements.map((ann, i) => (
+                          <span key={`${setIndex}-${i}`} className="inline-block px-4">
+                            {ann.url ? (
+                              <a href={ann.url} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline" dangerouslySetInnerHTML={{ __html: ann.text }} />
+                            ) : (
+                              <span dangerouslySetInnerHTML={{ __html: ann.text }} />
+                            )}
+                          </span>
+                        ))}
                       </span>
-                    ))
-                  ).flat()}
+                    ));
+                  })()}
                 </div>
               </div>
             )}
@@ -1214,6 +1238,26 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Loop Toggle */}
+              <div className="flex items-center justify-between py-3 border-t border-border">
+                <div>
+                  <label className="block text-sm font-medium text-on-surface">Loop</label>
+                  <p className="text-xs text-on-surface-variant">Seamless continuous scroll (duplicates content to fill the bar)</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setConfig({
+                      ...config,
+                      announcementBar: { ...config.announcementBar, loop: !(config.announcementBar.loop !== false) },
+                    });
+                    markChanged();
+                  }}
+                  className={`relative inline-flex flex-shrink-0 h-5 w-9 border-2 border-transparent rounded-full cursor-pointer transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${config.announcementBar.loop !== false ? 'bg-primary' : 'bg-surface-subtle hover:bg-primary/20'}`}
+                >
+                  <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition duration-200 ${config.announcementBar.loop !== false ? 'translate-x-4' : 'translate-x-0'}`} />
+                </button>
               </div>
 
               <div className={`flex-1 min-h-0 border-t border-border pt-4 ${bg.type === 'solid' ? 'overflow-visible' : 'overflow-auto'}`}>

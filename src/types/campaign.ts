@@ -66,6 +66,7 @@ export interface CampaignConfig {
   lastUpdated: string;
   announcementBar: {
     active: boolean;
+    loop?: boolean;
     announcements: Announcement[];
     startDate: string;
     endDate: string;
@@ -83,6 +84,7 @@ export const defaultConfig: CampaignConfig = {
   lastUpdated: '',
   announcementBar: {
     active: false,
+    loop: true,
     announcements: [
       { text: '🎉 Winter Sale is fully live! Keep shopping.' },
       { text: 'Get 5% off on orders above ₹999 and 10% off on orders above ₹1999' },

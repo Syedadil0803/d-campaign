@@ -31,7 +31,7 @@
   }
 }
 
-/* Scrolling animation for announcement bar */
+/* Scrolling marquee animation for announcement bar */
 .animate-scroll-left {
   display: inline-flex;
   white-space: nowrap;
@@ -46,7 +46,7 @@
 
 @keyframes scrollLeft {
   0% { transform: translateX(0); }
-  100% { transform: translateX(-25%); }
+  100% { transform: translateX(-50%); }
 }
 
 /* Contenteditable placeholder — default gray for plain editors */
