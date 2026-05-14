@@ -1027,82 +1027,88 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
             {/* Style Customization */}
             <div>
               <label className="block text-sm font-medium text-on-surface mb-2">Style Customization</label>
-              <div>
-                <label className="block text-xs text-on-surface-variant mb-1">Background Type</label>
-                <select value={bg.type || 'solid'} onChange={(e) => updateBg({ type: e.target.value })}
-                  className="block w-full border-border rounded-md p-2 border bg-surface text-on-surface sm:text-sm">
-                  <option value="solid">Solid</option>
-                  <option value="linear">Linear</option>
-                  <option value="radial">Gradient</option>
-                </select>
+
+              {/* Type + inline control */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs text-on-surface-variant mb-1">Background Type</label>
+                  <select value={bg.type || 'solid'} onChange={(e) => updateBg({ type: e.target.value })}
+                    className="block w-full border-border rounded-md p-2 border bg-surface text-on-surface sm:text-sm">
+                    <option value="solid">Solid</option>
+                    <option value="linear">Linear</option>
+                    <option value="radial">Gradient</option>
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  {bg.type === 'solid' && (
+                    <div>
+                      <label className="block text-xs text-on-surface-variant mb-1">Background Color</label>
+                      <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
+                        className="h-[38px] w-full rounded border border-border cursor-pointer" />
+                    </div>
+                  )}
+                  {bg.type === 'linear' && (
+                    <div>
+                      <label className="block text-xs text-on-surface-variant mb-1">Balance: {bg.midpoint ?? 50}%</label>
+                      <input type="range" min="0" max="100" value={bg.midpoint ?? 50}
+                        onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
+                        className="w-full h-2 mt-3 bg-surface-subtle rounded-lg appearance-none cursor-pointer" />
+                    </div>
+                  )}
+                  {bg.type === 'radial' && (
+                    <div>
+                      <label className="block text-xs text-on-surface-variant mb-1">Balance: {bg.midpoint ?? 50}%</label>
+                      <input type="range" min="0" max="100" value={bg.midpoint ?? 50}
+                        onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
+                        className="w-full h-2 mt-3 bg-surface-subtle rounded-lg appearance-none cursor-pointer" />
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {bg.type === 'solid' && (
-                <div className="mt-4">
-                  <label className="block text-xs text-on-surface-variant mb-1">Background Color</label>
-                  <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
-                    className="h-10 w-full rounded border border-border cursor-pointer" />
+              {/* Colors + Direction (second line) */}
+              {bg.type === 'linear' && (
+                <div className="grid grid-cols-3 gap-4 mt-4">
+                  <div>
+                    <label className="block text-xs text-on-surface-variant mb-1">Start Color</label>
+                    <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
+                      className="h-10 w-full rounded border border-border cursor-pointer" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-on-surface-variant mb-1">End Color</label>
+                    <input type="color" value={bg.endColor} onChange={(e) => updateBg({ endColor: e.target.value })}
+                      className="h-10 w-full rounded border border-border cursor-pointer" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-on-surface-variant mb-1">Direction</label>
+                    <select value={bg.direction || 'to right'} onChange={(e) => updateBg({ direction: e.target.value })}
+                      className="block w-full border-border rounded-md p-2 border bg-surface text-on-surface sm:text-sm">
+                      <option value="to right">To Right →</option>
+                      <option value="to left">To Left ←</option>
+                      <option value="to bottom">To Bottom ↓</option>
+                      <option value="to top">To Top ↑</option>
+                      <option value="to bottom right">To Bottom Right ↘</option>
+                      <option value="to bottom left">To Bottom Left ↙</option>
+                      <option value="to top right">To Top Right ↗</option>
+                      <option value="to top left">To Top Left ↖</option>
+                    </select>
+                  </div>
                 </div>
               )}
 
-              {bg.type === 'linear' && (
-                <>
-                  <div className="grid grid-cols-3 gap-4 mt-4">
-                    <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">Start Color</label>
-                      <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
-                        className="h-10 w-full rounded border border-border cursor-pointer" />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">End Color</label>
-                      <input type="color" value={bg.endColor} onChange={(e) => updateBg({ endColor: e.target.value })}
-                        className="h-10 w-full rounded border border-border cursor-pointer" />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">Direction</label>
-                      <select value={bg.direction || 'to right'} onChange={(e) => updateBg({ direction: e.target.value })}
-                        className="block w-full border-border rounded-md p-2 border bg-surface text-on-surface sm:text-sm">
-                        <option value="to right">To Right →</option>
-                        <option value="to left">To Left ←</option>
-                        <option value="to bottom">To Bottom ↓</option>
-                        <option value="to top">To Top ↑</option>
-                        <option value="to bottom right">To Bottom Right ↘</option>
-                        <option value="to bottom left">To Bottom Left ↙</option>
-                        <option value="to top right">To Top Right ↗</option>
-                        <option value="to top left">To Top Left ↖</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="mt-4 space-y-2">
-                    <label className="block text-xs text-on-surface-variant">Balance: {bg.midpoint ?? 50}%</label>
-                    <input type="range" min="0" max="100" value={bg.midpoint ?? 50}
-                      onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
-                      className="w-full h-2 bg-surface-subtle rounded-lg appearance-none cursor-pointer" />
-                  </div>
-                </>
-              )}
-
               {bg.type === 'radial' && (
-                <>
-                  <div className="grid grid-cols-2 gap-4 mt-4">
-                    <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">Center Color</label>
-                      <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
-                        className="h-10 w-full rounded border border-border cursor-pointer" />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">Outer Color</label>
-                      <input type="color" value={bg.endColor} onChange={(e) => updateBg({ endColor: e.target.value })}
-                        className="h-10 w-full rounded border border-border cursor-pointer" />
-                    </div>
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="block text-xs text-on-surface-variant mb-1">Center Color</label>
+                    <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
+                      className="h-10 w-full rounded border border-border cursor-pointer" />
                   </div>
-                  <div className="mt-4 space-y-2">
-                    <label className="block text-xs text-on-surface-variant">Balance: {bg.midpoint ?? 50}%</label>
-                    <input type="range" min="0" max="100" value={bg.midpoint ?? 50}
-                      onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
-                      className="w-full h-2 bg-surface-subtle rounded-lg appearance-none cursor-pointer" />
+                  <div>
+                    <label className="block text-xs text-on-surface-variant mb-1">Outer Color</label>
+                    <input type="color" value={bg.endColor} onChange={(e) => updateBg({ endColor: e.target.value })}
+                      className="h-10 w-full rounded border border-border cursor-pointer" />
                   </div>
-                </>
+                </div>
               )}
             </div>
           </div>
