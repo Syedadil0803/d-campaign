@@ -839,6 +839,13 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 style={{ position: 'absolute', top: linkPos.top, left: linkPos.left, zIndex: 9999 }}
                 className="bg-surface-elevated border border-border rounded-lg shadow-xl p-3 w-[260px]"
               >
+                  <button
+                    onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); closePopupAndFocusEditor(); }}
+                    aria-label="Close"
+                    className="absolute top-2 right-2 text-on-surface-variant hover:text-on-surface p-1 rounded"
+                  >
+                    ×
+                  </button>
                 <p className="text-xs font-medium text-on-surface mb-2">Link URL</p>
                 <input
                   type="url"
@@ -918,6 +925,13 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 style={{ position: 'absolute', top: schedulePos.top, left: schedulePos.left, zIndex: 9999 }}
                 className="bg-surface-elevated border border-border rounded-lg shadow-xl p-3 w-[260px]"
               >
+                  <button
+                    onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); closePopupAndFocusEditor(); }}
+                    aria-label="Close"
+                    className="absolute top-2 right-2 text-on-surface-variant hover:text-on-surface p-1 rounded"
+                  >
+                    ×
+                  </button>
                 <p className="text-xs font-medium text-on-surface mb-2">Schedule (optional)</p>
                 <div className="space-y-2">
                   <div>
