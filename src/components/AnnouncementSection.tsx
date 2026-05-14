@@ -540,7 +540,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
   
   return (
-    <section className="bg-surface-elevated shadow rounded-2xl border border-border overflow-hidden">
+    <section className=" shadow rounded-2xl  border-border overflow-hidden">
       {/* Header */}
       <div className="px-4 py-2 border-b border-border bg-surface/60 flex items-center justify-between">
         <div className="flex items-center">
@@ -555,11 +555,11 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
         </button>
       </div>
 
-      <div className="p-5 space-y-6">
+      <div className=" space-y-6">
         {/* Preview */}
-        <div className="bg-surface-subtle p-4 border border-border rounded-md">
+        <div className=" py-4  border-border rounded-md">
           <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">Preview</h4>
-          <div className="w-full bg-surface-elevated border border-border rounded shadow-sm overflow-hidden">
+          <div className="w-full bg-surface-elevated  border-border rounded shadow-sm overflow-hidden">
             {config.announcementBar.active && visibleAnnouncements.length > 0 && (
               <div ref={scrollContainerRef} className="h-10 text-sm font-medium overflow-hidden flex items-center group"
                 style={{
@@ -1261,31 +1261,29 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
               </div>
 
               <div className={`flex-1 min-h-0 border-t border-border pt-4 ${bg.type === 'solid' ? 'overflow-visible' : 'overflow-auto'}`}>
-                <div className="border-b border-border pb-3">
-                  <h4 className="text-base font-semibold text-on-surface">Style</h4>
-                  <p className="mt-1 text-xs text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
-                </div>
+           
 
                 <div className="pb-1">
-                  <label className="block text-sm font-medium text-on-surface mb-2">Background Type Guide</label>
+                  <label className="block text-sm font-medium text-on-surface mb-1">Background Type Guide</label>
+                   <p className="mb-1 text-xs text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1">
                       <div
-                        className="h-10 rounded-lg border border-border shadow-inner"
+                        className="h-8 rounded-lg border border-border shadow-inner"
                         style={{ background: '#b91c1c' }}
                       />
                       <p className="text-[11px] font-semibold text-on-surface-variant text-center">Solid</p>
                     </div>
                     <div className="space-y-1">
                       <div
-                        className="h-10 rounded-lg border border-border shadow-inner"
+                        className="h-8 rounded-lg border border-border shadow-inner"
                         style={{ background: 'linear-gradient(90deg, #111111 0%, #7f1d1d 55%, #ef4444 100%)' }}
                       />
                       <p className="text-[11px] font-semibold text-on-surface-variant text-center">Linear</p>
                     </div>
                     <div className="space-y-1">
                       <div
-                        className="h-10 rounded-lg border border-border shadow-inner"
+                        className="h-8 rounded-lg border border-border shadow-inner"
                         style={{ background: 'radial-gradient(circle at 50% 45%, #ef4444 8%, #7f1d1d 45%, #111111 100%)' }}
                       />
                       <p className="text-[11px] font-semibold text-on-surface-variant text-center">Radial</p>

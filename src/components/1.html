@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>CampaignFlow - Campaign Hub</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;family=Geist:wght@400;500;600&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-fixed-dim": "#b9c7e0",
+                        "primary-fixed": "#ffdcc5",
+                        "tertiary": "#61d5ff",
+                        "on-tertiary-fixed": "#001f29",
+                        "surface-container": "#271e17",
+                        "surface-container-high": "#322821",
+                        "primary": "#ffb887",
+                        "on-background": "#f1dfd5",
+                        "outline-variant": "#554337",
+                        "tertiary-fixed-dim": "#5bd4ff",
+                        "surface-dim": "#1a120c",
+                        "on-secondary-fixed-variant": "#3a485c",
+                        "inverse-surface": "#f1dfd5",
+                        "primary-container": "#fb923c",
+                        "surface-container-lowest": "#150c07",
+                        "error-container": "#93000a",
+                        "on-error-container": "#ffdad6",
+                        "inverse-primary": "#944a00",
+                        "tertiary-container": "#00bbe9",
+                        "outline": "#a38c7e",
+                        "on-secondary-container": "#abb9d2",
+                        "on-tertiary-fixed-variant": "#004d62",
+                        "secondary-fixed": "#d5e3fd",
+                        "surface-bright": "#423730",
+                        "on-primary": "#4f2500",
+                        "surface-container-low": "#231a14",
+                        "surface-tint": "#ffb783",
+                        "surface-container-highest": "#3d332c",
+                        "surface": "#1a120c",
+                        "primary-fixed-dim": "#ffb783",
+                        "background": "#1a120c",
+                        "error": "#ffb4ab",
+                        "on-secondary": "#233144",
+                        "on-surface-variant": "#dbc1b2",
+                        "on-primary-container": "#673200",
+                        "on-primary-fixed-variant": "#713700",
+                        "secondary-container": "#3c4a5e",
+                        "on-tertiary": "#003545",
+                        "on-error": "#690005",
+                        "tertiary-fixed": "#baeaff",
+                        "surface-variant": "#3d332c",
+                        "on-primary-fixed": "#301400",
+                        "secondary": "#b9c7e0",
+                        "on-surface": "#f1dfd5",
+                        "inverse-on-surface": "#392e27",
+                        "on-secondary-fixed": "#0d1c2f",
+                        "on-tertiary-container": "#00465a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "12px",
+                        "lg": "40px",
+                        "gutter": "24px",
+                        "base": "8px",
+                        "xl": "64px",
+                        "margin": "32px",
+                        "md": "24px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "h1": [
+                            "Space Grotesk"
+                        ],
+                        "label-caps": [
+                            "JetBrains Mono"
+                        ],
+                        "h3": [
+                            "Space Grotesk"
+                        ],
+                        "body-md": [
+                            "Geist"
+                        ],
+                        "code": [
+                            "JetBrains Mono"
+                        ],
+                        "body-lg": [
+                            "Geist"
+                        ],
+                        "h2": [
+                            "Space Grotesk"
+                        ]
+                    },
+                    "fontSize": {
+                        "h1": [
+                            "48px",
+                            {
+                                "lineHeight": "1.1",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "700"
+                            }
+                        ],
+                        "label-caps": [
+                            "12px",
+                            {
+                                "lineHeight": "1.0",
+                                "letterSpacing": "0.1em",
+                                "fontWeight": "500"
+                            }
+                        ],
+                        "h3": [
+                            "24px",
+                            {
+                                "lineHeight": "1.3",
+                                "letterSpacing": "0em",
+                                "fontWeight": "600"
+                            }
+                        ],
+                        "body-md": [
+                            "16px",
+                            {
+                                "lineHeight": "1.5",
+                                "letterSpacing": "0em",
+                                "fontWeight": "400"
+                            }
+                        ],
+                        "code": [
+                            "14px",
+                            {
+                                "lineHeight": "1.5",
+                                "fontWeight": "400"
+                            }
+                        ],
+                        "body-lg": [
+                            "18px",
+                            {
+                                "lineHeight": "1.6",
+                                "letterSpacing": "0em",
+                                "fontWeight": "400"
+                            }
+                        ],
+                        "h2": [
+                            "32px",
+                            {
+                                "lineHeight": "1.2",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "600"
+                            }
+                        ]
+                    }
+                },
+            },
+        }
+    </script>
+    <style>
+        body {
+            background-color: #020617;
+            /* Void navy background */
+            position: relative;
+        }
+
+        /* Atmospheric orange spotlight */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 100vh;
+            background: radial-gradient(circle at 50% 0%, rgba(251, 146, 60, 0.15) 0%, rgba(2, 6, 23, 0) 60%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .gradient-card {
+            background: linear-gradient(135deg, #1E293B 0%, #111827 100%);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            /* Assuming 8px matches lg or custom requirement from prompt */
+        }
+         .gradient-card-a {
+            background: linear-gradient(135deg, #29344F 0%, #111827 100%);
+            border: 1px solid #334155;
+            border-radius: 8px;
+            /* Assuming 8px matches lg or custom requirement from prompt */
+        }
+
+        .glow-button:hover {
+            box-shadow: 0 0 12px rgba(251, 146, 60, 0.4);
+        }
+    </style>
+</head>
+
+<body class="text-on-background min-h-screen flex flex-col font-body-md text-body-md overflow-x-hidden antialiased">
+    <!-- TopNavBar -->
+    <nav
+        class="bg-background dark:bg-background border-b border-outline-variant dark:border-outline-variant docked full-width top-0 z-50">
+        <div class="flex justify-between items-center w-full px-margin py-base max-w-full">
+            <!-- Brand -->
+            <div class="flex items-center gap-sm">
+                <span class="material-symbols-outlined text-primary dark:text-primary text-h3"
+                    data-weight="fill">campaign</span>
+                <span
+                    class="text-h3 font-h3 font-bold text-primary dark:text-primary tracking-tight">CampaignFlow</span>
+            </div>
+            <!-- Navigation Links (Web) -->
+            <div class="hidden md:flex items-center gap-margin">
+                <a class="text-primary font-bold border-b-2 border-primary pb-2 font-label-caps text-label-caps uppercase transition-all duration-150"
+                    href="#">Dashboard</a>
+                <a class="text-on-surface-variant dark:text-on-surface-variant font-medium hover:text-primary transition-colors duration-200 font-label-caps text-label-caps uppercase pb-2"
+                    href="#">Announcements</a>
+                <a class="text-on-surface-variant dark:text-on-surface-variant font-medium hover:text-primary transition-colors duration-200 font-label-caps text-label-caps uppercase pb-2"
+                    href="#">Promo Studio</a>
+            </div>
+            <!-- Trailing Actions -->
+            <div class="flex items-center gap-md">
+                <div class="hidden md:flex gap-sm">
+                    <button aria-label="Settings"
+                        class="text-on-surface-variant hover:text-primary transition-colors duration-200">
+                        <span class="material-symbols-outlined">settings</span>
+                    </button>
+                    <button aria-label="Notifications"
+                        class="text-on-surface-variant hover:text-primary transition-colors duration-200">
+                        <span class="material-symbols-outlined">notifications</span>
+                    </button>
+                </div>
+                <button
+                    class="bg-primary-container text-[#000000] px-md py-sm rounded font-label-caps text-label-caps hover:bg-surface-tint transition-colors duration-200 glow-button font-bold flex items-center gap-xs">
+                    <span class="material-symbols-outlined text-[16px]">add</span>
+                    Create Campaign
+                </button>
+                <!-- Mobile Menu Toggle -->
+                <button class="md:hidden text-on-background">
+                    <span class="material-symbols-outlined">menu</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+    <!-- Main Content Canvas -->
+    <main class="flex-grow flex flex-col container mx-auto px-margin py-xl max-w-[1200px]">
+        <!-- Header Section -->
+        <header class="mb-xl flex flex-col gap-sm">
+            <h1 class="font-h1 text-h1 text-on-background">Campaign Hub</h1>
+            <p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+                Command center for active marketing operations. Select a module below to configure global announcements
+                or deploy targeted promotional cards across the platform ecosystem.
+            </p>
+        </header>
+        <!-- Bento Grid / Cards Area -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+            <!-- Announcement Bar Card -->
+            <article
+                class="gradient-card-a p-[32px] flex flex-col h-full relative group overflow-hidden transition-colors duration-300 hover:border-outline">
+                <!-- Decorative Icon Background Blur -->
+              <div style="height: 250px;"></div>
+            </article>
+            <!-- Promo Card Studio Card -->
+            <article
+                class="gradient-card ">
+                <!-- Decorative Icon Background Blur -->
+              
+               
+               
+            </article>
+        </div>
+    </main>
+</body>
+
+</html>
