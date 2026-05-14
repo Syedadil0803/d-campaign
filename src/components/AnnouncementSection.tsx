@@ -1227,21 +1227,21 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1">
                       <div
-                        className="h-16 rounded-lg border border-border shadow-inner"
+                        className="h-10 rounded-lg border border-border shadow-inner"
                         style={{ background: '#b91c1c' }}
                       />
                       <p className="text-[11px] font-semibold text-on-surface-variant text-center">Solid</p>
                     </div>
                     <div className="space-y-1">
                       <div
-                        className="h-16 rounded-lg border border-border shadow-inner"
+                        className="h-10 rounded-lg border border-border shadow-inner"
                         style={{ background: 'linear-gradient(90deg, #111111 0%, #7f1d1d 55%, #ef4444 100%)' }}
                       />
                       <p className="text-[11px] font-semibold text-on-surface-variant text-center">Linear</p>
                     </div>
                     <div className="space-y-1">
                       <div
-                        className="h-16 rounded-lg border border-border shadow-inner"
+                        className="h-10 rounded-lg border border-border shadow-inner"
                         style={{ background: 'radial-gradient(circle at 50% 45%, #ef4444 8%, #7f1d1d 45%, #111111 100%)' }}
                       />
                       <p className="text-[11px] font-semibold text-on-surface-variant text-center">Radial</p>
