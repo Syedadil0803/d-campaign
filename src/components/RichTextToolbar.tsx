@@ -22,6 +22,8 @@ interface RichTextToolbarProps {
   activeFormats: ActiveFormats;
   onFormat: (format: string) => void;
   onColorSelect: (color: string) => void;
+  extraActions?: React.ReactNode;
+  rightActions?: React.ReactNode;
   presetColors?: string[];
   showAlignment?: boolean;
   alignment?: 'left' | 'center' | 'right';
@@ -35,6 +37,8 @@ export default function RichTextToolbar({
   activeFormats,
   onFormat,
   onColorSelect,
+  extraActions,
+  rightActions,
   presetColors = [],
   showAlignment = false,
   alignment = 'left',
@@ -141,6 +145,8 @@ export default function RichTextToolbar({
             {size.toUpperCase()}
           </button>
         ))}
+
+        {extraActions}
       </div>
 
       <div className="flex items-center gap-1">
@@ -225,6 +231,8 @@ export default function RichTextToolbar({
             </button>
           </>
         )}
+
+        {rightActions}
       </div>
     </div>
   );

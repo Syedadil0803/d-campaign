@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Megaphone, MoreVertical } from 'lucide-react';
+import { Megaphone, MoreVertical, Sparkles } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
@@ -491,6 +491,19 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     markChanged();
   }
 
+  function openChatGptWithPrompt() {
+    const plainText = stripHtml(newAnnouncementText || richEditorRef.current?.innerHTML || '').trim() || 'your announcement';
+    const prompt = [
+      'Write 2-3 short, catchy website announcement banners.',
+      'Keep it concise, friendly, and promotional.',
+      'Include 1-2 relevant emojis.',
+      `Base text: ${plainText}`,
+    ].join('\n');
+
+    const url = `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
   const bg = config.announcementBar.style.background;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -649,47 +662,60 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           }
                         }
                       }}
+                      extraActions={
+                        <>
+                          <div className="border-l border-border h-4 mx-0.5 shrink-0" />
+
+                          <button
+                            ref={linkBtnRef}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              if (!newAnnouncementText.trim()) return;
+                              setShowLinkPopup(!showLinkPopup);
+                              setShowSchedulePopup(false);
+                            }}
+                            disabled={!newAnnouncementText.trim()}
+                            className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${selectedUrl ? 'border-primary/50 bg-primary/10 text-primary' : 'border-border hover:border-primary/35 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
+                            title={newAnnouncementText.trim() ? 'Add link' : 'Enter text first'}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                            </svg>
+                          </button>
+
+                          <button
+                            ref={scheduleBtnRef}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              if (!newAnnouncementText.trim()) return;
+                              setShowSchedulePopup(!showSchedulePopup);
+                              setShowLinkPopup(false);
+                            }}
+                            disabled={!newAnnouncementText.trim()}
+                            className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${(selectedStartDate || selectedEndDate) ? 'border-primary/50 bg-primary/10 text-primary' : 'border-border hover:border-primary/35 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
+                            title={newAnnouncementText.trim() ? 'Schedule' : 'Enter text first'}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </button>
+                        </>
+                      }
+                      rightActions={
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            openChatGptWithPrompt();
+                          }}
+                          className="cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 border-border hover:border-primary/35 hover:bg-primary/10 hover:text-primary text-on-surface-variant ml-1"
+                          title="Open ChatGPT with a prompt"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                        </button>
+                      }
                     />
                   </div>
-
-                  {/* Divider */}
-                  <div className="border-l border-border h-4 mx-0.5 shrink-0" />
-
-                  {/* Link button */}
-                  <button
-                    ref={linkBtnRef}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      if (!newAnnouncementText.trim()) return;
-                      setShowLinkPopup(!showLinkPopup);
-                      setShowSchedulePopup(false);
-                    }}
-                    disabled={!newAnnouncementText.trim()}
-                    className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${selectedUrl ? 'border-primary/50 bg-primary/10 text-primary' : 'border-border hover:border-primary/35 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
-                    title={newAnnouncementText.trim() ? 'Add link' : 'Enter text first'}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                    </svg>
-                  </button>
-
-                  {/* Schedule button */}
-                  <button
-                    ref={scheduleBtnRef}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      if (!newAnnouncementText.trim()) return;
-                      setShowSchedulePopup(!showSchedulePopup);
-                      setShowLinkPopup(false);
-                    }}
-                    disabled={!newAnnouncementText.trim()}
-                    className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${(selectedStartDate || selectedEndDate) ? 'border-primary/50 bg-primary/10 text-primary' : 'border-border hover:border-primary/35 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
-                    title={newAnnouncementText.trim() ? 'Schedule' : 'Enter text first'}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  </button>
                 </div>
               </div>
 
