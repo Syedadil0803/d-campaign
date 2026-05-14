@@ -7,7 +7,6 @@ import { Dashboard } from '@/components/Dashboard';
 import { AnnouncementSection } from '@/components/AnnouncementSection';
 import { PromoSection } from '@/components/PromoSection';
 import { Toast } from '@/components/Toast';
-import { Code, ChevronDown } from 'lucide-react';
 
 // Migration functions
 function migrateAnnouncements(config: any): CampaignConfig['announcementBar']['announcements'] {
@@ -262,20 +261,6 @@ export default function Home() {
                 toast={toast}
               />
             )}
-
-            {/* Raw Data (Collapsed) */}
-            <details className="group bg-surface-elevated rounded-lg border border-border shadow-sm">
-              <summary className="flex items-center justify-between p-4 cursor-pointer">
-                <h3 className="text-sm font-medium text-on-surface-variant font-mono flex items-center">
-                  <Code className="w-4 h-4 mr-2" />
-                  JSON Configuration
-                </h3>
-                <ChevronDown className="w-4 h-4 text-on-surface-variant group-open:rotate-180 transition-transform" />
-              </summary>
-              <div className="p-4 bg-surface-subtle border-t border-border font-mono text-xs overflow-x-auto text-on-surface-variant">
-                <pre>{JSON.stringify(config, null, 2)}</pre>
-              </div>
-            </details>
           </div>
         </main>
       </div>
