@@ -540,7 +540,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
   
   return (
-    <section className=" shadow rounded-2xl  border-border overflow-hidden">
+    <section className="rounded-2xl border-border overflow-hidden">
       {/* Header */}
       <div className="px-4 py-2 border-b border-border bg-surface/60 flex items-center justify-between">
         <div className="flex items-center">
@@ -559,7 +559,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
         {/* Preview */}
         <div className=" py-4  border-border rounded-md">
           <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">Preview</h4>
-          <div className="w-full bg-surface-elevated  border-border rounded shadow-sm overflow-hidden">
+          <div className="w-full bg-surface-elevated border-border rounded overflow-hidden">
             {config.announcementBar.active && visibleAnnouncements.length > 0 && (
               <div ref={scrollContainerRef} className="h-10 text-sm font-medium overflow-hidden flex items-center group"
                 style={{
