@@ -21,7 +21,7 @@
  *   />
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, Dispatch, SetStateAction } from 'react';
 import {
   FONT_SIZE_MAP,
   FONT_SIZE_LABEL_MAP,
@@ -56,6 +56,9 @@ export interface UseRichTextEditorOptions {
 export interface UseRichTextEditorReturn {
   /** Current formatting state at the cursor position */
   activeFormats: ActiveFormats;
+
+  /** Directly set the active formats state */
+  setActiveFormats: Dispatch<SetStateAction<ActiveFormats>>;
 
   /**
    * Apply a formatting command.
@@ -229,8 +232,21 @@ export function useRichTextEditor(
           return;
       }
 
-      // Re-detect formats after the DOM mutation
-      detectFormats();
+      // Only update size from DOM, preserve other formats set by user
+      const selection = window.getSelection();
+      if (selection?.anchorNode) {
+        let node: Node | null = selection.anchorNode;
+        let detectedSize = 'md';
+        while (node && node !== document.body) {
+          if (node instanceof HTMLElement && node.style.fontSize) {
+            const label = FONT_SIZE_LABEL_MAP[node.style.fontSize];
+            if (label) detectedSize = label;
+            break;
+          }
+          node = node.parentNode;
+        }
+        setActiveFormats(prev => ({ ...prev, size: detectedSize }));
+      }
     },
     [editorRef, isSelectionInEditor, detectFormats]
   );
@@ -336,6 +352,7 @@ export function useRichTextEditor(
   // --------------------------------------------------------
   return {
     activeFormats,
+    setActiveFormats,
     formatText,
     applyColor,
     detectFormats,

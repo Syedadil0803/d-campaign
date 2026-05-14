@@ -6,7 +6,7 @@ import { Megaphone, MoreVertical } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
-import { wrapBareTextWithFontSize } from '@/lib/richTextUtils';
+import { wrapBareTextWithFontSize, rgbToHex, FONT_SIZE_LABEL_MAP } from '@/lib/richTextUtils';
 import RichTextToolbar from './RichTextToolbar';
 
 interface AnnouncementSectionProps {
@@ -26,6 +26,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const [showShortcutsTip, setShowShortcutsTip] = useState(false);
   const shortcutsTipShown = useRef(false);
   const [showRichToolbar, setShowRichToolbar] = useState(false);
+  const [showSelectHint, setShowSelectHint] = useState(false);
 
   // Undo/Redo history
   const undoStackRef = useRef<CampaignConfig['announcementBar']['announcements'][]>([]);
@@ -55,6 +56,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
   const {
     activeFormats,
+    setActiveFormats,
     formatText,
     applyColor,
     detectFormats,
@@ -316,59 +318,100 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       richEditorRef.current.innerHTML = normalizedText;
       richEditorRef.current.blur();
     }
-    // Clear any browser selection from the editor
     window.getSelection()?.removeAllRanges();
+    // Detect if styles are uniform — if mixed, show neutral toolbar state
+    detectFormatsForSelectMode(normalizedText);
   }
 
-  // ── Enter edit mode (cursor active) ──
-  function enterEditMode() {
-    if (isEditing || selectedIndex === null) return;
-    setIsEditing(true);
-    setTimeout(() => {
-      if (richEditorRef.current) {
-        richEditorRef.current.focus();
-        const sel = window.getSelection();
-        if (sel) {
-          sel.removeAllRanges();
-          const range = document.createRange();
-          let lastNode: Node = richEditorRef.current;
-          while (lastNode.lastChild) lastNode = lastNode.lastChild;
-          if (lastNode.nodeType === Node.TEXT_NODE) {
-            range.setStart(lastNode, lastNode.textContent?.length || 0);
-            range.collapse(true);
-          } else {
-            range.selectNodeContents(richEditorRef.current);
-            range.collapse(false);
-          }
-          sel.addRange(range);
-        }
-        detectFormats();
+  function detectFormatsForSelectMode(html: string) {
+    const container = document.createElement('div');
+    container.innerHTML = html;
+
+    // Collect all text nodes with actual content
+    const textNodes: Node[] = [];
+    function findTextNodes(node: Node) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent?.replace(/\u200B/g, '').trim();
+        if (text) textNodes.push(node);
+      } else {
+        node.childNodes.forEach(findTextNodes);
       }
-    }, 0);
+    }
+    findTextNodes(container);
+
+    if (textNodes.length === 0) {
+      setActiveFormats({ bold: false, italic: false, size: 'md', color: '#000000' });
+      return;
+    }
+
+    const sizes = new Set<string>();
+    const colors = new Set<string>();
+    let allBold = true;
+    let allItalic = true;
+
+    textNodes.forEach((textNode) => {
+      let foundSize = false;
+      let foundColor = false;
+      let isBold = false;
+      let isItalic = false;
+
+      // Walk up from text node to find effective styles
+      let node: HTMLElement | null = textNode.parentElement;
+      while (node && node !== container) {
+        if (!foundSize && node.style.fontSize) {
+          const label = FONT_SIZE_LABEL_MAP[node.style.fontSize];
+          if (label) { sizes.add(label); foundSize = true; }
+        }
+        if (!foundColor && node.style.color) {
+          const c = node.style.color;
+          colors.add(c.startsWith('rgb') ? rgbToHex(c) : c);
+          foundColor = true;
+        }
+        const tag = node.tagName;
+        if (tag === 'B' || tag === 'STRONG') isBold = true;
+        if (tag === 'I' || tag === 'EM') isItalic = true;
+        node = node.parentElement;
+      }
+
+      if (!isBold) allBold = false;
+      if (!isItalic) allItalic = false;
+    });
+
+    setActiveFormats({
+      bold: allBold,
+      italic: allItalic,
+      size: sizes.size === 1 ? [...sizes][0] : (sizes.size === 0 ? 'md' : ''),
+      color: colors.size === 1 ? [...colors][0] : (colors.size === 0 ? '#000000' : ''),
+    });
   }
 
   // ── Apply format to entire content (selection mode) ──
   const applyingFormatRef = useRef(false);
+  const justFocusedRef = useRef(false);
   function applyFormatToAll(action: () => void) {
     if (!richEditorRef.current) return;
+    const editor = richEditorRef.current;
+    const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
+    // Empty: don't touch DOM, just let toolbar state track the choice
+    if (!hasContent) return;
+    // Has content: select all and apply
     applyingFormatRef.current = true;
-    richEditorRef.current.focus();
+    const wasFocused = document.activeElement === editor;
+    editor.focus();
     const sel = window.getSelection();
     if (sel) {
       sel.removeAllRanges();
       const range = document.createRange();
-      range.selectNodeContents(richEditorRef.current);
+      range.selectNodeContents(editor);
       sel.addRange(range);
-      // Also save the range so applyColor can use it
       saveSelection();
     }
     action();
-    // Stay in selection mode
+    const html = getNormalizedHTML();
+    setNewAnnouncementText(html);
     window.getSelection()?.removeAllRanges();
-    richEditorRef.current.blur();
+    if (!wasFocused) editor.blur();
     applyingFormatRef.current = false;
-    // Sync back
-    onRichTextInput();
   }
 
   function openActionMenu(index: number, button: HTMLButtonElement) {
@@ -420,9 +463,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
   // ── Rich text input handler ──
   function onRichTextInput() {
+    if (applyingFormatRef.current) return;
     const html = getNormalizedHTML();
     setNewAnnouncementText(html);
-    detectFormats();
   }
 
   // ── Style helpers ──
@@ -533,26 +576,77 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
               <label className="block text-sm font-medium text-on-surface mb-2">Message</label>
 
               {/* Rich Text Toolbar + Link/Schedule buttons — same row, show/hide with focus */}
-              <div className={`mb-2 transition-all ${showRichToolbar ? 'opacity-100 max-h-16' : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'}`}>
+              <div className={`mb-2 transition-all ${showRichToolbar ? 'opacity-100 max-h-20' : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'}`}>
+                {showSelectHint && (
+                  <p className="text-[11px] text-primary font-medium mb-1 animate-pulse">✋ Select text first to change its style</p>
+                )}
                 <div className="flex items-center gap-1">
                   <div className="flex-1 min-w-0">
                     <RichTextToolbar
                       activeFormats={activeFormats}
                       onFormat={(format) => {
-                        if (!isEditing && selectedIndex !== null) {
+                        if (!isEditing) {
                           applyFormatToAll(() => formatText(format));
+                          // Ensure toolbar reflects the size
+                          if (format.startsWith('size-')) {
+                            setActiveFormats(prev => ({ ...prev, size: format.replace('size-', '') }));
+                          } else if (format === 'bold') {
+                            setActiveFormats(prev => ({ ...prev, bold: !prev.bold }));
+                          } else if (format === 'italic') {
+                            setActiveFormats(prev => ({ ...prev, italic: !prev.italic }));
+                          }
                         } else {
-                          saveSelection();
-                          formatText(format);
+                          // Only apply if text is selected
+                          const sel = window.getSelection();
+                          if (sel && !sel.isCollapsed) {
+                            saveSelection();
+                            formatText(format);
+                            // After format, update toolbar from the new DOM state
+                            // but preserve color if not found
+                            const currentColor = activeFormats.color;
+                            setTimeout(() => {
+                              const s = window.getSelection();
+                              if (s && s.anchorNode) {
+                                let foundColor = '';
+                                let node: Node | null = s.anchorNode;
+                                while (node && node !== document.body) {
+                                  if (node instanceof HTMLElement && node.style.color) {
+                                    foundColor = node.style.color.startsWith('rgb') ? rgbToHex(node.style.color) : node.style.color;
+                                    break;
+                                  }
+                                  node = node.parentNode;
+                                }
+                                if (!foundColor) {
+                                  setActiveFormats(prev => ({ ...prev, color: currentColor }));
+                                }
+                              }
+                            }, 0);
+                          } else {
+                            setShowSelectHint(true);
+                            setTimeout(() => setShowSelectHint(false), 2000);
+                          }
                         }
                       }}
                       onColorSelect={(color) => {
-                        if (!isEditing && selectedIndex !== null) {
-                          applyFormatToAll(() => applyColor(color));
+                        if (!isEditing) {
+                          // In select mode: apply to all content or set for future typing
+                          if (richEditorRef.current) {
+                            const hasContent = richEditorRef.current.textContent?.replace(/\u200B/g, '').trim();
+                            if (hasContent) {
+                              applyFormatToAll(() => applyColor(color));
+                            }
+                          }
+                          setActiveFormats(prev => ({ ...prev, color }));
                         } else {
-                          saveSelection();
-                          applyColor(color);
-                          onRichTextInput();
+                          const sel = window.getSelection();
+                          if (sel && !sel.isCollapsed) {
+                            saveSelection();
+                            applyColor(color);
+                            onRichTextInput();
+                          } else {
+                            setShowSelectHint(true);
+                            setTimeout(() => setShowSelectHint(false), 2000);
+                          }
                         }
                       }}
                     />
@@ -604,9 +698,63 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   <p className="text-xs text-on-surface-variant mb-1">Enter text below</p>
                   <div ref={richEditorRef} contentEditable suppressContentEditableWarning
                     onInput={onRichTextInput}
-                    onMouseUp={detectFormats}
-                    onKeyUp={detectFormats}
+                    onMouseDown={() => {
+                      // If already focused and in select mode, enter edit mode
+                      if (document.activeElement === richEditorRef.current && showRichToolbar && !isEditing) {
+                        setIsEditing(true);
+                        justFocusedRef.current = true;
+                        setTimeout(() => {
+                          if (richEditorRef.current) {
+                            const editor = richEditorRef.current;
+                            const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
+                            if (!hasContent) {
+                              // Empty: create a span with all chosen properties
+                              const { size, color, bold, italic } = activeFormats;
+                              const fontSize = size ? ({ xs: '0.75rem', sm: '0.875rem', md: '1rem', lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem' }[size] || '1rem') : '1rem';
+                              let html = `<span style="font-size: ${fontSize}; color: ${color || '#000000'}">\u200B</span>`;
+                              if (bold) html = `<b>${html}</b>`;
+                              if (italic) html = `<i>${html}</i>`;
+                              editor.innerHTML = html;
+                            }
+                            // Place cursor inside the deepest last node
+                            const sel = window.getSelection();
+                            if (sel) {
+                              sel.removeAllRanges();
+                              const range = document.createRange();
+                              let lastNode: Node = editor;
+                              while (lastNode.lastChild) lastNode = lastNode.lastChild;
+                              if (lastNode.nodeType === Node.TEXT_NODE) {
+                                range.setStart(lastNode, lastNode.textContent?.length || 0);
+                                range.collapse(true);
+                              } else {
+                                range.selectNodeContents(editor);
+                                range.collapse(false);
+                              }
+                              sel.addRange(range);
+                            }
+                          }
+                        }, 0);
+                      }
+                    }}
+                    onMouseUp={() => {
+                      if (justFocusedRef.current) {
+                        justFocusedRef.current = false;
+                        return;
+                      }
+                      if (isEditing) {
+                        detectFormats();
+                      }
+                    }}
+                    onKeyUp={() => {
+                      if (isEditing) {
+                        detectFormats();
+                      }
+                    }}
                     onKeyDown={(e) => {
+                      // Any typing enters edit mode
+                      if (!isEditing && !e.metaKey && !e.ctrlKey && e.key.length === 1) {
+                        setIsEditing(true);
+                      }
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         addAnnouncement();
@@ -614,29 +762,62 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     }}
                     onFocus={() => {
                       if (applyingFormatRef.current) return;
-                      if (!isEditing && selectedIndex !== null) {
-                        enterEditMode();
+                      justFocusedRef.current = true;
+                      // If already in select mode (e.g. from chip click), go straight to edit mode
+                      if (showRichToolbar && !isEditing) {
+                        setIsEditing(true);
+                        setTimeout(() => {
+                          if (richEditorRef.current) {
+                            const sel = window.getSelection();
+                            if (sel) {
+                              sel.removeAllRanges();
+                              const range = document.createRange();
+                              let lastNode: Node = richEditorRef.current;
+                              while (lastNode.lastChild) lastNode = lastNode.lastChild;
+                              if (lastNode.nodeType === Node.TEXT_NODE) {
+                                range.setStart(lastNode, lastNode.textContent?.length || 0);
+                                range.collapse(true);
+                              } else {
+                                range.selectNodeContents(richEditorRef.current);
+                                range.collapse(false);
+                              }
+                              sel.addRange(range);
+                            }
+                          }
+                        }, 0);
                         return;
                       }
                       setShowRichToolbar(true);
-                      // Show shortcuts tip (unless permanently dismissed)
                       if (!shortcutsTipShown.current && localStorage.getItem('ann_shortcuts_seen') !== 'never') {
                         shortcutsTipShown.current = true;
                         setShowShortcutsTip(true);
                       }
-                      setTimeout(() => {
-                        ensureDefaultFontSize();
-                        detectFormats();
-                      }, 0);
+                      // Always enter select mode first (cell behavior)
+                      setIsEditing(false);
+                      window.getSelection()?.removeAllRanges();
+                      if (richEditorRef.current) {
+                        const html = richEditorRef.current.innerHTML;
+                        const hasContent = richEditorRef.current.textContent?.replace(/\u200B/g, '').trim();
+                        if (hasContent) {
+                          detectFormatsForSelectMode(html);
+                        } else {
+                          // Empty: show defaults
+                          setActiveFormats({ bold: false, italic: false, size: 'md', color: '#000000' });
+                        }
+                      }
                     }}
                     onBlur={() => {
+                      // Don't hide toolbar if in select mode or if applying format
+                      if (applyingFormatRef.current) return;
+                      if (!isEditing && showRichToolbar) return;
                       const text = richEditorRef.current?.textContent?.replace(/\u200B/g, '').trim();
                       if (!text && selectedIndex === null) {
                         setShowRichToolbar(false);
+                        setIsEditing(false);
                         if (richEditorRef.current) richEditorRef.current.innerHTML = '';
                       }
                     }}
-                    className={`rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[360px] resize-y break-words transition-colors ${selectedIndex !== null && !isEditing ? 'ring-2 ring-primary/50 border-primary/50 cursor-default caret-transparent' : 'focus:ring-primary/40 focus:border-primary/50 hover:border-primary/35 border-border'}`}
+                    className={`rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[360px] resize-y break-words transition-colors ${!isEditing && showRichToolbar ? 'ring-2 ring-primary/50 border-primary/50 cursor-default caret-transparent' : 'focus:ring-primary/40 focus:border-primary/50 hover:border-primary/35 border-border'}`}
                     style={{ background: getBackgroundStyle(config.announcementBar.style.background), wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%' }} />
                 </div>
                 <button onMouseDown={(e) => {

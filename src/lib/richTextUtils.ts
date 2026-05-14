@@ -352,7 +352,7 @@ export function applyFontSize(size: string): void {
     if (walkForStyle.nodeType === Node.TEXT_NODE) walkForStyle = walkForStyle.parentElement;
     while (walkForStyle && walkForStyle instanceof HTMLElement && walkForStyle.contentEditable !== 'true') {
       const el = walkForStyle;
-      if (el.style.color && !el.style.fontSize) {
+      if (el.style.color && !colorToPreserve) {
         colorToPreserve = el.style.color;
       }
       if (el.tagName === 'B' || el.tagName === 'STRONG' || el.style.fontWeight === 'bold') {
@@ -361,7 +361,7 @@ export function applyFontSize(size: string): void {
       if (el.tagName === 'I' || el.tagName === 'EM' || el.style.fontStyle === 'italic') {
         hasItalic = true;
       }
-      if (el.style.fontSize) break; // Stop at font-size boundary
+      if (el.style.fontSize) break;
       walkForStyle = el.parentElement;
     }
 
@@ -497,14 +497,23 @@ export function applyInlineColor(color: string, range: Range): void {
     }
   }
 
-  // Unwrap spans that only have color style (no font-size/weight/style)
-  const colorSpans = tempDiv.querySelectorAll('span');
-  for (const sp of colorSpans) {
+  // Remove color from ALL spans (we're applying a new color to everything)
+  const allSpans = tempDiv.querySelectorAll('span');
+  for (const sp of allSpans) {
+    if (sp instanceof HTMLElement && sp.style.color) {
+      sp.style.removeProperty('color');
+    }
+  }
+
+  // Unwrap spans that now have no meaningful styles left
+  const emptyStyleSpans = tempDiv.querySelectorAll('span');
+  for (const sp of emptyStyleSpans) {
     if (
-      sp.style.color &&
+      sp instanceof HTMLElement &&
       !sp.style.fontSize &&
       !sp.style.fontWeight &&
       !sp.style.fontStyle &&
+      !sp.style.color &&
       !sp.getAttribute('data-timer-placeholder') &&
       !sp.getAttribute('data-timer-separator')
     ) {
