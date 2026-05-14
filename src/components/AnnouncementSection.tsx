@@ -1216,13 +1216,13 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 )}
               </div>
 
-              <div className="flex-1 min-h-0 border-t border-border pt-4 overflow-auto">
+              <div className={`flex-1 min-h-0 border-t border-border pt-4 ${bg.type === 'solid' ? 'overflow-visible' : 'overflow-auto'}`}>
                 <div className="border-b border-border pb-3">
                   <h4 className="text-base font-semibold text-on-surface">Style</h4>
                   <p className="mt-1 text-xs text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
                 </div>
 
-                <div>
+                <div className="pb-1">
                   <label className="block text-sm font-medium text-on-surface mb-2">Background Type Guide</label>
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1">
