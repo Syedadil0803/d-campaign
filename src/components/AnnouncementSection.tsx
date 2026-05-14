@@ -1166,7 +1166,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   )}
                 </div>
                 {config.announcementBar.announcements.length === 0 ? (
-                  <div className="h-36 flex items-center justify-center text-center text-sm text-on-surface-variant">
+                  <div className="h-10 flex items-center justify-center text-center text-sm text-on-surface-variant">
                     Added text from the left input box will be displayed here
                   </div>
                 ) : (
