@@ -600,7 +600,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
           {/* Left: Input + Chips + Link */}
           <div className="space-y-4 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-full transition-all hover:border-primary/35 hover:shadow-md hover:shadow-primary/10">
             <div className="border-b border-border pb-3">
@@ -1178,10 +1178,11 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           </div>
 
           {/* Right: Message List + Style (single card split into equal halves) */}
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-full min-h-0 transition-all hover:border-primary/35 hover:shadow-md hover:shadow-primary/10">
-              <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-                <div className="flex items-center justify-between mb-2">
+          <div className="min-h-0">
+            <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[380px] overflow-hidden transition-all hover:border-primary/35 hover:shadow-md hover:shadow-primary/10">
+              {/* Top half: Message List */}
+              <div className="flex-1 min-h-0 flex flex-col pr-1">
+                <div className="flex items-center justify-between mb-2 shrink-0">
                   <label className="block text-sm font-medium text-on-surface">Message List</label>
                   {config.announcementBar.announcements.length > 0 && (
                     <span className="text-[11px] text-primary font-medium flex items-center animate-pulse">
@@ -1190,11 +1191,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   )}
                 </div>
                 {config.announcementBar.announcements.length === 0 ? (
-                  <div className="h-10 flex items-center justify-center text-center text-sm text-on-surface-variant">
+                  <div className="flex-1 flex items-center justify-center text-center text-sm text-on-surface-variant">
                     Added text from the left input box will be displayed here
                   </div>
                 ) : (
-                  <div className={`flex flex-wrap gap-2 p-1 ${config.announcementBar.announcements.length > 2 ? 'max-h-64 overflow-y-auto' : ''}`}>
+                  <div className="flex-1 min-h-0 overflow-y-auto">
+                    <div className="flex flex-wrap gap-2 p-1">
                     {config.announcementBar.announcements.map((ann, index) => (
                       <div key={index}
                         draggable
@@ -1236,12 +1238,15 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         </button>
                       </div>
                     ))}
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* Loop Toggle */}
-              <div className="flex items-center justify-between py-3 border-t border-border">
+              {/* Bottom: Loop + Style pinned to bottom */}
+              <div className="shrink-0 mt-auto">
+                {/* Loop Toggle */}
+                <div className="flex items-center justify-between py-3 border-t border-border">
                 <div>
                   <label className="block text-sm font-medium text-on-surface">Loop</label>
                   <p className="text-xs text-on-surface-variant">Seamless continuous scroll (duplicates content to fill the bar)</p>
@@ -1260,7 +1265,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 </button>
               </div>
 
-              <div className={`flex-1 min-h-0 border-t border-border pt-4 ${bg.type === 'solid' ? 'overflow-visible' : 'overflow-auto'}`}>
+              <div className="border-t border-border pt-2">
            
 
                 <div className="pb-1">
@@ -1291,6 +1296,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   </div>
                 </div>
 
+              </div>
               </div>
             </div>
           </div>
