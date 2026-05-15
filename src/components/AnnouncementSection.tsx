@@ -933,7 +933,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   />
                   <label htmlFor="openInNewTab" className="ml-2 text-xs text-on-surface cursor-pointer">Open in new tab</label>
                 </div>
-                <p className="text-[10px] text-on-surface-variant mt-1">In this editor, links always open in a new tab. This setting applies to your live site only.</p>
+                <p className="text-[10px] text-on-surface-variant mt-1">In this editor, links always open in a new tab. <br /> This setting applies to your live site only.</p>
                 <div className="flex justify-between items-center mt-2">
                   {selectedUrl && (
                     <button
