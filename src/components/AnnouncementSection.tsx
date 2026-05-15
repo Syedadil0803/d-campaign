@@ -887,7 +887,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 ref={linkPopupRef}
                 onMouseDown={(e) => e.stopPropagation()}
                 style={{ position: 'absolute', top: linkPos.top, left: linkPos.left, zIndex: 9999 }}
-                className="bg-surface-elevated border border-border rounded-lg shadow-xl p-3 w-[260px]"
+                className="campaign-card-surface border border-border rounded-lg shadow-xl p-3 w-[260px]"
               >
                   <button
                     onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); closePopupAndFocusEditor(); }}
@@ -973,7 +973,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 ref={schedulePopupRef}
                 onMouseDown={(e) => e.stopPropagation()}
                 style={{ position: 'absolute', top: schedulePos.top, left: schedulePos.left, zIndex: 9999 }}
-                className="bg-surface-elevated border border-border rounded-lg shadow-xl p-3 w-[260px]"
+                className="campaign-card-surface border border-border rounded-lg shadow-xl p-3 w-[260px]"
               >
                   <button
                     onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); closePopupAndFocusEditor(); }}
