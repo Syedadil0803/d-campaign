@@ -9,13 +9,13 @@
   /* Main cards/panels (Dashboard/Announcement/Promo/details) */
   --surface-subtle: 234 238 242;
   /* Inner subtle panels (page.tsx JSON panel) */
-  --border: 203 213 225;
+  --border: 223 227 231;
   /* Shared borders (border-border across components) */
   --primary: 163 57 0;
   /* Brand accent (text/border/bg primary classes) */
   --on-surface: 23 28 31;
   /* Primary readable text on surfaces */
-  --on-surface-variant: 71 85 105;
+  --on-surface-variant: 90 65 56;
   /* Secondary/muted text */
 
   --page-glow-1: rgba(163, 57, 0, 0.18);
@@ -27,27 +27,27 @@
   --page-glow-4: rgba(246, 250, 254, 0.96);
   /* Background gradient stop 4 (fade to base) */
 
-  --card-gradient: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  --card-gradient-a: linear-gradient(135deg, #eef2ff 0%, #dbeafe 100%);
+  --card-surface: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  --dashboard-card: linear-gradient(135deg, #f0f4f8 0%, #e4e9ed 100%);
 }
 
 .dark {
   --background: 2 6 23;
-  /* Same usage as light: page/base background */
+  /* Page base background */
   --surface: 18 20 22;
-  /* Same usage as light: header/nav surfaces */
+  /* Header/nav surfaces */
   --surface-elevated: 30 41 59;
-  /* Same usage as light: main cards/panels */
+  /* Main cards/panels */
   --surface-subtle: 15 23 42;
-  /* Same usage as light: inner subtle panels */
+  /* Inner subtle panels */
   --border: 51 65 85;
-  /* Same usage as light: shared borders */
+  /* Shared borders */
   --primary: 249 115 22;
-  /* Same usage as light: accent color */
-  --on-surface: 226 226 229;
-  /* Same usage as light: primary text */
-  --on-surface-variant: 148 163 184;
-  /* Same usage as light: secondary text */
+  /* Brand accent */
+  --on-surface: 241 223 213;
+  /* Primary readable text on surfaces */
+  --on-surface-variant: 219 193 178;
+  /* Secondary/muted text */
 
   --page-glow-1: rgba(249, 115, 22, 0.28);
   /* Background gradient stop 1 (center glow) */
@@ -58,29 +58,31 @@
   --page-glow-4: rgba(2, 6, 23, 0.96);
   /* Background gradient stop 4 (fade to base) */
 
-  --card-gradient: linear-gradient(135deg, #1E293B 0%, #111827 100%);
-  --card-gradient-a: linear-gradient(135deg, #29344F 0%, #111827 100%);
+
+  --card-surface: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  --dashboard-card: linear-gradient(135deg, #29344F 0%, #111827 100%);
 }
 
 .campaign-page-bg {
   background-color: rgb(var(--background));
-  background-image: radial-gradient(ellipse 95% 75% at 50% 45%,
-      var(--page-glow-1) 0%,
-      var(--page-glow-2) 32%,
-      var(--page-glow-3) 56%,
-      var(--page-glow-4) 82%);
+  background-image: radial-gradient(
+    ellipse 95% 75% at 50% 45%,
+    var(--page-glow-1) 0%,
+    var(--page-glow-2) 32%,
+    var(--page-glow-3) 56%,
+    var(--page-glow-4) 82%
+  );
 }
-
-
 
 .campaign-gradient-card {
   background: var(--card-gradient);
- 
-
 }
 
-.campaign-gradient-card-a {
-  background: var(--card-gradient-a);
+.campaign-card-surface {
+  background: var(--card-surface);
+}
 
-
+.dashboard-gradient-card {
+  background: var(--dashboard-card);
+  border-radius: 8px;
 }

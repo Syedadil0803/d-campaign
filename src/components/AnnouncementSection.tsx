@@ -602,7 +602,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
           {/* Left: Input + Chips + Link */}
-          <div className="space-y-4 rounded-2xl border border-border campaign-gradient-card p-4 shadow-sm flex flex-col h-full transition-all hover:border-primary/35 hover:shadow-md hover:shadow-primary/10">
+          <div className="space-y-4 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-full transition-all hover:border-primary/35 hover:shadow-md hover:shadow-primary/10">
             <div className="border-b border-border pb-3">
               <h4 className="text-base font-semibold text-on-surface">Announcement Content</h4>
               <p className="mt-1 text-xs text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
@@ -1179,7 +1179,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
           {/* Right: Message List + Style (single card split into equal halves) */}
           <div className="space-y-4">
-            <div className="rounded-2xl border border-border campaign-gradient-card-a p-4 shadow-sm flex flex-col h-full min-h-0 transition-all hover:border-primary/35 hover:shadow-md hover:shadow-primary/10">
+            <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-full min-h-0 transition-all hover:border-primary/35 hover:shadow-md hover:shadow-primary/10">
               <div className="flex-1 min-h-0 overflow-y-auto pr-1">
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-sm font-medium text-on-surface">Message List</label>

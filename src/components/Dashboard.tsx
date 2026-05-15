@@ -12,7 +12,7 @@ export function Dashboard({ config, setActiveTab }: DashboardProps) {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div
         onClick={() => setActiveTab('announcement')}
-        className="bg-surface-elevated rounded-lg border border-border shadow-[0_0_20px_rgba(51,65,85,0.3)] p-6 cursor-pointer hover:shadow-[0_0_30px_rgba(51,65,85,0.5)] hover:border-primary/70 transition-all group"
+        className="dashboard-gradient-card border border-border shadow-[0_0_20px_rgba(51,65,85,0.3)] p-6 cursor-pointer hover:shadow-[0_0_30px_rgba(51,65,85,0.5)] hover:border-primary/70 transition-all group"
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
@@ -57,7 +57,7 @@ export function Dashboard({ config, setActiveTab }: DashboardProps) {
 
       <div
         onClick={() => setActiveTab('promo')}
-        className="bg-surface-elevated rounded-lg border border-border shadow-[0_0_20px_rgba(51,65,85,0.3)] p-6 cursor-pointer hover:shadow-[0_0_30px_rgba(51,65,85,0.5)] hover:border-primary/70 transition-all group"
+        className="dashboard-gradient-card border border-border shadow-[0_0_20px_rgba(51,65,85,0.3)] p-6 cursor-pointer hover:shadow-[0_0_30px_rgba(51,65,85,0.5)] hover:border-primary/70 transition-all group"
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
