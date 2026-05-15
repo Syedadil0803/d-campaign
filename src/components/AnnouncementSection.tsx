@@ -909,7 +909,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   <button
                     onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); closePopupAndFocusEditor(); }}
                     aria-label="Close"
-                    className="absolute top-2 right-2 text-on-surface-variant hover:text-on-surface p-1 rounded"
+                    className="absolute top-0 right-2 text-on-surface-variant hover:text-on-surface p-1 rounded text-xl"
                   >
                     ×
                   </button>
@@ -995,7 +995,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   <button
                     onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); closePopupAndFocusEditor(); }}
                     aria-label="Close"
-                    className="absolute top-2 right-2 text-on-surface-variant hover:text-on-surface p-1 rounded"
+                    className="absolute top-0 right-2 text-on-surface-variant hover:text-on-surface p-1 rounded text-xl"
                   >
                     ×
                   </button>
