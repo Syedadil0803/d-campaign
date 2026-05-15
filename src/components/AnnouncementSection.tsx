@@ -67,6 +67,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   } = useRichTextEditor(richEditorRef, { defaultColor: '#000000' });
 
   // Marquee layout: calculate copies for loop mode, or set min-width for non-loop
+  // Also dynamically compute --scroll-duration so speed (px/s) stays constant
+  const SCROLL_SPEED_PX_PER_SEC = 60; // constant visual speed regardless of content length
+
   useEffect(() => {
     if (!scrollContainerRef.current || !config.announcementBar.active) return;
     const container = scrollContainerRef.current;
@@ -88,10 +91,24 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       if (needed !== loopCopies) {
         setLoopCopies(needed);
       }
+
+      // Set duration proportional to content width so speed stays constant.
+      // The animation moves translateX(-50%) = halfWidth pixels.
+      // duration = halfWidth / speed  →  longer content = longer duration = same speed.
+      const duration = Math.max(5, halfWidth / SCROLL_SPEED_PX_PER_SEC);
+      track.style.setProperty('--scroll-duration', `${duration.toFixed(1)}s`);
     } else {
       // Loop OFF: set min-width so duplicate stays off-screen
       container.style.setProperty('--set-min-width', `${containerWidth}px`);
       setLoopCopies(1);
+
+      // Also compute duration for non-loop mode based on full track width
+      const track = container.querySelector('.animate-scroll-left') as HTMLElement;
+      if (track) {
+        const halfWidth = track.scrollWidth / 2;
+        const duration = Math.max(5, halfWidth / SCROLL_SPEED_PX_PER_SEC);
+        track.style.setProperty('--scroll-duration', `${duration.toFixed(1)}s`);
+      }
     }
   }, [config.announcementBar.announcements, config.announcementBar.active, config.announcementBar.loop, loopCopies]);
 
