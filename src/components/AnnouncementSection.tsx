@@ -168,7 +168,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       if (
         showSchedulePopup &&
         schedulePopupRef.current && !schedulePopupRef.current.contains(target) &&
-        scheduleBtnRef.current && !scheduleBtnRef.current.contains(target)
+        scheduleBtnRef.current && !scheduleBtnRef.current.contains(target) &&
+        !(target instanceof HTMLInputElement && target.type === 'date')
       ) {
         setShowSchedulePopup(false);
       }
@@ -957,13 +958,13 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       onMouseDown={(e) => {
                         e.preventDefault();
                         setSelectedUrl('');
+                        setSelectedOpenInNewTab(false);
                         if (selectedIndex !== null) {
                           const updated = [...config.announcementBar.announcements];
-                          updated[selectedIndex] = { ...updated[selectedIndex], url: undefined, richText: true };
+                          updated[selectedIndex] = { ...updated[selectedIndex], url: undefined, openInNewTab: undefined, richText: true };
                           setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
                           markChanged();
                         }
-                        setShowLinkPopup(false);
                       }}
                       className="text-xs text-primary hover:opacity-80"
                     >
@@ -989,9 +990,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
               <div
                 ref={schedulePopupRef}
                 onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
                 style={{ position: 'absolute', top: schedulePos.top, left: schedulePos.left, zIndex: 9999 }}
-                className="campaign-card-surface border border-border rounded-lg shadow-xl p-3 w-[260px]"
-              >
+                className="campaign-card-surface border border-border rounded-lg shadow-xl p-3 w-[260px]">
                   <button
                     onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); closePopupAndFocusEditor(); }}
                     aria-label="Close"
@@ -1006,6 +1007,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     <input
                       type="date"
                       value={selectedStartDate}
+                      onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
                       onChange={(e) => {
                         const nextStart = e.target.value;
                         setSelectedStartDate(nextStart);
@@ -1016,7 +1018,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           markChanged();
                         }
                       }}
-                      className="block w-full border-border rounded-md p-1.5 border bg-surface text-on-surface text-sm"
+                      className="block w-full border-border rounded-md p-1.5 border bg-surface text-on-surface text-sm [color-scheme:light] dark:[color-scheme:dark]"
                     />
                   </div>
                   <div>
@@ -1024,6 +1026,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     <input
                       type="date"
                       value={selectedEndDate}
+                      onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
                       onChange={(e) => {
                         const nextEnd = e.target.value;
                         setSelectedEndDate(nextEnd);
@@ -1034,7 +1037,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           markChanged();
                         }
                       }}
-                      className="block w-full border-border rounded-md p-1.5 border bg-surface text-on-surface text-sm"
+                      className="block w-full border-border rounded-md p-1.5 border bg-surface text-on-surface text-sm [color-scheme:light] dark:[color-scheme:dark]"
                     />
                   </div>
                   <p className="text-[10px] text-on-surface-variant">Leave empty to always show when bar is active.</p>
