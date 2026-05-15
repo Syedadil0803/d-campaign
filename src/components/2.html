@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opposite Dual-Color Rotation</title>
+    <style>
+        @property --gradient-angle {
+            syntax: "<angle>";
+            initial-value: 0deg;
+            inherits: false;
+        }
+
+        :root {
+            --duration: 4s;
+            --color-1: #27ae60; /* Emerald Green */
+            --color-2: #00d4ff; /* Bright Teal/Blue */
+        }
+
+        body {
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .nav-btn {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 40px;
+            border-radius: 100px;
+            background: #050505;
+            color: white;
+            font-family: 'Inter', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            text-decoration: none;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+            isolation: isolate;
+            transition: transform 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+        }
+
+        /* The Double-Sided Aurora Layer */
+        .nav-btn::before {
+            content: "";
+            position: absolute;
+            inset: -100%;
+            z-index: -1;
+            /* Two color peaks placed exactly 180 degrees apart */
+            background: conic-gradient(
+                from var(--gradient-angle),
+                transparent 0deg,
+                var(--color-1) 45deg,   /* First color (Green) */
+                transparent 90deg,
+                transparent 180deg,
+                var(--color-2) 225deg,  /* Second color (Blue/Teal) exactly opposite */
+                transparent 270deg,
+                transparent 360deg
+            );
+            animation: rotate-gradient var(--duration) linear infinite;
+            filter: blur(30px) brightness(1.5);
+        }
+
+        /* The Grid Overlay (Matching the video's fade-out) */
+        .nav-btn::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            background-image: radial-gradient(rgba(255, 255, 255, 0.18) 1.2px, transparent 1.2px);
+            background-size: 11px 11px;
+            mask-image: linear-gradient(to right, black 10%, transparent 85%);
+            -webkit-mask-image: linear-gradient(to right, black 10%, transparent 85%);
+        }
+
+        @keyframes rotate-gradient {
+            from { --gradient-angle: 0deg; }
+            to { --gradient-angle: 360deg; }
+        }
+
+        /* Interaction Effects */
+        .nav-btn:hover {
+            transform: scale(1.04);
+            border-color: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 0 40px rgba(39, 174, 96, 0.15);
+        }
+
+        .arrow {
+            margin-left: 12px;
+            font-size: 32px;
+            font-weight: 200;
+            transition: transform 0.3s ease;
+        }
+
+        .nav-btn:hover .arrow {
+            transform: translateX(5px);
+        }
+    </style>
+</head>
+<body>
+
+    <a href="#" class="nav-btn">
+        Log In <span class="arrow">→</span>
+    </a>
+
+</body>
+</html>

@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technical Design System - Master Button Suite</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        /* REGISTERING CUSTOM PROPERTY FOR SMOOTH ROTATION */
+        @property --angle {
+            syntax: "<angle>";
+            initial-value: 0deg;
+            inherits: false;
+        }
+
+        :root {
+            /* Your Color Palette Tokens */
+            --surface: #1a120c;
+            --surface-container-lowest: #150c07;
+            --surface-bright: #423730;
+            --primary: #ffb887;
+            --primary-container: #fb923c;
+            --secondary: #b9c7e0;
+            --tertiary: #61d5ff;
+            --tertiary-container: #00bbe9;
+            --on-surface: #f1dfd5;
+            --outline-variant: #554337;
+            --outline: #a38c7e;
+        }
+
+        body {
+            background-color: var(--surface);
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+            padding: 60px;
+            margin: 0;
+            min-height: 100vh;
+            align-items: center;
+            justify-items: center;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        h2 {
+            color: var(--outline);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin: 0;
+            padding-left: 4px;
+        }
+
+        /* --- MASTER BUTTON BASE --- */
+        .btn-base {
+            position: relative;
+            width: 280px;
+            height: 72px;
+            background: var(--surface-container-lowest);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            cursor: pointer;
+            overflow: hidden;
+            isolation: isolate;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid var(--outline-variant);
+        }
+
+        .btn-base:hover {
+            transform: translateY(-2px);
+            border-color: var(--outline);
+        }
+
+        /* SHARED ANIMATION KEYFRAMES */
+        @keyframes rotate { from { --angle: 0deg; } to { --angle: 360deg; } }
+        
+        @keyframes ping {
+            0% { transform: scale(0.2); opacity: 0; }
+            50% { opacity: 0.8; }
+            100% { transform: scale(1.8); opacity: 0; }
+        }
+
+        @keyframes rain {
+            0% { background-position: 0 -150px; -webkit-mask-position: 0 -150px; }
+            100% { background-position: 0 150px; -webkit-mask-position: 0 150px; }
+        }
+
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(1.6); opacity: 0.7; }
+        }
+
+        @keyframes scanline {
+            0% { top: 0%; opacity: 0; }
+            50% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        /* --- 01. PROPELLER (OPPOSITE COLORS) --- */
+        .v1-propeller { border-radius: 99px; font-family: 'Space Grotesk'; font-weight: 700; color: #fff; }
+        .v1-propeller::before {
+            content: ""; position: absolute; inset: -100%; z-index: -2;
+            background: conic-gradient(from var(--angle), transparent 0deg, var(--primary-container) 30deg, transparent 90deg, transparent 180deg, var(--tertiary) 210deg, transparent 270deg);
+            animation: rotate 4s linear infinite; filter: blur(30px);
+        }
+        .v1-propeller::after {
+            content: ""; position: absolute; inset: 0; z-index: -1;
+            background: conic-gradient(from var(--angle), #fff 30deg, transparent 90deg, transparent 180deg, #fff 210deg, transparent 270deg);
+            -webkit-mask-image: radial-gradient(circle, #000 1.2px, transparent 1.2px);
+            -webkit-mask-size: 12px 12px; animation: rotate 4s linear infinite; opacity: 0.4;
+        }
+
+        /* --- 02. TECHNICAL SCANNER --- */
+        .v2-scanner { border-radius: 4px; font-family: 'JetBrains Mono'; font-size: 14px; color: var(--primary); }
+        .v2-scanner::before {
+            content: ""; position: absolute; inset: -100%; z-index: -2;
+            background: conic-gradient(from var(--angle), transparent 0deg, var(--primary-container) 10deg, #423730 25deg, transparent 45deg);
+            animation: rotate 2s linear infinite; filter: blur(15px);
+        }
+        .v2-scanner::after {
+            content: ""; position: absolute; inset: 0; z-index: -1;
+            background: conic-gradient(from var(--angle), #fff 10deg, transparent 45deg);
+            -webkit-mask-image: radial-gradient(circle, #000 1px, transparent 1px);
+            -webkit-mask-size: 8px 8px; animation: rotate 2s linear infinite; opacity: 0.6;
+        }
+
+        /* --- 03. AMBIENT TONAL --- */
+        .v3-ambient { border-radius: 16px; font-family: 'Space Grotesk'; color: #fff; }
+        .v3-ambient::before {
+            content: ""; position: absolute; inset: -100%; z-index: -2;
+            background: conic-gradient(from var(--angle), var(--secondary) 0deg, var(--primary) 180deg, var(--secondary) 360deg);
+            animation: rotate 8s linear infinite; filter: blur(40px) opacity(0.3);
+        }
+        .v3-ambient::after {
+            content: ""; position: absolute; inset: 0; z-index: -1;
+            background: conic-gradient(from var(--angle), #fff 0deg, transparent 180deg, #fff 360deg);
+            -webkit-mask-image: radial-gradient(circle, #000 1.5px, transparent 1.5px);
+            -webkit-mask-size: 14px 14px; animation: rotate 8s linear infinite; opacity: 0.15;
+        }
+
+        /* --- 04. RADAR PING --- */
+        .v4-radar { border-radius: 8px; font-family: 'JetBrains Mono'; color: #fff; }
+        .v4-radar::before {
+            content: ""; position: absolute; inset: 0; z-index: -2;
+            background: radial-gradient(circle at center, var(--primary-container) 0%, transparent 60%);
+            animation: ping 3s ease-out infinite;
+        }
+        .v4-radar::after {
+            content: ""; position: absolute; inset: 0; z-index: -1;
+            background: white; -webkit-mask-image: radial-gradient(circle, #000 1.5px, transparent 1.5px);
+            -webkit-mask-size: 12px 12px; mask-image: radial-gradient(circle, #000 1.5px, transparent 1.5px);
+            mask-size: 12px 12px; animation: ping 3s ease-out infinite;
+        }
+
+        /* --- 05. DATA RAINFALL --- */
+        .v5-rainfall { border-radius: 4px; font-family: 'JetBrains Mono'; color: var(--tertiary); }
+        .v5-rainfall::before {
+            content: ""; position: absolute; inset: 0; z-index: -2;
+            background: linear-gradient(to bottom, transparent, var(--tertiary), transparent);
+            background-size: 100% 150px; animation: rain 2s linear infinite;
+        }
+        .v5-rainfall::after {
+            content: ""; position: absolute; inset: 0; z-index: -1;
+            background: #fff; -webkit-mask-image: radial-gradient(circle, #000 1px, transparent 1px);
+            -webkit-mask-size: 10px 10px; -webkit-mask-position: center;
+            opacity: 0.4; mask-image: linear-gradient(to bottom, transparent, black, transparent);
+            mask-size: 100% 150px; animation: rain 2s linear infinite;
+        }
+
+        /* --- 06. NEURAL BREATH --- */
+        .v6-breath { border-radius: 12px; font-family: 'Space Grotesk'; text-transform: uppercase; color: #fff; }
+        .v6-breath::before {
+            content: ""; position: absolute; inset: 0; z-index: -2;
+            background: radial-gradient(circle at center, var(--primary-container), transparent);
+            animation: breathe 4s ease-in-out infinite;
+        }
+        .v6-breath::after {
+            content: ""; position: absolute; inset: 0; z-index: -1;
+            background: #fff; -webkit-mask-image: radial-gradient(circle, #000 1.2px, transparent 1.2px);
+            -webkit-mask-size: 14px 14px; animation: breathe 4s ease-in-out infinite;
+        }
+
+        /* --- 07. VECTOR FLOW --- */
+        .v7-flow { border-radius: 8px; font-family: 'JetBrains Mono'; color: var(--on-surface); }
+        .v7-flow::before {
+            content: ""; position: absolute; inset: -50%; z-index: -2;
+            background: linear-gradient(45deg, transparent, var(--tertiary), var(--primary), transparent);
+            background-size: 200% 200%; animation: rotate 5s linear infinite; filter: blur(20px);
+        }
+        .v7-flow::after {
+            content: ""; position: absolute; inset: 0; z-index: -1;
+            background: #fff; -webkit-mask-image: radial-gradient(circle, #000 1.2px, transparent 1.2px);
+            -webkit-mask-size: 12px 12px; opacity: 0.3;
+        }
+
+        /* --- 08. ECLIPSE (BORDER ONLY) --- */
+        .v8-eclipse { border-radius: 99px; font-family: 'Space Grotesk'; color: #fff; border: none; }
+        .v8-eclipse::before {
+            content: ""; position: absolute; inset: -100%; z-index: -2;
+            background: conic-gradient(from var(--angle), transparent 0deg, var(--primary) 180deg, transparent 360deg);
+            animation: rotate 3s linear infinite;
+        }
+        .v8-eclipse::after {
+            content: ""; position: absolute; inset: 2px; z-index: -1;
+            background: var(--surface-container-lowest); border-radius: 99px;
+        }
+
+        /* --- 09. GLITCH SCAN --- */
+        .v9-glitch { border-radius: 4px; font-family: 'JetBrains Mono'; color: var(--primary); }
+        .v9-glitch::before {
+            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 2px;
+            background: var(--primary); box-shadow: 0 0 15px var(--primary);
+            z-index: 1; animation: scanline 2s steps(30) infinite;
+        }
+        .v9-glitch::after {
+            content: ""; position: absolute; inset: 0; z-index: -1;
+            background-image: radial-gradient(var(--primary) 1.2px, transparent 1.2px);
+            background-size: 10px 10px; opacity: 0.2;
+        }
+
+        /* --- 10. MOLTEN CORE --- */
+        .v10-molten { border-radius: 12px; font-family: 'Space Grotesk'; color: #fff; }
+        .v10-molten::before {
+            content: ""; position: absolute; inset: -100%; z-index: -2;
+            background: radial-gradient(circle at 30% 30%, var(--primary-container), transparent),
+                        radial-gradient(circle at 70% 70%, var(--tertiary-container), transparent);
+            animation: rotate 10s linear infinite; filter: blur(40px) brightness(1.2);
+        }
+        .v10-molten::after {
+            content: ""; position: absolute; inset: 0; z-index: -1;
+            background-image: radial-gradient(rgba(255,255,255,0.4) 1.2px, transparent 1.2px);
+            background-size: 11px 11px; opacity: 0.3;
+        }
+
+        .arrow { margin-left: 10px; font-weight: 200; font-size: 1.2em; }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>01 Propeller Sweep</h2>
+        <a class="btn-base v1-propeller">LOGIN_SECURE <span class="arrow">→</span></a>
+    </div>
+
+    <div class="container">
+        <h2>02 Technical Scanner</h2>
+        <a class="btn-base v2-scanner">RUN_DIAGNOSTIC <span class="arrow">→</span></a>
+    </div>
+
+    <div class="container">
+        <h2>03 Ambient Tonal</h2>
+        <a class="btn-base v3-ambient">Console_Root <span class="arrow">→</span></a>
+    </div>
+
+    <div class="container">
+        <h2>04 Radar Ping</h2>
+        <a class="btn-base v4-radar">SEARCHING_AREA <span class="arrow">→</span></a>
+    </div>
+
+    <div class="container">
+        <h2>05 Data Rainfall</h2>
+        <a class="btn-base v5-rainfall">FETCH_DATA <span class="arrow">↓</span></a>
+    </div>
+
+    <div class="container">
+        <h2>06 Neural Breath</h2>
+        <a class="btn-base v6-breath">PULSE_SYNC <span class="arrow">→</span></a>
+    </div>
+
+    <div class="container">
+        <h2>07 Vector Flow</h2>
+        <a class="btn-base v7-flow">NODE_CONNECT <span class="arrow">→</span></a>
+    </div>
+
+    <div class="container">
+        <h2>08 Eclipse Border</h2>
+        <a class="btn-base v8-eclipse">ENCRYPT_KEY <span class="arrow">→</span></a>
+    </div>
+
+    <div class="container">
+        <h2>09 Glitch Scan</h2>
+        <a class="btn-base v9-glitch">SCAN_OVERRIDE <span class="arrow">→</span></a>
+    </div>
+
+    <div class="container">
+        <h2>10 Molten Core</h2>
+        <a class="btn-base v10-molten">FUSION_LINK <span class="arrow">→</span></a>
+    </div>
+
+</body>
+</html>

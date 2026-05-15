@@ -25,7 +25,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const [selectedEndDate, setSelectedEndDate] = useState('');
   const [showShortcutsTip, setShowShortcutsTip] = useState(false);
   const shortcutsTipShown = useRef(false);
-  const [showRichToolbar, setShowRichToolbar] = useState(false);
+  const [showRichToolbar, setShowRichToolbar] = useState(true);
   const [showSelectHint, setShowSelectHint] = useState(false);
   const [loopCopies, setLoopCopies] = useState(1);
 
@@ -325,7 +325,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     setSelectedOpenInNewTab(false);
     setSelectedStartDate('');
     setSelectedEndDate('');
-    setShowRichToolbar(false);
+    setShowRichToolbar(true);
     if (richEditorRef.current) {
       richEditorRef.current.innerHTML = '';
       richEditorRef.current.blur();
@@ -617,9 +617,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
           {/* Left: Input + Chips + Link */}
-          <div className="space-y-4 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-full transition-all hover:border-primary/35 hover:shadow-md hover:shadow-primary/10">
+          <div className="space-y-4 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[420px] transition-all hover:border-primary/35 hover:shadow-md hover:shadow-primary/10">
             <div className="border-b border-border pb-3">
               <h4 className="text-base font-semibold text-on-surface">Announcement Content</h4>
               <p className="mt-1 text-xs text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
@@ -630,7 +630,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
               <label className="block text-sm font-medium text-on-surface mb-2">Message</label>
 
               {/* Rich Text Toolbar + Link/Schedule buttons — same row, show/hide with focus */}
-              <div className={`mb-2 transition-all ${showRichToolbar ? 'opacity-100 max-h-20' : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'}`}>
+              <div className="mb-2">
                 {showSelectHint && (
                   <p className="text-[11px] text-primary font-medium mb-1 animate-pulse">✋ Select text first to change its style</p>
                 )}
@@ -879,7 +879,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       if (!isEditing && showRichToolbar) return;
                       const text = richEditorRef.current?.textContent?.replace(/\u200B/g, '').trim();
                       if (!text && selectedIndex === null) {
-                        setShowRichToolbar(false);
+                        setShowRichToolbar(true);
                         setIsEditing(false);
                         if (richEditorRef.current) richEditorRef.current.innerHTML = '';
                       }
@@ -1121,13 +1121,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   </select>
                 </div>
                 <div className="col-span-2">
-                  {bg.type === 'solid' && (
-                    <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">Background Color</label>
-                      <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
-                        className="h-[38px] w-full rounded border border-border cursor-pointer" />
-                    </div>
-                  )}
                   {bg.type === 'linear' && (
                     <div>
                       <label className="block text-xs text-on-surface-variant mb-1">Balance: {bg.midpoint ?? 50}%</label>
@@ -1148,55 +1141,70 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
               </div>
 
               {/* Colors + Direction (second line) */}
-              {bg.type === 'linear' && (
-                <div className="grid grid-cols-3 gap-4 mt-4">
-                  <div>
-                    <label className="block text-xs text-on-surface-variant mb-1">Start Color</label>
-                    <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
-                      className="h-10 w-full rounded border border-border cursor-pointer" />
+              <div className="mt-4 min-h-[96px]">
+                {bg.type === 'solid' && (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs text-on-surface-variant mb-1">Background Color</label>
+                      <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
+                        className="h-10 w-full rounded border border-border cursor-pointer" />
+                    </div>
+                    <div aria-hidden="true" />
+                    <div aria-hidden="true" />
                   </div>
-                  <div>
-                    <label className="block text-xs text-on-surface-variant mb-1">End Color</label>
-                    <input type="color" value={bg.endColor} onChange={(e) => updateBg({ endColor: e.target.value })}
-                      className="h-10 w-full rounded border border-border cursor-pointer" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-on-surface-variant mb-1">Direction</label>
-                    <select value={bg.direction || 'to right'} onChange={(e) => updateBg({ direction: e.target.value })}
-                      className="block w-full border-border rounded-md p-2 border bg-surface text-on-surface sm:text-sm">
-                      <option value="to right">To Right →</option>
-                      <option value="to left">To Left ←</option>
-                      <option value="to bottom">To Bottom ↓</option>
-                      <option value="to top">To Top ↑</option>
-                      <option value="to bottom right">To Bottom Right ↘</option>
-                      <option value="to bottom left">To Bottom Left ↙</option>
-                      <option value="to top right">To Top Right ↗</option>
-                      <option value="to top left">To Top Left ↖</option>
-                    </select>
-                  </div>
-                </div>
-              )}
+                )}
 
-              {bg.type === 'radial' && (
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                  <div>
-                    <label className="block text-xs text-on-surface-variant mb-1">Center Color</label>
-                    <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
-                      className="h-10 w-full rounded border border-border cursor-pointer" />
+                {bg.type === 'linear' && (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs text-on-surface-variant mb-1">Start Color</label>
+                      <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
+                        className="h-10 w-full rounded border border-border cursor-pointer" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-on-surface-variant mb-1">End Color</label>
+                      <input type="color" value={bg.endColor} onChange={(e) => updateBg({ endColor: e.target.value })}
+                        className="h-10 w-full rounded border border-border cursor-pointer" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-on-surface-variant mb-1">Direction</label>
+                      <select value={bg.direction || 'to right'} onChange={(e) => updateBg({ direction: e.target.value })}
+                        className="block w-full border-border rounded-md p-2 border bg-surface text-on-surface sm:text-sm">
+                        <option value="to right">To Right →</option>
+                        <option value="to left">To Left ←</option>
+                        <option value="to bottom">To Bottom ↓</option>
+                        <option value="to top">To Top ↑</option>
+                        <option value="to bottom right">To Bottom Right ↘</option>
+                        <option value="to bottom left">To Bottom Left ↙</option>
+                        <option value="to top right">To Top Right ↗</option>
+                        <option value="to top left">To Top Left ↖</option>
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs text-on-surface-variant mb-1">Outer Color</label>
-                    <input type="color" value={bg.endColor} onChange={(e) => updateBg({ endColor: e.target.value })}
-                      className="h-10 w-full rounded border border-border cursor-pointer" />
+                )}
+
+                {bg.type === 'radial' && (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs text-on-surface-variant mb-1">Center Color</label>
+                      <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
+                        className="h-10 w-full rounded border border-border cursor-pointer" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-on-surface-variant mb-1">Outer Color</label>
+                      <input type="color" value={bg.endColor} onChange={(e) => updateBg({ endColor: e.target.value })}
+                        className="h-10 w-full rounded border border-border cursor-pointer" />
+                    </div>
+                    <div aria-hidden="true" />
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 
           {/* Right: Message List + Style (single card split into equal halves) */}
           <div className="min-h-0">
-            <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[380px] overflow-hidden transition-all hover:border-primary/35 hover:shadow-md hover:shadow-primary/10">
+            <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[420px] overflow-hidden transition-all hover:border-primary/35 hover:shadow-md hover:shadow-primary/10">
               {/* Top half: Message List */}
               <div className="flex-1 min-h-0 flex flex-col pr-1">
                 <div className="flex items-center justify-between mb-2 shrink-0">

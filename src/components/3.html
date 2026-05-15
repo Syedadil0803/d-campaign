@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technical Design System - Button Suite</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        /* REGISTERING CUSTOM PROPERTY FOR SMOOTH ROTATION */
+        @property --angle {
+            syntax: "<angle>";
+            initial-value: 0deg;
+            inherits: false;
+        }
+
+        :root {
+            /* Your Color Palette Tokens */
+            --surface: #1a120c;
+            --surface-container-lowest: #150c07;
+            --primary: #ffb887;
+            --primary-container: #fb923c;
+            --secondary: #b9c7e0;
+            --tertiary: #61d5ff;
+            --on-surface: #f1dfd5;
+            --outline-variant: #554337;
+            --outline: #a38c7e;
+        }
+
+        body {
+            background-color: var(--surface);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 60px;
+            min-height: 100vh;
+            margin: 0;
+            padding: 40px;
+        }
+
+        h2 {
+            color: var(--on-surface);
+            font-family: 'Space Grotesk', sans-serif;
+            margin-bottom: -20px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            opacity: 0.6;
+        }
+
+        /* --- COMMON BUTTON BASE --- */
+        .btn-base {
+            position: relative;
+            width: 280px;
+            height: 72px;
+            background: var(--surface-container-lowest);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            cursor: pointer;
+            overflow: hidden;
+            isolation: isolate;
+            transition: transform 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+            border: 1px solid var(--outline-variant);
+        }
+
+        .btn-base:hover {
+            transform: scale(1.02);
+        }
+
+        .btn-base:active {
+            transform: scale(0.98);
+        }
+
+        /* --- VARIATION 1: THE PROPELLER (OPPOSITE COLORS) --- */
+        .v1-propeller {
+            border-radius: 999px; /* Rounded Full */
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            color: var(--on-surface);
+            font-size: 20px;
+        }
+
+        .v1-propeller::before {
+            content: "";
+            position: absolute;
+            inset: -100%;
+            z-index: -2;
+            background: conic-gradient(
+                from var(--angle),
+                transparent 0deg,
+                var(--primary-container) 30deg,
+                transparent 90deg,
+                transparent 180deg,
+                var(--tertiary) 210deg,
+                transparent 270deg
+            );
+            animation: rotate 4s linear infinite;
+            filter: blur(30px);
+        }
+
+        .v1-propeller::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            background: conic-gradient(from var(--angle), #fff 30deg, transparent 90deg, transparent 180deg, #fff 210deg, transparent 270deg);
+            -webkit-mask-image: radial-gradient(circle, #000 1.2px, transparent 1.2px);
+            -webkit-mask-size: 12px 12px;
+            animation: rotate 4s linear infinite;
+            opacity: 0.4;
+        }
+
+        /* --- VARIATION 2: THE SCANNER (SHARP & TECHNICAL) --- */
+        .v2-scanner {
+            border-radius: 4px; /* Rounded Small */
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+            color: var(--primary);
+            font-size: 14px;
+            letter-spacing: 0.1em;
+            border-color: var(--outline);
+        }
+
+        .v2-scanner::before {
+            content: "";
+            position: absolute;
+            inset: -100%;
+            z-index: -2;
+            background: conic-gradient(
+                from var(--angle),
+                transparent 0deg,
+                var(--primary-container) 10deg,
+                #423730 25deg,
+                transparent 40deg
+            );
+            animation: rotate 2s linear infinite;
+            filter: blur(15px) brightness(1.5);
+        }
+
+        .v2-scanner::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            background: conic-gradient(from var(--angle), #fff 10deg, transparent 40deg);
+            -webkit-mask-image: radial-gradient(circle, #000 1px, transparent 1px);
+            -webkit-mask-size: 8px 8px;
+            animation: rotate 2s linear infinite;
+            opacity: 0.6;
+        }
+
+        /* --- VARIATION 3: THE AMBIENT (SOFT FLOW) --- */
+        .v3-ambient {
+            border-radius: 16px; /* Rounded LG */
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 600;
+            color: var(--on-surface);
+            font-size: 22px;
+        }
+
+        .v3-ambient::before {
+            content: "";
+            position: absolute;
+            inset: -100%;
+            z-index: -2;
+            background: conic-gradient(
+                from var(--angle),
+                var(--secondary) 0deg,
+                var(--primary) 180deg,
+                var(--secondary) 360deg
+            );
+            animation: rotate 8s linear infinite;
+            filter: blur(45px) opacity(0.3);
+        }
+
+        .v3-ambient::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            background: conic-gradient(from var(--angle), #fff 0deg, transparent 180deg, #fff 360deg);
+            -webkit-mask-image: radial-gradient(circle, #000 1.5px, transparent 1.5px);
+            -webkit-mask-size: 14px 14px;
+            animation: rotate 8s linear infinite;
+            opacity: 0.15;
+        }
+
+        /* SHARED ANIMATION */
+        @keyframes rotate {
+            from { --angle: 0deg; }
+            to { --angle: 360deg; }
+        }
+
+        /* ARROW STYLING */
+        .arrow {
+            margin-left: 10px;
+            font-size: 1.2em;
+            transition: transform 0.3s ease;
+        }
+
+        .btn-base:hover .arrow {
+            transform: translateX(5px);
+        }
+
+    </style>
+</head>
+<body>
+
+    <div>
+        <h2>01. Propeller Sweep</h2>
+        <a class="btn-base v1-propeller">
+            LOG IN <span class="arrow">→</span>
+        </a>
+    </div>
+
+    <div>
+        <h2>02. Technical Scanner</h2>
+        <a class="btn-base v2-scanner">
+            INIT_SEQUENCE <span class="arrow">→</span>
+        </a>
+    </div>
+
+    <div>
+        <h2>03. Ambient Tonal</h2>
+        <a class="btn-base v3-ambient">
+            Dashboard <span class="arrow">→</span>
+        </a>
+    </div>
+
+</body>
+</html>
