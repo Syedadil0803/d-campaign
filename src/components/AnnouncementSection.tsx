@@ -9,6 +9,7 @@ import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { wrapBareTextWithFontSize, rgbToHex, FONT_SIZE_LABEL_MAP } from '@/lib/richTextUtils';
 import RichTextToolbar from './RichTextToolbar';
 import { Toast } from './Toast';
+import { PopupDropdown } from './PopupDropdown';
 
 interface AnnouncementSectionProps {
   config: CampaignConfig;
@@ -52,6 +53,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const [showSchedulePopup, setShowSchedulePopup] = useState(false);
   const [linkPos, setLinkPos] = useState<{ top: number; left: number } | null>(null);
   const [schedulePos, setSchedulePos] = useState<{ top: number; left: number } | null>(null);
+  const [showBackgroundTypeDropdown, setShowBackgroundTypeDropdown] = useState(false);
+  const [showDirectionDropdown, setShowDirectionDropdown] = useState(false);
+  const [backgroundTypePos, setBackgroundTypePos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [directionPos, setDirectionPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const richEditorRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -64,6 +69,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const linkPopupRef = useRef<HTMLDivElement>(null);
   const schedulePopupRef = useRef<HTMLDivElement>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
+  const backgroundTypeBtnRef = useRef<HTMLButtonElement>(null);
+  const backgroundTypeMenuRef = useRef<HTMLDivElement>(null);
+  const directionBtnRef = useRef<HTMLButtonElement>(null);
+  const directionMenuRef = useRef<HTMLDivElement>(null);
 
   const [editorDefaultColor, setEditorDefaultColor] = useState('#000000');
 
@@ -173,6 +182,20 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     }
   }, [showSchedulePopup]);
 
+  useLayoutEffect(() => {
+    if (showBackgroundTypeDropdown && backgroundTypeBtnRef.current) {
+      const rect = backgroundTypeBtnRef.current.getBoundingClientRect();
+      setBackgroundTypePos({ top: rect.bottom + window.scrollY + 6, left: rect.left + window.scrollX, width: rect.width });
+    }
+  }, [showBackgroundTypeDropdown]);
+
+  useLayoutEffect(() => {
+    if (showDirectionDropdown && directionBtnRef.current) {
+      const rect = directionBtnRef.current.getBoundingClientRect();
+      setDirectionPos({ top: rect.bottom + window.scrollY + 6, left: rect.left + window.scrollX, width: rect.width });
+    }
+  }, [showDirectionDropdown]);
+
   // Delete selected announcement on Delete/Backspace key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -219,6 +242,20 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       ) {
         setShowSchedulePopup(false);
       }
+      if (
+        showBackgroundTypeDropdown &&
+        backgroundTypeMenuRef.current && !backgroundTypeMenuRef.current.contains(target) &&
+        backgroundTypeBtnRef.current && !backgroundTypeBtnRef.current.contains(target)
+      ) {
+        setShowBackgroundTypeDropdown(false);
+      }
+      if (
+        showDirectionDropdown &&
+        directionMenuRef.current && !directionMenuRef.current.contains(target) &&
+        directionBtnRef.current && !directionBtnRef.current.contains(target)
+      ) {
+        setShowDirectionDropdown(false);
+      }
       if (actionMenuIndex !== null && actionMenuRef.current && !actionMenuRef.current.contains(target)) {
         setActionMenuIndex(null);
         setActionMenuPos(null);
@@ -226,7 +263,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     };
     document.addEventListener('mousedown', handleMouseDown);
     return () => document.removeEventListener('mousedown', handleMouseDown);
-  }, [showLinkPopup, showSchedulePopup, actionMenuIndex]);
+  }, [showLinkPopup, showSchedulePopup, showBackgroundTypeDropdown, showDirectionDropdown, actionMenuIndex]);
 
   function addAnnouncement() {
     pushUndo();
@@ -1204,13 +1241,27 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
               {/* Type + inline control */}
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs text-on-surface-variant mb-1">Background Type</label>
-                  <select value={bg.type || 'solid'} onChange={(e) => updateBg({ type: e.target.value })}
-                    className="block w-full border-border rounded-md p-2 border bg-surface text-on-surface sm:text-sm">
-                    <option value="solid">Solid</option>
-                    <option value="linear">Linear</option>
-                    <option value="radial">Gradient</option>
-                  </select>
+                  <PopupDropdown
+                    label="Background Type"
+                    value={bg.type || 'solid'}
+                    options={[
+                      { value: 'solid', label: 'Solid' },
+                      { value: 'linear', label: 'Linear' },
+                      { value: 'radial', label: 'Gradient' },
+                    ]}
+                    open={showBackgroundTypeDropdown}
+                    onOpen={() => {
+                      setShowBackgroundTypeDropdown((current) => !current);
+                      setShowDirectionDropdown(false);
+                    }}
+                    onSelect={(nextType) => {
+                      updateBg({ type: nextType });
+                      setShowBackgroundTypeDropdown(false);
+                    }}
+                    buttonRef={backgroundTypeBtnRef}
+                    menuRef={backgroundTypeMenuRef}
+                    menuPosition={backgroundTypePos}
+                  />
                 </div>
                 <div className="col-span-2">
                   {bg.type === 'linear' && (
@@ -1259,18 +1310,32 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         className="bg-color-picker h-10 w-full rounded cursor-pointer" />
                     </div>
                     <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">Direction</label>
-                      <select value={bg.direction || 'to right'} onChange={(e) => updateBg({ direction: e.target.value })}
-                        className="block w-full border-border rounded-md p-2 border bg-surface text-on-surface sm:text-sm">
-                        <option value="to right">To Right →</option>
-                        <option value="to left">To Left ←</option>
-                        <option value="to bottom">To Bottom ↓</option>
-                        <option value="to top">To Top ↑</option>
-                        <option value="to bottom right">To Bottom Right ↘</option>
-                        <option value="to bottom left">To Bottom Left ↙</option>
-                        <option value="to top right">To Top Right ↗</option>
-                        <option value="to top left">To Top Left ↖</option>
-                      </select>
+                      <PopupDropdown
+                        label="Direction"
+                        value={bg.direction || 'to right'}
+                        options={[
+                          { value: 'to right', label: 'To Right →' },
+                          { value: 'to left', label: 'To Left ←' },
+                          { value: 'to bottom', label: 'To Bottom ↓' },
+                          { value: 'to top', label: 'To Top ↑' },
+                          { value: 'to bottom right', label: 'To Bottom Right ↘' },
+                          { value: 'to bottom left', label: 'To Bottom Left ↙' },
+                          { value: 'to top right', label: 'To Top Right ↗' },
+                          { value: 'to top left', label: 'To Top Left ↖' },
+                        ]}
+                        open={showDirectionDropdown}
+                        onOpen={() => {
+                          setShowDirectionDropdown((current) => !current);
+                          setShowBackgroundTypeDropdown(false);
+                        }}
+                        onSelect={(nextDirection) => {
+                          updateBg({ direction: nextDirection });
+                          setShowDirectionDropdown(false);
+                        }}
+                        buttonRef={directionBtnRef}
+                        menuRef={directionMenuRef}
+                        menuPosition={directionPos}
+                      />
                     </div>
                   </div>
                 )}
