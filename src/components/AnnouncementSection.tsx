@@ -471,6 +471,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   // ── Apply format to entire content (selection mode) ──
   const applyingFormatRef = useRef(false);
   const justFocusedRef = useRef(false);
+  const activeFormatsRef = useRef(activeFormats);
+  activeFormatsRef.current = activeFormats;
   function applyFormatToAll(action: () => void) {
     if (!richEditorRef.current) return;
     const editor = richEditorRef.current;
@@ -852,7 +854,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                             const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
                             if (!hasContent) {
                               // Empty: create a span with all chosen properties
-                              const { size, color, bold, italic } = activeFormats;
+                              const { size, color, bold, italic } = activeFormatsRef.current;
                               const fontSize = size ? ({ xs: '0.75rem', sm: '0.875rem', md: '1rem', lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem' }[size] || '1rem') : '1rem';
                               let html = `<span style="font-size: ${fontSize}; color: ${color || editorDefaultColor}">\u200B</span>`;
                               if (bold) html = `<b>${html}</b>`;
@@ -911,17 +913,29 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         setIsEditing(true);
                         setTimeout(() => {
                           if (richEditorRef.current) {
+                            const editor = richEditorRef.current;
+                            const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
+                            if (!hasContent) {
+                              // Empty: create a span with all chosen properties
+                              const { size, color, bold, italic } = activeFormatsRef.current;
+                              const fontSize = size ? ({ xs: '0.75rem', sm: '0.875rem', md: '1rem', lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem' }[size] || '1rem') : '1rem';
+                              let html = `<span style="font-size: ${fontSize}; color: ${color || editorDefaultColor}">\u200B</span>`;
+                              if (bold) html = `<b>${html}</b>`;
+                              if (italic) html = `<i>${html}</i>`;
+                              editor.innerHTML = html;
+                            }
+                            // Place cursor inside the deepest last node
                             const sel = window.getSelection();
                             if (sel) {
                               sel.removeAllRanges();
                               const range = document.createRange();
-                              let lastNode: Node = richEditorRef.current;
+                              let lastNode: Node = editor;
                               while (lastNode.lastChild) lastNode = lastNode.lastChild;
                               if (lastNode.nodeType === Node.TEXT_NODE) {
                                 range.setStart(lastNode, lastNode.textContent?.length || 0);
                                 range.collapse(true);
                               } else {
-                                range.selectNodeContents(richEditorRef.current);
+                                range.selectNodeContents(editor);
                                 range.collapse(false);
                               }
                               sel.addRange(range);
