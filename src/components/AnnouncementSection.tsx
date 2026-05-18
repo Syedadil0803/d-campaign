@@ -836,6 +836,11 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   <p className="text-xs text-on-surface-variant mb-1">Enter text below</p>
                   <div ref={richEditorRef} contentEditable suppressContentEditableWarning
                     onInput={onRichTextInput}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const text = e.clipboardData.getData('text/plain');
+                      document.execCommand('insertText', false, text);
+                    }}
                     onMouseDown={() => {
                       // If already focused and in select mode, enter edit mode
                       if (document.activeElement === richEditorRef.current && showRichToolbar && !isEditing) {
