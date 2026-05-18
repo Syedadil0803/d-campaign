@@ -646,7 +646,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
 
 
-  
+
   return (
     <section className="rounded-2xl border-border overflow-hidden">
       <Toast show={toast.show} message={toast.message} isError={toast.isError} />
@@ -703,7 +703,13 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         {visibleAnnouncements.map((ann, i) => (
                           <span key={`${setIndex}-${i}`} className="inline-block px-4">
                             {ann.url ? (
-                              <a href={ann.url} target="_blank" rel="noopener noreferrer" className="underline hover:no-underline" dangerouslySetInnerHTML={{ __html: ann.text }} />
+                              <a
+                                href={ann.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="animated-underline inline-block"
+                                dangerouslySetInnerHTML={{ __html: ann.text }}
+                              />
                             ) : (
                               <span dangerouslySetInnerHTML={{ __html: ann.text }} />
                             )}
@@ -734,7 +740,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
               <h4 className="text-base font-semibold text-on-surface">Announcement Content</h4>
               <p className="mt-1 text-xs text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
             </div>
-            
+
             {/* Announcement Input */}
             <div className="flex-1 flex flex-col justify-between">
               <label className="block text-sm font-medium text-on-surface mb-2">Message</label>
@@ -1015,15 +1021,15 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     style={{ background: getBackgroundStyle(config.announcementBar.style.background), wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%' }} />
                 </div>
                 <button onMouseDown={(e) => {
-                    e.preventDefault();
-                    addAnnouncement();
-                  }}
+                  e.preventDefault();
+                  addAnnouncement();
+                }}
                   disabled={!newAnnouncementText.trim()}
                   className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-on-primary bg-primary hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed self-end">
                   Add
                 </button>
-                </div>
               </div>
+            </div>
 
             {/* Link popup portal */}
             {showLinkPopup && linkPos && typeof document !== 'undefined' && createPortal(
@@ -1033,13 +1039,13 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 style={{ position: 'absolute', top: linkPos.top, left: linkPos.left, zIndex: 9999 }}
                 className="bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 w-[260px]"
               >
-                  <button
-                    onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); closePopupAndFocusEditor(); }}
-                    aria-label="Close"
-                    className="absolute top-0 right-2 text-on-surface-variant hover:text-on-surface p-1 rounded text-xl"
-                  >
-                    ×
-                  </button>
+                <button
+                  onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); closePopupAndFocusEditor(); }}
+                  aria-label="Close"
+                  className="absolute top-0 right-2 text-on-surface-variant hover:text-on-surface p-1 rounded text-xl"
+                >
+                  ×
+                </button>
                 <p className="text-xs font-medium text-on-surface mb-2">Link URL</p>
                 <input
                   type="url"
@@ -1119,13 +1125,13 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 onClick={(e) => e.stopPropagation()}
                 style={{ position: 'absolute', top: schedulePos.top, left: schedulePos.left, zIndex: 9999 }}
                 className="bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 w-[260px]">
-                  <button
-                    onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); closePopupAndFocusEditor(); }}
-                    aria-label="Close"
-                    className="absolute top-0 right-2 text-on-surface-variant hover:text-on-surface p-1 rounded text-xl"
-                  >
-                    ×
-                  </button>
+                <button
+                  onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); closePopupAndFocusEditor(); }}
+                  aria-label="Close"
+                  className="absolute top-0 right-2 text-on-surface-variant hover:text-on-surface p-1 rounded text-xl"
+                >
+                  ×
+                </button>
                 <p className="text-xs font-medium text-on-surface mb-2">Schedule (optional)</p>
                 <div className="space-y-2">
                   <div>
@@ -1379,47 +1385,47 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 ) : (
                   <div className="flex-1 min-h-0 overflow-y-auto">
                     <div className="flex flex-wrap gap-2 p-1">
-                    {config.announcementBar.announcements.map((ann, index) => (
-                      <div key={index}
-                        draggable
-                        onDragStart={(e) => {
-                          setDraggedIndex(index);
-                          e.dataTransfer.effectAllowed = 'move';
-                        }}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.dataTransfer.dropEffect = 'move';
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          if (draggedIndex !== null) reorderAnnouncements(draggedIndex, index);
-                          setDraggedIndex(null);
-                        }}
-                        onDragEnd={() => setDraggedIndex(null)}
-                        onClick={() => {
-                          if (selectedIndex === index) {
-                            clearSelection();
-                          } else {
-                            selectAnnouncement(index);
-                          }
-                        }}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm text-[#5a4138] dark:text-[#dbc1b3] bg-primary/20 group relative cursor-pointer transition-all ${selectedIndex === index ? 'ring-[1.5px] ring-primary/80 bg-primary/30' : 'hover:bg-primary/25 hover:ring-1 hover:ring-primary/70'} ${draggedIndex === index ? 'opacity-60' : ''}`}>
-                        <span className="flex-1 truncate max-w-[200px]" title={stripHtml(ann.text)}>
-                          {stripHtml(ann.text)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openActionMenu(index, e.currentTarget);
+                      {config.announcementBar.announcements.map((ann, index) => (
+                        <div key={index}
+                          draggable
+                          onDragStart={(e) => {
+                            setDraggedIndex(index);
+                            e.dataTransfer.effectAllowed = 'move';
                           }}
-                          className="text-[#5a4138] dark:text-[#dbc1b3] hover:opacity-80 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                          title="More options"
-                        >
-                          <MoreVertical className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            if (draggedIndex !== null) reorderAnnouncements(draggedIndex, index);
+                            setDraggedIndex(null);
+                          }}
+                          onDragEnd={() => setDraggedIndex(null)}
+                          onClick={() => {
+                            if (selectedIndex === index) {
+                              clearSelection();
+                            } else {
+                              selectAnnouncement(index);
+                            }
+                          }}
+                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm text-[#5a4138] dark:text-[#dbc1b3] bg-primary/20 group relative cursor-pointer transition-all ${selectedIndex === index ? 'ring-[1.5px] ring-primary/80 bg-primary/30' : 'hover:bg-primary/25 hover:ring-1 hover:ring-primary/70'} ${draggedIndex === index ? 'opacity-60' : ''}`}>
+                          <span className="flex-1 truncate max-w-[200px]" title={stripHtml(ann.text)}>
+                            {stripHtml(ann.text)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openActionMenu(index, e.currentTarget);
+                            }}
+                            className="text-[#5a4138] dark:text-[#dbc1b3] hover:opacity-80 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                            title="More options"
+                          >
+                            <MoreVertical className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1429,56 +1435,56 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
               <div className="shrink-0 mt-auto">
                 {/* Loop Toggle */}
                 <div className="flex items-center justify-between py-3 border-t border-border">
-                <div>
-                  <label className="block text-sm font-medium text-on-surface">Loop</label>
-                  <p className="text-xs text-on-surface-variant">Seamless continuous scroll (duplicates content to fill the bar)</p>
+                  <div>
+                    <label className="block text-sm font-medium text-on-surface">Loop</label>
+                    <p className="text-xs text-on-surface-variant">Seamless continuous scroll (duplicates content to fill the bar)</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setConfig({
+                        ...config,
+                        announcementBar: { ...config.announcementBar, loop: !(config.announcementBar.loop !== false) },
+                      });
+                      markChanged();
+                    }}
+                    className={`relative inline-flex flex-shrink-0 h-5 w-9 border-2 border-transparent rounded-full cursor-pointer transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${config.announcementBar.loop !== false ? 'bg-primary' : 'bg-surface-subtle hover:bg-primary/20'}`}
+                  >
+                    <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition duration-200 ${config.announcementBar.loop !== false ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    setConfig({
-                      ...config,
-                      announcementBar: { ...config.announcementBar, loop: !(config.announcementBar.loop !== false) },
-                    });
-                    markChanged();
-                  }}
-                  className={`relative inline-flex flex-shrink-0 h-5 w-9 border-2 border-transparent rounded-full cursor-pointer transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${config.announcementBar.loop !== false ? 'bg-primary' : 'bg-surface-subtle hover:bg-primary/20'}`}
-                >
-                  <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition duration-200 ${config.announcementBar.loop !== false ? 'translate-x-4' : 'translate-x-0'}`} />
-                </button>
-              </div>
 
-              <div className="border-t border-border pt-2">
-           
+                <div className="border-t border-border pt-2">
 
-                <div className="pb-1">
-                  <label className="block text-sm font-medium text-on-surface mb-1">Background Type Guide</label>
-                   <p className="mb-1 text-xs text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <div
-                        className="h-8 rounded-lg border border-border shadow-inner"
-                        style={{ background: 'rgb(100, 132, 150)' }}
-                      />
-                      <p className="text-[11px] font-semibold text-on-surface-variant text-center">Solid</p>
-                    </div>
-                    <div className="space-y-1">
-                      <div
-                        className="h-8 rounded-lg border border-border shadow-inner"
-                        style={{ background: 'linear-gradient(to right, rgb(100, 132, 150) 0%, rgb(51, 89, 112) 100%)' }}
-                      />
-                      <p className="text-[11px] font-semibold text-on-surface-variant text-center">Linear</p>
-                    </div>
-                    <div className="space-y-1">
-                      <div
-                        className="h-8 rounded-lg border border-border shadow-inner"
-                        style={{ background: 'radial-gradient(circle at 50% 45%, rgb(100, 132, 150) 8%, rgb(51, 89, 112) 100%)' }}
-                      />
-                      <p className="text-[11px] font-semibold text-on-surface-variant text-center">Radial</p>
+
+                  <div className="pb-1">
+                    <label className="block text-sm font-medium text-on-surface mb-1">Background Type Guide</label>
+                    <p className="mb-1 text-xs text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <div
+                          className="h-8 rounded-lg border border-border shadow-inner"
+                          style={{ background: 'rgb(100, 132, 150)' }}
+                        />
+                        <p className="text-[11px] font-semibold text-on-surface-variant text-center">Solid</p>
+                      </div>
+                      <div className="space-y-1">
+                        <div
+                          className="h-8 rounded-lg border border-border shadow-inner"
+                          style={{ background: 'linear-gradient(to right, rgb(100, 132, 150) 0%, rgb(51, 89, 112) 100%)' }}
+                        />
+                        <p className="text-[11px] font-semibold text-on-surface-variant text-center">Linear</p>
+                      </div>
+                      <div className="space-y-1">
+                        <div
+                          className="h-8 rounded-lg border border-border shadow-inner"
+                          style={{ background: 'radial-gradient(circle at 50% 45%, rgb(100, 132, 150) 8%, rgb(51, 89, 112) 100%)' }}
+                        />
+                        <p className="text-[11px] font-semibold text-on-surface-variant text-center">Radial</p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-              </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1489,7 +1495,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
         <div className="fixed top-5 left-5 z-50 animate-bounce-in">
           <div className="bg-black/10 backdrop-blur-sm border border-white/10 rounded-2xl shadow-2xl px-5 py-4 w-[380px]">
             <p className="text-[13px] text-on-surface leading-relaxed">
-              💡 You can also add emojis!<br/>Press <kbd className="inline bg-primary/10 text-primary border border-primary/70 px-1.5 py-0.5 rounded text-[11px] font-mono font-medium whitespace-nowrap">{navigator.platform?.includes('Mac') ? '⌘ + Ctrl + Space' : 'Win + .'}</kbd> to open the emoji picker
+              💡 You can also add emojis!<br />Press <kbd className="inline bg-primary/10 text-primary border border-primary/70 px-1.5 py-0.5 rounded text-[11px] font-mono font-medium whitespace-nowrap">{navigator.platform?.includes('Mac') ? '⌘ + Ctrl + Space' : 'Win + .'}</kbd> to open the emoji picker
             </p>
             <div className="flex items-center justify-end gap-4 mt-3">
               <button

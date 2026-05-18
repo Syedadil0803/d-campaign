@@ -173,3 +173,46 @@ select {
   background: rgb(var(--primary) / 0.3);
   border-radius: 0.375rem;
 }
+.animated-underline{
+  position:relative;
+  text-decoration:none;
+}
+
+/* animated underline */
+.animated-underline::after{
+  content:"";
+  position:absolute;
+  left:0;
+  bottom:-4px;
+  width:100%;
+  height:2px;
+
+  background:linear-gradient(
+    90deg,
+    #EA4335,
+    #EA4335,
+    #4285F4,
+    #4285F4,
+    #34A853,
+    #34A853,
+    #FBBC05,
+    #FBBC05,
+    #EA4335
+  );
+
+  background-size:300% 100%;
+
+  animation:googleFlow 4s linear infinite;
+
+  border-radius:999px;
+}
+
+@keyframes googleFlow{
+  0%{
+    background-position:0% 50%;
+  }
+
+  100%{
+    background-position:100% 50%;
+  }
+}
