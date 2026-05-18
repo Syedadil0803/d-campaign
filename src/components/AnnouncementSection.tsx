@@ -927,7 +927,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 ref={linkPopupRef}
                 onMouseDown={(e) => e.stopPropagation()}
                 style={{ position: 'absolute', top: linkPos.top, left: linkPos.left, zIndex: 9999 }}
-                className="campaign-card-surface border border-border rounded-lg shadow-xl p-3 w-[260px]"
+                className="bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 w-[260px]"
               >
                   <button
                     onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); closePopupAndFocusEditor(); }}
@@ -1014,7 +1014,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
                 style={{ position: 'absolute', top: schedulePos.top, left: schedulePos.left, zIndex: 9999 }}
-                className="campaign-card-surface border border-border rounded-lg shadow-xl p-3 w-[260px]">
+                className="bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 w-[260px]">
                   <button
                     onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); closePopupAndFocusEditor(); }}
                     aria-label="Close"
@@ -1102,7 +1102,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 ref={actionMenuRef}
                 onMouseDown={(e) => e.stopPropagation()}
                 style={{ position: 'absolute', top: actionMenuPos.top, left: actionMenuPos.left, zIndex: 9999 }}
-                className="bg-surface-elevated border border-border rounded-lg shadow-xl py-1 w-[180px]"
+                className="bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl py-1 w-[180px]"
               >
                 <button
                   type="button"
@@ -1271,8 +1271,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                             selectAnnouncement(index);
                           }
                         }}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm bg-primary/20 group relative cursor-pointer transition-all ${selectedIndex === index ? 'ring-[1.5px] ring-primary/80 bg-primary/30' : 'hover:bg-primary/25 hover:ring-1 hover:ring-primary/70'} ${draggedIndex === index ? 'opacity-60' : ''}`}
-                        style={{ color: '#dbc1b3' }}>
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm text-[#5a4138] dark:text-[#dbc1b3] bg-primary/20 group relative cursor-pointer transition-all ${selectedIndex === index ? 'ring-[1.5px] ring-primary/80 bg-primary/30' : 'hover:bg-primary/25 hover:ring-1 hover:ring-primary/70'} ${draggedIndex === index ? 'opacity-60' : ''}`}>
                         <span className="flex-1 truncate max-w-[200px]" title={stripHtml(ann.text)}>
                           {stripHtml(ann.text)}
                         </span>
@@ -1282,9 +1281,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                             e.stopPropagation();
                             openActionMenu(index, e.currentTarget);
                           }}
-                          className="hover:opacity-80 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                          className="text-[#5a4138] dark:text-[#dbc1b3] hover:opacity-80 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                           title="More options"
-                          style={{ color: '#dbc1b3' }}
                         >
                           <MoreVertical className="w-3 h-3" />
                         </button>
@@ -1357,7 +1355,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       {/* Emoji tip toast */}
       {showShortcutsTip && (
         <div className="fixed top-5 left-5 z-50 animate-bounce-in">
-          <div className="bg-surface-elevated border border-border rounded-2xl shadow-2xl px-5 py-4 w-[380px]">
+          <div className="bg-black/10 backdrop-blur-sm border border-white/10 rounded-2xl shadow-2xl px-5 py-4 w-[380px]">
             <p className="text-[13px] text-on-surface leading-relaxed">
               💡 You can also add emojis!<br/>Press <kbd className="inline bg-primary/10 text-primary border border-primary/70 px-1.5 py-0.5 rounded text-[11px] font-mono font-medium whitespace-nowrap">{navigator.platform?.includes('Mac') ? '⌘ + Ctrl + Space' : 'Win + .'}</kbd> to open the emoji picker
             </p>
