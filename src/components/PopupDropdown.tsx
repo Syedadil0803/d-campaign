@@ -63,7 +63,7 @@ export function PopupDropdown({
           ref={menuRef}
           onMouseDown={(e) => e.stopPropagation()}
           style={{ position: 'absolute', zIndex: 9999, top: menuPosition?.top ?? 0, left: menuPosition?.left ?? 0, width: `${popupWidth}px`, overflow: 'hidden' }}
-          className="bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-3 rounded-md"
+          className="bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-3 rounded-xl"
         >
           {options.map((option) => (
             <div
