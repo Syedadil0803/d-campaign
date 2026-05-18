@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Megaphone, MoreVertical, Sparkles } from 'lucide-react';
+import { Megaphone, MoreVertical, Sparkles, Undo2, Redo2 } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
@@ -330,6 +330,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       announcementBar: { ...configRef.current.announcementBar, announcements: prev },
     });
     clearSelection();
+    showToast('Action undone');
     markChanged();
   }
 
@@ -342,6 +343,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       announcementBar: { ...configRef.current.announcementBar, announcements: next },
     });
     clearSelection();
+    showToast('Action redone');
     markChanged();
   }
 
@@ -618,9 +620,27 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
             <p className="mt-0.5 max-w-2xl text-xs text-on-surface-variant">Top banner for site-wide alerts.</p>
           </div>
         </div>
-        <button onClick={toggleActive} className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${config.announcementBar.active ? 'bg-primary' : 'bg-surface-subtle hover:bg-primary/20'}`}>
-          <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition duration-200 ${config.announcementBar.active ? 'translate-x-5' : 'translate-x-0'}`} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={undo}
+            disabled={undoStackRef.current.length === 0}
+            className="p-1.5 rounded-md text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Undo"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={redo}
+            disabled={redoStackRef.current.length === 0}
+            className="p-1.5 rounded-md text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Redo"
+          >
+            <Redo2 className="w-4 h-4" />
+          </button>
+          <button onClick={toggleActive} className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${config.announcementBar.active ? 'bg-primary' : 'bg-surface-subtle hover:bg-primary/20'}`}>
+            <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition duration-200 ${config.announcementBar.active ? 'translate-x-5' : 'translate-x-0'}`} />
+          </button>
+        </div>
       </div>
 
       <div className=" space-y-6">
