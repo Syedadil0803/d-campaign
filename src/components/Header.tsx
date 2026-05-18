@@ -82,7 +82,7 @@ export function Header({
           <button
             onClick={handleSave}
             disabled={!hasChanges}
-            className="inline-flex items-center rounded-md border border-primary/40 bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center rounded-md border border-primary/40 bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-all hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Save className="w-4 h-4 mr-2" />
             <span className="hidden sm:inline">{hasChanges ? 'Save Changes' : 'Saved'}</span>
