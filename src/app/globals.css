@@ -67,6 +67,37 @@
   display: none; /* Chrome/Safari */
 }
 
+/* Remove native white frame/chrome on color inputs used in announcement background controls */
+.bg-color-picker {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid rgb(var(--border) / 0.4);
+  border-radius: 0.5rem;
+  box-sizing: border-box;
+  padding: 0;
+  background: transparent;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.bg-color-picker:hover {
+  border-color: rgb(var(--primary));
+  box-shadow: 0 0 0 1px rgb(var(--primary) / 0.2);
+}
+
+.bg-color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.bg-color-picker::-webkit-color-swatch {
+  border: 0;
+  border-radius: 0.25rem;
+}
+
+.bg-color-picker::-moz-color-swatch {
+  border: 0;
+  border-radius: 0.25rem;
+}
+
 /* Consistent right-side dropdown arrow for selects */
 select {
   appearance: none;

@@ -1239,7 +1239,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     <div>
                       <label className="block text-xs text-on-surface-variant mb-1">Background Color</label>
                       <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
-                        className="h-10 w-full rounded  cursor-pointer" />
+                        className="bg-color-picker h-10 w-full rounded cursor-pointer" />
                     </div>
                     <div aria-hidden="true" />
                     <div aria-hidden="true" />
@@ -1251,12 +1251,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     <div>
                       <label className="block text-xs text-on-surface-variant mb-1">Start Color</label>
                       <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
-                        className="h-10 w-full rounded cursor-pointer" />
+                        className="bg-color-picker h-10 w-full rounded cursor-pointer" />
                     </div>
                     <div>
                       <label className="block text-xs text-on-surface-variant mb-1">End Color</label>
                       <input type="color" value={bg.endColor} onChange={(e) => updateBg({ endColor: e.target.value })}
-                        className="h-10 w-full rounded cursor-pointer" />
+                        className="bg-color-picker h-10 w-full rounded cursor-pointer" />
                     </div>
                     <div>
                       <label className="block text-xs text-on-surface-variant mb-1">Direction</label>
@@ -1280,12 +1280,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     <div>
                       <label className="block text-xs text-on-surface-variant mb-1">Center Color</label>
                       <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
-                        className="h-10 w-full rounded  cursor-pointer" />
+                        className="bg-color-picker h-10 w-full rounded cursor-pointer" />
                     </div>
                     <div>
                       <label className="block text-xs text-on-surface-variant mb-1">Outer Color</label>
                       <input type="color" value={bg.endColor} onChange={(e) => updateBg({ endColor: e.target.value })}
-                        className="h-10 w-full rounded  cursor-pointer" />
+                        className="bg-color-picker h-10 w-full rounded cursor-pointer" />
                     </div>
                     <div aria-hidden="true" />
                   </div>
