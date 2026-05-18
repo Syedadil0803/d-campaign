@@ -8,6 +8,7 @@ import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { wrapBareTextWithFontSize, rgbToHex, FONT_SIZE_LABEL_MAP } from '@/lib/richTextUtils';
 import RichTextToolbar from './RichTextToolbar';
+import { Toast } from './Toast';
 
 interface AnnouncementSectionProps {
   config: CampaignConfig;
@@ -76,6 +77,28 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     saveSelection,
     getNormalizedHTML,
   } = useRichTextEditor(richEditorRef, { defaultColor: editorDefaultColor });
+
+  // Toast state
+  const [toast, setToast] = useState({ show: false, message: '', isError: false });
+  const toastTimerRef = useRef<number | null>(null);
+
+  function showToast(message: string, isError = false, duration = 2500) {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setToast({ show: true, message, isError });
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast({ show: false, message: '', isError: false });
+      toastTimerRef.current = null;
+    }, duration) as unknown as number;
+  }
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     setEditorDefaultColor(getThemeOnSurfaceHex());
@@ -169,6 +192,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           announcementBar: { ...currentConfig.announcementBar, announcements: updated },
         });
         clearSelection();
+        showToast('Announcement deleted');
         markChanged();
       }
     };
@@ -241,6 +265,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     clearSelection();
     detectFormats();
     markChanged();
+    showToast(selectedIndex !== null ? 'Announcement updated' : 'Announcement added');
   }
 
   function removeAnnouncement(index: number) {
@@ -261,6 +286,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     }
 
     markChanged();
+    showToast('Announcement deleted', false);
   }
 
   function reorderAnnouncements(fromIndex: number, toIndex: number) {
@@ -544,6 +570,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       announcementBar: { ...config.announcementBar, active: !config.announcementBar.active },
     });
     markChanged();
+    showToast(!config.announcementBar.active ? 'Announcement bar enabled' : 'Announcement bar disabled');
   }
 
   function openChatGptWithPrompt() {
@@ -581,6 +608,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   
   return (
     <section className="rounded-2xl border-border overflow-hidden">
+      <Toast show={toast.show} message={toast.message} isError={toast.isError} />
       {/* Header */}
       <div className="px-4 py-2 border-b border-border bg-surface/60 flex items-center justify-between">
         <div className="flex items-center">
