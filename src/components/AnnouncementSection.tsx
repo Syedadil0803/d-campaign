@@ -15,6 +15,15 @@ interface AnnouncementSectionProps {
   markChanged: () => void;
 }
 
+function getThemeOnSurfaceHex(): string {
+  if (typeof window === 'undefined') return '#000000';
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--on-surface').trim();
+  if (!raw) return '#000000';
+  const [r, g, b] = raw.split(/\s+/).map(Number);
+  if ([r, g, b].some((v) => Number.isNaN(v))) return '#000000';
+  return rgbToHex(`rgb(${r}, ${g}, ${b})`);
+}
+
 export function AnnouncementSection({ config, setConfig, markChanged }: AnnouncementSectionProps) {
   const [newAnnouncementText, setNewAnnouncementText] = useState('');
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -55,6 +64,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const schedulePopupRef = useRef<HTMLDivElement>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
 
+  const [editorDefaultColor, setEditorDefaultColor] = useState('#000000');
+
   const {
     activeFormats,
     setActiveFormats,
@@ -64,7 +75,18 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     ensureDefaultFontSize,
     saveSelection,
     getNormalizedHTML,
-  } = useRichTextEditor(richEditorRef, { defaultColor: '#000000' });
+  } = useRichTextEditor(richEditorRef, { defaultColor: editorDefaultColor });
+
+  useEffect(() => {
+    setEditorDefaultColor(getThemeOnSurfaceHex());
+
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => {
+      setEditorDefaultColor(getThemeOnSurfaceHex());
+    });
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   // Marquee layout: calculate copies for loop mode, or set min-width for non-loop
   // Also dynamically compute --scroll-duration so speed (px/s) stays constant
@@ -373,7 +395,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     findTextNodes(container);
 
     if (textNodes.length === 0) {
-      setActiveFormats({ bold: false, italic: false, size: 'md', color: '#000000' });
+      setActiveFormats({ bold: false, italic: false, size: 'md', color: editorDefaultColor });
       return;
     }
 
@@ -414,7 +436,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       bold: allBold,
       italic: allItalic,
       size: sizes.size === 1 ? [...sizes][0] : (sizes.size === 0 ? 'md' : ''),
-      color: colors.size === 1 ? [...colors][0] : (colors.size === 0 ? '#000000' : ''),
+      color: colors.size === 1 ? [...colors][0] : (colors.size === 0 ? editorDefaultColor : ''),
     });
   }
 
@@ -562,7 +584,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       {/* Header */}
       <div className="px-4 py-2 border-b border-border bg-surface/60 flex items-center justify-between">
         <div className="flex items-center">
-          <div className="p-1 bg-primary/15 rounded-lg mr-3 border border-primary/30"><Megaphone className="w-4 h-4 text-primary" /></div>
+          <div className="p-1 bg-primary/15 rounded-lg mr-3 border border-primary/60"><Megaphone className="w-4 h-4 text-primary" /></div>
           <div>
             <h3 className="text-lg leading-6 font-semibold text-on-surface">Announcement Bar</h3>
             <p className="mt-0.5 max-w-2xl text-xs text-on-surface-variant">Top banner for site-wide alerts.</p>
@@ -620,7 +642,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
           {/* Left: Input + Chips + Link */}
-          <div className="space-y-4 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[420px] transition-all hover:border-primary/35 hover:shadow-md hover:shadow-primary/10">
+          <div className="space-y-4 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[420px] transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
             <div className="border-b border-border pb-3">
               <h4 className="text-base font-semibold text-on-surface">Announcement Content</h4>
               <p className="mt-1 text-xs text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
@@ -717,7 +739,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                               setShowSchedulePopup(false);
                             }}
                             disabled={!newAnnouncementText.trim()}
-                            className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${selectedUrl ? 'border-primary/50 bg-primary/10 text-primary' : 'border-border hover:border-primary/35 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
+                            className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${selectedUrl ? 'border-primary/80 bg-primary/10 text-primary' : 'border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
                             title={newAnnouncementText.trim() ? 'Add link' : 'Enter text first'}
                           >
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -734,7 +756,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                               setShowLinkPopup(false);
                             }}
                             disabled={!newAnnouncementText.trim()}
-                            className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${(selectedStartDate || selectedEndDate) ? 'border-primary/50 bg-primary/10 text-primary' : 'border-border hover:border-primary/35 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
+                            className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${(selectedStartDate || selectedEndDate) ? 'border-primary/80 bg-primary/10 text-primary' : 'border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
                             title={newAnnouncementText.trim() ? 'Schedule' : 'Enter text first'}
                           >
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -750,7 +772,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                             e.preventDefault();
                             openChatGptWithPrompt();
                           }}
-                          className="cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 border-border hover:border-primary/35 hover:bg-primary/10 hover:text-primary text-on-surface-variant ml-1"
+                          className="cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant ml-1"
                           title="Open ChatGPT with a prompt"
                         >
                           <Sparkles className="w-3.5 h-3.5" />
@@ -779,7 +801,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                               // Empty: create a span with all chosen properties
                               const { size, color, bold, italic } = activeFormats;
                               const fontSize = size ? ({ xs: '0.75rem', sm: '0.875rem', md: '1rem', lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem' }[size] || '1rem') : '1rem';
-                              let html = `<span style="font-size: ${fontSize}; color: ${color || '#000000'}">\u200B</span>`;
+                              let html = `<span style="font-size: ${fontSize}; color: ${color || editorDefaultColor}">\u200B</span>`;
                               if (bold) html = `<b>${html}</b>`;
                               if (italic) html = `<i>${html}</i>`;
                               editor.innerHTML = html;
@@ -870,7 +892,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           detectFormatsForSelectMode(html);
                         } else {
                           // Empty: show defaults
-                          setActiveFormats({ bold: false, italic: false, size: 'md', color: '#000000' });
+                          setActiveFormats({ bold: false, italic: false, size: 'md', color: editorDefaultColor });
                         }
                       }
                     }}
@@ -885,7 +907,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         if (richEditorRef.current) richEditorRef.current.innerHTML = '';
                       }
                     }}
-                    className={`rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[360px] resize-y break-words transition-colors ${!isEditing && showRichToolbar ? 'ring-2 ring-primary/50 border-primary/50 cursor-default caret-transparent' : 'focus:ring-primary/40 focus:border-primary/50 hover:border-primary/35 border-border'}`}
+                    className={`rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[360px] resize-y break-words transition-colors ${!isEditing && showRichToolbar ? 'ring-2 ring-primary/80 border-primary/80 cursor-default caret-transparent' : 'focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 border-border'}`}
                     style={{ background: getBackgroundStyle(config.announcementBar.style.background), wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%' }} />
                 </div>
                 <button onMouseDown={(e) => {
@@ -893,7 +915,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     addAnnouncement();
                   }}
                   disabled={!newAnnouncementText.trim()}
-                  className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed self-end">
+                  className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-on-primary bg-primary hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed self-end">
                   Add
                 </button>
                 </div>
@@ -976,7 +998,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       e.preventDefault();
                       closePopupAndFocusEditor();
                     }}
-                    className="ml-auto text-xs bg-primary text-white px-3 py-1 rounded hover:opacity-95"
+                    className="ml-auto text-xs bg-primary text-on-primary px-3 py-1 rounded hover:opacity-95"
                   >
                     Done
                   </button>
@@ -1066,7 +1088,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       e.preventDefault();
                       closePopupAndFocusEditor();
                     }}
-                    className="ml-auto text-xs bg-primary text-white px-3 py-1 rounded hover:opacity-95"
+                    className="ml-auto text-xs bg-primary text-on-primary px-3 py-1 rounded hover:opacity-95"
                   >
                     Done
                   </button>
@@ -1207,7 +1229,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
           {/* Right: Message List + Style (single card split into equal halves) */}
           <div className="min-h-0">
-            <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[420px] overflow-hidden transition-all hover:border-primary/35 hover:shadow-md hover:shadow-primary/10">
+            <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[420px] overflow-hidden transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
               {/* Top half: Message List */}
               <div className="flex-1 min-h-0 flex flex-col pr-1">
                 <div className="flex items-center justify-between mb-2 shrink-0">
@@ -1249,7 +1271,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                             selectAnnouncement(index);
                           }
                         }}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm bg-primary/15 text-primary group relative cursor-pointer transition-all ${selectedIndex === index ? 'ring-[1.5px] ring-primary/60 bg-primary/25' : 'hover:bg-primary/20 hover:ring-1 hover:ring-primary/35'} ${draggedIndex === index ? 'opacity-60' : ''}`}>
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm bg-primary/20 group relative cursor-pointer transition-all ${selectedIndex === index ? 'ring-[1.5px] ring-primary/80 bg-primary/30' : 'hover:bg-primary/25 hover:ring-1 hover:ring-primary/70'} ${draggedIndex === index ? 'opacity-60' : ''}`}
+                        style={{ color: '#dbc1b3' }}>
                         <span className="flex-1 truncate max-w-[200px]" title={stripHtml(ann.text)}>
                           {stripHtml(ann.text)}
                         </span>
@@ -1259,8 +1282,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                             e.stopPropagation();
                             openActionMenu(index, e.currentTarget);
                           }}
-                          className="text-primary hover:opacity-80 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                          className="hover:opacity-80 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                           title="More options"
+                          style={{ color: '#dbc1b3' }}
                         >
                           <MoreVertical className="w-3 h-3" />
                         </button>
@@ -1303,21 +1327,21 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     <div className="space-y-1">
                       <div
                         className="h-8 rounded-lg border border-border shadow-inner"
-                        style={{ background: '#b91c1c' }}
+                        style={{ background: 'rgb(100, 132, 150)' }}
                       />
                       <p className="text-[11px] font-semibold text-on-surface-variant text-center">Solid</p>
                     </div>
                     <div className="space-y-1">
                       <div
                         className="h-8 rounded-lg border border-border shadow-inner"
-                        style={{ background: 'linear-gradient(90deg, #111111 0%, #7f1d1d 55%, #ef4444 100%)' }}
+                        style={{ background: 'linear-gradient(to right, rgb(100, 132, 150) 0%, rgb(51, 89, 112) 100%)' }}
                       />
                       <p className="text-[11px] font-semibold text-on-surface-variant text-center">Linear</p>
                     </div>
                     <div className="space-y-1">
                       <div
                         className="h-8 rounded-lg border border-border shadow-inner"
-                        style={{ background: 'radial-gradient(circle at 50% 45%, #ef4444 8%, #7f1d1d 45%, #111111 100%)' }}
+                        style={{ background: 'radial-gradient(circle at 50% 45%, rgb(100, 132, 150) 8%, rgb(51, 89, 112) 100%)' }}
                       />
                       <p className="text-[11px] font-semibold text-on-surface-variant text-center">Radial</p>
                     </div>
@@ -1335,7 +1359,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
         <div className="fixed top-5 left-5 z-50 animate-bounce-in">
           <div className="bg-surface-elevated border border-border rounded-2xl shadow-2xl px-5 py-4 w-[380px]">
             <p className="text-[13px] text-on-surface leading-relaxed">
-              💡 You can also add emojis!<br/>Press <kbd className="inline bg-primary/10 text-primary border border-primary/30 px-1.5 py-0.5 rounded text-[11px] font-mono font-medium whitespace-nowrap">{navigator.platform?.includes('Mac') ? '⌘ + Ctrl + Space' : 'Win + .'}</kbd> to open the emoji picker
+              💡 You can also add emojis!<br/>Press <kbd className="inline bg-primary/10 text-primary border border-primary/70 px-1.5 py-0.5 rounded text-[11px] font-mono font-medium whitespace-nowrap">{navigator.platform?.includes('Mac') ? '⌘ + Ctrl + Space' : 'Win + .'}</kbd> to open the emoji picker
             </p>
             <div className="flex items-center justify-end gap-4 mt-3">
               <button

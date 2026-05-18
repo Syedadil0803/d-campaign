@@ -13,6 +13,8 @@
   /* Shared borders (border-border across components) */
   --primary: 163 57 0;
   /* Brand accent (text/border/bg primary classes) */
+  --on-primary: 255 255 255;
+  /* Text/icons on primary surfaces */
   --on-surface: 23 28 31;
   /* Primary readable text on surfaces */
   --on-surface-variant: 90 65 56;
@@ -44,6 +46,8 @@
   /* Shared borders */
   --primary: 249 115 22;
   /* Brand accent */
+  --on-primary: 79 37 0;
+  /* Text/icons on primary surfaces */
   --on-surface: 241 223 213;
   /* Primary readable text on surfaces */
   --on-surface-variant: 219 193 178;

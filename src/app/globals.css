@@ -52,13 +52,13 @@
 /* Contenteditable placeholder — default gray for plain editors */
 [contenteditable]:empty:before {
   content: attr(data-placeholder);
-  color: #9ca3af;
+  color: rgb(var(--on-surface-variant) / 0.8);
   pointer-events: none;
 }
 
 /* Hide scrollbar on rich editor but keep scroll functional */
 .rich-editor {
-  background-color: #d6d6d6;
+  background-color: transparent;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE/Edge */
 }

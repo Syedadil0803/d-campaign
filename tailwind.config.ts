@@ -16,6 +16,7 @@ const config: Config = {
         'surface-subtle': 'rgb(var(--surface-subtle) / <alpha-value>)',
         border: 'rgb(var(--border) / <alpha-value>)',
         primary: 'rgb(var(--primary) / <alpha-value>)',
+        'on-primary': 'rgb(var(--on-primary) / <alpha-value>)',
         'on-surface': 'rgb(var(--on-surface) / <alpha-value>)',
         'on-surface-variant': 'rgb(var(--on-surface-variant) / <alpha-value>)',
       },

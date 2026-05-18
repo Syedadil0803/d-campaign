@@ -49,6 +49,8 @@ export default function RichTextToolbar({
 }: RichTextToolbarProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const colorBtnRef = useRef<HTMLButtonElement>(null);
+  const baseBtnClass = 'cursor-pointer px-2 py-1 text-xs border rounded transition-colors border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant';
+  const activeBtnClass = 'bg-primary/10 text-primary border-primary/80';
 
   const handleFormat = (format: string) => {
     onFormat(format);
@@ -66,14 +68,14 @@ export default function RichTextToolbar({
         <div className="relative flex items-center">
           <button
             ref={colorBtnRef}
-            className="cursor-pointer flex flex-col items-center px-1.5 py-1 border rounded transition-colors border-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 dark:border-gray-600"
+            className={`${baseBtnClass} flex flex-col items-center px-1.5`}
             title="Text Color"
             onMouseDown={(e) => {
               e.preventDefault();
               setShowColorPicker(!showColorPicker);
             }}
           >
-            <span className="text-xs font-bold leading-none text-gray-700 dark:text-gray-200">A</span>
+            <span className="text-xs font-bold leading-none">A</span>
             <span 
               className="block w-4 h-1 rounded-sm mt-0.5"
               style={{ backgroundColor: activeFormats.color }}
@@ -99,10 +101,10 @@ export default function RichTextToolbar({
             e.preventDefault();
             handleFormat('bold');
           }}
-          className={`px-2 py-1 text-xs font-bold border rounded transition-colors ${
+          className={`${baseBtnClass} font-bold ${
             activeFormats.bold
-              ? 'bg-indigo-600 text-white border-indigo-600'
-              : 'border-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 dark:border-gray-600'
+              ? activeBtnClass
+              : ''
           }`}
           title="Bold"
         >
@@ -115,10 +117,10 @@ export default function RichTextToolbar({
             e.preventDefault();
             handleFormat('italic');
           }}
-          className={`px-2 py-1 text-xs italic border rounded transition-colors ${
+          className={`${baseBtnClass} italic ${
             activeFormats.italic
-              ? 'bg-indigo-600 text-white border-indigo-600'
-              : 'border-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 dark:border-gray-600'
+              ? activeBtnClass
+              : ''
           }`}
           title="Italic"
         >
@@ -136,10 +138,10 @@ export default function RichTextToolbar({
               e.preventDefault();
               handleFormat(`size-${size}`);
             }}
-            className={`px-2 py-1 text-xs border rounded transition-colors ${
+            className={`${baseBtnClass} ${
               activeFormats.size === size
-                ? 'bg-indigo-600 text-white border-indigo-600'
-                : 'border-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 dark:border-gray-600'
+                ? activeBtnClass
+                : ''
             }`}
           >
             {size.toUpperCase()}
@@ -160,10 +162,10 @@ export default function RichTextToolbar({
                 e.preventDefault();
                 onAlignmentChange?.('left');
               }}
-              className={`px-2 py-1 text-xs border rounded transition-colors ${
+              className={`${baseBtnClass} ${
                 alignment === 'left'
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'border-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 dark:border-gray-600'
+                  ? activeBtnClass
+                  : ''
               }`}
               title="Align Left"
             >
@@ -177,10 +179,10 @@ export default function RichTextToolbar({
                 e.preventDefault();
                 onAlignmentChange?.('center');
               }}
-              className={`px-2 py-1 text-xs border rounded transition-colors ${
+              className={`${baseBtnClass} ${
                 alignment === 'center'
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'border-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 dark:border-gray-600'
+                  ? activeBtnClass
+                  : ''
               }`}
               title="Align Center"
             >
@@ -194,10 +196,10 @@ export default function RichTextToolbar({
                 e.preventDefault();
                 onAlignmentChange?.('right');
               }}
-              className={`px-2 py-1 text-xs border rounded transition-colors ${
+              className={`${baseBtnClass} ${
                 alignment === 'right'
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'border-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 dark:border-gray-600'
+                  ? activeBtnClass
+                  : ''
               }`}
               title="Align Right"
             >
@@ -218,10 +220,10 @@ export default function RichTextToolbar({
                 e.preventDefault();
                 onButtonWidthChange?.(!buttonFullWidth);
               }}
-              className={`px-2 py-1 text-xs border rounded transition-colors ${
+              className={`${baseBtnClass} ${
                 buttonFullWidth
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'border-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 dark:border-gray-600'
+                  ? activeBtnClass
+                  : ''
               }`}
               title="Full Width"
             >
