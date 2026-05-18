@@ -31,7 +31,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedUrl, setSelectedUrl] = useState('');
-  const [selectedOpenInNewTab, setSelectedOpenInNewTab] = useState(false);
+  const [selectedOpenInNewTab, setSelectedOpenInNewTab] = useState(true);
   const [selectedStartDate, setSelectedStartDate] = useState('');
   const [selectedEndDate, setSelectedEndDate] = useState('');
   const [showShortcutsTip, setShowShortcutsTip] = useState(false);
@@ -410,7 +410,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     setIsEditing(false);
     setNewAnnouncementText('');
     setSelectedUrl('');
-    setSelectedOpenInNewTab(false);
+    setSelectedOpenInNewTab(true);
     setSelectedStartDate('');
     setSelectedEndDate('');
     setShowRichToolbar(true);
@@ -427,7 +427,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     setSelectedIndex(index);
     setIsEditing(false);
     setSelectedUrl(ann.url || '');
-    setSelectedOpenInNewTab(ann.openInNewTab || false);
+    setSelectedOpenInNewTab(ann.openInNewTab !== undefined ? ann.openInNewTab : true);
     setSelectedStartDate(ann.startDate || '');
     setSelectedEndDate(ann.endDate || '');
     const normalizedText = ann.richText ? ann.text : wrapBareTextWithFontSize(ann.text);
@@ -1084,7 +1084,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       onMouseDown={(e) => {
                         e.preventDefault();
                         setSelectedUrl('');
-                        setSelectedOpenInNewTab(false);
+                        setSelectedOpenInNewTab(true);
                         if (selectedIndex !== null) {
                           const updated = [...config.announcementBar.announcements];
                           updated[selectedIndex] = { ...updated[selectedIndex], url: undefined, openInNewTab: undefined, richText: true };
@@ -1269,7 +1269,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       <label className="block text-xs text-on-surface-variant mb-1">Balance: {bg.midpoint ?? 50}%</label>
                       <input type="range" min="0" max="100" value={bg.midpoint ?? 50}
                         onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
-                        className="w-full h-2 mt-3 bg-surface-subtle rounded-lg appearance-none cursor-pointer" />
+                        className="balance-slider mt-3" />
                     </div>
                   )}
                   {bg.type === 'radial' && (
@@ -1277,7 +1277,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       <label className="block text-xs text-on-surface-variant mb-1">Balance: {bg.midpoint ?? 50}%</label>
                       <input type="range" min="0" max="100" value={bg.midpoint ?? 50}
                         onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
-                        className="w-full h-2 mt-3 bg-surface-subtle rounded-lg appearance-none cursor-pointer" />
+                        className="balance-slider mt-3" />
                     </div>
                   )}
                 </div>
