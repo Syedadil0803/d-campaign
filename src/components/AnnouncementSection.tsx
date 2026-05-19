@@ -185,14 +185,21 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   useLayoutEffect(() => {
     if (showBackgroundTypeDropdown && backgroundTypeBtnRef.current) {
       const rect = backgroundTypeBtnRef.current.getBoundingClientRect();
-      setBackgroundTypePos({ top: rect.bottom + window.scrollY + 6, left: rect.left + window.scrollX, width: rect.width });
+      setBackgroundTypePos({ top: rect.bottom + 6, left: rect.left, width: rect.width });
     }
   }, [showBackgroundTypeDropdown]);
 
   useLayoutEffect(() => {
     if (showDirectionDropdown && directionBtnRef.current) {
       const rect = directionBtnRef.current.getBoundingClientRect();
-      setDirectionPos({ top: rect.bottom + window.scrollY + 6, left: rect.left + window.scrollX, width: rect.width });
+      const menuWidth = 180;
+      const menuHeight = 320;
+      const spaceRight = window.innerWidth - rect.right;
+      const left = spaceRight >= menuWidth + 10 ? rect.right + 6 : rect.left - menuWidth - 6;
+      // Offset: increase this value to move menu down, decrease to move up
+      const verticalOffset = 80;
+      const top = rect.bottom - menuHeight + verticalOffset;
+      setDirectionPos({ top, left, width: menuWidth });
     }
   }, [showDirectionDropdown]);
 
@@ -628,6 +635,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   }
 
   const bg = config.announcementBar.style.background;
+  const [previewDirection, setPreviewDirection] = useState<string | null>(null);
+  const previewBg = previewDirection ? { ...bg, direction: previewDirection } : bg;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -690,7 +699,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
             {config.announcementBar.active && visibleAnnouncements.length > 0 && (
               <div ref={scrollContainerRef} className="h-10 text-sm font-medium overflow-hidden flex items-center group"
                 style={{
-                  background: getBackgroundStyle(config.announcementBar.style.background),
+                  background: getBackgroundStyle(previewBg),
                   color: config.announcementBar.style.textColor,
                 }}>
                 <div className="animate-scroll-left">
@@ -1018,7 +1027,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       }
                     }}
                     className={`rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[360px] resize-y break-words transition-colors ${!isEditing && showRichToolbar ? 'ring-2 ring-primary/80 border-primary/80 cursor-default caret-transparent' : 'focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 border-border'}`}
-                    style={{ background: getBackgroundStyle(config.announcementBar.style.background), wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%' }} />
+                    style={{ background: getBackgroundStyle(previewBg), wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%' }} />
                 </div>
                 <button onMouseDown={(e) => {
                   e.preventDefault();
@@ -1338,9 +1347,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           updateBg({ direction: nextDirection });
                           setShowDirectionDropdown(false);
                         }}
+                        onHover={(dir) => setPreviewDirection(dir)}
+                        onHoverEnd={() => setPreviewDirection(null)}
                         buttonRef={directionBtnRef}
                         menuRef={directionMenuRef}
                         menuPosition={directionPos}
+                        arrowDirection="right"
                       />
                     </div>
                   </div>

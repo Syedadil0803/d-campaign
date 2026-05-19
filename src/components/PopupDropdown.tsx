@@ -15,9 +15,12 @@ interface PopupDropdownProps {
   open: boolean;
   onOpen: () => void;
   onSelect: (value: string) => void;
+  onHover?: (value: string) => void;
+  onHoverEnd?: () => void;
   buttonRef: RefObject<HTMLButtonElement | null>;
   menuRef: RefObject<HTMLDivElement | null>;
   menuPosition: { top: number; left: number; width: number } | null;
+  arrowDirection?: 'down' | 'right';
 }
 
 export function PopupDropdown({
@@ -27,12 +30,15 @@ export function PopupDropdown({
   open,
   onOpen,
   onSelect,
+  onHover,
+  onHoverEnd,
   buttonRef,
   menuRef,
   menuPosition,
+  arrowDirection = 'down',
 }: PopupDropdownProps) {
   const selectedLabel = options.find((option) => option.value === value)?.label ?? value;
-  const popupWidth = Math.max(menuPosition?.width ?? 0, 260);
+  const popupWidth = menuPosition?.width ?? 260;
 
   return (
     <div>
@@ -48,13 +54,17 @@ export function PopupDropdown({
       >
         <span className="truncate">{selectedLabel}</span>
         <svg
-          className={`h-4 w-4 flex-shrink-0 text-on-surface-variant transition-transform duration-200 ${open ? 'rotate-180' : 'rotate-0'}`}
+          className={`h-4 w-4 flex-shrink-0 text-on-surface-variant transition-transform duration-200 ${arrowDirection === 'right' ? (open ? 'rotate-180' : 'rotate-0') : (open ? 'rotate-180' : 'rotate-0')}`}
           viewBox="0 0 20 20"
           fill="none"
           stroke="currentColor"
           strokeWidth="1.8"
         >
-          <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+          {arrowDirection === 'right' ? (
+            <path d="M8 6l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+          ) : (
+            <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+          )}
         </svg>
       </button>
 
@@ -62,7 +72,8 @@ export function PopupDropdown({
         <div
           ref={menuRef}
           onMouseDown={(e) => e.stopPropagation()}
-          style={{ position: 'absolute', zIndex: 9999, top: menuPosition?.top ?? 0, left: menuPosition?.left ?? 0, width: `${popupWidth}px`, overflow: 'hidden' }}
+          onMouseLeave={() => onHoverEnd?.()}
+          style={{ position: 'fixed', zIndex: 9999, top: menuPosition?.top ?? 0, left: menuPosition?.left ?? 0, width: `${popupWidth}px` }}
           className="bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-3 rounded-xl"
         >
           {options.map((option) => (
@@ -71,6 +82,7 @@ export function PopupDropdown({
               role="button"
               tabIndex={0}
               style={{ borderRadius: '0.375rem' }}
+              onMouseEnter={() => onHover?.(option.value)}
               onMouseDown={(e) => {
                 e.preventDefault();
                 onSelect(option.value);
