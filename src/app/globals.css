@@ -199,40 +199,32 @@ select {
 
   background:linear-gradient(
     90deg,
-    #EA4335,
-    #EA4335,
-
-    #4285F4,
-    #4285F4,
-
-    #34A853,
-    #34A853,
-
-    #FBBC05,
-    #FBBC05,
-
-    #EA4335
+    #EA4335 0%,
+    #4285F4 25%,
+    #34A853 50%,
+    #FBBC05 75%,
+    #EA4335 100%
   );
 
   background-size:300% 100%;
 
-  animation:googleFlow 2.2s linear infinite;
+  animation:googleFlow 4s linear infinite;
 
   border-radius:999px;
 
   box-shadow:
-    0 0 8px rgba(234,67,53,0.7),
-    0 0 10px rgba(66,133,244,0.6),
-    0 0 12px rgba(52,168,83,0.6),
-    0 0 14px rgba(251,188,5,0.6);
+    0 0 8px rgba(234,67,53,0.35),
+    0 0 10px rgba(66,133,244,0.3),
+    0 0 12px rgba(52,168,83,0.3),
+    0 0 14px rgba(251,188,5,0.3);
 }
 
 @keyframes googleFlow{
   0%{
-    background-position:0% 50%;
+    background-position:0% 0;
   }
 
   100%{
-    background-position:100% 50%;
+    background-position:300% 0;
   }
 }
