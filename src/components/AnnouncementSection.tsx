@@ -1380,10 +1380,15 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           {/* Right: Message List + Style (single card split into equal halves) */}
           <div className="min-h-0">
             <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[420px] overflow-hidden transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
-              {/* Top half: Message List */}
+              {/* Header */}
+              <div className="border-b border-border pb-3 mb-4 shrink-0">
+                <h4 className="text-base font-semibold text-on-surface">Manage Announcements</h4>
+                <p className="mt-1 text-xs text-on-surface-variant">View, reorder, and style your announcement messages.</p>
+              </div>
+              {/* Section 1: Message List */}
               <div className="flex-1 min-h-0 flex flex-col pr-1">
                 <div className="flex items-center justify-between mb-2 shrink-0">
-                  <label className="block text-sm font-medium text-on-surface">Message List</label>
+                  <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wide">Message List</label>
                   {config.announcementBar.announcements.length > 0 && (
                     <span className="text-[11px] text-primary font-medium flex items-center animate-pulse">
                       💡 hover a chip & click ••• to manage
@@ -1445,10 +1450,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
               {/* Bottom: Loop + Style pinned to bottom */}
               <div className="shrink-0 mt-auto">
-                {/* Loop Toggle */}
+                {/* Section 2: Loop Toggle */}
                 <div className="flex items-center justify-between py-3 border-t border-border">
                   <div>
-                    <label className="block text-sm font-medium text-on-surface">Loop</label>
+                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wide">Loop</label>
                     <p className="text-xs text-on-surface-variant">Seamless continuous scroll (duplicates content to fill the bar)</p>
                   </div>
                   <button
@@ -1465,11 +1470,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   </button>
                 </div>
 
+                {/* Section 3: Background Type Guide */}
                 <div className="border-t border-border pt-2">
-
-
                   <div className="pb-1">
-                    <label className="block text-sm font-medium text-on-surface mb-1">Background Type Guide</label>
+                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1">Background Type Guide</label>
                     <p className="mb-1 text-xs text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1">
