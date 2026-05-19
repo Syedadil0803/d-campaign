@@ -374,9 +374,18 @@ export function applyFontSize(size: string): void {
     const innerFontSpans = tempDiv.querySelectorAll('span[style]');
     for (const fs of innerFontSpans) {
       if (fs instanceof HTMLElement && fs.style.fontSize) {
+        const inlineColor = fs.style.color;
         const parent = fs.parentElement;
         if (parent) {
-          while (fs.firstChild) parent.insertBefore(fs.firstChild, fs);
+          if (inlineColor) {
+            // Wrap children in a color-only span to preserve color
+            const colorWrap = document.createElement('span');
+            colorWrap.style.color = inlineColor;
+            while (fs.firstChild) colorWrap.appendChild(fs.firstChild);
+            parent.insertBefore(colorWrap, fs);
+          } else {
+            while (fs.firstChild) parent.insertBefore(fs.firstChild, fs);
+          }
           parent.removeChild(fs);
         }
       }

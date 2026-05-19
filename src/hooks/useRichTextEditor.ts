@@ -162,10 +162,65 @@ export function useRichTextEditor(
       savedRangeRef.current = selection.getRangeAt(0).cloneRange();
     }
 
-    // Bold & Italic: queryCommandState is the most reliable approach.
-    // It correctly handles <b>, <strong>, font-weight: bold, etc.
-    const bold = document.queryCommandState('bold');
-    const italic = document.queryCommandState('italic');
+    // Bold & Italic: For collapsed selection, use queryCommandState.
+    // For range selection, check all text nodes in the range.
+    let bold = false;
+    let italic = false;
+
+    if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+      const range = selection.getRangeAt(0);
+      const fragment = range.cloneContents();
+      const tempDiv = document.createElement('div');
+      tempDiv.appendChild(fragment);
+
+      const textNodes: Node[] = [];
+      function findTextNodes(node: Node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent?.replace(/\u200B/g, '').trim();
+          if (text) textNodes.push(node);
+        } else {
+          node.childNodes.forEach(findTextNodes);
+        }
+      }
+      findTextNodes(tempDiv);
+
+      if (textNodes.length > 0) {
+        let allBold = true;
+        let allItalic = true;
+        textNodes.forEach((tn) => {
+          let isBold = false;
+          let isItalic = false;
+          let n: HTMLElement | null = tn.parentElement;
+          while (n && n !== tempDiv) {
+            const tag = n.tagName;
+            if (tag === 'B' || tag === 'STRONG') isBold = true;
+            if (tag === 'I' || tag === 'EM') isItalic = true;
+            n = n.parentElement;
+          }
+          if (!isBold) allBold = false;
+          if (!isItalic) allItalic = false;
+        });
+        bold = allBold;
+        italic = allItalic;
+      }
+
+      // Also check ancestors of the range's common ancestor in the live DOM
+      if (!bold || !italic) {
+        let ancestor: Node | null = range.commonAncestorContainer;
+        if (ancestor.nodeType === Node.TEXT_NODE) ancestor = ancestor.parentNode;
+        while (ancestor && ancestor !== editor) {
+          if (ancestor instanceof HTMLElement) {
+            const tag = ancestor.tagName;
+            if (tag === 'B' || tag === 'STRONG') bold = true;
+            if (tag === 'I' || tag === 'EM') italic = true;
+          }
+          ancestor = ancestor.parentNode;
+        }
+      }
+    } else {
+      bold = document.queryCommandState('bold');
+      italic = document.queryCommandState('italic');
+    }
 
     // Font-size: Walk up the DOM from the anchor node to find the nearest
     // element with an explicit font-size style. Default to 'md' (1rem).
