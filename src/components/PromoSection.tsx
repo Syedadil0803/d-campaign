@@ -310,34 +310,35 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }
 
   return (
-    <section className="bg-surface-elevated shadow rounded-lg border border-border overflow-hidden">
-      <div className="px-6 py-3 border-b border-border bg-surface/60 flex items-center justify-between">
-        <div className="flex items-center">
-          <div className="p-2 bg-pink-100 rounded-lg mr-4">
-            <Gift className="w-5 h-5 text-pink-600" />
+    <>
+      <div className="p-4 flex gap-6" style={{ height: 'calc(100vh - 120px)' }}>
+        {/* Left: All editables — 30% width, scrollable */}
+        <div className="w-[30%] shrink-0 overflow-y-auto pr-2 space-y-4">
+          {/* Header + Toggle */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="p-2 bg-pink-100 rounded-lg mr-3">
+                <Gift className="w-4 h-4 text-pink-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-on-surface">Promo Card</h3>
+                <p className="text-xs text-on-surface-variant">Floating widget for special offers.</p>
+              </div>
+            </div>
+            <button
+              onClick={toggleActive}
+              className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 ${
+                config.promoCard.active ? 'bg-indigo-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`pointer-events-none relative inline-block h-5 w-5 rounded-full bg-white shadow transform transition ${
+                  config.promoCard.active ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              ></span>
+            </button>
           </div>
-          <div>
-            <h3 className="text-lg leading-6 font-medium text-on-surface">Promo Card</h3>
-            <p className="mt-1 max-w-2xl text-sm text-on-surface-variant">Floating widget for special offers.</p>
-          </div>
-        </div>
 
-        <button
-          onClick={toggleActive}
-          className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 ${
-            config.promoCard.active ? 'bg-indigo-600' : 'bg-gray-200'
-          }`}
-        >
-          <span
-            className={`pointer-events-none relative inline-block h-5 w-5 rounded-full bg-white shadow transform transition ${
-              config.promoCard.active ? 'translate-x-5' : 'translate-x-0'
-            }`}
-          ></span>
-        </button>
-      </div>
-
-      <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-4">
           {/* Global Style Toolbar */}
           <div className="border border-gray-300 rounded-md p-2 bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
             <label className="block text-xs font-medium text-gray-700 mb-1.5 dark:text-gray-300">
@@ -411,25 +412,23 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
             })()}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-1">Enter text below</p>
-              <div ref={titleRef} contentEditable suppressContentEditableWarning
-                onInput={()=>onFieldInput('title')} onFocus={()=>onFieldFocus('title',titleRef)}
-                onMouseUp={detectFormats} onKeyUp={detectFormats}
-                className="rich-editor block w-full border-gray-300 rounded-md p-2 border dark:border-gray-600 min-h-[38px] outline-none break-words focus:ring-indigo-500 focus:border-indigo-500"
-                style={{ background: getBackgroundStyle(config.promoCard.style.background) }} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Subtitle</label>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-1">Enter text below</p>
-              <div ref={subtitleRef} contentEditable suppressContentEditableWarning
-                onInput={()=>onFieldInput('subtitle')} onFocus={()=>onFieldFocus('subtitle',subtitleRef)}
-                onMouseUp={detectFormats} onKeyUp={detectFormats}
-                className="rich-editor block w-full border-gray-300 rounded-md p-2 border dark:border-gray-600 min-h-[38px] outline-none break-words focus:ring-indigo-500 focus:border-indigo-500"
-                style={{ background: getBackgroundStyle(config.promoCard.style.background) }} />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-1">Enter text below</p>
+            <div ref={titleRef} contentEditable suppressContentEditableWarning
+              onInput={()=>onFieldInput('title')} onFocus={()=>onFieldFocus('title',titleRef)}
+              onMouseUp={detectFormats} onKeyUp={detectFormats}
+              className="rich-editor block w-full border-gray-300 rounded-md p-2 border dark:border-gray-600 min-h-[38px] outline-none break-words focus:ring-indigo-500 focus:border-indigo-500"
+              style={{ background: getBackgroundStyle(config.promoCard.style.background) }} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Subtitle</label>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-1">Enter text below</p>
+            <div ref={subtitleRef} contentEditable suppressContentEditableWarning
+              onInput={()=>onFieldInput('subtitle')} onFocus={()=>onFieldFocus('subtitle',subtitleRef)}
+              onMouseUp={detectFormats} onKeyUp={detectFormats}
+              className="rich-editor block w-full border-gray-300 rounded-md p-2 border dark:border-gray-600 min-h-[38px] outline-none break-words focus:ring-indigo-500 focus:border-indigo-500"
+              style={{ background: getBackgroundStyle(config.promoCard.style.background) }} />
           </div>
 
           <div>
@@ -445,25 +444,23 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date</label>
-              <input
-                type="date"
-                value={config.promoCard.startDate}
-                onChange={(e) => updateField('startDate', e.target.value)}
-                className="mt-1 block w-full border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date</label>
-              <input
-                type="date"
-                value={config.promoCard.endDate}
-                onChange={(e) => updateField('endDate', e.target.value)}
-                className="mt-1 block w-full border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date</label>
+            <input
+              type="date"
+              value={config.promoCard.startDate}
+              onChange={(e) => updateField('startDate', e.target.value)}
+              className="mt-1 block w-full border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date</label>
+            <input
+              type="date"
+              value={config.promoCard.endDate}
+              onChange={(e) => updateField('endDate', e.target.value)}
+              className="mt-1 block w-full border-gray-300 rounded-md p-2 border bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+            />
           </div>
 
           <div className="flex items-center justify-between">
@@ -571,7 +568,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
           </div>
 
           {config.promoCard.showButton && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Button Text</label>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-1">Enter text below</p>
@@ -592,9 +589,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
               </div>
             </div>
           )}
-        </div>
 
-        <div className="space-y-4">
           {/* Card Appearance */}
           <div className="border border-gray-200 rounded-lg p-4 bg-white dark:bg-gray-800 dark:border-gray-700">
             <label className="block text-sm font-medium text-gray-900 mb-2 dark:text-gray-100">Card Appearance</label>
@@ -669,8 +664,11 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
               )}
             </div>
           </div>
+        </div>
 
-          <div className="bg-gray-100 rounded-lg p-4 relative self-start min-h-[260px] border border-gray-200 bg-[url('https://lib.shadcn.com/placeholder.svg')] bg-center bg-no-repeat bg-contain dark:bg-gray-700 dark:border-gray-600">
+        {/* Right: Preview — 70% width, fixed */}
+        <div className="flex-1 sticky top-0 self-start">
+          <div className="bg-gray-100 rounded-lg p-4 relative min-h-[400px] border border-gray-200 bg-[url('https://lib.shadcn.com/placeholder.svg')] bg-center bg-no-repeat bg-contain dark:bg-gray-700 dark:border-gray-600">
             <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm font-medium pointer-events-none">
               Website Content Area
             </div>
@@ -756,6 +754,6 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       </div>
 
       <SamplePromoTemplates onApplyTemplate={applyTemplate} />
-    </section>
+    </>
   );
 }
