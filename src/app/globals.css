@@ -144,7 +144,7 @@ select {
 
     rgb(var(--primary) / 0.12);
 
-  animation: slider-shine 9s ease-in-out infinite;
+  animation: slider-shine 30s linear infinite;
 
   outline: none;
   cursor: pointer;
@@ -152,13 +152,13 @@ select {
 
 @keyframes slider-shine {
   0% {
-    background-position: 0% 50%, 0 0;
+    background-position: -20% 50%, 0 0;
   }
   50% {
-    background-position: 100% 50%, 0 0;
+    background-position: 120% 50%, 0 0;
   }
   100% {
-    background-position: 0% 50%, 0 0;
+    background-position: -20% 50%, 0 0;
   }
 }
 
