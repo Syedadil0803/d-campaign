@@ -679,6 +679,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const activeFormatsRef = useRef(activeFormats);
   activeFormatsRef.current = activeFormats;
   const suppressWordBoundaryRef = useRef(false);
+  const isDeletingRef = useRef(false);
   function applyFormatToAll(action: () => void) {
     if (!richEditorRef.current) return;
     const editor = richEditorRef.current;
@@ -1048,6 +1049,14 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       const text = e.clipboardData.getData('text/plain');
                       document.execCommand('insertText', false, text);
                     }}
+                    onMouseDown={() => {
+                      // Cursor reposition — snapshot before user starts editing at new position
+                      if (!richEditorRef.current) return;
+                      const hasContent = richEditorRef.current.textContent?.replace(/\u200B/g, '').trim();
+                      if (hasContent) {
+                        pushImmediateState(getEditorSnapshot());
+                      }
+                    }}
                     onMouseUp={() => {
                       if (!richEditorRef.current) return;
                       const hasContent = richEditorRef.current.textContent?.replace(/\u200B/g, '').trim();
@@ -1089,32 +1098,39 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         }
                       }
 
-                      // ── Backspace/Delete word boundary — snapshot before deleting into a space ──
+                      // ── Backspace/Delete — snapshot on first delete after typing ──
                       if ((e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.ctrlKey) {
-                        console.log('🔍 backspace check firing');
                         const sel = window.getSelection();
-                        if (sel?.isCollapsed && sel.rangeCount > 0) {
-                          const range = sel.getRangeAt(0);
-                          const node = range.startContainer;
-                          const offset = range.startOffset;
-
-                          let charToCheck: string | null = null;
-
-                          if (e.key === 'Backspace') {
-                            if (node.nodeType === Node.TEXT_NODE && offset > 0) {
-                              charToCheck = node.textContent?.[offset - 1] ?? null;
-                            }
-                          } else {
-                            if (node.nodeType === Node.TEXT_NODE && offset < (node.textContent?.length ?? 0)) {
-                              charToCheck = node.textContent?.[offset] ?? null;
-                            }
-                          }
-
-                          console.log('🔍 charToCheck:', charToCheck);
-                          if (charToCheck === ' ') {
+                        if (sel?.isCollapsed) {
+                          if (!isDeletingRef.current) {
+                            // First backspace after typing — capture full text before deletion begins
+                            isDeletingRef.current = true;
                             pushImmediateState(getEditorSnapshot());
+                          } else {
+                            // Continued deleting — only snapshot at word boundaries (space)
+                            if (sel.rangeCount > 0) {
+                              const range = sel.getRangeAt(0);
+                              const node = range.startContainer;
+                              const offset = range.startOffset;
+                              let charToCheck: string | null = null;
+                              if (e.key === 'Backspace') {
+                                if (node.nodeType === Node.TEXT_NODE && offset > 0) {
+                                  charToCheck = node.textContent?.[offset - 1] ?? null;
+                                }
+                              } else {
+                                if (node.nodeType === Node.TEXT_NODE && offset < (node.textContent?.length ?? 0)) {
+                                  charToCheck = node.textContent?.[offset] ?? null;
+                                }
+                              }
+                              if (charToCheck === ' ') {
+                                pushImmediateState(getEditorSnapshot());
+                              }
+                            }
                           }
                         }
+                      } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
+                        // Any character key resets the deleting flag
+                        isDeletingRef.current = false;
                       }
 
                       // ── Word boundary — capture word BEFORE space is added ──
