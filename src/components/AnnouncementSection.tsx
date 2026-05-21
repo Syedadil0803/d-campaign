@@ -10,6 +10,8 @@ import { wrapBareTextWithFontSize, rgbToHex, FONT_SIZE_LABEL_MAP } from '@/lib/r
 import RichTextToolbar from './RichTextToolbar';
 import { Toast } from './Toast';
 import { PopupDropdown } from './PopupDropdown';
+import { useEditorHistory } from '@/hooks/useEditorHistory';
+import { EditorSnapshot, LinkSnapshot } from '@/lib/historyManager';
 
 interface AnnouncementSectionProps {
   config: CampaignConfig;
@@ -39,10 +41,47 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const [showRichToolbar, setShowRichToolbar] = useState(true);
   const [loopCopies, setLoopCopies] = useState(1);
 
-  // Undo/Redo history
-  const undoStackRef = useRef<CampaignConfig['announcementBar']['announcements'][]>([]);
-  const redoStackRef = useRef<CampaignConfig['announcementBar']['announcements'][]>([]);
-  const MAX_HISTORY = 30;
+  // List-level undo/redo (delete, reorder, add)
+  const listUndoStack = useRef<CampaignConfig['announcementBar']['announcements'][]>([]);
+  const listRedoStack = useRef<CampaignConfig['announcementBar']['announcements'][]>([]);
+  const [canUndoList, setCanUndoList] = useState(false);
+  const [canRedoList, setCanRedoList] = useState(false);
+
+  function pushListUndo() {
+    listUndoStack.current.push([...configRef.current.announcementBar.announcements]);
+    if (listUndoStack.current.length > 30) listUndoStack.current.shift();
+    listRedoStack.current = [];
+    setCanUndoList(true);
+    setCanRedoList(false);
+    console.log(`📋 [List] PUSH — undo: ${listUndoStack.current.length}, redo: 0, items: ${configRef.current.announcementBar.announcements.length}`);
+  }
+
+  function undoList() {
+    if (listUndoStack.current.length === 0) return;
+    listRedoStack.current.push([...configRef.current.announcementBar.announcements]);
+    const prev = listUndoStack.current.pop()!;
+    setConfig({ ...configRef.current, announcementBar: { ...configRef.current.announcementBar, announcements: prev } });
+    setCanUndoList(listUndoStack.current.length > 0);
+    setCanRedoList(true);
+    clearSelection();
+    showToast('Action undone');
+    markChanged();
+    console.log(`📋 [List] UNDO — undo: ${listUndoStack.current.length}, redo: ${listRedoStack.current.length}, restoring ${prev.length} items`);
+  }
+
+  function redoList() {
+    if (listRedoStack.current.length === 0) return;
+    listUndoStack.current.push([...configRef.current.announcementBar.announcements]);
+    const next = listRedoStack.current.pop()!;
+    setConfig({ ...configRef.current, announcementBar: { ...configRef.current.announcementBar, announcements: next } });
+    setCanUndoList(true);
+    setCanRedoList(listRedoStack.current.length > 0);
+    clearSelection();
+    showToast('Action redone');
+    markChanged();
+    console.log(`📋 [List] REDO — undo: ${listUndoStack.current.length}, redo: ${listRedoStack.current.length}, restoring ${next.length} items`);
+  }
+
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [actionMenuIndex, setActionMenuIndex] = useState<number | null>(null);
   const [actionMenuPos, setActionMenuPos] = useState<{ top: number; left: number } | null>(null);
@@ -85,6 +124,100 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     saveSelection,
     getNormalizedHTML,
   } = useRichTextEditor(richEditorRef, { defaultColor: editorDefaultColor });
+
+  // Editor history (undo/redo)
+  const {
+    pushTextState, pushImmediateState, pushLinkState,
+    flushTextDebounce,
+    undoEditor, redoEditor, undoLink, redoLink,
+    commit: commitHistory,
+    canUndoEditor, canRedoEditor, canUndoLink, canRedoLink,
+  } = useEditorHistory();
+
+  // Snapshot helpers
+  function getEditorSnapshot(): EditorSnapshot {
+    const bg = config.announcementBar.style.background;
+    return {
+      html: richEditorRef.current?.innerHTML || '',
+      bold: activeFormats.bold,
+      italic: activeFormats.italic,
+      textColor: activeFormats.color,
+      textSize: activeFormats.size,
+      bgType: bg.type || 'solid',
+      bgStartColor: bg.startColor || '',
+      bgEndColor: bg.endColor || '',
+      bgDirection: bg.direction || 'to right',
+      bgMidpoint: bg.midpoint ?? 50,
+      link: selectedUrl,
+      openInNewTab: selectedOpenInNewTab,
+      startDate: selectedStartDate,
+      endDate: selectedEndDate,
+    };
+  }
+
+  function applyEditorSnapshot(snapshot: EditorSnapshot) {
+    restoringSnapshotRef.current = true;
+    // Restore editor HTML
+    if (richEditorRef.current) {
+      richEditorRef.current.innerHTML = snapshot.html;
+      // Place cursor at end
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        const range = document.createRange();
+        range.selectNodeContents(richEditorRef.current);
+        range.collapse(false);
+        sel.addRange(range);
+      }
+    }
+    setNewAnnouncementText(snapshot.html);
+    // If restored to empty, reset initial state flag so next typing session gets a base state
+    const restoredText = snapshot.html.replace(/<[^>]*>/g, '').replace(/\u200B/g, '').trim();
+    if (!restoredText) {
+      editorInitialStatePushedRef.current = false;
+    }
+    // Restore formats
+    setActiveFormats({
+      bold: snapshot.bold,
+      italic: snapshot.italic,
+      size: snapshot.textSize,
+      color: snapshot.textColor,
+    });
+    // Restore background
+    setConfig({
+      ...config,
+      announcementBar: {
+        ...config.announcementBar,
+        style: {
+          ...config.announcementBar.style,
+          background: {
+            ...config.announcementBar.style.background,
+            type: snapshot.bgType as any,
+            startColor: snapshot.bgStartColor,
+            endColor: snapshot.bgEndColor,
+            direction: snapshot.bgDirection,
+            midpoint: snapshot.bgMidpoint,
+          },
+        },
+      },
+    });
+    // Restore link/schedule
+    setSelectedUrl(snapshot.link);
+    setSelectedOpenInNewTab(snapshot.openInNewTab);
+    setSelectedStartDate(snapshot.startDate);
+    setSelectedEndDate(snapshot.endDate);
+    // Allow next tick to complete before re-enabling history
+    setTimeout(() => { restoringSnapshotRef.current = false; }, 0);
+  }
+
+  function getLinkSnapshot(): LinkSnapshot {
+    return { link: selectedUrl, openInNewTab: selectedOpenInNewTab };
+  }
+
+  function applyLinkSnapshot(snapshot: LinkSnapshot) {
+    setSelectedUrl(snapshot.link);
+    setSelectedOpenInNewTab(snapshot.openInNewTab);
+  }
 
   // Toast state
   const [toast, setToast] = useState({ show: false, message: '', isError: false });
@@ -217,7 +350,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
         if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
         e.preventDefault();
         // Remove from config
-        pushUndo();
+        pushListUndo();
         const currentConfig = configRef.current;
         const updated = currentConfig.announcementBar.announcements.filter((_, i) => i !== idx);
         setConfig({
@@ -276,7 +409,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   }, [showLinkPopup, showSchedulePopup, showBackgroundTypeDropdown, showDirectionDropdown, actionMenuIndex]);
 
   function addAnnouncement() {
-    pushUndo();
+    pushListUndo();
+    commitHistory(); // Clear editor undo/redo stacks on Add
     const html = getNormalizedHTML();
     const updated = [...config.announcementBar.announcements];
 
@@ -316,7 +450,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   }
 
   function removeAnnouncement(index: number) {
-    pushUndo();
+    pushListUndo();
     const updated = config.announcementBar.announcements.filter((_, currentIndex) => currentIndex !== index);
     setConfig({
       ...config,
@@ -337,7 +471,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   }
 
   function reorderAnnouncements(fromIndex: number, toIndex: number) {
-    pushUndo();
+    pushListUndo();
     const updated = [...config.announcementBar.announcements];
     const [movedAnnouncement] = updated.splice(fromIndex, 1);
     updated.splice(toIndex, 0, movedAnnouncement);
@@ -361,57 +495,74 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     markChanged();
   }
 
-  // ── Push current state to undo stack before a change ──
-  function pushUndo() {
-    undoStackRef.current.push([...configRef.current.announcementBar.announcements]);
-    if (undoStackRef.current.length > MAX_HISTORY) undoStackRef.current.shift();
-    redoStackRef.current = [];
-  }
+  // ── Undo/Redo keyboard shortcut (custom history, suppress native) ──
+  const getEditorSnapshotRef = useRef(getEditorSnapshot);
+  getEditorSnapshotRef.current = getEditorSnapshot;
+  const applyEditorSnapshotRef = useRef(applyEditorSnapshot);
+  applyEditorSnapshotRef.current = applyEditorSnapshot;
+  const getLinkSnapshotRef = useRef(getLinkSnapshot);
+  getLinkSnapshotRef.current = getLinkSnapshot;
+  const applyLinkSnapshotRef = useRef(applyLinkSnapshot);
+  applyLinkSnapshotRef.current = applyLinkSnapshot;
+  const showLinkPopupRef = useRef(showLinkPopup);
+  showLinkPopupRef.current = showLinkPopup;
 
-  function undo() {
-    if (undoStackRef.current.length === 0) return;
-    redoStackRef.current.push([...configRef.current.announcementBar.announcements]);
-    const prev = undoStackRef.current.pop()!;
-    setConfig({
-      ...configRef.current,
-      announcementBar: { ...configRef.current.announcementBar, announcements: prev },
-    });
-    clearSelection();
-    showToast('Action undone');
-    markChanged();
-  }
-
-  function redo() {
-    if (redoStackRef.current.length === 0) return;
-    undoStackRef.current.push([...configRef.current.announcementBar.announcements]);
-    const next = redoStackRef.current.pop()!;
-    setConfig({
-      ...configRef.current,
-      announcementBar: { ...configRef.current.announcementBar, announcements: next },
-    });
-    clearSelection();
-    showToast('Action redone');
-    markChanged();
-  }
-
-  // ── Undo/Redo keyboard shortcut ──
   useEffect(() => {
-    const handleUndoRedo = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       const isMac = navigator.platform?.includes('Mac');
       const mod = isMac ? e.metaKey : e.ctrlKey;
-      if (!mod || e.key.toLowerCase() !== 'z') return;
-      // Don't intercept when typing in the editor
+      if (!mod) return;
+
+      const isUndo = e.key.toLowerCase() === 'z' && !e.shiftKey;
+      const isRedo = (e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y';
+      if (!isUndo && !isRedo) return;
+
       const target = e.target as HTMLElement;
-      if (target.isContentEditable) return;
+      const tag = target.tagName;
+
+      // Link popup input focused → link stack
+      if (tag === 'INPUT' && showLinkPopupRef.current) {
+        e.preventDefault();
+        if (isUndo) {
+          const snapshot = undoLink(getLinkSnapshotRef.current());
+          if (snapshot) applyLinkSnapshotRef.current(snapshot);
+        } else {
+          const snapshot = redoLink(getLinkSnapshotRef.current());
+          if (snapshot) applyLinkSnapshotRef.current(snapshot);
+        }
+        return;
+      }
+
+
+      // Editor focused → already handled by inline onKeyDown on the contentEditable
+      if (target.isContentEditable) {
+        return;
+      }
+
+      // Nothing specific focused → editor stack
       e.preventDefault();
-      if (e.shiftKey) {
-        redo();
+      if (isUndo) {
+        const snapshot = undoEditor(getEditorSnapshotRef.current());
+        if (snapshot) applyEditorSnapshotRef.current(snapshot);
       } else {
-        undo();
+        const snapshot = redoEditor(getEditorSnapshotRef.current());
+        if (snapshot) applyEditorSnapshotRef.current(snapshot);
       }
     };
-    document.addEventListener('keydown', handleUndoRedo);
-    return () => document.removeEventListener('keydown', handleUndoRedo);
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowLinkPopup(false);
+        setShowSchedulePopup(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
   }, []);
 
   // ── Clear all selection/editing state ──
@@ -423,6 +574,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     setSelectedStartDate('');
     setSelectedEndDate('');
     setShowRichToolbar(true);
+    setShowLinkPopup(false);
+    setShowSchedulePopup(false);
+    editorInitialStatePushedRef.current = false;
     if (richEditorRef.current) {
       richEditorRef.current.innerHTML = '';
       richEditorRef.current.blur();
@@ -521,6 +675,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
   // ── Apply format to entire content (selection mode) ──
   const applyingFormatRef = useRef(false);
+  const restoringSnapshotRef = useRef(false);
+  const editorInitialStatePushedRef = useRef(false);
   const activeFormatsRef = useRef(activeFormats);
   activeFormatsRef.current = activeFormats;
   function applyFormatToAll(action: () => void) {
@@ -599,11 +755,15 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   // ── Rich text input handler ──
   function onRichTextInput() {
     if (applyingFormatRef.current) return;
+    if (restoringSnapshotRef.current) return;
     const html = getNormalizedHTML();
     setNewAnnouncementText(html);
+    // Push current state after 800ms idle
+    pushTextState(getEditorSnapshot());
   }
 
   // ── Style helpers ──
+  // Update BG without pushing history (used for live updates like color picker drag)
   function updateBg(patch: Record<string, any>) {
     setConfig({
       ...config,
@@ -616,6 +776,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       },
     });
     markChanged();
+  }
+
+  // Update BG WITH history push (used for discrete changes like type change, slider release)
+  function updateBgWithHistory(patch: Record<string, any>) {
+    pushImmediateState(getEditorSnapshot());
+    updateBg(patch);
   }
 
   function toggleActive() {
@@ -674,23 +840,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
             <p className="mt-0.5 max-w-2xl text-xs text-on-surface-variant">Top banner for site-wide alerts.</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={undo}
-            disabled={undoStackRef.current.length === 0}
-            className="p-1.5 rounded-md text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            title="Undo"
-          >
-            <Undo2 className="w-4 h-4" />
-          </button>
-          <button
-            onClick={redo}
-            disabled={redoStackRef.current.length === 0}
-            className="p-1.5 rounded-md text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            title="Redo"
-          >
-            <Redo2 className="w-4 h-4" />
-          </button>
+        <div className="flex items-center gap-1">
           <button onClick={toggleActive} className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${config.announcementBar.active ? 'bg-primary' : 'bg-surface-subtle hover:bg-primary/20'}`}>
             <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition duration-200 ${config.announcementBar.active ? 'translate-x-5' : 'translate-x-0'}`} />
           </button>
@@ -767,10 +917,11 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     <RichTextToolbar
                       activeFormats={activeFormats}
                       onFormat={(format) => {
+                        // Push state before format change
+                        pushImmediateState(getEditorSnapshot());
                         const sel = window.getSelection();
                         const hasSelectionInEditor = sel && !sel.isCollapsed && richEditorRef.current?.contains(sel.anchorNode);
                         if (hasSelectionInEditor) {
-                          // Text is selected in editor: apply only to selection
                           saveSelection();
                           formatText(format);
                           const currentColor = activeFormats.color;
@@ -809,6 +960,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         }
                       }}
                       onColorSelect={(color) => {
+                        // Push state before color change
+                        pushImmediateState(getEditorSnapshot());
                         const sel = window.getSelection();
                         const hasSelectionInEditor = sel && !sel.isCollapsed && richEditorRef.current?.contains(sel.anchorNode);
                         if (hasSelectionInEditor) {
@@ -834,6 +987,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                             onMouseDown={(e) => {
                               e.preventDefault();
                               if (!newAnnouncementText.trim()) return;
+                              if (!showLinkPopup) {
+                                // Opening popup — push current link state as base
+                                pushLinkState(getLinkSnapshot());
+                              }
                               setShowLinkPopup(!showLinkPopup);
                               setShowSchedulePopup(false);
                             }}
@@ -911,6 +1068,21 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       }
                     }}
                     onKeyDown={(e) => {
+                      // Suppress native undo/redo — handled by custom history
+                      const mod = e.metaKey || e.ctrlKey;
+                      if (mod && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
+                        e.preventDefault();
+                        const isUndo = e.key.toLowerCase() === 'z' && !e.shiftKey;
+                        const isRedo = (e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y';
+                        if (isUndo) {
+                          const snapshot = undoEditor(getEditorSnapshot());
+                          if (snapshot) applyEditorSnapshot(snapshot);
+                        } else if (isRedo) {
+                          const snapshot = redoEditor(getEditorSnapshot());
+                          if (snapshot) applyEditorSnapshot(snapshot);
+                        }
+                        return;
+                      }
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         addAnnouncement();
@@ -953,10 +1125,16 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     }}
                     onFocus={() => {
                       if (applyingFormatRef.current) return;
+                      if (restoringSnapshotRef.current) return;
                       setShowRichToolbar(true);
                       if (!shortcutsTipShown.current && localStorage.getItem('ann_shortcuts_seen') !== 'never') {
                         shortcutsTipShown.current = true;
                         setShowShortcutsTip(true);
+                      }
+                      // Push initial state on first focus so undo can go all the way back
+                      if (!editorInitialStatePushedRef.current) {
+                        editorInitialStatePushedRef.current = true;
+                        pushImmediateState(getEditorSnapshot());
                       }
                       if (richEditorRef.current) {
                         const editor = richEditorRef.current;
@@ -1007,6 +1185,21 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 <input
                   type="url"
                   value={selectedUrl}
+                  onKeyDown={(e) => {
+                    const mod = e.metaKey || e.ctrlKey;
+                    if (mod && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
+                      e.preventDefault();
+                      const isUndo = e.key.toLowerCase() === 'z' && !e.shiftKey;
+                      const isRedo = (e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y';
+                      if (isUndo) {
+                        const snapshot = undoLink(getLinkSnapshot());
+                        if (snapshot) applyLinkSnapshot(snapshot);
+                      } else if (isRedo) {
+                        const snapshot = redoLink(getLinkSnapshot());
+                        if (snapshot) applyLinkSnapshot(snapshot);
+                      }
+                    }
+                  }}
                   onChange={(e) => {
                     const nextUrl = e.target.value;
                     setSelectedUrl(nextUrl);
@@ -1218,7 +1411,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       setShowDirectionDropdown(false);
                     }}
                     onSelect={(nextType) => {
-                      updateBg({ type: nextType });
+                      updateBgWithHistory({ type: nextType });
                       setShowBackgroundTypeDropdown(false);
                     }}
                     buttonRef={backgroundTypeBtnRef}
@@ -1232,6 +1425,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       <label className="block text-xs text-on-surface-variant mb-1">Balance: {bg.midpoint ?? 50}%</label>
                       <input type="range" min="0" max="100" value={bg.midpoint ?? 50}
                         onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
+                        onMouseDown={() => pushImmediateState(getEditorSnapshot())}
                         className="balance-slider mt-3" />
                     </div>
                   )}
@@ -1240,6 +1434,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       <label className="block text-xs text-on-surface-variant mb-1">Balance: {bg.midpoint ?? 50}%</label>
                       <input type="range" min="0" max="100" value={bg.midpoint ?? 50}
                         onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
+                        onMouseDown={() => pushImmediateState(getEditorSnapshot())}
                         className="balance-slider mt-3" />
                     </div>
                   )}
@@ -1252,7 +1447,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   <div className="grid grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs text-on-surface-variant mb-1">Background Color</label>
-                      <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
+                      <input type="color" value={bg.startColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ startColor: e.target.value })}
                         className="bg-color-picker h-10 w-full rounded cursor-pointer" />
                     </div>
                     <div aria-hidden="true" />
@@ -1264,12 +1459,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   <div className="grid grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs text-on-surface-variant mb-1">Start Color</label>
-                      <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
+                      <input type="color" value={bg.startColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ startColor: e.target.value })}
                         className="bg-color-picker h-10 w-full rounded cursor-pointer" />
                     </div>
                     <div>
                       <label className="block text-xs text-on-surface-variant mb-1">End Color</label>
-                      <input type="color" value={bg.endColor} onChange={(e) => updateBg({ endColor: e.target.value })}
+                      <input type="color" value={bg.endColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ endColor: e.target.value })}
                         className="bg-color-picker h-10 w-full rounded cursor-pointer" />
                     </div>
                     <div>
@@ -1292,6 +1487,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           setShowBackgroundTypeDropdown(false);
                         }}
                         onSelect={(nextDirection) => {
+                          pushImmediateState(getEditorSnapshot());
                           updateBg({ direction: nextDirection });
                           setShowDirectionDropdown(false);
                         }}
@@ -1310,12 +1506,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                   <div className="grid grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs text-on-surface-variant mb-1">Center Color</label>
-                      <input type="color" value={bg.startColor} onChange={(e) => updateBg({ startColor: e.target.value })}
+                      <input type="color" value={bg.startColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ startColor: e.target.value })}
                         className="bg-color-picker h-10 w-full rounded cursor-pointer" />
                     </div>
                     <div>
                       <label className="block text-xs text-on-surface-variant mb-1">Outer Color</label>
-                      <input type="color" value={bg.endColor} onChange={(e) => updateBg({ endColor: e.target.value })}
+                      <input type="color" value={bg.endColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ endColor: e.target.value })}
                         className="bg-color-picker h-10 w-full rounded cursor-pointer" />
                     </div>
                     <div aria-hidden="true" />
@@ -1329,9 +1525,31 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           <div className="min-h-0">
             <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[420px] overflow-hidden transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
               {/* Header */}
-              <div className="border-b border-border pb-3 mb-4 shrink-0">
-                <h4 className="text-base font-semibold text-on-surface">Manage Announcements</h4>
-                <p className="mt-1 text-xs text-on-surface-variant">View, reorder, and style your announcement messages.</p>
+              <div className="border-b border-border pb-3 mb-4 shrink-0 flex items-center justify-between">
+                <div>
+                  <h4 className="text-base font-semibold text-on-surface">Manage Announcements</h4>
+                  <p className="mt-1 text-xs text-on-surface-variant">View, reorder, and style your announcement messages.</p>
+                </div>
+                <div className="flex items-center gap-0.5">
+                  <button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={undoList}
+                    disabled={!canUndoList}
+                    className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Undo list action"
+                  >
+                    <Undo2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={redoList}
+                    disabled={!canRedoList}
+                    className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Redo list action"
+                  >
+                    <Redo2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
               {/* Section 1: Message List */}
               <div className="flex-1 min-h-0 flex flex-col pr-1">
