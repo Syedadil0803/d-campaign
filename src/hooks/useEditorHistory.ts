@@ -36,7 +36,7 @@ export interface UseEditorHistoryReturn {
 }
 
 export function useEditorHistory(): UseEditorHistoryReturn {
-  const editorHistory = useRef(new HistoryManager<EditorSnapshot>((a, b) => a.html === b.html && a.bgType === b.bgType && a.bgStartColor === b.bgStartColor && a.bgEndColor === b.bgEndColor && a.bgDirection === b.bgDirection && a.bgMidpoint === b.bgMidpoint && a.textColor === b.textColor && a.textSize === b.textSize && a.bold === b.bold && a.italic === b.italic, 'Editor', 30)).current;
+  const editorHistory = useRef(new HistoryManager<EditorSnapshot>((a, b) => a.html === b.html && a.bgType === b.bgType && a.bgStartColor === b.bgStartColor && a.bgEndColor === b.bgEndColor && a.bgDirection === b.bgDirection && a.bgMidpoint === b.bgMidpoint, 'Editor', 30)).current;
   const linkHistory = useRef(new HistoryManager<LinkSnapshot>(undefined, 'Link', 30)).current;
 
   // State for re-rendering buttons
@@ -86,6 +86,8 @@ export function useEditorHistory(): UseEditorHistoryReturn {
 
   // Undo/Redo link
   const undoLink = useCallback((current: LinkSnapshot): LinkSnapshot | null => {
+    // Push the current live state so it's captured before undoing
+    linkHistory.pushState(current);
     const result = linkHistory.undo();
     syncLinkButtons();
     return result;

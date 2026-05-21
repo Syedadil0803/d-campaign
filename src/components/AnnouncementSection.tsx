@@ -680,6 +680,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   activeFormatsRef.current = activeFormats;
   const suppressWordBoundaryRef = useRef(false);
   const isDeletingRef = useRef(false);
+  const justDeletedStyledRef = useRef(false);
   function applyFormatToAll(action: () => void) {
     if (!richEditorRef.current) return;
     const editor = richEditorRef.current;
@@ -1051,7 +1052,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     }}
                     onMouseDown={() => {
                       // Cursor reposition — snapshot before user starts editing at new position
+                      // Only if editor already has focus (not initial click-to-focus)
                       if (!richEditorRef.current) return;
+                      if (document.activeElement !== richEditorRef.current) return;
                       const hasContent = richEditorRef.current.textContent?.replace(/\u200B/g, '').trim();
                       if (hasContent) {
                         pushImmediateState(getEditorSnapshot());
@@ -1076,6 +1079,31 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       }
 
                       if (!richEditorRef.current) return;
+
+                      // After delete, clean up empty styled nodes
+                      if (e.key === 'Backspace' || e.key === 'Delete') {
+                        const editor = richEditorRef.current;
+                        // Remove empty styled spans and wrappers
+                        editor.querySelectorAll('span[style], b, strong, i, em').forEach((el) => {
+                          if (!el.textContent?.replace(/\u200B/g, '').trim()) {
+                            el.remove();
+                          }
+                        });
+
+                        const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
+                        if (!hasContent) {
+                          setActiveFormats({ bold: false, italic: false, size: 'md', color: editorDefaultColor });
+                          editor.innerHTML = '';
+                          justDeletedStyledRef.current = false;
+                          return;
+                        }
+                        // Mark that we just deleted — next typed char should use detected formats
+                        justDeletedStyledRef.current = true;
+                        // Use DOM-walking detection (not queryCommandState which reads stale context)
+                        detectFormatsForSelectMode(editor.innerHTML);
+                        return;
+                      }
+
                       const hasContent = richEditorRef.current.textContent?.replace(/\u200B/g, '').trim();
                       if (!hasContent) return;
                       const sel = window.getSelection();
@@ -1137,7 +1165,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       if (e.key === ' ' && !e.metaKey && !e.ctrlKey && !suppressWordBoundaryRef.current) {
                         const sel = window.getSelection();
                         if (sel?.isCollapsed) {
-                          console.log('🔍 spacebar keydown — capturing word before space');
                           pushImmediateState(getEditorSnapshot());
                         }
                       }
@@ -1165,7 +1192,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         return;
                       }
 
-                      // ── 5. Seed empty editor with active formats on first character ──
+                      // ── 5. Seed empty editor OR re-apply correct style after delete ──
                       if (!e.metaKey && !e.ctrlKey && e.key.length === 1 && richEditorRef.current) {
                         const editor = richEditorRef.current;
                         const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
@@ -1193,6 +1220,19 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                             }
                             sel.addRange(range);
                           }
+                          onRichTextInput();
+                          justDeletedStyledRef.current = false;
+                        } else if (justDeletedStyledRef.current) {
+                          // After deleting styled text, force-insert with surrounding style
+                          e.preventDefault();
+                          justDeletedStyledRef.current = false;
+                          const { size, color, bold, italic } = activeFormatsRef.current;
+                          const fontSize = size ? ({ xs: '0.75rem', sm: '0.875rem', md: '1rem', lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem' }[size] || '1rem') : '1rem';
+                          const resolvedColor = color || editorDefaultColor;
+                          let charHtml = `<span style="font-size: ${fontSize}; color: ${resolvedColor}">${e.key}</span>`;
+                          if (bold) charHtml = `<b>${charHtml}</b>`;
+                          if (italic) charHtml = `<i>${charHtml}</i>`;
+                          document.execCommand('insertHTML', false, charHtml);
                           onRichTextInput();
                         } else {
                           ensureDefaultFontSize();
