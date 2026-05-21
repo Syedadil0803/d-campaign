@@ -127,8 +127,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
   // Editor history (undo/redo)
   const {
-    pushTextState, pushImmediateState, pushLinkState,
-    flushTextDebounce,
+    pushImmediateState, pushLinkState,
     undoEditor, redoEditor, undoLink, redoLink,
     commit: commitHistory,
     canUndoEditor, canRedoEditor, canUndoLink, canRedoLink,
@@ -679,6 +678,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const editorInitialStatePushedRef = useRef(false);
   const activeFormatsRef = useRef(activeFormats);
   activeFormatsRef.current = activeFormats;
+  const suppressWordBoundaryRef = useRef(false);
   function applyFormatToAll(action: () => void) {
     if (!richEditorRef.current) return;
     const editor = richEditorRef.current;
@@ -758,8 +758,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     if (restoringSnapshotRef.current) return;
     const html = getNormalizedHTML();
     setNewAnnouncementText(html);
-    // Push current state after 800ms idle
-    pushTextState(getEditorSnapshot());
+    // No history push here — handled by intention-based triggers on keyDown/focus/blur
   }
 
   // ── Style helpers ──
@@ -1058,7 +1057,15 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         detectFormats();
                       }
                     }}
-                    onKeyUp={() => {
+                    onKeyUp={(e) => {
+                      // Word boundary — snapshot on spacebar (after DOM update)
+                      if (e.key === ' ' && !e.metaKey && !e.ctrlKey && !suppressWordBoundaryRef.current) {
+                        const sel = window.getSelection();
+                        if (sel?.isCollapsed) {
+                          pushImmediateState(getEditorSnapshot());
+                        }
+                      }
+
                       if (!richEditorRef.current) return;
                       const hasContent = richEditorRef.current.textContent?.replace(/\u200B/g, '').trim();
                       if (!hasContent) return;
@@ -1068,7 +1075,58 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       }
                     }}
                     onKeyDown={(e) => {
-                      // Suppress native undo/redo — handled by custom history
+                      // ── 1. Selection overwrite — snapshot before replacing selected text ──
+                      if (!e.metaKey && !e.ctrlKey) {
+                        const sel = window.getSelection();
+                        if (
+                          sel &&
+                          !sel.isCollapsed &&
+                          richEditorRef.current?.contains(sel.anchorNode) &&
+                          (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete')
+                        ) {
+                          pushImmediateState(getEditorSnapshot());
+                          suppressWordBoundaryRef.current = true;
+                        }
+                      }
+
+                      // ── Backspace/Delete word boundary — snapshot before deleting into a space ──
+                      if ((e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.ctrlKey) {
+                        console.log('🔍 backspace check firing');
+                        const sel = window.getSelection();
+                        if (sel?.isCollapsed && sel.rangeCount > 0) {
+                          const range = sel.getRangeAt(0);
+                          const node = range.startContainer;
+                          const offset = range.startOffset;
+
+                          let charToCheck: string | null = null;
+
+                          if (e.key === 'Backspace') {
+                            if (node.nodeType === Node.TEXT_NODE && offset > 0) {
+                              charToCheck = node.textContent?.[offset - 1] ?? null;
+                            }
+                          } else {
+                            if (node.nodeType === Node.TEXT_NODE && offset < (node.textContent?.length ?? 0)) {
+                              charToCheck = node.textContent?.[offset] ?? null;
+                            }
+                          }
+
+                          console.log('🔍 charToCheck:', charToCheck);
+                          if (charToCheck === ' ') {
+                            pushImmediateState(getEditorSnapshot());
+                          }
+                        }
+                      }
+
+                      // ── Word boundary — capture word BEFORE space is added ──
+                      if (e.key === ' ' && !e.metaKey && !e.ctrlKey && !suppressWordBoundaryRef.current) {
+                        const sel = window.getSelection();
+                        if (sel?.isCollapsed) {
+                          console.log('🔍 spacebar keydown — capturing word before space');
+                          pushImmediateState(getEditorSnapshot());
+                        }
+                      }
+
+                      // ── 3. Suppress native undo/redo — handled by custom history ──
                       const mod = e.metaKey || e.ctrlKey;
                       if (mod && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
                         e.preventDefault();
@@ -1083,12 +1141,15 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         }
                         return;
                       }
+
+                      // ── 4. Enter to submit ──
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
                         addAnnouncement();
                         return;
                       }
-                      // On typing in empty editor, seed with active formats
+
+                      // ── 5. Seed empty editor with active formats on first character ──
                       if (!e.metaKey && !e.ctrlKey && e.key.length === 1 && richEditorRef.current) {
                         const editor = richEditorRef.current;
                         const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
@@ -1101,7 +1162,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           if (bold) html = `<b>${html}</b>`;
                           if (italic) html = `<i>${html}</i>`;
                           editor.innerHTML = html;
-                          // Place cursor at end
                           const sel = window.getSelection();
                           if (sel) {
                             sel.removeAllRanges();
@@ -1126,6 +1186,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     onFocus={() => {
                       if (applyingFormatRef.current) return;
                       if (restoringSnapshotRef.current) return;
+                      suppressWordBoundaryRef.current = false;
                       setShowRichToolbar(true);
                       if (!shortcutsTipShown.current && localStorage.getItem('ann_shortcuts_seen') !== 'never') {
                         shortcutsTipShown.current = true;
@@ -1144,8 +1205,21 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         }
                       }
                     }}
-                    onBlur={() => {
+                    onBlur={(e) => {
                       if (applyingFormatRef.current) return;
+                      if (restoringSnapshotRef.current) return;
+
+                      // Skip if focus moved to toolbar or editor UI (not a true blur)
+                      const relatedTarget = e.relatedTarget as HTMLElement | null;
+                      const editorContainer = e.currentTarget.closest('.space-y-4');
+                      if (relatedTarget && editorContainer?.contains(relatedTarget)) {
+                        // Focus stayed inside editor UI — skip snapshot
+                      } else {
+                        // True blur — capture final state
+                        pushImmediateState(getEditorSnapshot());
+                        suppressWordBoundaryRef.current = false;
+                      }
+
                       const text = richEditorRef.current?.textContent?.replace(/\u200B/g, '').trim();
                       if (!text && selectedIndex === null) {
                         setShowRichToolbar(true);
