@@ -1,18 +1,14 @@
 /**
- * HistoryManager — Simple 1-level undo/redo.
+ * HistoryManager — Simple 1-level undo/redo with lock mechanism.
  * 
- * Only tracks: previous state and current state.
- * Undo = restore previous. Redo = restore current.
- * Each new change overwrites the previous.
- * commit() clears both (called on "Add").
+ * - pushState locks the "previous" state (first push only, subsequent skipped)
+ * - undo restores previous, saves current to redo, clears lock
+ * - redo restores redo state, saves current as previous (so undo still works)
+ * - commit clears everything (called on "Add")
  */
 
 export interface EditorSnapshot {
   html: string;
-  bold: boolean;
-  italic: boolean;
-  textColor: string;
-  textSize: string;
   bgType: string;
   bgStartColor: string;
   bgEndColor: string;
@@ -31,29 +27,25 @@ export interface LinkSnapshot {
 
 export class HistoryManager<T> {
   private previousState: T | null = null;
-  private currentState: T | null = null;
   private redoState: T | null = null;
-  private isEqual: (a: T, b: T) => boolean;
   private label: string;
 
-  constructor(isEqual?: (a: T, b: T) => boolean, label = 'History') {
-    this.isEqual = isEqual || ((a, b) => JSON.stringify(a) === JSON.stringify(b));
+  constructor(label = 'History') {
     this.label = label;
   }
 
-  /** Push state before a change. This becomes the "previous" you can undo to. */
+  /** Push state before a change. Only the FIRST push locks — subsequent are skipped until undo/redo resets. */
   pushState(snapshot: T): void {
-    // Don't push if same as current previous
-    if (this.previousState !== null && this.isEqual(this.previousState, snapshot)) {
-      console.log(`📝 [${this.label}] PUSH skipped (duplicate)`);
+    if (this.previousState !== null) {
+      console.log(`📝 [${this.label}] PUSH skipped (already locked)`);
       return;
     }
     this.previousState = snapshot;
     this.redoState = null;
-    console.log(`📝 [${this.label}] PUSH — previous set`);
+    console.log(`📝 [${this.label}] PUSH — previous locked`);
   }
 
-  /** Undo: restore previous state. Current goes to redo. */
+  /** Undo: restore previous state. Current goes to redo. Clears lock. */
   undo(currentState: T): T | null {
     if (this.previousState === null) {
       console.log(`↩️ [${this.label}] UNDO — nothing to undo`);
@@ -66,14 +58,14 @@ export class HistoryManager<T> {
     return result;
   }
 
-  /** Redo: restore the state that was undone from. */
+  /** Redo: restore redo state. Current becomes previous (so undo works after redo). */
   redo(currentState: T): T | null {
     if (this.redoState === null) {
       console.log(`↪️ [${this.label}] REDO — nothing to redo`);
       return null;
     }
     const result = this.redoState;
-    this.previousState = currentState; // So you can undo back after redo
+    this.previousState = currentState;
     this.redoState = null;
     console.log(`↪️ [${this.label}] REDO — restored redo state`);
     return result;
@@ -82,7 +74,6 @@ export class HistoryManager<T> {
   /** Clear everything (called on Add). */
   commit(): void {
     this.previousState = null;
-    this.currentState = null;
     this.redoState = null;
     console.log(`✅ [${this.label}] COMMIT — cleared`);
   }
@@ -95,9 +86,14 @@ export class HistoryManager<T> {
     return this.redoState !== null;
   }
 
+  /** Unlock the previous state so next push can set a new one. */
+  unlock(): void {
+    this.previousState = null;
+    console.log(`\uD83D\uDD13 [${this.label}] UNLOCK \u2014 ready for new session`);
+  }
+
   clear(): void {
     this.previousState = null;
-    this.currentState = null;
     this.redoState = null;
   }
 }

@@ -14,6 +14,7 @@ import { HistoryManager, EditorSnapshot, LinkSnapshot } from '@/lib/historyManag
 export interface UseEditorHistoryReturn {
   pushImmediateState: (snapshot: EditorSnapshot) => void;
   pushLinkState: (snapshot: LinkSnapshot) => void;
+  unlockEditor: () => void;
   undoEditor: (current: EditorSnapshot) => EditorSnapshot | null;
   redoEditor: (current: EditorSnapshot) => EditorSnapshot | null;
   undoLink: (current: LinkSnapshot) => LinkSnapshot | null;
@@ -26,8 +27,8 @@ export interface UseEditorHistoryReturn {
 }
 
 export function useEditorHistory(): UseEditorHistoryReturn {
-  const editorHistory = useRef(new HistoryManager<EditorSnapshot>((a, b) => a.html === b.html && a.bgType === b.bgType && a.bgStartColor === b.bgStartColor && a.bgEndColor === b.bgEndColor && a.bgDirection === b.bgDirection && a.bgMidpoint === b.bgMidpoint && a.textColor === b.textColor && a.textSize === b.textSize && a.bold === b.bold && a.italic === b.italic, 'Editor')).current;
-  const linkHistory = useRef(new HistoryManager<LinkSnapshot>(undefined, 'Link')).current;
+  const editorHistory = useRef(new HistoryManager<EditorSnapshot>('Editor')).current;
+  const linkHistory = useRef(new HistoryManager<LinkSnapshot>('Link')).current;
 
   const [canUndoEditor, setCanUndoEditor] = useState(false);
   const [canRedoEditor, setCanRedoEditor] = useState(false);
@@ -52,6 +53,11 @@ export function useEditorHistory(): UseEditorHistoryReturn {
   const pushLinkState = useCallback((snapshot: LinkSnapshot) => {
     linkHistory.pushState(snapshot);
     syncLinkButtons();
+  }, []);
+
+  const unlockEditor = useCallback(() => {
+    editorHistory.unlock();
+    syncEditorButtons();
   }, []);
 
   const undoEditor = useCallback((current: EditorSnapshot): EditorSnapshot | null => {
@@ -88,6 +94,7 @@ export function useEditorHistory(): UseEditorHistoryReturn {
   return {
     pushImmediateState,
     pushLinkState,
+    unlockEditor,
     undoEditor,
     redoEditor,
     undoLink,

@@ -127,7 +127,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
   // Editor history (undo/redo)
   const {
-    pushImmediateState, pushLinkState,
+    pushImmediateState, pushLinkState, unlockEditor,
     undoEditor, redoEditor, undoLink, redoLink,
     commit: commitHistory,
     canUndoEditor, canRedoEditor, canUndoLink, canRedoLink,
@@ -138,10 +138,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     const bg = config.announcementBar.style.background;
     return {
       html: richEditorRef.current?.innerHTML || '',
-      bold: activeFormats.bold,
-      italic: activeFormats.italic,
-      textColor: activeFormats.color,
-      textSize: activeFormats.size,
       bgType: bg.type || 'solid',
       bgStartColor: bg.startColor || '',
       bgEndColor: bg.endColor || '',
@@ -159,28 +155,30 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     // Restore editor HTML
     if (richEditorRef.current) {
       richEditorRef.current.innerHTML = snapshot.html;
-      // Place cursor at end
+      // Place cursor inside the deepest last node (so typing inherits styles)
       const sel = window.getSelection();
       if (sel) {
         sel.removeAllRanges();
         const range = document.createRange();
-        range.selectNodeContents(richEditorRef.current);
-        range.collapse(false);
+        let lastNode: Node = richEditorRef.current;
+        while (lastNode.lastChild) lastNode = lastNode.lastChild;
+        if (lastNode.nodeType === Node.TEXT_NODE) {
+          range.setStart(lastNode, lastNode.textContent?.length || 0);
+          range.collapse(true);
+        } else {
+          range.selectNodeContents(richEditorRef.current);
+          range.collapse(false);
+        }
         sel.addRange(range);
       }
     }
     setNewAnnouncementText(snapshot.html);
-    // If restored to empty, reset initial state flag so next typing session gets a base state
-    const restoredText = snapshot.html.replace(/<[^>]*>/g, '').replace(/\u200B/g, '').trim();
-    if (!restoredText) {
+    // Restore formats from the HTML (source of truth)
+    if (snapshot.html) {
+      detectFormatsForSelectMode(snapshot.html);
+    } else {
+      setActiveFormats({ bold: false, italic: false, size: 'md', color: editorDefaultColor });
     }
-    // Restore formats
-    setActiveFormats({
-      bold: snapshot.bold,
-      italic: snapshot.italic,
-      size: snapshot.textSize,
-      color: snapshot.textColor,
-    });
     // Restore background
     setConfig({
       ...config,
@@ -1110,13 +1108,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         const sel = window.getSelection();
                         if (sel?.isCollapsed && !isDeletingRef.current) {
                           isDeletingRef.current = true;
+                          unlockEditor();
                           pushImmediateState(getEditorSnapshot());
                         }
                       } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
-                        // Typing after delete — space ends the delete session
-                        if (e.key === ' ') {
-                          isDeletingRef.current = false;
-                        }
+                        // Any forward typing resets delete mode (next backspace starts new session)
+                        isDeletingRef.current = false;
                       }
 
                       // ── 3. Suppress native undo/redo ──
