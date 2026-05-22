@@ -1090,6 +1090,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       // Any keystroke ends the styling session
 
                       // ── 1. Selection overwrite — snapshot before replacing selected text ──
+                      // A deliberate selection+overwrite always starts a NEW session
                       if (!e.metaKey && !e.ctrlKey) {
                         const sel = window.getSelection();
                         if (
@@ -1098,6 +1099,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           richEditorRef.current?.contains(sel.anchorNode) &&
                           (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete')
                         ) {
+                          unlockEditor();
                           pushImmediateState(getEditorSnapshot());
                           isDeletingRef.current = true;
                         }
@@ -1108,12 +1110,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         const sel = window.getSelection();
                         if (sel?.isCollapsed && !isDeletingRef.current) {
                           isDeletingRef.current = true;
-                          unlockEditor();
                           pushImmediateState(getEditorSnapshot());
                         }
                       } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
-                        // Any forward typing resets delete mode (next backspace starts new session)
-                        isDeletingRef.current = false;
+                        // Forward typing — same session, don't reset
                       }
 
                       // ── 3. Suppress native undo/redo ──
