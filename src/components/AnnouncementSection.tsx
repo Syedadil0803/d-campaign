@@ -173,7 +173,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     // If restored to empty, reset initial state flag so next typing session gets a base state
     const restoredText = snapshot.html.replace(/<[^>]*>/g, '').replace(/\u200B/g, '').trim();
     if (!restoredText) {
-      editorInitialStatePushedRef.current = false;
     }
     // Restore formats
     setActiveFormats({
@@ -526,7 +525,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           const snapshot = undoLink(getLinkSnapshotRef.current());
           if (snapshot) applyLinkSnapshotRef.current(snapshot);
         } else {
-          const snapshot = redoLink(getLinkSnapshotRef.current());
+          const snapshot = redoLink(getLinkSnapshot());
           if (snapshot) applyLinkSnapshotRef.current(snapshot);
         }
         return;
@@ -544,7 +543,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
         const snapshot = undoEditor(getEditorSnapshotRef.current());
         if (snapshot) applyEditorSnapshotRef.current(snapshot);
       } else {
-        const snapshot = redoEditor(getEditorSnapshotRef.current());
+        const snapshot = redoEditor(getEditorSnapshot());
         if (snapshot) applyEditorSnapshotRef.current(snapshot);
       }
     };
@@ -575,7 +574,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     setShowRichToolbar(true);
     setShowLinkPopup(false);
     setShowSchedulePopup(false);
-    editorInitialStatePushedRef.current = false;
     if (richEditorRef.current) {
       richEditorRef.current.innerHTML = '';
       richEditorRef.current.blur();
@@ -675,11 +673,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   // ── Apply format to entire content (selection mode) ──
   const applyingFormatRef = useRef(false);
   const restoringSnapshotRef = useRef(false);
-  const editorInitialStatePushedRef = useRef(false);
   const activeFormatsRef = useRef(activeFormats);
   activeFormatsRef.current = activeFormats;
-  const suppressWordBoundaryRef = useRef(false);
   const isDeletingRef = useRef(false);
+  const linkDeletingRef = useRef(false);
   const justDeletedStyledRef = useRef(false);
   function applyFormatToAll(action: () => void) {
     if (!richEditorRef.current) return;
@@ -918,11 +915,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     <RichTextToolbar
                       activeFormats={activeFormats}
                       onFormat={(format) => {
-                        // Push state before format change
-                        pushImmediateState(getEditorSnapshot());
                         const sel = window.getSelection();
                         const hasSelectionInEditor = sel && !sel.isCollapsed && richEditorRef.current?.contains(sel.anchorNode);
                         if (hasSelectionInEditor) {
+                          pushImmediateState(getEditorSnapshot());
                           saveSelection();
                           formatText(format);
                           const currentColor = activeFormats.color;
@@ -947,6 +943,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           // No selection in editor: apply to all text or track for future
                           const hasContent = richEditorRef.current?.textContent?.replace(/\u200B/g, '').trim();
                           if (hasContent) {
+                            pushImmediateState(getEditorSnapshot());
                             applyFormatToAll(() => formatText(format));
                           } else {
                             // Empty editor: just track the format for future typing
@@ -961,12 +958,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         }
                       }}
                       onColorSelect={(color) => {
-                        // Push state before color change
-                        pushImmediateState(getEditorSnapshot());
                         const sel = window.getSelection();
                         const hasSelectionInEditor = sel && !sel.isCollapsed && richEditorRef.current?.contains(sel.anchorNode);
                         if (hasSelectionInEditor) {
-                          // Text is selected in editor: apply only to selection
+                          pushImmediateState(getEditorSnapshot());
                           saveSelection();
                           applyColor(color);
                           onRichTextInput();
@@ -974,6 +969,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           // No selection in editor: apply to all text or track for future
                           const hasContent = richEditorRef.current?.textContent?.replace(/\u200B/g, '').trim();
                           if (hasContent) {
+                            pushImmediateState(getEditorSnapshot());
                             applyFormatToAll(() => applyColor(color));
                           }
                           setActiveFormats(prev => ({ ...prev, color }));
@@ -988,10 +984,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                             onMouseDown={(e) => {
                               e.preventDefault();
                               if (!newAnnouncementText.trim()) return;
-                              if (!showLinkPopup) {
-                                // Opening popup — push current link state as base
-                                pushLinkState(getLinkSnapshot());
-                              }
                               setShowLinkPopup(!showLinkPopup);
                               setShowSchedulePopup(false);
                             }}
@@ -1051,14 +1043,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       document.execCommand('insertText', false, text);
                     }}
                     onMouseDown={() => {
-                      // Cursor reposition — snapshot before user starts editing at new position
-                      // Only if editor already has focus (not initial click-to-focus)
-                      if (!richEditorRef.current) return;
-                      if (document.activeElement !== richEditorRef.current) return;
-                      const hasContent = richEditorRef.current.textContent?.replace(/\u200B/g, '').trim();
-                      if (hasContent) {
-                        pushImmediateState(getEditorSnapshot());
-                      }
+                      // Click in editor resets styling session
                     }}
                     onMouseUp={() => {
                       if (!richEditorRef.current) return;
@@ -1070,14 +1055,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       }
                     }}
                     onKeyUp={(e) => {
-                      // Word boundary — snapshot on spacebar (after DOM update)
-                      if (e.key === ' ' && !e.metaKey && !e.ctrlKey && !suppressWordBoundaryRef.current) {
-                        const sel = window.getSelection();
-                        if (sel?.isCollapsed) {
-                          pushImmediateState(getEditorSnapshot());
-                        }
-                      }
-
                       if (!richEditorRef.current) return;
 
                       // After delete, clean up empty styled nodes
@@ -1112,6 +1089,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       }
                     }}
                     onKeyDown={(e) => {
+                      // Any keystroke ends the styling session
+
                       // ── 1. Selection overwrite — snapshot before replacing selected text ──
                       if (!e.metaKey && !e.ctrlKey) {
                         const sel = window.getSelection();
@@ -1122,54 +1101,25 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete')
                         ) {
                           pushImmediateState(getEditorSnapshot());
-                          suppressWordBoundaryRef.current = true;
+                          isDeletingRef.current = true;
                         }
                       }
 
-                      // ── Backspace/Delete — snapshot on first delete after typing ──
+                      // ── 2. First Backspace/Delete — snapshot before destruction begins ──
                       if ((e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.ctrlKey) {
                         const sel = window.getSelection();
-                        if (sel?.isCollapsed) {
-                          if (!isDeletingRef.current) {
-                            // First backspace after typing — capture full text before deletion begins
-                            isDeletingRef.current = true;
-                            pushImmediateState(getEditorSnapshot());
-                          } else {
-                            // Continued deleting — only snapshot at word boundaries (space)
-                            if (sel.rangeCount > 0) {
-                              const range = sel.getRangeAt(0);
-                              const node = range.startContainer;
-                              const offset = range.startOffset;
-                              let charToCheck: string | null = null;
-                              if (e.key === 'Backspace') {
-                                if (node.nodeType === Node.TEXT_NODE && offset > 0) {
-                                  charToCheck = node.textContent?.[offset - 1] ?? null;
-                                }
-                              } else {
-                                if (node.nodeType === Node.TEXT_NODE && offset < (node.textContent?.length ?? 0)) {
-                                  charToCheck = node.textContent?.[offset] ?? null;
-                                }
-                              }
-                              if (charToCheck === ' ') {
-                                pushImmediateState(getEditorSnapshot());
-                              }
-                            }
-                          }
-                        }
-                      } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
-                        // Any character key resets the deleting flag
-                        isDeletingRef.current = false;
-                      }
-
-                      // ── Word boundary — capture word BEFORE space is added ──
-                      if (e.key === ' ' && !e.metaKey && !e.ctrlKey && !suppressWordBoundaryRef.current) {
-                        const sel = window.getSelection();
-                        if (sel?.isCollapsed) {
+                        if (sel?.isCollapsed && !isDeletingRef.current) {
+                          isDeletingRef.current = true;
                           pushImmediateState(getEditorSnapshot());
                         }
+                      } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
+                        // Typing after delete — space ends the delete session
+                        if (e.key === ' ') {
+                          isDeletingRef.current = false;
+                        }
                       }
 
-                      // ── 3. Suppress native undo/redo — handled by custom history ──
+                      // ── 3. Suppress native undo/redo ──
                       const mod = e.metaKey || e.ctrlKey;
                       if (mod && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
                         e.preventDefault();
@@ -1182,6 +1132,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           const snapshot = redoEditor(getEditorSnapshot());
                           if (snapshot) applyEditorSnapshot(snapshot);
                         }
+                        // After undo/redo, reset delete mode
+                        isDeletingRef.current = false;
                         return;
                       }
 
@@ -1192,7 +1144,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                         return;
                       }
 
-                      // ── 5. Seed empty editor OR re-apply correct style after delete ──
+                      // ── 5. Seed empty editor ──
                       if (!e.metaKey && !e.ctrlKey && e.key.length === 1 && richEditorRef.current) {
                         const editor = richEditorRef.current;
                         const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
@@ -1242,16 +1194,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     onFocus={() => {
                       if (applyingFormatRef.current) return;
                       if (restoringSnapshotRef.current) return;
-                      suppressWordBoundaryRef.current = false;
                       setShowRichToolbar(true);
                       if (!shortcutsTipShown.current && localStorage.getItem('ann_shortcuts_seen') !== 'never') {
                         shortcutsTipShown.current = true;
                         setShowShortcutsTip(true);
-                      }
-                      // Push initial state on first focus so undo can go all the way back
-                      if (!editorInitialStatePushedRef.current) {
-                        editorInitialStatePushedRef.current = true;
-                        pushImmediateState(getEditorSnapshot());
                       }
                       if (richEditorRef.current) {
                         const editor = richEditorRef.current;
@@ -1273,7 +1219,6 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       } else {
                         // True blur — capture final state
                         pushImmediateState(getEditorSnapshot());
-                        suppressWordBoundaryRef.current = false;
                       }
 
                       const text = richEditorRef.current?.textContent?.replace(/\u200B/g, '').trim();
@@ -1327,6 +1272,27 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       } else if (isRedo) {
                         const snapshot = redoLink(getLinkSnapshot());
                         if (snapshot) applyLinkSnapshot(snapshot);
+                      }
+                      linkDeletingRef.current = false;
+                      return;
+                    }
+                    // Push before destroying existing URL (first backspace only)
+                    if (selectedUrl && (e.key === 'Backspace' || e.key === 'Delete')) {
+                      if (!linkDeletingRef.current) {
+                        linkDeletingRef.current = true;
+                        pushLinkState(getLinkSnapshot());
+                      }
+                    } else if (selectedUrl && e.key.length === 1 && !mod) {
+                      const input = e.target as HTMLInputElement;
+                      if (input.selectionStart !== input.selectionEnd) {
+                        // About to overwrite selected text
+                        if (!linkDeletingRef.current) {
+                          linkDeletingRef.current = true;
+                          pushLinkState(getLinkSnapshot());
+                        }
+                      } else {
+                        // Typing forward — reset delete mode
+                        if (e.key === ' ') linkDeletingRef.current = false;
                       }
                     }
                   }}

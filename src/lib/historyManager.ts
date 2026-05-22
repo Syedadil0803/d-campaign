@@ -1,13 +1,10 @@
 /**
- * HistoryManager — Custom undo/redo stack with full snapshot restore.
+ * HistoryManager — Simple 1-level undo/redo.
  * 
- * Architecture:
- * - currentState tracks the live state (NOT on the undoStack)
- * - undoStack holds previous states only, capped at MAX_STATES
- * - Any new action clears the redo stack
- * - commit() clears all stacks (called on "Add")
- * - undo()/redo() return the snapshot to restore, or null
- * - No diffing — always store and restore full snapshots
+ * Only tracks: previous state and current state.
+ * Undo = restore previous. Redo = restore current.
+ * Each new change overwrites the previous.
+ * commit() clears both (called on "Add").
  */
 
 export interface EditorSnapshot {
@@ -32,101 +29,75 @@ export interface LinkSnapshot {
   openInNewTab: boolean;
 }
 
-const DEFAULT_MAX_STATES = 10;
-
 export class HistoryManager<T> {
-  private undoStack: T[] = [];  // previous states only (NOT including current)
-  private redoStack: T[] = [];
-  private currentState: T | null = null;  // track current state separately
+  private previousState: T | null = null;
+  private currentState: T | null = null;
+  private redoState: T | null = null;
   private isEqual: (a: T, b: T) => boolean;
-  private label: string; // for log grouping
-  private maxStates: number;
+  private label: string;
 
-  constructor(isEqual?: (a: T, b: T) => boolean, label = 'History', maxStates = DEFAULT_MAX_STATES) {
+  constructor(isEqual?: (a: T, b: T) => boolean, label = 'History') {
     this.isEqual = isEqual || ((a, b) => JSON.stringify(a) === JSON.stringify(b));
     this.label = label;
-    this.maxStates = maxStates;
   }
 
-  /** Strip HTML tags for readable log preview */
-  private _preview(snapshot: T): string {
-    const html = (snapshot as any).html;
-    if (typeof html === 'string') {
-      const text = html.replace(/<[^>]*>/g, '').substring(0, 50);
-      return text || '(empty)';
-    }
-    return JSON.stringify(snapshot).substring(0, 50);
-  }
-
+  /** Push state before a change. This becomes the "previous" you can undo to. */
   pushState(snapshot: T): void {
-    // Don't push if identical to current state
-    if (this.currentState !== null && this.isEqual(this.currentState, snapshot)) {
+    // Don't push if same as current previous
+    if (this.previousState !== null && this.isEqual(this.previousState, snapshot)) {
       console.log(`📝 [${this.label}] PUSH skipped (duplicate)`);
       return;
     }
-    // Move current state to undo stack (it becomes a previous state)
-    if (this.currentState !== null) {
-      this.undoStack.push(this.currentState);
-      if (this.undoStack.length > this.maxStates) {
-        this.undoStack.shift();
-        console.log(`📝 [${this.label}] PUSH dropped oldest — undo: ${this.undoStack.length}, redo: ${this.redoStack.length}`);
-      }
-    }
-    this.currentState = snapshot;
-    this.redoStack = [];
-    console.log(`📝 [${this.label}] PUSH — undo: ${this.undoStack.length}, redo: 0 — "${this._preview(snapshot)}"`);
+    this.previousState = snapshot;
+    this.redoState = null;
+    console.log(`📝 [${this.label}] PUSH — previous set`);
   }
 
-  undo(): T | null {
-    if (this.undoStack.length === 0) {
+  /** Undo: restore previous state. Current goes to redo. */
+  undo(currentState: T): T | null {
+    if (this.previousState === null) {
       console.log(`↩️ [${this.label}] UNDO — nothing to undo`);
       return null;
     }
-    // Push current state to redo stack
-    if (this.currentState !== null) {
-      this.redoStack.push(this.currentState);
-    }
-    // Pop previous state from undo stack → becomes current
-    const previous = this.undoStack.pop()!;
-    this.currentState = previous;
-    console.log(`↩️ [${this.label}] UNDO — undo: ${this.undoStack.length}, redo: ${this.redoStack.length} — restoring "${this._preview(previous)}"`);
-    return previous;
+    this.redoState = currentState;
+    const result = this.previousState;
+    this.previousState = null;
+    console.log(`↩️ [${this.label}] UNDO — restored previous`);
+    return result;
   }
 
-  redo(): T | null {
-    if (this.redoStack.length === 0) {
+  /** Redo: restore the state that was undone from. */
+  redo(currentState: T): T | null {
+    if (this.redoState === null) {
       console.log(`↪️ [${this.label}] REDO — nothing to redo`);
       return null;
     }
-    // Push current state back to undo stack
-    if (this.currentState !== null) {
-      this.undoStack.push(this.currentState);
-    }
-    const next = this.redoStack.pop()!;
-    this.currentState = next;
-    console.log(`↪️ [${this.label}] REDO — undo: ${this.undoStack.length}, redo: ${this.redoStack.length} — restoring "${this._preview(next)}"`);
-    return next;
+    const result = this.redoState;
+    this.previousState = currentState; // So you can undo back after redo
+    this.redoState = null;
+    console.log(`↪️ [${this.label}] REDO — restored redo state`);
+    return result;
   }
 
+  /** Clear everything (called on Add). */
   commit(): void {
-    console.log(`🔄 [${this.label}] COMMIT — cleared all stacks`);
-    this.undoStack = [];
-    this.redoStack = [];
+    this.previousState = null;
     this.currentState = null;
+    this.redoState = null;
+    console.log(`✅ [${this.label}] COMMIT — cleared`);
   }
 
   canUndo(): boolean {
-    return this.undoStack.length > 0;
+    return this.previousState !== null;
   }
 
   canRedo(): boolean {
-    return this.redoStack.length > 0;
+    return this.redoState !== null;
   }
 
   clear(): void {
-    console.log(`🧹 [${this.label}] CLEAR — cleared all stacks`);
-    this.undoStack = [];
-    this.redoStack = [];
+    this.previousState = null;
     this.currentState = null;
+    this.redoState = null;
   }
 }
