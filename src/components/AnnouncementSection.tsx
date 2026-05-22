@@ -85,6 +85,21 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [actionMenuIndex, setActionMenuIndex] = useState<number | null>(null);
   const [actionMenuPos, setActionMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const actionMenuTimer = useRef<number | null>(null);
+
+  function scheduleCloseActionMenu() {
+    actionMenuTimer.current = window.setTimeout(() => {
+      setActionMenuIndex(null);
+      setActionMenuPos(null);
+    }, 150);
+  }
+
+  function cancelCloseActionMenu() {
+    if (actionMenuTimer.current) {
+      window.clearTimeout(actionMenuTimer.current);
+      actionMenuTimer.current = null;
+    }
+  }
 
   // Popup state
   const [showLinkPopup, setShowLinkPopup] = useState(false);
@@ -1454,6 +1469,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
               <div
                 ref={actionMenuRef}
                 onMouseDown={(e) => e.stopPropagation()}
+                onMouseEnter={() => cancelCloseActionMenu()}
+                onMouseLeave={() => scheduleCloseActionMenu()}
                 style={{ position: 'absolute', top: actionMenuPos.top, left: actionMenuPos.left, zIndex: 9999 }}
                 className="bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl py-1 w-[180px]"
               >
@@ -1678,11 +1695,32 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                             setDraggedIndex(null);
                           }}
                           onDragEnd={() => setDraggedIndex(null)}
+                          onMouseEnter={(e) => {
+                            cancelCloseActionMenu();
+                            const btn = e.currentTarget.querySelector('[data-action-btn]') as HTMLButtonElement;
+                            if (btn) openActionMenu(index, btn);
+                          }}
+                          onMouseLeave={() => {
+                            scheduleCloseActionMenu();
+                          }}
                           onClick={() => {
                             if (selectedIndex === index) {
                               clearSelection();
                             } else {
-                              selectAnnouncement(index);
+                              const ann = config.announcementBar.announcements[index];
+                              setSelectedIndex(index);
+                              setSelectedUrl(ann.url || '');
+                              setSelectedOpenInNewTab(ann.openInNewTab !== undefined ? ann.openInNewTab : true);
+                              setSelectedStartDate(ann.startDate || '');
+                              setSelectedEndDate(ann.endDate || '');
+                              const normalizedText = ann.richText ? ann.text : wrapBareTextWithFontSize(ann.text);
+                              setNewAnnouncementText(normalizedText);
+                              if (richEditorRef.current) {
+                                richEditorRef.current.innerHTML = normalizedText;
+                                richEditorRef.current.blur();
+                              }
+                              window.getSelection()?.removeAllRanges();
+                              detectFormatsForSelectMode(normalizedText);
                             }
                           }}
                           className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm text-[#5a4138] dark:text-[#dbc1b3] bg-primary/20 group relative cursor-pointer transition-all ${selectedIndex === index ? 'ring-[1.5px] ring-primary/80 bg-primary/30' : 'hover:bg-primary/25 hover:ring-1 hover:ring-primary/70'} ${draggedIndex === index ? 'opacity-60' : ''}`}>
@@ -1691,6 +1729,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                           </span>
                           <button
                             type="button"
+                            data-action-btn
                             onClick={(e) => {
                               e.stopPropagation();
                               openActionMenu(index, e.currentTarget);
