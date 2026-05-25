@@ -146,7 +146,8 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
 
   function onFieldInput(field: 'title'|'subtitle'|'description'|'button'|'timer') {
     if (field === 'timer') {
-      const el = timerRef.current;
+      const fallbackEl = timerRef.current;
+      const el = (currentField === 'timer' && activeEditorRef.current) ? activeEditorRef.current : fallbackEl;
       if (!el) return;
       const html = wrapBareTextWithFontSize(el.innerHTML);
       const text = normalizeTimerTemplate(html);
@@ -383,37 +384,6 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     return bg;
   }
 
-  function calculateTimeRemaining(): string {
-    if (!config.promoCard.startDate || !config.promoCard.endDate) {
-      return '00:00:00';
-    }
-
-    const now = new Date(currentTime);
-    const start = new Date(config.promoCard.startDate);
-    const end = new Date(config.promoCard.endDate);
-
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-
-    if (now < start) {
-      const diff = start.getTime() - now.getTime();
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    }
-
-    if (now > end) {
-      return '00:00:00';
-    }
-
-    const remaining = end.getTime() - now.getTime();
-    const hours = Math.floor(remaining / (1000 * 60 * 60));
-    const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  }
-
   function getFormattedTimerText(): string {
     const rawHtml = config.promoCard.timerText || 'Ends in {hh}:{mm}:{ss}';
     const timerValue = calcTimerRemaining(config.promoCard.endDate || '');
@@ -422,41 +392,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       // Replace tokens with dashes, preserving HTML structure
       return rawHtml.replace(/\{hhh\}|\{hh\}|\{h\}|\{mmm\}|\{mm\}|\{m\}|\{sss\}|\{ss\}|\{s\}|\{ddd\}|\{dd\}|\{d\}/g, '--');
     }
-
-    // Replace tokens in the HTML while preserving inline styles and spans
-    let formattedHtml = rawHtml;
-    
-    const days = timerValue.days ?? 0;
-    
-    if (timerValue.hours !== undefined) {
-      const hhh = String(timerValue.hours).padStart(3, '0');
-      const hh = String(timerValue.hours).padStart(2, '0');
-      const h = String(timerValue.hours);
-      formattedHtml = formattedHtml.replace(/\{hhh\}/g, hhh).replace(/\{hh\}/g, hh).replace(/\{h\}/g, h);
-    }
-    
-    if (timerValue.minutes !== undefined) {
-      const mmm = String(timerValue.minutes).padStart(3, '0');
-      const mm = String(timerValue.minutes).padStart(2, '0');
-      const m = String(timerValue.minutes);
-      formattedHtml = formattedHtml.replace(/\{mmm\}/g, mmm).replace(/\{mm\}/g, mm).replace(/\{m\}/g, m);
-    }
-    
-    if (timerValue.seconds !== undefined) {
-      const sss = String(timerValue.seconds).padStart(3, '0');
-      const ss = String(timerValue.seconds).padStart(2, '0');
-      const s = String(timerValue.seconds);
-      formattedHtml = formattedHtml.replace(/\{sss\}/g, sss).replace(/\{ss\}/g, ss).replace(/\{s\}/g, s);
-    }
-    
-    if (timerValue.days !== undefined) {
-      const ddd = String(days).padStart(3, '0');
-      const dd = String(days).padStart(2, '0');
-      const d = String(days);
-      formattedHtml = formattedHtml.replace(/\{ddd\}/g, ddd).replace(/\{dd\}/g, dd).replace(/\{d\}/g, d);
-    }
-    
-    return formattedHtml;
+    return formatTimerText(rawHtml, timerValue);
   }
 
   function applyTemplate(template: PromoCard, templateName: string) {
