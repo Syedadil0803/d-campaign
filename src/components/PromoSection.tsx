@@ -1060,6 +1060,20 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                 </div>
               </div>
 
+              {(config.promoCard.style.background.type === 'linear' || config.promoCard.style.background.type === 'radial') && (
+                <div>
+                  <label className="block text-xs text-on-surface-variant mb-0.5">Balance: {config.promoCard.style.background.midpoint ?? 50}%</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={config.promoCard.style.background.midpoint ?? 50}
+                    onChange={(e) => updateCardBg({ midpoint: Number(e.target.value) })}
+                    className="balance-slider mt-2"
+                  />
+                </div>
+              )}
+
               {config.promoCard.style.background.type === 'linear' && (
                 <div className="grid grid-cols-3 gap-3">
                   <div><label className="block text-xs text-on-surface-variant mb-0.5">Start Color</label><input type="color" value={config.promoCard.style.background.startColor} onChange={e => updateCardBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" /></div>

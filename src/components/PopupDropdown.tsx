@@ -1,6 +1,7 @@
 'use client';
 
 import { createPortal } from 'react-dom';
+import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 
 export type PopupDropdownOption = {
@@ -41,6 +42,58 @@ export function PopupDropdown({
 }: PopupDropdownProps) {
   const selectedLabel = options.find((option) => option.value === value)?.label ?? value;
   const popupWidth = menuPosition?.width ?? 260;
+  const [livePosition, setLivePosition] = useState<{ top: number; left: number; width: number } | null>(menuPosition);
+  const initialButtonRectRef = useRef<{ top: number; left: number } | null>(null);
+  const initialMenuPosRef = useRef<{ top: number; left: number; width: number } | null>(null);
+
+  useEffect(() => {
+    setLivePosition(menuPosition);
+  }, [menuPosition]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const initialRect = buttonRef.current?.getBoundingClientRect();
+    if (initialRect && menuPosition) {
+      initialButtonRectRef.current = { top: initialRect.top, left: initialRect.left };
+      initialMenuPosRef.current = { ...menuPosition };
+    }
+
+    const updatePosition = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      // Preserve original popup placement (e.g., right-side custom anchor) and
+      // move it by the same delta as the trigger button while scrolling.
+      if (initialButtonRectRef.current && initialMenuPosRef.current) {
+        const deltaTop = rect.top - initialButtonRectRef.current.top;
+        const deltaLeft = rect.left - initialButtonRectRef.current.left;
+        setLivePosition({
+          top: initialMenuPosRef.current.top + deltaTop,
+          left: initialMenuPosRef.current.left + deltaLeft,
+          width: initialMenuPosRef.current.width,
+        });
+        return;
+      }
+
+      // Fallback when no initial anchor info is provided.
+      setLivePosition({
+        top: rect.bottom + 6,
+        left: rect.left,
+        width: menuPosition?.width ?? rect.width,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+      initialButtonRectRef.current = null;
+      initialMenuPosRef.current = null;
+    };
+  }, [open, buttonRef, menuPosition?.width]);
 
   return (
     <div>
@@ -77,7 +130,7 @@ export function PopupDropdown({
           ref={menuRef}
           onMouseDown={(e) => e.stopPropagation()}
           onMouseLeave={() => onHoverEnd?.()}
-          style={{ position: 'fixed', zIndex: 9999, top: menuPosition?.top ?? 0, left: menuPosition?.left ?? 0, width: `${popupWidth}px` }}
+          style={{ position: 'fixed', zIndex: 9999, top: livePosition?.top ?? menuPosition?.top ?? 0, left: livePosition?.left ?? menuPosition?.left ?? 0, width: `${livePosition?.width ?? popupWidth}px` }}
           className="bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-3 rounded-xl"
         >
           {options.map((option) => (
