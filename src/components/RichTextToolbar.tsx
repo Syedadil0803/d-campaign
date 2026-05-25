@@ -8,7 +8,7 @@
 
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import PresetColorPicker from './PresetColorPicker';
 
 interface ActiveFormats {
@@ -31,6 +31,7 @@ interface RichTextToolbarProps {
   showButtonWidth?: boolean;
   buttonFullWidth?: boolean;
   onButtonWidthChange?: (fullWidth: boolean) => void;
+  compact?: boolean;
 }
 
 export default function RichTextToolbar({
@@ -46,10 +47,16 @@ export default function RichTextToolbar({
   showButtonWidth = false,
   buttonFullWidth = false,
   onButtonWidthChange,
+  compact = false,
 }: RichTextToolbarProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showSizeDropdown, setShowSizeDropdown] = useState(false);
   const colorBtnRef = useRef<HTMLButtonElement>(null);
-  const baseBtnClass = 'cursor-pointer px-2 py-1 text-xs border rounded transition-colors border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant';
+  const sizeBtnRef = useRef<HTMLButtonElement>(null);
+  const sizeMenuRef = useRef<HTMLDivElement>(null);
+  const baseBtnClass = compact
+    ? 'cursor-pointer px-1.5 py-0.5 text-[10px] border rounded transition-colors border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'
+    : 'cursor-pointer px-2 py-1 text-xs border rounded transition-colors border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant';
   const activeBtnClass = 'bg-primary/10 text-primary border-primary/80';
 
   const handleFormat = (format: string) => {
@@ -60,6 +67,16 @@ export default function RichTextToolbar({
     onColorSelect(color);
     setShowColorPicker(false);
   };
+
+  useEffect(() => {
+    const onDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (sizeBtnRef.current?.contains(target) || sizeMenuRef.current?.contains(target)) return;
+      setShowSizeDropdown(false);
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, []);
 
   return (
     <div className="flex items-center justify-between w-full">
@@ -130,28 +147,78 @@ export default function RichTextToolbar({
         {/* Divider */}
         <div className="border-l border-gray-300 h-4 mx-1" />
 
-        {/* Size Buttons */}
-        {['xs', 'sm', 'md', 'lg', 'xl', 'xxl'].map((size) => (
-          <button
-            key={size}
-            onMouseDown={(e) => {
-              e.preventDefault();
-              handleFormat(`size-${size}`);
-            }}
-            className={`${baseBtnClass} ${
-              activeFormats.size === size
-                ? activeBtnClass
-                : ''
-            }`}
-          >
-            {size.toUpperCase()}
-          </button>
-        ))}
+        {/* Size controls */}
+        {!compact ? (
+          ['xs', 'sm', 'md', 'lg', 'xl', 'xxl'].map((size) => (
+            <button
+              key={size}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                handleFormat(`size-${size}`);
+              }}
+              className={`${baseBtnClass} ${
+                activeFormats.size === size
+                  ? activeBtnClass
+                  : ''
+              }`}
+            >
+              {size.toUpperCase()}
+            </button>
+          ))
+        ) : null}
 
         {extraActions}
       </div>
 
       <div className="flex items-center gap-1">
+        {compact && (
+          <div className="relative">
+            <button
+              ref={sizeBtnRef}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setShowSizeDropdown((v) => !v);
+              }}
+              className="cursor-pointer h-6 w-[60px] px-1 py-1 text-[10px] rounded-md border border-white/10 bg-black/10 text-on-surface shadow-2xl backdrop-blur-md hover:border-primary/70 flex items-center justify-between"
+              title="Font Size"
+            >
+              <span>{(activeFormats.size || 'md').toUpperCase()}</span>
+              <svg className={`h-3 w-3 flex-shrink-0 text-on-surface-variant transition-transform duration-200 ${showSizeDropdown ? 'rotate-180' : 'rotate-0'}`} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            {showSizeDropdown && (
+              <div
+                ref={sizeMenuRef}
+                className="absolute right-0 mt-1 z-50 min-w-[80px] bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-1.5 rounded-lg"
+              >
+                {[
+                  { value: 'xs', label: 'XS' },
+                  { value: 'sm', label: 'SM' },
+                  { value: 'md', label: 'MD' },
+                  { value: 'lg', label: 'LG' },
+                  { value: 'xl', label: 'XL' },
+                  { value: 'xxl', label: '2XL' },
+                ].map((size) => (
+                  <button
+                    key={size.value}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleFormat(`size-${size.value}`);
+                      setShowSizeDropdown(false);
+                    }}
+                    className={`block w-full rounded px-2 py-1 text-left text-[11px] transition-colors ${
+                      (activeFormats.size || 'md') === size.value ? 'text-primary' : 'text-on-surface'
+                    } hover:bg-surface-subtle`}
+                  >
+                    {size.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Text Alignment (optional) moved to right side */}
         {showAlignment && (
           <>
