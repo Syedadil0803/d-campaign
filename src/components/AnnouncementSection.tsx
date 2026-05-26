@@ -721,8 +721,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     const rect = button.getBoundingClientRect();
     setActionMenuIndex(index);
     setActionMenuPos({
-      top: rect.bottom + window.scrollY + 6,
-      left: Math.max(12, rect.right + window.scrollX - 180),
+      top: rect.top + window.scrollY,
+      left: rect.right + window.scrollX + 8,
     });
     setShowLinkPopup(false);
     setShowSchedulePopup(false);
