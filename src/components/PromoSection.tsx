@@ -67,6 +67,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   const [showFieldDirectionDropdown, setShowFieldDirectionDropdown] = useState(false);
   const [showCardBgPopup, setShowCardBgPopup] = useState(false);
   const [previewFieldDirection, setPreviewFieldDirection] = useState<string | null>(null);
+  const [showPersistentScaffold, setShowPersistentScaffold] = useState(false);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [startDateView, setStartDateView] = useState<Date>(() => {
@@ -155,6 +156,12 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }, [config.promoCard.timerText, config.promoCard.showTimer]);
 
   useEffect(() => {
+    if (!config.promoCard.active) {
+      setShowPersistentScaffold(false);
+    }
+  }, [config.promoCard.active]);
+
+  useEffect(() => {
     const nextStart = config.promoCard.startDate || getISODateWithOffset(0);
     const nextEnd = config.promoCard.endDate || getISODateWithOffset(1);
     if (config.promoCard.startDate && config.promoCard.endDate) return;
@@ -181,6 +188,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }
 
   function onFieldFocus(field: 'title'|'subtitle'|'description'|'timer'|'button', ref: RefObject<HTMLDivElement|null>) {
+    setShowPersistentScaffold(true);
     setCurrentField(field);
     activeEditorRef.current = ref.current;
     setTimeout(() => { detectFormats(); ensureDefaultFontSize(); }, 0);
@@ -680,6 +688,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   const hasDescription = hasVisibleContent(config.promoCard.description);
   const hasButtonText = hasVisibleContent(config.promoCard.buttonText);
   const showContentScaffold =
+    showPersistentScaffold ||
     currentField === 'title' ||
     currentField === 'subtitle' ||
     currentField === 'description' ||
@@ -1235,7 +1244,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     const fbg = fieldStyle.background;
                     return (
                       <div
-                        className={`absolute z-30 w-[280px] border border-gray-200 rounded-md p-2 bg-white/95 backdrop-blur shadow-lg dark:bg-gray-800/95 dark:border-gray-700 ${
+                        className={`absolute z-30 w-[280px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 ${
                           config.promoCard.style.position === 'bottom-right' || config.promoCard.style.position === 'top-right'
                             ? 'right-full mr-3'
                             : 'left-full ml-3'
@@ -1275,6 +1284,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                         />
 
                         <div className="mt-2 pt-2 border-t border-white/10">
+                            {/* Change here to reflect color updates on the selected field preview. */}
                             <label className="block text-xs text-on-surface-variant mb-1">Field Background</label>
                             <div className="grid grid-cols-3 gap-2">
                               <div>
@@ -1390,7 +1400,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                   {showCardBgPopup && (
                     <div
                       ref={cardBgPopupRef}
-                      className={`absolute z-30 w-[320px] border border-gray-200 rounded-lg p-3 bg-white/95 backdrop-blur shadow-lg dark:bg-gray-800/95 dark:border-gray-700 ${
+                      className={`absolute z-30 w-[320px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 ${
                         config.promoCard.style.position === 'bottom-right' || config.promoCard.style.position === 'top-right'
                           ? 'right-full mr-3'
                           : 'left-full ml-3'
@@ -1409,6 +1419,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
+                      {/* Change here to reflect color updates on the full promo card preview. */}
                       <label className="text-xs font-semibold text-on-surface">Card Background</label>
                       <div className="mt-2.5 space-y-2">
                         <div className="grid grid-cols-3 gap-2">
