@@ -77,7 +77,33 @@
   /* Chrome/Safari */
 }
 
-/* Thin, restrained scrollbar for the left promo editor column */
+/* Thin, restrained scrollbar used only in Promo + Announcement panels */
+.campaign-custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--border) / 0.8) transparent;
+}
+
+.campaign-custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.campaign-custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.campaign-custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(var(--border) / 0.75);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.campaign-custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--border) / 0.95);
+  background-clip: content-box;
+}
+
+/* Backward-compatible alias */
 .promo-left-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgb(var(--border) / 0.8) transparent;

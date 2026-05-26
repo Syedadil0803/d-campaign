@@ -239,7 +239,12 @@ export default function Home() {
           handleLogout={handleLogout}
         />
 
-        <main ref={mainScrollRef} className="flex-1 overflow-y-auto bg-transparent p-6">
+        <main
+          ref={mainScrollRef}
+          className={`flex-1 overflow-y-auto bg-transparent p-6 ${
+            activeTab === 'promo' || activeTab === 'announcement' ? 'campaign-custom-scrollbar' : ''
+          }`}
+        >
           <div className="max-w-[1840px] mx-auto space-y-8 pb-12">
             {activeTab === 'dashboard' && (
               <Dashboard config={config} setActiveTab={setActiveTab} />

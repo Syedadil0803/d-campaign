@@ -1676,7 +1676,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                     Added text from the left input box will be displayed here
                   </div>
                 ) : (
-                  <div className="flex-1 min-h-0 overflow-y-auto">
+                  <div className="campaign-custom-scrollbar flex-1 min-h-0 overflow-y-auto">
                     <div className="flex flex-wrap gap-2 p-1">
                       {config.announcementBar.announcements.map((ann, index) => (
                         <div key={index}
