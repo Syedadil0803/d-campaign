@@ -429,6 +429,17 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     toast(`Template applied: ${templateName}`);
   }
 
+  function hasVisibleContent(html: string | undefined): boolean {
+    if (!html) return false;
+    const plainText = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+    return plainText.length > 0;
+  }
+
+  const hasTitle = hasVisibleContent(config.promoCard.title);
+  const hasSubtitle = hasVisibleContent(config.promoCard.subtitle);
+  const hasDescription = hasVisibleContent(config.promoCard.description);
+  const hasButtonText = hasVisibleContent(config.promoCard.buttonText);
+
   return (
     <>
       <div className="p-4 flex gap-6 overflow-hidden" style={{ height: 'calc(100vh - 120px)' }}>
@@ -748,42 +759,44 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     <X className="w-4 h-4" />
                   </button>
 
-                  <div
-                    ref={previewTitleRef}
-                    contentEditable
-                    suppressContentEditableWarning
-                    className={`text-base font-normal mb-1 px-2 py-1 rounded break-words cursor-pointer ${currentField === 'title' ? 'ring-1 ring-primary/70' : ''}`}
-                    onMouseDown={() => {
-                      activeEditorRef.current = previewTitleRef.current;
-                    }}
-                    onClick={() => {
-                      setShowCardBgPopup(false);
-                      if (currentField !== 'title') setCurrentField('title');
-                      activeEditorRef.current = previewTitleRef.current;
-                      setTimeout(() => detectFormats(), 0);
-                    }}
-                    onFocus={() => {
-                      activeEditorRef.current = previewTitleRef.current;
-                    }}
-                    onMouseUp={() => {
-                      detectFormats();
-                    }}
-                    onInput={() => onFieldInput('title')}
-                    onKeyDown={(e) => e.preventDefault()}
-                    onPaste={(e) => e.preventDefault()}
-                    onDrop={(e) => e.preventDefault()}
-                    style={{
-                      background: getBackgroundStyle(getPreviewFieldBackground('title')),
-                      color: config.promoCard.style.titleStyle.textColor,
-                      textAlign: config.promoCard.style.titleStyle.textAlign || 'center',
-                      caretColor: 'transparent',
-                      userSelect: 'text',
-                      WebkitUserSelect: 'text',
-                      cursor: 'text',
-                    }}
-                  />
+                  {hasTitle && (
+                    <div
+                      ref={previewTitleRef}
+                      contentEditable
+                      suppressContentEditableWarning
+                      className={`text-base font-normal mb-1 px-2 py-1 rounded break-words cursor-pointer ${currentField === 'title' ? 'ring-1 ring-primary/70' : ''}`}
+                      onMouseDown={() => {
+                        activeEditorRef.current = previewTitleRef.current;
+                      }}
+                      onClick={() => {
+                        setShowCardBgPopup(false);
+                        if (currentField !== 'title') setCurrentField('title');
+                        activeEditorRef.current = previewTitleRef.current;
+                        setTimeout(() => detectFormats(), 0);
+                      }}
+                      onFocus={() => {
+                        activeEditorRef.current = previewTitleRef.current;
+                      }}
+                      onMouseUp={() => {
+                        detectFormats();
+                      }}
+                      onInput={() => onFieldInput('title')}
+                      onKeyDown={(e) => e.preventDefault()}
+                      onPaste={(e) => e.preventDefault()}
+                      onDrop={(e) => e.preventDefault()}
+                      style={{
+                        background: getBackgroundStyle(getPreviewFieldBackground('title')),
+                        color: config.promoCard.style.titleStyle.textColor,
+                        textAlign: config.promoCard.style.titleStyle.textAlign || 'center',
+                        caretColor: 'transparent',
+                        userSelect: 'text',
+                        WebkitUserSelect: 'text',
+                        cursor: 'text',
+                      }}
+                    />
+                  )}
 
-                  {config.promoCard.subtitle && (
+                  {hasSubtitle && (
                     <div
                       ref={previewSubtitleRef}
                       contentEditable
@@ -825,42 +838,44 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     />
                   )}
 
-                  <div
-                    ref={previewDescriptionRef}
-                    contentEditable
-                    suppressContentEditableWarning
-                    className={`text-base font-normal mb-2 px-2 py-1 rounded break-words cursor-pointer ${currentField === 'description' ? 'ring-1 ring-primary/70' : ''}`}
-                    onMouseDown={() => {
-                      activeEditorRef.current = previewDescriptionRef.current;
-                    }}
-                    onClick={() => {
-                      setShowCardBgPopup(false);
-                      if (currentField !== 'description') setCurrentField('description');
-                      activeEditorRef.current = previewDescriptionRef.current;
-                      setTimeout(() => detectFormats(), 0);
-                    }}
-                    onFocus={() => {
-                      activeEditorRef.current = previewDescriptionRef.current;
-                    }}
-                    onMouseUp={() => {
-                      detectFormats();
-                    }}
-                    onInput={() => onFieldInput('description')}
-                    onKeyDown={(e) => {
-                      e.preventDefault();
-                    }}
-                    onPaste={(e) => e.preventDefault()}
-                    onDrop={(e) => e.preventDefault()}
-                    style={{
-                      background: getBackgroundStyle(getPreviewFieldBackground('description')),
-                      color: config.promoCard.style.descriptionStyle.textColor,
-                      textAlign: config.promoCard.style.descriptionStyle.textAlign || 'left',
-                      caretColor: 'transparent',
-                      userSelect: 'text',
-                      WebkitUserSelect: 'text',
-                      cursor: 'text',
-                    }}
-                  />
+                  {hasDescription && (
+                    <div
+                      ref={previewDescriptionRef}
+                      contentEditable
+                      suppressContentEditableWarning
+                      className={`text-base font-normal mb-2 px-2 py-1 rounded break-words cursor-pointer ${currentField === 'description' ? 'ring-1 ring-primary/70' : ''}`}
+                      onMouseDown={() => {
+                        activeEditorRef.current = previewDescriptionRef.current;
+                      }}
+                      onClick={() => {
+                        setShowCardBgPopup(false);
+                        if (currentField !== 'description') setCurrentField('description');
+                        activeEditorRef.current = previewDescriptionRef.current;
+                        setTimeout(() => detectFormats(), 0);
+                      }}
+                      onFocus={() => {
+                        activeEditorRef.current = previewDescriptionRef.current;
+                      }}
+                      onMouseUp={() => {
+                        detectFormats();
+                      }}
+                      onInput={() => onFieldInput('description')}
+                      onKeyDown={(e) => {
+                        e.preventDefault();
+                      }}
+                      onPaste={(e) => e.preventDefault()}
+                      onDrop={(e) => e.preventDefault()}
+                      style={{
+                        background: getBackgroundStyle(getPreviewFieldBackground('description')),
+                        color: config.promoCard.style.descriptionStyle.textColor,
+                        textAlign: config.promoCard.style.descriptionStyle.textAlign || 'left',
+                        caretColor: 'transparent',
+                        userSelect: 'text',
+                        WebkitUserSelect: 'text',
+                        cursor: 'text',
+                      }}
+                    />
+                  )}
 
                   {config.promoCard.showTimer && (
                     <div
@@ -899,7 +914,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     />
                   )}
 
-                  {config.promoCard.showButton && config.promoCard.buttonText && (
+                  {config.promoCard.showButton && hasButtonText && (
                     <div
                       className={
                         config.promoCard.buttonFullWidth
