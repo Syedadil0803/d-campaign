@@ -1200,7 +1200,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       <style jsx global>{`
         .promo-standard-editor,
         .promo-standard-editor * {
-          color: #111827 !important;
+          color: rgb(var(--on-surface)) !important;
           font-size: 14px !important;
           font-weight: 400 !important;
           font-style: normal !important;
