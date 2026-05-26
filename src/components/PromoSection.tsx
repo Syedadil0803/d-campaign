@@ -393,6 +393,15 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     return bg;
   }
 
+  function isPreviewFieldActive() {
+    const editor = activeEditorRef.current;
+    return editor === previewTitleRef.current
+      || editor === previewSubtitleRef.current
+      || editor === previewDescriptionRef.current
+      || editor === previewTimerRef.current
+      || editor === previewButtonRef.current;
+  }
+
   function getFormattedTimerText(): string {
     const rawHtml = config.promoCard.timerText || 'Ends in {hh}:{mm}:{ss}';
     const timerValue = calcTimerRemaining(config.promoCard.endDate || '');
@@ -893,7 +902,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     </div>
                   )}
 
-                  {popupEditableFields.includes(currentField as PopupField) && (() => {
+                  {popupEditableFields.includes(currentField as PopupField) && isPreviewFieldActive() && (() => {
                     const field = currentField as PopupField;
                     const fieldStyle = getPopupFieldStyle(field);
                     const isButton = field === 'button';
