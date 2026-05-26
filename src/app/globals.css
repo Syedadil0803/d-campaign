@@ -77,6 +77,32 @@
   /* Chrome/Safari */
 }
 
+/* Thin, restrained scrollbar for the left promo editor column */
+.promo-left-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--border) / 0.8) transparent;
+}
+
+.promo-left-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.promo-left-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.promo-left-scrollbar::-webkit-scrollbar-thumb {
+  background: rgb(var(--border) / 0.75);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.promo-left-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--border) / 0.95);
+  background-clip: content-box;
+}
+
 /* Remove native white frame/chrome on color inputs used in announcement background controls */
 .bg-color-picker {
   appearance: none;
