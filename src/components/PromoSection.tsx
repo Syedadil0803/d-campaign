@@ -650,11 +650,11 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
           </div>
 
           {config.promoCard.showButton && (
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-on-surface">Button Text</label>
-                <p className="text-xs text-on-surface-variant mt-0.5 mb-1">Enter text below</p>
                 <div ref={buttonRef} contentEditable suppressContentEditableWarning
+                  data-placeholder="Enter text here"
                   onInput={()=>onFieldInput('button')} onFocus={()=>onFieldFocus('button',buttonRef)}
                   onMouseUp={detectFormats} onKeyUp={detectFormats}
                   className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[38px] outline-none break-words transition-colors ${
