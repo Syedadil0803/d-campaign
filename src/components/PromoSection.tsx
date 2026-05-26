@@ -738,7 +738,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
               Website Content Area
             </div>
 
-            <div className="relative z-10 w-full min-h-[228px] grid">
+            <div className="relative z-10 w-full h-full min-h-[228px] grid">
               {config.promoCard.active && (
                 <div
                   className={`relative w-[400px] rounded-xl shadow-2xl p-5 transition-all duration-300 flex flex-col ${
