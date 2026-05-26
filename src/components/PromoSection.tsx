@@ -1005,8 +1005,8 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
               </div>
             </div>
           </div>
-          <div className="bg-gray-100 rounded-lg p-5 relative h-[420px] border border-gray-200 bg-[url('https://lib.shadcn.com/placeholder.svg')] bg-center bg-no-repeat bg-contain dark:bg-gray-700 dark:border-gray-600">
-            <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm font-medium pointer-events-none">
+          <div className="bg-gray-100 rounded-lg p-5 relative flex-1 min-h-0 border border-gray-200 bg-[url('https://lib.shadcn.com/placeholder.svg')] bg-center bg-no-repeat bg-contain dark:bg-gray-700 dark:border-gray-600">
+            <div className="absolute inset-x-0 top-4 flex items-center justify-center text-gray-400 text-sm font-medium pointer-events-none">
               Website Content Area
             </div>
 
@@ -1257,7 +1257,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                             e.preventDefault();
                             setCurrentField(null);
                           }}
-                          className="absolute -top-3.5 -right-3.5 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface-elevated text-on-surface-variant shadow-sm transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          className="absolute -top-5 -right-5 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface-elevated text-on-surface-variant shadow-sm transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
                           aria-label="Close style controls"
                           title="Close"
                         >
@@ -1413,7 +1413,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                           e.preventDefault();
                           setShowCardBgPopup(false);
                         }}
-                        className="absolute -top-3.5 -right-3.5 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface-elevated text-on-surface-variant shadow-sm transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        className="absolute -top-5 -right-5 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface-elevated text-on-surface-variant shadow-sm transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
                         aria-label="Close card background controls"
                         title="Close"
                       >
