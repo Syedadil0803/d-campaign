@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { PromoCard } from '@/types/campaign';
 import { getBackgroundStyle, getISODateWithOffset } from '@/lib/utils';
 import { getTemplateTimerPreviewText } from '@/lib/timerUtils';
@@ -298,15 +299,56 @@ const sampleTemplates = [
 ];
 
 export function SamplePromoTemplates({ onApplyTemplate }: SamplePromoTemplatesProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [visibleTemplateIds, setVisibleTemplateIds] = useState<Set<string>>(new Set());
+  const REVEAL_DURATION_MS = 900;
+  const STAGGER_DELAY_MS = 180;
+
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const id = entry.target.getAttribute('data-template-id');
+          if (!id) return;
+          setVisibleTemplateIds((prev) => {
+            const next = new Set(prev);
+            if (entry.isIntersecting) next.add(id);
+            else next.delete(id);
+            return next;
+          });
+        });
+      },
+      { threshold: 0.05, rootMargin: '0px 0px -2% 0px' }
+    );
+
+    const cards = root.querySelectorAll('[data-template-id]');
+    cards.forEach((card) => observer.observe(card));
+
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 mt-6">
+    <div ref={containerRef} className="lg:col-span-2 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 mt-6">
       <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">Sample Templates</h4>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {sampleTemplates.map((template) => (
+        {sampleTemplates.map((template, index) => (
+          (() => {
+            const isVisible = visibleTemplateIds.has(template.id);
+            return (
           <div
             key={template.id}
+            data-template-id={template.id}
             onClick={() => onApplyTemplate(template.promoCard, template.name)}
-            className="group rounded-xl border border-gray-200 bg-white p-3 shadow-sm hover:shadow-lg cursor-pointer dark:border-gray-700 dark:bg-gray-900"
+            className={`group rounded-xl border border-gray-200 bg-white p-3 shadow-sm hover:shadow-lg cursor-pointer dark:border-gray-700 dark:bg-gray-900 transition-all ease-out ${
+              isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
+            }`}
+            style={{
+              transitionDuration: isVisible ? `${REVEAL_DURATION_MS}ms` : '120ms',
+              transitionDelay: isVisible ? `${index * STAGGER_DELAY_MS}ms` : '0ms',
+            }}
           >
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-semibold text-gray-800 dark:text-gray-200">{template.name}</p>
@@ -366,6 +408,8 @@ export function SamplePromoTemplates({ onApplyTemplate }: SamplePromoTemplatesPr
               </div>
             </div>
           </div>
+            );
+          })()
         ))}
       </div>
     </div>
