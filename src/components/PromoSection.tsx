@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, type RefObject, type Dispatch, type SetStateAction } from 'react';
-import { Gift, X } from 'lucide-react';
+import { Gift, X, Palette } from 'lucide-react';
 import { CampaignConfig, PromoCard } from '@/types/campaign';
 import { getBackgroundStyle } from '@/lib/utils';
 import { SamplePromoTemplates } from './SamplePromoTemplates';
@@ -49,12 +49,15 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   const fieldBgTypeMenuRef = useRef<HTMLDivElement>(null);
   const fieldDirectionBtnRef = useRef<HTMLButtonElement>(null);
   const fieldDirectionMenuRef = useRef<HTMLDivElement>(null);
+  const cardBgPopupBtnRef = useRef<HTMLButtonElement>(null);
+  const cardBgPopupRef = useRef<HTMLDivElement>(null);
 
   const [showCardPositionDropdown, setShowCardPositionDropdown] = useState(false);
   const [showCardBgTypeDropdown, setShowCardBgTypeDropdown] = useState(false);
   const [showCardDirectionDropdown, setShowCardDirectionDropdown] = useState(false);
   const [showFieldBgTypeDropdown, setShowFieldBgTypeDropdown] = useState(false);
   const [showFieldDirectionDropdown, setShowFieldDirectionDropdown] = useState(false);
+  const [showCardBgPopup, setShowCardBgPopup] = useState(false);
   const [previewCardDirection, setPreviewCardDirection] = useState<string | null>(null);
   const [previewFieldDirection, setPreviewFieldDirection] = useState<string | null>(null);
 
@@ -310,6 +313,9 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
         if (btnRef.current?.contains(target) || menuRef.current?.contains(target)) return;
         setOpen(false);
       });
+      if (!cardBgPopupBtnRef.current?.contains(target) && !cardBgPopupRef.current?.contains(target)) {
+        setShowCardBgPopup(false);
+      }
     };
     document.addEventListener('mousedown', onDocMouseDown);
     return () => document.removeEventListener('mousedown', onDocMouseDown);
@@ -321,6 +327,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     setShowCardDirectionDropdown(false);
     setShowFieldBgTypeDropdown(false);
     setShowFieldDirectionDropdown(false);
+    setShowCardBgPopup(false);
   }, []);
 
   function toggleActive() {
@@ -426,7 +433,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     <>
       <div className="p-4 flex gap-6 overflow-hidden" style={{ height: 'calc(100vh - 120px)' }}>
         {/* Left: All editables — 30% width, scrollable */}
-        <div className="w-[35%] min-h-0 shrink-0 overflow-y-auto overflow-x-hidden pr-2 space-y-4">
+        <div className="w-[30%] min-h-0 shrink-0 overflow-y-auto overflow-x-hidden pr-2 space-y-4">
           {/* Header + Toggle */}
           <div className="flex items-center justify-between">
             <div className="flex items-center">
@@ -673,9 +680,47 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
 
         {/* Right: Preview — 70% width, fixed */}
         <div className="flex-1 min-h-0 h-full pr-2 flex flex-col gap-4 overflow-x-hidden">
-          <div>
-            <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">Preview</h4>
-            <p className="text-xs text-on-surface-variant">Live card rendering with editable field styles.</p>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide">Preview</h4>
+                <p className="text-xs text-on-surface-variant">Live card rendering with editable field styles.</p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <p className="text-[11px] text-primary font-medium flex items-center animate-pulse">💡 click Position to place the card • click Style to edit card background</p>
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  <PopupDropdown
+                    label="Position"
+                    value={config.promoCard.style.position}
+                    options={[{ value: 'bottom-right', label: 'Bottom Right' }, { value: 'bottom-left', label: 'Bottom Left' }]}
+                    open={showCardPositionDropdown}
+                    onOpen={() => { const next = !showCardPositionDropdown; closeAllPromoDropdowns(); setShowCardPositionDropdown(next); setCardPositionPos(getDropdownPosition(cardPositionBtnRef.current)); }}
+                    onSelect={(v) => { setConfig({ ...config, promoCard: { ...config.promoCard, style: { ...config.promoCard.style, position: v as any } } }); markChanged(); setShowCardPositionDropdown(false); }}
+                    buttonRef={cardPositionBtnRef}
+                    menuRef={cardPositionMenuRef}
+                    menuPosition={cardPositionPos}
+                    compact={true}
+                  />
+                  <div>
+                    <label className="block text-[10px] text-on-surface-variant mb-0.5">Style</label>
+                      <button
+                        ref={cardBgPopupBtnRef}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          closeAllPromoDropdowns();
+                          setCurrentField(null);
+                          setShowCardBgPopup((prev) => !prev);
+                        }}
+                      className="inline-flex h-9 items-center justify-center rounded-md border border-white/10 bg-black/10 px-2 text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10"
+                      title="Card Style"
+                    >
+                      <Palette className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <div className="bg-gray-100 rounded-lg p-4 relative h-[420px] border border-gray-200 bg-[url('https://lib.shadcn.com/placeholder.svg')] bg-center bg-no-repeat bg-contain dark:bg-gray-700 dark:border-gray-600">
             <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm font-medium pointer-events-none">
@@ -712,6 +757,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       activeEditorRef.current = previewTitleRef.current;
                     }}
                     onClick={() => {
+                      setShowCardBgPopup(false);
                       if (currentField !== 'title') setCurrentField('title');
                       activeEditorRef.current = previewTitleRef.current;
                       setTimeout(() => detectFormats(), 0);
@@ -748,6 +794,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                         activeEditorRef.current = previewSubtitleRef.current;
                       }}
                       onClick={() => {
+                        setShowCardBgPopup(false);
                         // Plain click activates subtitle style mode.
                         if (currentField !== 'subtitle') setCurrentField('subtitle');
                         activeEditorRef.current = previewSubtitleRef.current;
@@ -787,6 +834,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       activeEditorRef.current = previewDescriptionRef.current;
                     }}
                     onClick={() => {
+                      setShowCardBgPopup(false);
                       if (currentField !== 'description') setCurrentField('description');
                       activeEditorRef.current = previewDescriptionRef.current;
                       setTimeout(() => detectFormats(), 0);
@@ -824,6 +872,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                         activeEditorRef.current = previewTimerRef.current;
                       }}
                       onClick={() => {
+                        setShowCardBgPopup(false);
                         if (currentField !== 'timer') setCurrentField('timer');
                         activeEditorRef.current = previewTimerRef.current;
                         setTimeout(() => detectFormats(), 0);
@@ -875,6 +924,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                           activeEditorRef.current = previewButtonRef.current;
                         }}
                         onClick={() => {
+                          setShowCardBgPopup(false);
                           if (currentField !== 'button') setCurrentField('button');
                           activeEditorRef.current = previewButtonRef.current;
                           setTimeout(() => detectFormats(), 0);
@@ -902,7 +952,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     </div>
                   )}
 
-                  {popupEditableFields.includes(currentField as PopupField) && isPreviewFieldActive() && (() => {
+                  {popupEditableFields.includes(currentField as PopupField) && isPreviewFieldActive() && !showCardBgPopup && (() => {
                     const field = currentField as PopupField;
                     const fieldStyle = getPopupFieldStyle(field);
                     const isButton = field === 'button';
@@ -1059,61 +1109,90 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       </div>
                     );
                   })()}
+                  {showCardBgPopup && (
+                    <div
+                      ref={cardBgPopupRef}
+                      className={`absolute z-30 w-[300px] border border-gray-200 rounded-md p-2 bg-white/95 backdrop-blur shadow-lg dark:bg-gray-800/95 dark:border-gray-700 ${
+                        config.promoCard.style.position === 'bottom-right' || config.promoCard.style.position === 'top-right'
+                          ? 'right-full mr-3'
+                          : 'left-full ml-3'
+                      }`}
+                      style={{ top: '8px' }}
+                    >
+                      <button
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setShowCardBgPopup(false);
+                        }}
+                        className="absolute -top-2 -right-2 h-5 w-5 rounded-full border border-gray-300 bg-white shadow-sm flex items-center justify-center text-gray-500 hover:text-primary hover:border-primary/70 dark:bg-gray-800 dark:border-gray-600"
+                        title="Close"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                      <label className="text-xs font-semibold text-on-surface">Card Background</label>
+                      <div className="mt-2">
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <PopupDropdown label="Type" value={config.promoCard.style.background.type} options={[{ value: 'solid', label: 'Solid' }, { value: 'linear', label: 'Linear' }, { value: 'radial', label: 'Gradient' }]} open={showCardBgTypeDropdown} onOpen={() => { const next = !showCardBgTypeDropdown; closeAllPromoDropdowns(); setShowCardBgPopup(true); setShowCardBgTypeDropdown(next); setCardBgTypePos(getDropdownPosition(cardBgTypeBtnRef.current)); }} onSelect={(v) => { updateCardBg({ type: v }); setShowCardBgTypeDropdown(false); }} buttonRef={cardBgTypeBtnRef} menuRef={cardBgTypeMenuRef} menuPosition={cardBgTypePos} compact={true} />
+                          </div>
+                          <div className="col-span-2">
+                            {(config.promoCard.style.background.type === 'linear' || config.promoCard.style.background.type === 'radial') && (
+                              <>
+                                <label className="block text-xs text-on-surface-variant mb-0.5">Balance: {config.promoCard.style.background.midpoint ?? 50}%</label>
+                                <input type="range" min="0" max="100" value={config.promoCard.style.background.midpoint ?? 50} onChange={(e) => updateCardBg({ midpoint: Number(e.target.value) })} className="balance-slider mt-3" />
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-2 min-h-[56px]">
+                          {config.promoCard.style.background.type === 'solid' && (
+                            <div className="grid grid-cols-3 gap-2">
+                              <div>
+                                <label className="block text-xs text-on-surface-variant mb-0.5">Background</label>
+                                <input type="color" value={config.promoCard.style.background.startColor} onChange={e => updateCardBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                              </div>
+                              <div aria-hidden="true" />
+                              <div aria-hidden="true" />
+                            </div>
+                          )}
+                          {config.promoCard.style.background.type === 'linear' && (
+                            <div className="grid grid-cols-3 gap-2">
+                              <div>
+                                <label className="block text-xs text-on-surface-variant mb-0.5">Start</label>
+                                <input type="color" value={config.promoCard.style.background.startColor} onChange={e => updateCardBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-on-surface-variant mb-0.5">End</label>
+                                <input type="color" value={config.promoCard.style.background.endColor} onChange={e => updateCardBg({ endColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                              </div>
+                              <div>
+                                <PopupDropdown label="Direction" value={config.promoCard.style.background.direction || 'to right'} options={[{ value: 'to right', label: '→' }, { value: 'to left', label: '←' }, { value: 'to bottom', label: '↓' }, { value: 'to top', label: '↑' }, { value: 'to bottom right', label: '↘' }, { value: 'to bottom left', label: '↙' }, { value: 'to top right', label: '↗' }, { value: 'to top left', label: '↖' }]} open={showCardDirectionDropdown} onOpen={() => { const next = !showCardDirectionDropdown; closeAllPromoDropdowns(); setShowCardBgPopup(true); setShowCardDirectionDropdown(next); setCardDirectionPos(getDropdownPosition(cardDirectionBtnRef.current)); }} onSelect={(v) => { updateCardBg({ direction: v }); setShowCardDirectionDropdown(false); setPreviewCardDirection(null); }} onHover={(dir) => setPreviewCardDirection(dir)} onHoverEnd={() => setPreviewCardDirection(null)} buttonRef={cardDirectionBtnRef} menuRef={cardDirectionMenuRef} menuPosition={cardDirectionPos} compact={true} />
+                              </div>
+                            </div>
+                          )}
+                          {config.promoCard.style.background.type === 'radial' && (
+                            <div className="grid grid-cols-3 gap-2">
+                              <div>
+                                <label className="block text-xs text-on-surface-variant mb-0.5">Center</label>
+                                <input type="color" value={config.promoCard.style.background.startColor} onChange={e => updateCardBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-on-surface-variant mb-0.5">Outer</label>
+                                <input type="color" value={config.promoCard.style.background.endColor} onChange={e => updateCardBg({ endColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                              </div>
+                              <div aria-hidden="true" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
           </div>
 
-          <div className="border border-border rounded-lg p-3 bg-surface">
-            <label className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">Card Appearance</label>
-                        <p className="text-xs text-on-surface-variant mb-1.5">Adjust position and background styling.</p>
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <PopupDropdown label="Position" value={config.promoCard.style.position} options={[{ value: 'bottom-right', label: 'Bottom Right' }, { value: 'bottom-left', label: 'Bottom Left' }]} open={showCardPositionDropdown} onOpen={() => { const next = !showCardPositionDropdown; closeAllPromoDropdowns(); setShowCardPositionDropdown(next); setCardPositionPos(getDropdownPosition(cardPositionBtnRef.current)); }} onSelect={(v) => { setConfig({ ...config, promoCard: { ...config.promoCard, style: { ...config.promoCard.style, position: v as any } } }); markChanged(); setShowCardPositionDropdown(false); }} buttonRef={cardPositionBtnRef} menuRef={cardPositionMenuRef} menuPosition={cardPositionPos} />
-                </div>
-                <div>
-                  <PopupDropdown label="Background Type" value={config.promoCard.style.background.type} options={[{ value: 'solid', label: 'Solid' }, { value: 'linear', label: 'Linear' }, { value: 'radial', label: 'Gradient' }]} open={showCardBgTypeDropdown} onOpen={() => { const next = !showCardBgTypeDropdown; closeAllPromoDropdowns(); setShowCardBgTypeDropdown(next); setCardBgTypePos(getDropdownPosition(cardBgTypeBtnRef.current)); }} onSelect={(v) => { updateCardBg({ type: v }); setShowCardBgTypeDropdown(false); }} buttonRef={cardBgTypeBtnRef} menuRef={cardBgTypeMenuRef} menuPosition={cardBgTypePos} />
-                </div>
-              </div>
-
-              {(config.promoCard.style.background.type === 'linear' || config.promoCard.style.background.type === 'radial') && (
-                <div>
-                  <label className="block text-xs text-on-surface-variant mb-0.5">Balance: {config.promoCard.style.background.midpoint ?? 50}%</label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={config.promoCard.style.background.midpoint ?? 50}
-                    onChange={(e) => updateCardBg({ midpoint: Number(e.target.value) })}
-                    className="balance-slider mt-2"
-                  />
-                </div>
-              )}
-
-              {config.promoCard.style.background.type === 'linear' && (
-                <div className="grid grid-cols-3 gap-3">
-                  <div><label className="block text-xs text-on-surface-variant mb-0.5">Start Color</label><input type="color" value={config.promoCard.style.background.startColor} onChange={e => updateCardBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" /></div>
-                  <div><label className="block text-xs text-on-surface-variant mb-0.5">End Color</label><input type="color" value={config.promoCard.style.background.endColor} onChange={e => updateCardBg({ endColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" /></div>
-                  <div>
-                    <PopupDropdown label="Direction" value={config.promoCard.style.background.direction || 'to right'} options={[{ value: 'to right', label: 'To Right →' }, { value: 'to left', label: 'To Left ←' }, { value: 'to bottom', label: 'To Bottom ↓' }, { value: 'to top', label: 'To Top ↑' }, { value: 'to bottom right', label: 'To Bottom Right ↘' }, { value: 'to bottom left', label: 'To Bottom Left ↙' }, { value: 'to top right', label: 'To Top Right ↗' }, { value: 'to top left', label: 'To Top Left ↖' }]} open={showCardDirectionDropdown} onOpen={() => { const next = !showCardDirectionDropdown; closeAllPromoDropdowns(); setShowCardDirectionDropdown(next); const pos = getDropdownPosition(cardDirectionBtnRef.current); setCardDirectionPos(pos ? { ...pos, width: 170 } : null); }} onSelect={(v) => { updateCardBg({ direction: v }); setShowCardDirectionDropdown(false); setPreviewCardDirection(null); }} onHover={(dir) => setPreviewCardDirection(dir)} onHoverEnd={() => setPreviewCardDirection(null)} buttonRef={cardDirectionBtnRef} menuRef={cardDirectionMenuRef} menuPosition={cardDirectionPos} />
-                  </div>
-                </div>
-              )}
-
-              {config.promoCard.style.background.type === 'solid' && (
-                <div><label className="block text-xs text-on-surface-variant mb-0.5">Background Color</label><input type="color" value={config.promoCard.style.background.startColor} onChange={e => updateCardBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" /></div>
-              )}
-
-              {config.promoCard.style.background.type === 'radial' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div><label className="block text-xs text-on-surface-variant mb-0.5">Center Color</label><input type="color" value={config.promoCard.style.background.startColor} onChange={e => updateCardBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" /></div>
-                  <div><label className="block text-xs text-on-surface-variant mb-0.5">Outer Color</label><input type="color" value={config.promoCard.style.background.endColor} onChange={e => updateCardBg({ endColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" /></div>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       </div>
 
