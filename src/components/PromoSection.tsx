@@ -43,27 +43,23 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   const cardPositionMenuRef = useRef<HTMLDivElement>(null);
   const cardBgTypeBtnRef = useRef<HTMLButtonElement>(null);
   const cardBgTypeMenuRef = useRef<HTMLDivElement>(null);
-  const cardDirectionBtnRef = useRef<HTMLButtonElement>(null);
-  const cardDirectionMenuRef = useRef<HTMLDivElement>(null);
   const fieldBgTypeBtnRef = useRef<HTMLButtonElement>(null);
   const fieldBgTypeMenuRef = useRef<HTMLDivElement>(null);
   const fieldDirectionBtnRef = useRef<HTMLButtonElement>(null);
   const fieldDirectionMenuRef = useRef<HTMLDivElement>(null);
   const cardBgPopupBtnRef = useRef<HTMLButtonElement>(null);
   const cardBgPopupRef = useRef<HTMLDivElement>(null);
+  const cardAngleWheelRef = useRef<HTMLDivElement>(null);
 
   const [showCardPositionDropdown, setShowCardPositionDropdown] = useState(false);
   const [showCardBgTypeDropdown, setShowCardBgTypeDropdown] = useState(false);
-  const [showCardDirectionDropdown, setShowCardDirectionDropdown] = useState(false);
   const [showFieldBgTypeDropdown, setShowFieldBgTypeDropdown] = useState(false);
   const [showFieldDirectionDropdown, setShowFieldDirectionDropdown] = useState(false);
   const [showCardBgPopup, setShowCardBgPopup] = useState(false);
-  const [previewCardDirection, setPreviewCardDirection] = useState<string | null>(null);
   const [previewFieldDirection, setPreviewFieldDirection] = useState<string | null>(null);
 
   const [cardPositionPos, setCardPositionPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [cardBgTypePos, setCardBgTypePos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const [cardDirectionPos, setCardDirectionPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [fieldBgTypePos, setFieldBgTypePos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [fieldDirectionPos, setFieldDirectionPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
@@ -305,7 +301,6 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       const pairs: Array<[RefObject<HTMLButtonElement | null>, RefObject<HTMLDivElement | null>, Dispatch<SetStateAction<boolean>>]> = [
         [cardPositionBtnRef, cardPositionMenuRef, setShowCardPositionDropdown],
         [cardBgTypeBtnRef, cardBgTypeMenuRef, setShowCardBgTypeDropdown],
-        [cardDirectionBtnRef, cardDirectionMenuRef, setShowCardDirectionDropdown],
         [fieldBgTypeBtnRef, fieldBgTypeMenuRef, setShowFieldBgTypeDropdown],
         [fieldDirectionBtnRef, fieldDirectionMenuRef, setShowFieldDirectionDropdown],
       ];
@@ -313,9 +308,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
         if (btnRef.current?.contains(target) || menuRef.current?.contains(target)) return;
         setOpen(false);
       });
-      if (!cardBgPopupBtnRef.current?.contains(target) && !cardBgPopupRef.current?.contains(target)) {
-        setShowCardBgPopup(false);
-      }
+      // Keep card background popup open until explicit close (X button).
     };
     document.addEventListener('mousedown', onDocMouseDown);
     return () => document.removeEventListener('mousedown', onDocMouseDown);
@@ -324,7 +317,6 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   const closeAllPromoDropdowns = useCallback(() => {
     setShowCardPositionDropdown(false);
     setShowCardBgTypeDropdown(false);
-    setShowCardDirectionDropdown(false);
     setShowFieldBgTypeDropdown(false);
     setShowFieldDirectionDropdown(false);
     setShowCardBgPopup(false);
@@ -429,6 +421,64 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     toast(`Template applied: ${templateName}`);
   }
 
+  function directionToAngle(direction?: string): number {
+    if (!direction) return 90;
+    const normalized = direction.trim().toLowerCase();
+    const degreeMatch = normalized.match(/^(-?\d+(?:\.\d+)?)deg$/);
+    if (degreeMatch) return Number(degreeMatch[1]);
+    const map: Record<string, number> = {
+      'to top': 0,
+      'to top right': 45,
+      'to right': 90,
+      'to bottom right': 135,
+      'to bottom': 180,
+      'to bottom left': 225,
+      'to left': 270,
+      'to top left': 315,
+    };
+    return map[normalized] ?? 90;
+  }
+
+  function normalizeAngle(angle: number): number {
+    return ((angle % 360) + 360) % 360;
+  }
+
+  function angleToCssDirection(angle: number): string {
+    return `${Math.round(normalizeAngle(angle))}deg`;
+  }
+
+  function setCardDirectionAngle(angle: number) {
+    updateCardBg({ direction: angleToCssDirection(angle) });
+  }
+
+  function getAngleFromPointer(clientX: number, clientY: number): number | null {
+    const wheel = cardAngleWheelRef.current;
+    if (!wheel) return null;
+    const rect = wheel.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const dx = clientX - centerX;
+    const dy = clientY - centerY;
+    const distance = Math.hypot(dx, dy);
+    if (distance < 10) return null;
+    const raw = Math.atan2(dy, dx) * (180 / Math.PI);
+    return normalizeAngle(raw + 90);
+  }
+
+  const presetDirections = [
+    { label: '↑', angle: 0 },
+    { label: '↗', angle: 45 },
+    { label: '→', angle: 90 },
+    { label: '↘', angle: 135 },
+    { label: '↓', angle: 180 },
+    { label: '↙', angle: 225 },
+    { label: '←', angle: 270 },
+    { label: '↖', angle: 315 },
+  ];
+
+  const cardAngle = directionToAngle(config.promoCard.style.background.direction || 'to right');
+  const cardAngleNormalized = normalizeAngle(cardAngle);
+
   function hasVisibleContent(html: string | undefined): boolean {
     if (!html) return false;
     const plainText = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
@@ -442,7 +492,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
 
   return (
     <>
-      <div className="p-4 flex gap-6 overflow-hidden" style={{ height: 'calc(100vh - 120px)' }}>
+      <div className="p-4 flex gap-5 overflow-hidden" style={{ height: 'calc(100vh - 120px)' }}>
         {/* Left: All editables — 30% width, scrollable */}
         <div className="promo-left-scrollbar w-[30%] min-h-0 shrink-0 overflow-y-auto overflow-x-hidden pr-2 space-y-4">
           {/* Header + Toggle */}
@@ -733,7 +783,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
               </div>
             </div>
           </div>
-          <div className="bg-gray-100 rounded-lg p-4 relative h-[420px] border border-gray-200 bg-[url('https://lib.shadcn.com/placeholder.svg')] bg-center bg-no-repeat bg-contain dark:bg-gray-700 dark:border-gray-600">
+          <div className="bg-gray-100 rounded-lg p-5 relative h-[420px] border border-gray-200 bg-[url('https://lib.shadcn.com/placeholder.svg')] bg-center bg-no-repeat bg-contain dark:bg-gray-700 dark:border-gray-600">
             <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm font-medium pointer-events-none">
               Website Content Area
             </div>
@@ -749,9 +799,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                   }`}
                   style={{
                     background: getBackgroundStyle(
-                      previewCardDirection && config.promoCard.style.background.type === 'linear'
-                        ? { ...config.promoCard.style.background, direction: previewCardDirection }
-                        : config.promoCard.style.background
+                      config.promoCard.style.background
                     ),
                   }}
                 >
@@ -982,14 +1030,16 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                         style={getPopupPositionStyle(field)}
                       >
                         <button
+                          type="button"
                           onMouseDown={(e) => {
                             e.preventDefault();
                             setCurrentField(null);
                           }}
-                          className="absolute -top-2 -right-2 h-5 w-5 rounded-full border border-gray-300 bg-white shadow-sm flex items-center justify-center text-gray-500 hover:text-primary hover:border-primary/70 dark:bg-gray-800 dark:border-gray-600"
+                          className="absolute -top-3.5 -right-3.5 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface-elevated text-on-surface-variant shadow-sm transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          aria-label="Close style controls"
                           title="Close"
                         >
-                          <X className="w-3 h-3" />
+                          <X className="h-3.5 w-3.5" />
                         </button>
                         <div className="mb-2 flex items-center justify-between gap-2">
                           <label className="text-xs font-semibold text-on-surface">{getPopupFieldLabel(field)}</label>
@@ -1127,7 +1177,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                   {showCardBgPopup && (
                     <div
                       ref={cardBgPopupRef}
-                      className={`absolute z-30 w-[300px] border border-gray-200 rounded-md p-2 bg-white/95 backdrop-blur shadow-lg dark:bg-gray-800/95 dark:border-gray-700 ${
+                      className={`absolute z-30 w-[320px] border border-gray-200 rounded-lg p-3 bg-white/95 backdrop-blur shadow-lg dark:bg-gray-800/95 dark:border-gray-700 ${
                         config.promoCard.style.position === 'bottom-right' || config.promoCard.style.position === 'top-right'
                           ? 'right-full mr-3'
                           : 'left-full ml-3'
@@ -1135,17 +1185,19 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       style={{ top: '8px' }}
                     >
                       <button
+                        type="button"
                         onMouseDown={(e) => {
                           e.preventDefault();
                           setShowCardBgPopup(false);
                         }}
-                        className="absolute -top-2 -right-2 h-5 w-5 rounded-full border border-gray-300 bg-white shadow-sm flex items-center justify-center text-gray-500 hover:text-primary hover:border-primary/70 dark:bg-gray-800 dark:border-gray-600"
+                        className="absolute -top-3.5 -right-3.5 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface-elevated text-on-surface-variant shadow-sm transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        aria-label="Close card background controls"
                         title="Close"
                       >
-                        <X className="w-3 h-3" />
+                        <X className="h-3.5 w-3.5" />
                       </button>
                       <label className="text-xs font-semibold text-on-surface">Card Background</label>
-                      <div className="mt-2">
+                      <div className="mt-2.5 space-y-2">
                         <div className="grid grid-cols-3 gap-2">
                           <div>
                             <PopupDropdown label="Type" value={config.promoCard.style.background.type} options={[{ value: 'solid', label: 'Solid' }, { value: 'linear', label: 'Linear' }, { value: 'radial', label: 'Gradient' }]} open={showCardBgTypeDropdown} onOpen={() => { const next = !showCardBgTypeDropdown; closeAllPromoDropdowns(); setShowCardBgPopup(true); setShowCardBgTypeDropdown(next); setCardBgTypePos(getDropdownPosition(cardBgTypeBtnRef.current)); }} onSelect={(v) => { updateCardBg({ type: v }); setShowCardBgTypeDropdown(false); }} buttonRef={cardBgTypeBtnRef} menuRef={cardBgTypeMenuRef} menuPosition={cardBgTypePos} compact={true} />
@@ -1171,7 +1223,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                             </div>
                           )}
                           {config.promoCard.style.background.type === 'linear' && (
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-2 gap-2">
                               <div>
                                 <label className="block text-xs text-on-surface-variant mb-0.5">Start</label>
                                 <input type="color" value={config.promoCard.style.background.startColor} onChange={e => updateCardBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
@@ -1180,8 +1232,67 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                                 <label className="block text-xs text-on-surface-variant mb-0.5">End</label>
                                 <input type="color" value={config.promoCard.style.background.endColor} onChange={e => updateCardBg({ endColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
                               </div>
-                              <div>
-                                <PopupDropdown label="Direction" value={config.promoCard.style.background.direction || 'to right'} options={[{ value: 'to right', label: '→' }, { value: 'to left', label: '←' }, { value: 'to bottom', label: '↓' }, { value: 'to top', label: '↑' }, { value: 'to bottom right', label: '↘' }, { value: 'to bottom left', label: '↙' }, { value: 'to top right', label: '↗' }, { value: 'to top left', label: '↖' }]} open={showCardDirectionDropdown} onOpen={() => { const next = !showCardDirectionDropdown; closeAllPromoDropdowns(); setShowCardBgPopup(true); setShowCardDirectionDropdown(next); setCardDirectionPos(getDropdownPosition(cardDirectionBtnRef.current)); }} onSelect={(v) => { updateCardBg({ direction: v }); setShowCardDirectionDropdown(false); setPreviewCardDirection(null); }} onHover={(dir) => setPreviewCardDirection(dir)} onHoverEnd={() => setPreviewCardDirection(null)} buttonRef={cardDirectionBtnRef} menuRef={cardDirectionMenuRef} menuPosition={cardDirectionPos} compact={true} />
+                              <div className="col-span-2 mt-2 rounded-md border border-border/70 bg-surface/30 p-3">
+                                <div className="mb-1 flex items-center justify-between">
+                                  <label className="block text-xs text-on-surface-variant">Gradient Direction</label>
+                                  <span className="text-[11px] font-medium text-on-surface-variant">{Math.round(cardAngleNormalized)}deg</span>
+                                </div>
+                                <div className="flex items-center justify-center">
+                                  <div
+                                    ref={cardAngleWheelRef}
+                                    className="relative h-28 w-28 rounded-full border border-border/80 bg-[conic-gradient(from_0deg,_rgba(255,255,255,0.14),_rgba(255,255,255,0.03),_rgba(255,255,255,0.14))] shadow-inner cursor-grab active:cursor-grabbing"
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      const updateFromMouse = (clientX: number, clientY: number) => {
+                                        const nextAngle = getAngleFromPointer(clientX, clientY);
+                                        if (nextAngle !== null) setCardDirectionAngle(nextAngle);
+                                      };
+                                      updateFromMouse(e.clientX, e.clientY);
+                                      const onMove = (moveEvent: MouseEvent) => updateFromMouse(moveEvent.clientX, moveEvent.clientY);
+                                      const onUp = () => {
+                                        window.removeEventListener('mousemove', onMove);
+                                        window.removeEventListener('mouseup', onUp);
+                                      };
+                                      window.addEventListener('mousemove', onMove);
+                                      window.addEventListener('mouseup', onUp);
+                                    }}
+                                  >
+                                    <div
+                                      className="pointer-events-none absolute left-1/2 top-1/2 z-40 h-[2px] w-[42%] origin-left bg-primary"
+                                      style={{ transform: `translateY(-50%) rotate(${cardAngleNormalized - 90}deg)` }}
+                                    />
+                                    <div
+                                      className="pointer-events-none absolute left-1/2 top-1/2 z-50 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-surface-elevated"
+                                    />
+                                    {presetDirections.map((preset) => (
+                                      <button
+                                        key={`wheel-${preset.angle}`}
+                                        type="button"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          setCardDirectionAngle(preset.angle);
+                                        }}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                        }}
+                                        className={`absolute left-1/2 top-1/2 z-20 h-6 w-6 -translate-x-1/2 -translate-y-1/2 text-[12px] leading-none transition-colors ${
+                                          Math.abs(cardAngleNormalized - preset.angle) < 0.6
+                                            ? 'font-semibold text-primary'
+                                            : 'text-on-surface-variant hover:text-primary'
+                                        }`}
+                                        style={{
+                                          left: `calc(50% + ${Math.sin((preset.angle * Math.PI) / 180) * 37}px)`,
+                                          top: `calc(50% - ${Math.cos((preset.angle * Math.PI) / 180) * 37}px)`,
+                                        }}
+                                        title={`${preset.angle}deg`}
+                                      >
+                                        {preset.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           )}
