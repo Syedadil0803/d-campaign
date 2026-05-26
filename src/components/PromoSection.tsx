@@ -24,6 +24,14 @@ interface PromoSectionProps {
 }
 
 export function PromoSection({ config, setConfig, markChanged, toast }: PromoSectionProps) {
+  const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
+    const date = new Date();
+    date.setDate(date.getDate() + daysFromToday);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }, []);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [currentField, setCurrentField] = useState<'title'|'subtitle'|'description'|'timer'|'button'|null>(null);
 
@@ -50,6 +58,8 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   const cardBgPopupBtnRef = useRef<HTMLButtonElement>(null);
   const cardBgPopupRef = useRef<HTMLDivElement>(null);
   const cardAngleWheelRef = useRef<HTMLDivElement>(null);
+  const startDatePickerRef = useRef<HTMLDivElement>(null);
+  const endDatePickerRef = useRef<HTMLDivElement>(null);
 
   const [showCardPositionDropdown, setShowCardPositionDropdown] = useState(false);
   const [showCardBgTypeDropdown, setShowCardBgTypeDropdown] = useState(false);
@@ -57,6 +67,16 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   const [showFieldDirectionDropdown, setShowFieldDirectionDropdown] = useState(false);
   const [showCardBgPopup, setShowCardBgPopup] = useState(false);
   const [previewFieldDirection, setPreviewFieldDirection] = useState<string | null>(null);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [startDateView, setStartDateView] = useState<Date>(() => {
+    const base = config.promoCard.startDate ? new Date(`${config.promoCard.startDate}T00:00:00`) : new Date();
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  });
+  const [endDateView, setEndDateView] = useState<Date>(() => {
+    const base = config.promoCard.endDate ? new Date(`${config.promoCard.endDate}T00:00:00`) : new Date();
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  });
 
   const [cardPositionPos, setCardPositionPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [cardBgTypePos, setCardBgTypePos] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -133,6 +153,20 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       el.innerHTML = nextHtml;
     }
   }, [config.promoCard.timerText, config.promoCard.showTimer]);
+
+  useEffect(() => {
+    const nextStart = config.promoCard.startDate || getISODateWithOffset(0);
+    const nextEnd = config.promoCard.endDate || getISODateWithOffset(1);
+    if (config.promoCard.startDate && config.promoCard.endDate) return;
+    setConfig({
+      ...config,
+      promoCard: {
+        ...config.promoCard,
+        startDate: nextStart,
+        endDate: nextEnd,
+      },
+    });
+  }, [config, setConfig, getISODateWithOffset]);
 
   function syncEditorsFromConfig(pc: PromoCard) {
     setTimeout(() => {
@@ -308,6 +342,8 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
         if (btnRef.current?.contains(target) || menuRef.current?.contains(target)) return;
         setOpen(false);
       });
+      if (!startDatePickerRef.current?.contains(target)) setShowStartDatePicker(false);
+      if (!endDatePickerRef.current?.contains(target)) setShowEndDatePicker(false);
       // Keep card background popup open until explicit close (X button).
     };
     document.addEventListener('mousedown', onDocMouseDown);
@@ -419,6 +455,160 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     syncEditorsFromConfig(cloned);
     markChanged();
     toast(`Template applied: ${templateName}`);
+  }
+
+  function formatDateLabel(value: string): string {
+    if (!value) return 'Select date';
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return 'Select date';
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  function toISODate(date: Date): string {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function buildMonthDays(viewDate: Date): Date[] {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    const first = new Date(year, month, 1);
+    const startOffset = first.getDay();
+    const gridStart = new Date(year, month, 1 - startOffset);
+    return Array.from({ length: 42 }, (_, i) => new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i));
+  }
+
+  function renderDatePicker(params: {
+    mode: 'start' | 'end';
+    value: string;
+    viewDate: Date;
+    setViewDate: (date: Date) => void;
+    open: boolean;
+    setOpen: (open: boolean) => void;
+    onSelect: (value: string) => void;
+  }) {
+    const { mode, value, viewDate, setViewDate, open, setOpen, onSelect } = params;
+    const days = buildMonthDays(viewDate);
+    const month = viewDate.getMonth();
+    const selected = value;
+    const today = toISODate(new Date());
+    return (
+      <div ref={mode === 'start' ? startDatePickerRef : endDatePickerRef} className="relative mt-1">
+        <button
+          type="button"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setOpen(!open);
+          }}
+          className="flex w-full items-center justify-between rounded-md border border-border bg-surface px-3 py-2 text-sm text-on-surface transition-colors hover:border-primary/70"
+        >
+          <span className={selected ? 'text-on-surface' : 'text-on-surface-variant'}>{formatDateLabel(value)}</span>
+          <svg
+            className={`h-4 w-4 flex-shrink-0 text-on-surface-variant transition-transform duration-200 ${open ? 'rotate-180' : 'rotate-0'}`}
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+          >
+            <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        {open && (
+          <div className={`absolute z-40 mt-1 w-[260px] rounded-md border border-border bg-surface-elevated p-2 shadow-lg ${mode === 'end' ? 'right-0' : 'left-0'}`}>
+            <div className="mb-2 flex items-center justify-between">
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1));
+                }}
+                className="h-7 w-7 rounded border border-border text-on-surface-variant hover:border-primary/70 hover:text-primary"
+                aria-label="Previous month"
+              >
+                <svg className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M12 6l-4 4 4 4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <div className="text-xs font-semibold text-on-surface">
+                {viewDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+              </div>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1));
+                }}
+                className="h-7 w-7 rounded border border-border text-on-surface-variant hover:border-primary/70 hover:text-primary"
+                aria-label="Next month"
+              >
+                <svg className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M8 6l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+            <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-on-surface-variant">
+              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => <div key={day}>{day}</div>)}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {days.map((date) => {
+                const iso = toISODate(date);
+                const inMonth = date.getMonth() === month;
+                const isSelected = selected === iso;
+                const isToday = today === iso;
+                return (
+                  <button
+                    key={iso}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      onSelect(iso);
+                      setOpen(false);
+                    }}
+                    className={`h-8 rounded text-xs transition-colors ${
+                      isSelected
+                        ? 'bg-primary text-on-primary'
+                        : inMonth
+                          ? 'text-on-surface hover:bg-primary/10 hover:text-primary'
+                          : 'text-on-surface-variant/60 hover:bg-primary/5'
+                    } ${isToday && !isSelected ? 'ring-1 ring-primary/40' : ''}`}
+                  >
+                    {date.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-2 flex items-center justify-between border-t border-border pt-2">
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onSelect('');
+                  setOpen(false);
+                }}
+                className="text-xs text-on-surface-variant hover:text-primary"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  const now = new Date();
+                  onSelect(toISODate(now));
+                  setViewDate(new Date(now.getFullYear(), now.getMonth(), 1));
+                  setOpen(false);
+                }}
+                className="text-xs font-medium text-primary hover:opacity-80"
+              >
+                Today
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   }
 
   function directionToAngle(direction?: string): number {
@@ -574,21 +764,27 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-on-surface">Start Date</label>
-              <input
-                type="date"
-                value={config.promoCard.startDate}
-                onChange={(e) => updateField('startDate', e.target.value)}
-                className="mt-1 block w-full border-border rounded-md p-2 border bg-surface text-on-surface text-sm [color-scheme:light] dark:[color-scheme:dark]"
-              />
+              {renderDatePicker({
+                mode: 'start',
+                value: config.promoCard.startDate,
+                viewDate: startDateView,
+                setViewDate: setStartDateView,
+                open: showStartDatePicker,
+                setOpen: setShowStartDatePicker,
+                onSelect: (nextValue) => updateField('startDate', nextValue),
+              })}
             </div>
             <div>
               <label className="block text-sm font-medium text-on-surface">End Date</label>
-              <input
-                type="date"
-                value={config.promoCard.endDate}
-                onChange={(e) => updateField('endDate', e.target.value)}
-                className="mt-1 block w-full border-border rounded-md p-2 border bg-surface text-on-surface text-sm [color-scheme:light] dark:[color-scheme:dark]"
-              />
+              {renderDatePicker({
+                mode: 'end',
+                value: config.promoCard.endDate,
+                viewDate: endDateView,
+                setViewDate: setEndDateView,
+                open: showEndDatePicker,
+                setOpen: setShowEndDatePicker,
+                onSelect: (nextValue) => updateField('endDate', nextValue),
+              })}
             </div>
           </div>
 
