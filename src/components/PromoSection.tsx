@@ -57,6 +57,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   const fieldDirectionMenuRef = useRef<HTMLDivElement>(null);
   const cardBgPopupBtnRef = useRef<HTMLButtonElement>(null);
   const cardBgPopupRef = useRef<HTMLDivElement>(null);
+  const promoCardRef = useRef<HTMLDivElement>(null);
   const cardAngleWheelRef = useRef<HTMLDivElement>(null);
   const startDatePickerRef = useRef<HTMLDivElement>(null);
   const endDatePickerRef = useRef<HTMLDivElement>(null);
@@ -388,7 +389,8 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     markChanged();
   }
 
-  function getPopupTopForField(field: 'title'|'subtitle'|'description'|'button'|'timer'): number {
+  function getPopupPositionStyle(field: PopupField, popupHeight = 320): { top?: string; bottom?: string } {
+    const card = promoCardRef.current;
     const refMap = {
       title: previewTitleRef,
       subtitle: previewSubtitleRef,
@@ -397,16 +399,13 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       timer: previewTimerRef,
     } as const;
     const el = refMap[field].current;
-    return el ? Math.max(8, el.offsetTop) : 8;
-  }
-
-  function getPopupPositionStyle(field: PopupField): { top?: string; bottom?: string } {
-    const isBottomCard = config.promoCard.style.position === 'bottom-right' || config.promoCard.style.position === 'bottom-left';
-    const isLowerField = field === 'button' || field === 'timer';
-    if (isBottomCard && isLowerField) {
-      return { bottom: '8px' };
+    if (!card || !el) return { bottom: '8px' };
+    const fieldTop = el.offsetTop;
+    const spaceBelow = card.clientHeight - fieldTop;
+    if (spaceBelow >= popupHeight + 8) {
+      return { top: `${Math.max(8, fieldTop)}px` };
     }
-    return { top: `${getPopupTopForField(field)}px` };
+    return { bottom: '8px' };
   }
 
   const popupEditableFields = ['title', 'subtitle', 'description', 'button', 'timer'] as const;
@@ -992,7 +991,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                         onMouseDown={(e) => {
                           e.preventDefault();
                           closeAllPromoDropdowns();
-                          setCurrentField(null);
+                          setShowPersistentScaffold(true);
                           setShowCardBgPopup((prev) => !prev);
                         }}
                       className="inline-flex h-9 items-center justify-center rounded-md border border-white/10 bg-black/10 px-2 text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10"
@@ -1013,6 +1012,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
             <div className="relative z-10 w-full h-full min-h-[228px] grid">
               {config.promoCard.active && (
                 <div
+                  ref={promoCardRef}
                   className={`relative w-[400px] rounded-xl shadow-2xl p-5 transition-all duration-300 flex flex-col ${
                     config.promoCard.style.position === 'bottom-right' ? 'justify-self-end self-end' :
                     config.promoCard.style.position === 'bottom-left' ? 'justify-self-start self-end' :
@@ -1034,7 +1034,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       ref={previewTitleRef}
                       contentEditable
                       suppressContentEditableWarning
-                      className={`text-base font-normal mb-1 px-2 py-1 rounded break-words cursor-pointer ${currentField === 'title' ? 'ring-1 ring-primary/70' : ''}`}
+                      className={`text-base font-normal mb-1 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === 'title' ? 'ring-1 ring-primary/70' : ''}`}
                       onMouseDown={() => {
                         activeEditorRef.current = previewTitleRef.current;
                       }}
@@ -1071,7 +1071,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       ref={previewSubtitleRef}
                       contentEditable
                       suppressContentEditableWarning
-                      className={`text-base font-normal mb-2 px-2 py-1 rounded break-words cursor-pointer ${currentField === 'subtitle' ? 'ring-1 ring-primary/70' : ''}`}
+                      className={`text-base font-normal mb-2 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === 'subtitle' ? 'ring-1 ring-primary/70' : ''}`}
                       onMouseDown={() => {
                         // Don't trigger state updates while dragging selection.
                         activeEditorRef.current = previewSubtitleRef.current;
@@ -1113,7 +1113,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       ref={previewDescriptionRef}
                       contentEditable
                       suppressContentEditableWarning
-                      className={`text-base font-normal mb-2 px-2 py-1 rounded break-words cursor-pointer ${currentField === 'description' ? 'ring-1 ring-primary/70' : ''}`}
+                      className={`text-base font-normal mb-2 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === 'description' ? 'ring-1 ring-primary/70' : ''}`}
                       onMouseDown={() => {
                         activeEditorRef.current = previewDescriptionRef.current;
                       }}
@@ -1152,7 +1152,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       ref={previewTimerRef}
                       contentEditable
                       suppressContentEditableWarning
-                      className={`mb-4 px-2 py-1 rounded break-words cursor-pointer ${currentField === 'timer' ? 'ring-1 ring-primary/70' : ''}`}
+                      className={`mb-4 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === 'timer' ? 'ring-1 ring-primary/70' : ''}`}
                       onMouseDown={() => {
                         activeEditorRef.current = previewTimerRef.current;
                       }}
@@ -1202,7 +1202,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                         ref={previewButtonRef}
                         contentEditable
                         suppressContentEditableWarning
-                        className={`py-2 px-4 rounded-lg text-base font-semibold ${
+                        className={`py-2 px-4 rounded-lg text-base font-semibold outline-none ${
                           config.promoCard.buttonFullWidth ? 'w-full' : ''
                         } ${currentField === 'button' ? 'ring-1 ring-primary/70' : ''} cursor-pointer`}
                         onMouseDown={() => {
@@ -1405,7 +1405,11 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                           ? 'right-full mr-3'
                           : 'left-full ml-3'
                       }`}
-                      style={{ top: '8px' }}
+                      style={(() => {
+                        const card = promoCardRef.current;
+                        if (!card || card.clientHeight >= 320 + 8 + 8) return { top: '8px' };
+                        return { bottom: '8px' };
+                      })()}
                     >
                       <button
                         type="button"
