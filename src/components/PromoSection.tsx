@@ -148,7 +148,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   useEffect(() => {
     const el = timerRef.current;
     if (!el) return;
-    const nextHtml = normalizeTimerTemplate(config.promoCard.timerText || getDefaultTimerStorageHTML()) || 'Ends in {hh}:{mm}:{ss}';
+    const nextHtml = normalizeTimerTemplate(config.promoCard.timerText ?? getDefaultTimerStorageHTML());
     if (el.innerHTML !== nextHtml) {
       el.innerHTML = nextHtml;
     }
@@ -175,7 +175,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       if (descRef.current) descRef.current.innerHTML = pc.description || '';
       if (buttonRef.current) buttonRef.current.innerHTML = pc.buttonText || '';
       if (timerRef.current) {
-        timerRef.current.innerHTML = normalizeTimerTemplate(pc.timerText || getDefaultTimerStorageHTML()) || 'Ends in {hh}:{mm}:{ss}';
+        timerRef.current.innerHTML = normalizeTimerTemplate(pc.timerText ?? getDefaultTimerStorageHTML());
       }
     }, 0);
   }
@@ -438,7 +438,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }
 
   function getFormattedTimerText(): string {
-    const rawHtml = config.promoCard.timerText || 'Ends in {hh}:{mm}:{ss}';
+    const rawHtml = config.promoCard.timerText ?? getDefaultTimerStorageHTML();
     const timerValue = calcTimerRemaining(config.promoCard.endDate || '');
 
     if ([timerValue.hours, timerValue.minutes, timerValue.seconds, timerValue.days ?? 0].some(Number.isNaN)) {
@@ -450,7 +450,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
 
   function applyTemplate(template: PromoCard, templateName: string) {
     const cloned = JSON.parse(JSON.stringify(template));
-    cloned.timerText = normalizeTimerTemplate(cloned.timerText || getDefaultTimerStorageHTML()) || 'Ends in {hh}:{mm}:{ss}';
+    cloned.timerText = normalizeTimerTemplate(cloned.timerText ?? getDefaultTimerStorageHTML());
     setConfig({ ...config, promoCard: cloned });
     syncEditorsFromConfig(cloned);
     markChanged();
@@ -679,6 +679,17 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   const hasSubtitle = hasVisibleContent(config.promoCard.subtitle);
   const hasDescription = hasVisibleContent(config.promoCard.description);
   const hasButtonText = hasVisibleContent(config.promoCard.buttonText);
+  const showContentScaffold =
+    currentField === 'title' ||
+    currentField === 'subtitle' ||
+    currentField === 'description' ||
+    currentField === 'timer' ||
+    currentField === 'button';
+  const showTitleInPreview = hasTitle || showContentScaffold;
+  const showSubtitleInPreview = hasSubtitle || showContentScaffold;
+  const showDescriptionInPreview = hasDescription || showContentScaffold;
+  const showTimerInPreview = config.promoCard.showTimer || showContentScaffold;
+  const showButtonInPreview = config.promoCard.showButton || showContentScaffold;
 
   return (
     <>
@@ -924,10 +935,16 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
               <div>
                 <label className="block text-sm font-medium text-on-surface">Button URL</label>
                 <input
-                  type="text"
+                  type="url"
                   value={config.promoCard.buttonUrl}
                   onChange={(e) => updateField('buttonUrl', e.target.value)}
-                  className="mt-1 block w-full border-border rounded-md p-2 border bg-surface text-on-surface text-sm"
+                  onBlur={(e) => updateField('buttonUrl', e.target.value.trim())}
+                  placeholder="https://example.com"
+                  inputMode="url"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className="block w-full rounded-md p-2 border min-h-[38px] outline-none text-sm transition-colors border-border bg-surface text-on-surface focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70"
                 />
               </div>
             </div>
@@ -1003,7 +1020,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     <X className="w-4 h-4" />
                   </button>
 
-                  {hasTitle && (
+                  {showTitleInPreview && (
                     <div
                       ref={previewTitleRef}
                       contentEditable
@@ -1040,7 +1057,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     />
                   )}
 
-                  {hasSubtitle && (
+                  {showSubtitleInPreview && (
                     <div
                       ref={previewSubtitleRef}
                       contentEditable
@@ -1082,7 +1099,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     />
                   )}
 
-                  {hasDescription && (
+                  {showDescriptionInPreview && (
                     <div
                       ref={previewDescriptionRef}
                       contentEditable
@@ -1121,7 +1138,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     />
                   )}
 
-                  {config.promoCard.showTimer && (
+                  {showTimerInPreview && (
                     <div
                       ref={previewTimerRef}
                       contentEditable
@@ -1158,7 +1175,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     />
                   )}
 
-                  {config.promoCard.showButton && hasButtonText && (
+                  {showButtonInPreview && (
                     <div
                       className={
                         config.promoCard.buttonFullWidth
