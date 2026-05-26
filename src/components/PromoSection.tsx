@@ -126,6 +126,15 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     }
   }, [config.promoCard.timerText, config.promoCard.endDate, currentTime]);
 
+  useEffect(() => {
+    const el = timerRef.current;
+    if (!el) return;
+    const nextHtml = normalizeTimerTemplate(config.promoCard.timerText || getDefaultTimerStorageHTML()) || 'Ends in {hh}:{mm}:{ss}';
+    if (el.innerHTML !== nextHtml) {
+      el.innerHTML = nextHtml;
+    }
+  }, [config.promoCard.timerText, config.promoCard.showTimer]);
+
   function syncEditorsFromConfig(pc: PromoCard) {
     setTimeout(() => {
       if (titleRef.current) titleRef.current.innerHTML = pc.title || '';
