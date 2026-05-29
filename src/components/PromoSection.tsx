@@ -1464,7 +1464,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
               </div>
             </div>
           </div>
-          <div className="bg-gray-100 rounded-lg p-5 relative flex-1 min-h-0 border border-gray-200 bg-[url('https://lib.shadcn.com/placeholder.svg')] bg-center bg-no-repeat bg-contain dark:bg-gray-700 dark:border-gray-600">
+          <div className="campaign-card-surface rounded-lg p-5 relative flex-1 min-h-0 border border-gray-200 dark:border-gray-600">
             <div className="absolute inset-x-0 top-4 flex items-center justify-center text-gray-400 text-sm font-medium pointer-events-none">
               Website Content Area
             </div>
