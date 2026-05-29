@@ -245,7 +245,7 @@ export default function Home() {
             activeTab === 'promo' || activeTab === 'announcement' ? 'campaign-custom-scrollbar' : ''
           }`}
         >
-          <div className="max-w-[1840px] mx-auto space-y-8 pb-12">
+          <div className={`max-w-[1840px] mx-auto ${activeTab === 'promo' ? '' : 'space-y-8 pb-12'}`}>
             {activeTab === 'dashboard' && (
               <Dashboard config={config} setActiveTab={setActiveTab} />
             )}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, type RefObject, type Dispatch, type SetStateAction, type KeyboardEvent } from 'react';
-import { Gift, X, Palette, Undo2, Redo2 } from 'lucide-react';
+import { Gift, X, Palette, Undo2, Redo2, LayoutTemplate, History } from 'lucide-react';
 import { CampaignConfig, PromoCard } from '@/types/campaign';
 import { getBackgroundStyle } from '@/lib/utils';
 import { HistoryManager } from '@/lib/historyManager';
@@ -88,6 +88,9 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   const [showCardBgPopup, setShowCardBgPopup] = useState(false);
   const [previewFieldDirection, setPreviewFieldDirection] = useState<string | null>(null);
   const [showPersistentScaffold, setShowPersistentScaffold] = useState(false);
+  // Action popups launched from the buttons under the Promo Card heading.
+  const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
+  const [showVersionsPopup, setShowVersionsPopup] = useState(false);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [startDateView, setStartDateView] = useState<Date>(() => {
@@ -1160,6 +1163,26 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
             </div>
           </div>
 
+          {/* Quick actions: pick a saved version, or start from a sample template */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowVersionsPopup(true)}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              title="Saved versions of this promo card"
+            >
+              <History className="h-4 w-4" /> Versions
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowTemplatesPopup(true)}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              title="Start from a ready-made sample template"
+            >
+              <LayoutTemplate className="h-4 w-4" /> Sample Templates
+            </button>
+          </div>
+
           <div className="pt-1">
             <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">Content</h4>
             <p className="text-xs text-on-surface-variant mb-2">Main promo copy shown in the card.</p>
@@ -1982,7 +2005,59 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
         </div>
       </div>
 
-      <SamplePromoTemplates onApplyTemplate={applyTemplate} />
+      {/* Sample Templates popup — shows the same 6 cards; click one to apply */}
+      {showTemplatesPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" onClick={() => setShowTemplatesPopup(false)} />
+          <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-6 py-4">
+              <div>
+                <h3 className="text-base font-semibold text-on-surface">Sample Templates</h3>
+                <p className="text-xs text-on-surface-variant">Click a template to apply it to your promo card.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTemplatesPopup(false)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+                aria-label="Close templates"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="campaign-custom-scrollbar overflow-y-auto p-6">
+              <SamplePromoTemplates
+                onApplyTemplate={(template, name) => { applyTemplate(template, name); setShowTemplatesPopup(false); }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Versions popup — entry point in place; logic to be implemented next */}
+      {showVersionsPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" onClick={() => setShowVersionsPopup(false)} />
+          <div className="relative z-10 flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <div>
+                <h3 className="text-base font-semibold text-on-surface">Versions</h3>
+                <p className="text-xs text-on-surface-variant">Saved snapshots of this promo card.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVersionsPopup(false)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+                aria-label="Close versions"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-6 text-center text-sm text-on-surface-variant">
+              Version management is coming here next.
+            </div>
+          </div>
+        </div>
+      )}
       <style jsx global>{`
         .promo-standard-editor,
         .promo-standard-editor * {

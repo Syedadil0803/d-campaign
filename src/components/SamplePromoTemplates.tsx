@@ -331,9 +331,8 @@ export function SamplePromoTemplates({ onApplyTemplate }: SamplePromoTemplatesPr
   }, []);
 
   return (
-    <div ref={containerRef} className="lg:col-span-2 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 mt-6">
-      <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">Sample Templates</h4>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div ref={containerRef}>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {sampleTemplates.map((template, index) => (
           (() => {
             const isVisible = visibleTemplateIds.has(template.id);
