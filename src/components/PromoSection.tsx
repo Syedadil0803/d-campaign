@@ -365,12 +365,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
 
     if (isDestructiveKey && !promoDeletingRef.current) {
       promoDeletingRef.current = true;
-      pushPromoState({ replace: true });
-      return;
-    }
-
-    if (e.key.length === 1) {
-      promoDeletingRef.current = false;
+      pushPromoState();
     }
   }
 
