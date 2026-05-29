@@ -98,12 +98,11 @@ export function PromoSection({
   const cardBgTypeMenuRef = useRef<HTMLDivElement>(null);
   const fieldBgTypeBtnRef = useRef<HTMLButtonElement>(null);
   const fieldBgTypeMenuRef = useRef<HTMLDivElement>(null);
-  const fieldDirectionBtnRef = useRef<HTMLButtonElement>(null);
-  const fieldDirectionMenuRef = useRef<HTMLDivElement>(null);
   const cardBgPopupBtnRef = useRef<HTMLButtonElement>(null);
   const cardBgPopupRef = useRef<HTMLDivElement>(null);
   const promoCardRef = useRef<HTMLDivElement>(null);
   const cardAngleWheelRef = useRef<HTMLDivElement>(null);
+  const fieldAngleWheelRef = useRef<HTMLDivElement>(null);
   const startDatePickerRef = useRef<HTMLDivElement>(null);
   const endDatePickerRef = useRef<HTMLDivElement>(null);
 
@@ -111,12 +110,7 @@ export function PromoSection({
     useState(false);
   const [showCardBgTypeDropdown, setShowCardBgTypeDropdown] = useState(false);
   const [showFieldBgTypeDropdown, setShowFieldBgTypeDropdown] = useState(false);
-  const [showFieldDirectionDropdown, setShowFieldDirectionDropdown] =
-    useState(false);
   const [showCardBgPopup, setShowCardBgPopup] = useState(false);
-  const [previewFieldDirection, setPreviewFieldDirection] = useState<
-    string | null
-  >(null);
   const [showPersistentScaffold, setShowPersistentScaffold] = useState(false);
   // Action popups launched from the buttons under the Promo Card heading.
   const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
@@ -147,11 +141,6 @@ export function PromoSection({
     width: number;
   } | null>(null);
   const [fieldBgTypePos, setFieldBgTypePos] = useState<{
-    top: number;
-    left: number;
-    width: number;
-  } | null>(null);
-  const [fieldDirectionPos, setFieldDirectionPos] = useState<{
     top: number;
     left: number;
     width: number;
@@ -903,11 +892,6 @@ export function PromoSection({
         [cardPositionBtnRef, cardPositionMenuRef, setShowCardPositionDropdown],
         [cardBgTypeBtnRef, cardBgTypeMenuRef, setShowCardBgTypeDropdown],
         [fieldBgTypeBtnRef, fieldBgTypeMenuRef, setShowFieldBgTypeDropdown],
-        [
-          fieldDirectionBtnRef,
-          fieldDirectionMenuRef,
-          setShowFieldDirectionDropdown,
-        ],
       ];
       pairs.forEach(([btnRef, menuRef, setOpen]) => {
         if (
@@ -931,7 +915,6 @@ export function PromoSection({
     setShowCardPositionDropdown(false);
     setShowCardBgTypeDropdown(false);
     setShowFieldBgTypeDropdown(false);
-    setShowFieldDirectionDropdown(false);
     setShowCardBgPopup(false);
   }, []);
 
@@ -1030,15 +1013,7 @@ export function PromoSection({
   }
 
   function getPreviewFieldBackground(field: PopupField) {
-    const bg = getPopupFieldStyle(field).background;
-    if (
-      currentField === field &&
-      previewFieldDirection &&
-      bg.type === "linear"
-    ) {
-      return { ...bg, direction: previewFieldDirection };
-    }
-    return bg;
+    return getPopupFieldStyle(field).background;
   }
 
   function isPreviewFieldActive() {
@@ -1332,11 +1307,16 @@ export function PromoSection({
     updateCardBg({ direction: angleToCssDirection(angle) });
   }
 
+  function setFieldDirectionAngle(angle: number) {
+    updateFieldBg({ direction: angleToCssDirection(angle) });
+  }
+
   function getAngleFromPointer(
     clientX: number,
     clientY: number,
+    wheelRef: RefObject<HTMLDivElement | null>,
   ): number | null {
-    const wheel = cardAngleWheelRef.current;
+    const wheel = wheelRef.current;
     if (!wheel) return null;
     const rect = wheel.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
@@ -1359,6 +1339,86 @@ export function PromoSection({
     { label: "←", angle: 270 },
     { label: "↖", angle: 315 },
   ];
+
+  function renderGradientDirectionWheel({
+    angle,
+    wheelRef,
+    onAngleChange,
+    keyPrefix,
+  }: {
+    angle: number;
+    wheelRef: RefObject<HTMLDivElement | null>;
+    onAngleChange: (angle: number) => void;
+    keyPrefix: string;
+  }) {
+    const normalizedAngle = normalizeAngle(angle);
+
+    return (
+      <div
+        ref={wheelRef}
+        className="relative h-28 w-28 rounded-full border border-border/80 bg-[conic-gradient(from_0deg,_rgba(255,255,255,0.14),_rgba(255,255,255,0.03),_rgba(255,255,255,0.14))] shadow-inner cursor-grab active:cursor-grabbing"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          const updateFromMouse = (clientX: number, clientY: number) => {
+            const nextAngle = getAngleFromPointer(
+              clientX,
+              clientY,
+              wheelRef,
+            );
+            if (nextAngle !== null) onAngleChange(nextAngle);
+          };
+          updateFromMouse(e.clientX, e.clientY);
+          const onMove = (moveEvent: MouseEvent) =>
+            updateFromMouse(moveEvent.clientX, moveEvent.clientY);
+          const onUp = () => {
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+          };
+          window.addEventListener("mousemove", onMove);
+          window.addEventListener("mouseup", onUp);
+        }}
+      >
+        <div
+          className="pointer-events-none absolute left-1/2 top-1/2 z-40"
+          style={{
+            transform: `translateY(-50%) rotate(${normalizedAngle - 90}deg)`,
+            transformOrigin: "left center",
+          }}
+        >
+          <div className="h-[2px] w-6 bg-primary" />
+          <div className="absolute right-0 top-1/2 h-0 w-0 -translate-y-1/2 translate-x-full border-y-4 border-y-transparent border-l-[6px] border-l-primary" />
+        </div>
+        <div className="pointer-events-none absolute left-1/2 top-1/2 z-50 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-surface-elevated" />
+        {presetDirections.map((preset) => (
+          <button
+            key={`${keyPrefix}-${preset.angle}`}
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onAngleChange(preset.angle);
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            className={`absolute left-1/2 top-1/2 z-20 h-6 w-6 -translate-x-1/2 -translate-y-1/2 text-[12px] leading-none transition-colors ${
+              Math.abs(normalizedAngle - preset.angle) < 0.6
+                ? "font-semibold text-primary"
+                : "text-on-surface-variant hover:text-primary"
+            }`}
+            style={{
+              left: `calc(50% + ${Math.sin((preset.angle * Math.PI) / 180) * 37}px)`,
+              top: `calc(50% - ${Math.cos((preset.angle * Math.PI) / 180) * 37}px)`,
+            }}
+            title={`${preset.angle}deg`}
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   const cardAngle = directionToAngle(
     config.promoCard.style.background.direction || "to right",
@@ -2203,6 +2263,10 @@ export function PromoSection({
                       const fieldStyle = getPopupFieldStyle(field);
                       const isButton = field === "button";
                       const fbg = fieldStyle.background;
+                      const fieldAngle = directionToAngle(
+                        fbg.direction || "to right",
+                      );
+                      const fieldAngleNormalized = normalizeAngle(fieldAngle);
                       return (
                         <div
                           className={`absolute z-30 w-[280px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 ${
@@ -2391,7 +2455,7 @@ export function PromoSection({
                                 </div>
                               )}
                               {fbg.type === "linear" && (
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-2 gap-2">
                                   <div>
                                     <label className="block text-xs text-on-surface-variant mb-0.5">
                                       Start
@@ -2422,51 +2486,23 @@ export function PromoSection({
                                       className="bg-color-picker h-9 w-full rounded cursor-pointer"
                                     />
                                   </div>
-                                  <div>
-                                    <PopupDropdown
-                                      label="Direction"
-                                      value={fbg.direction || "to right"}
-                                      options={[
-                                        { value: "to right", label: "→" },
-                                        { value: "to left", label: "←" },
-                                        { value: "to bottom", label: "↓" },
-                                        { value: "to top", label: "↑" },
-                                        {
-                                          value: "to bottom right",
-                                          label: "↘",
-                                        },
-                                        { value: "to bottom left", label: "↙" },
-                                        { value: "to top right", label: "↗" },
-                                        { value: "to top left", label: "↖" },
-                                      ]}
-                                      open={showFieldDirectionDropdown}
-                                      onOpen={() => {
-                                        const next =
-                                          !showFieldDirectionDropdown;
-                                        closeAllPromoDropdowns();
-                                        setShowFieldDirectionDropdown(next);
-                                        setFieldDirectionPos(
-                                          getDropdownPosition(
-                                            fieldDirectionBtnRef.current,
-                                          ),
-                                        );
-                                      }}
-                                      onSelect={(v) => {
-                                        updateFieldBg({ direction: v });
-                                        setShowFieldDirectionDropdown(false);
-                                        setPreviewFieldDirection(null);
-                                      }}
-                                      onHover={(dir) =>
-                                        setPreviewFieldDirection(dir)
-                                      }
-                                      onHoverEnd={() =>
-                                        setPreviewFieldDirection(null)
-                                      }
-                                      buttonRef={fieldDirectionBtnRef}
-                                      menuRef={fieldDirectionMenuRef}
-                                      menuPosition={fieldDirectionPos}
-                                      compact={true}
-                                    />
+                                  <div className="col-span-2 mt-2 rounded-md border border-border/70 bg-surface/30 p-3">
+                                    <div className="mb-1 flex items-center justify-between">
+                                      <label className="block text-xs text-on-surface-variant">
+                                        Gradient Direction
+                                      </label>
+                                      <span className="text-[11px] font-medium text-on-surface-variant">
+                                        {Math.round(fieldAngleNormalized)}deg
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-center">
+                                      {renderGradientDirectionWheel({
+                                        angle: fieldAngle,
+                                        wheelRef: fieldAngleWheelRef,
+                                        onAngleChange: setFieldDirectionAngle,
+                                        keyPrefix: "field-wheel",
+                                      })}
+                                    </div>
                                   </div>
                                 </div>
                               )}
@@ -2670,89 +2706,12 @@ export function PromoSection({
                                   </span>
                                 </div>
                                 <div className="flex items-center justify-center">
-                                  <div
-                                    ref={cardAngleWheelRef}
-                                    className="relative h-28 w-28 rounded-full border border-border/80 bg-[conic-gradient(from_0deg,_rgba(255,255,255,0.14),_rgba(255,255,255,0.03),_rgba(255,255,255,0.14))] shadow-inner cursor-grab active:cursor-grabbing"
-                                    onMouseDown={(e) => {
-                                      e.preventDefault();
-                                      const updateFromMouse = (
-                                        clientX: number,
-                                        clientY: number,
-                                      ) => {
-                                        const nextAngle = getAngleFromPointer(
-                                          clientX,
-                                          clientY,
-                                        );
-                                        if (nextAngle !== null)
-                                          setCardDirectionAngle(nextAngle);
-                                      };
-                                      updateFromMouse(e.clientX, e.clientY);
-                                      const onMove = (moveEvent: MouseEvent) =>
-                                        updateFromMouse(
-                                          moveEvent.clientX,
-                                          moveEvent.clientY,
-                                        );
-                                      const onUp = () => {
-                                        window.removeEventListener(
-                                          "mousemove",
-                                          onMove,
-                                        );
-                                        window.removeEventListener(
-                                          "mouseup",
-                                          onUp,
-                                        );
-                                      };
-                                      window.addEventListener(
-                                        "mousemove",
-                                        onMove,
-                                      );
-                                      window.addEventListener("mouseup", onUp);
-                                    }}
-                                  >
-                                    <div
-                                      className="pointer-events-none absolute left-1/2 top-1/2 z-40"
-                                      style={{
-                                        transform: `translateY(-50%) rotate(${cardAngleNormalized - 90}deg)`,
-                                        transformOrigin: "left center",
-                                      }}
-                                    >
-                                      {/* Line */}
-                                      <div className="h-[2px] w-6 bg-primary" />
-
-                                      {/* Arrow Head */}
-                                      <div className="absolute right-0 top-1/2 h-0 w-0 -translate-y-1/2 translate-x-full border-y-4 border-y-transparent border-l-[6px] border-l-primary" />
-                                    </div>
-                                    <div className="pointer-events-none absolute left-1/2 top-1/2 z-50 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-surface-elevated" />
-                                    {presetDirections.map((preset) => (
-                                      <button
-                                        key={`wheel-${preset.angle}`}
-                                        type="button"
-                                        onMouseDown={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          setCardDirectionAngle(preset.angle);
-                                        }}
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                        }}
-                                        className={`absolute left-1/2 top-1/2 z-20 h-6 w-6 -translate-x-1/2 -translate-y-1/2 text-[12px] leading-none transition-colors ${
-                                          Math.abs(
-                                            cardAngleNormalized - preset.angle,
-                                          ) < 0.6
-                                            ? "font-semibold text-primary"
-                                            : "text-on-surface-variant hover:text-primary"
-                                        }`}
-                                        style={{
-                                          left: `calc(50% + ${Math.sin((preset.angle * Math.PI) / 180) * 37}px)`,
-                                          top: `calc(50% - ${Math.cos((preset.angle * Math.PI) / 180) * 37}px)`,
-                                        }}
-                                        title={`${preset.angle}deg`}
-                                      >
-                                        {preset.label}
-                                      </button>
-                                    ))}
-                                  </div>
+                                  {renderGradientDirectionWheel({
+                                    angle: cardAngle,
+                                    wheelRef: cardAngleWheelRef,
+                                    onAngleChange: setCardDirectionAngle,
+                                    keyPrefix: "card-wheel",
+                                  })}
                                 </div>
                               </div>
                             </div>
