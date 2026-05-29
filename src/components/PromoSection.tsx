@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, type RefObject, type Dispatch, type SetStateAction, type KeyboardEvent } from 'react';
-import { Gift, X, Palette } from 'lucide-react';
+import { Gift, X, Palette, Undo2, Redo2 } from 'lucide-react';
 import { CampaignConfig, PromoCard } from '@/types/campaign';
 import { getBackgroundStyle } from '@/lib/utils';
+import { HistoryManager } from '@/lib/historyManager';
 import { SamplePromoTemplates } from './SamplePromoTemplates';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { wrapBareTextWithFontSize, rgbToHex, FONT_SIZE_LABEL_MAP } from '@/lib/richTextUtils';
@@ -26,6 +27,17 @@ interface PromoSectionProps {
 type PromoField = 'title'|'subtitle'|'description'|'timer'|'button';
 const PROMO_EDITOR_DEFAULT_COLOR = '#ffffff';
 
+interface PromoSnapshot {
+  promoCard: PromoCard;
+  currentField: PromoField | null;
+  selection: PromoSelectionSnapshot | null;
+}
+
+interface PromoSelectionSnapshot {
+  start: number;
+  end: number;
+}
+
 export function PromoSection({ config, setConfig, markChanged, toast }: PromoSectionProps) {
   const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
     const date = new Date();
@@ -37,6 +49,8 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }, []);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [currentField, setCurrentField] = useState<PromoField|null>(null);
+  const configRef = useRef(config);
+  configRef.current = config;
   const currentFieldRef = useRef<PromoField | null>(currentField);
   currentFieldRef.current = currentField;
 
@@ -96,6 +110,37 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     ensureDefaultFontSize, saveSelection, getNormalizedHTML,
   } = useRichTextEditor(activeEditorRef, { defaultColor: PROMO_EDITOR_DEFAULT_COLOR });
 
+  const promoHistory = useRef(new HistoryManager<PromoSnapshot>('Promo')).current;
+  const restoringSnapshotRef = useRef(false);
+  const promoDeletingRef = useRef(false);
+  const [canUndoPromo, setCanUndoPromo] = useState(false);
+  const [canRedoPromo, setCanRedoPromo] = useState(false);
+
+  function clonePromoCard(card: PromoCard): PromoCard {
+    return JSON.parse(JSON.stringify(card)) as PromoCard;
+  }
+
+  function syncPromoHistoryButtons() {
+    setCanUndoPromo(promoHistory.canUndo());
+    setCanRedoPromo(promoHistory.canRedo());
+  }
+
+  function getPromoSnapshot(): PromoSnapshot {
+    const editor = getActivePromoEditor();
+    return {
+      promoCard: clonePromoCard(configRef.current.promoCard),
+      currentField: currentFieldRef.current,
+      selection: editor ? getPromoSelectionSnapshot(editor) : null,
+    };
+  }
+
+  function pushPromoState(options: { replace?: boolean } = {}) {
+    if (restoringSnapshotRef.current) return;
+    if (options.replace) promoHistory.unlock();
+    promoHistory.pushState(getPromoSnapshot());
+    syncPromoHistoryButtons();
+  }
+
   function getFieldRef(field: PromoField | null) {
     if (field === 'title') return titleRef;
     if (field === 'subtitle') return subtitleRef;
@@ -103,6 +148,43 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     if (field === 'timer') return timerRef;
     if (field === 'button') return buttonRef;
     return null;
+  }
+
+  function applyPromoSnapshot(snapshot: PromoSnapshot) {
+    restoringSnapshotRef.current = true;
+    const nextPromoCard = clonePromoCard(snapshot.promoCard);
+    setCurrentField(snapshot.currentField);
+    setShowPersistentScaffold(Boolean(snapshot.currentField));
+    setConfig({ ...configRef.current, promoCard: nextPromoCard });
+    syncEditorsFromConfig(nextPromoCard);
+    setTimeout(() => {
+      const ref = getFieldRef(snapshot.currentField);
+      activeEditorRef.current = ref?.current || null;
+      if (ref?.current) {
+        restorePromoSelection(ref.current, snapshot.selection);
+      }
+      refreshPromoToolbarFormats(ref?.current || undefined);
+      restoringSnapshotRef.current = false;
+    }, 0);
+    markChanged();
+  }
+
+  function undoPromo() {
+    const snapshot = promoHistory.undo(getPromoSnapshot());
+    syncPromoHistoryButtons();
+    if (snapshot) {
+      applyPromoSnapshot(snapshot);
+      toast('Promo action undone');
+    }
+  }
+
+  function redoPromo() {
+    const snapshot = promoHistory.redo(getPromoSnapshot());
+    syncPromoHistoryButtons();
+    if (snapshot) {
+      applyPromoSnapshot(snapshot);
+      toast('Promo action redone');
+    }
   }
 
   // Populate editors from config on mount
@@ -206,6 +288,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     setShowPersistentScaffold(true);
     setCurrentField(field);
     activeEditorRef.current = ref.current;
+    promoDeletingRef.current = false;
     setTimeout(() => {
       refreshPromoToolbarFormats(ref.current);
       ensureDefaultFontSize();
@@ -213,6 +296,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }
 
   function onFieldInput(field: PromoField) {
+    if (restoringSnapshotRef.current) return;
     if (field === 'timer') {
       const fallbackEl = timerRef.current;
       const el = (currentField === 'timer' && activeEditorRef.current) ? activeEditorRef.current : fallbackEl;
@@ -237,7 +321,57 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }
 
   function onPromoPreviewKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const mod = e.metaKey || e.ctrlKey;
+    const key = e.key.toLowerCase();
+    if (mod && (key === 'z' || key === 'y')) {
+      onPromoEditorKeyDown(e);
+      return;
+    }
     e.preventDefault();
+  }
+
+  function onPromoEditorKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const mod = e.metaKey || e.ctrlKey;
+    const key = e.key.toLowerCase();
+
+    if (mod && (key === 'z' || key === 'y')) {
+      e.preventDefault();
+      const isUndo = key === 'z' && !e.shiftKey;
+      const isRedo = (key === 'z' && e.shiftKey) || key === 'y';
+      if (isUndo) undoPromo();
+      if (isRedo) redoPromo();
+      promoDeletingRef.current = false;
+      return;
+    }
+
+    if (mod) return;
+
+    const editor = e.currentTarget;
+    const selection = window.getSelection();
+    const hasSelectionInEditor = Boolean(
+      selection &&
+      !selection.isCollapsed &&
+      selection.rangeCount > 0 &&
+      editor.contains(selection.getRangeAt(0).commonAncestorContainer)
+    );
+    const isDestructiveKey = e.key === 'Backspace' || e.key === 'Delete';
+    const overwritesSelection = hasSelectionInEditor && e.key.length === 1;
+
+    if (hasSelectionInEditor && (isDestructiveKey || overwritesSelection)) {
+      promoDeletingRef.current = true;
+      pushPromoState({ replace: true });
+      return;
+    }
+
+    if (isDestructiveKey && !promoDeletingRef.current) {
+      promoDeletingRef.current = true;
+      pushPromoState({ replace: true });
+      return;
+    }
+
+    if (e.key.length === 1) {
+      promoDeletingRef.current = false;
+    }
   }
 
   function getActivePromoEditor(): HTMLDivElement | null {
@@ -250,6 +384,69 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return false;
     const range = selection.getRangeAt(0);
     return editor.contains(range.commonAncestorContainer) || editor.contains(selection.anchorNode);
+  }
+
+  function getPromoSelectionSnapshot(editor: HTMLDivElement): PromoSelectionSnapshot | null {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return null;
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer) && !editor.contains(selection.anchorNode)) return null;
+
+    const preStartRange = document.createRange();
+    preStartRange.selectNodeContents(editor);
+    preStartRange.setEnd(range.startContainer, range.startOffset);
+
+    const preEndRange = document.createRange();
+    preEndRange.selectNodeContents(editor);
+    preEndRange.setEnd(range.endContainer, range.endOffset);
+
+    return {
+      start: preStartRange.toString().length,
+      end: preEndRange.toString().length,
+    };
+  }
+
+  function restorePromoSelection(editor: HTMLDivElement, selectionSnapshot: PromoSelectionSnapshot | null) {
+    if (!selectionSnapshot || typeof window === 'undefined') return;
+    const textLength = editor.textContent?.length || 0;
+    const start = Math.max(0, Math.min(selectionSnapshot.start, textLength));
+    const end = Math.max(start, Math.min(selectionSnapshot.end, textLength));
+    const range = document.createRange();
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+    let currentOffset = 0;
+    let startSet = false;
+    let endSet = false;
+    let node = walker.nextNode();
+
+    while (node) {
+      const nodeLength = node.textContent?.length || 0;
+      const nextOffset = currentOffset + nodeLength;
+
+      if (!startSet && start <= nextOffset) {
+        range.setStart(node, Math.max(0, start - currentOffset));
+        startSet = true;
+      }
+      if (!endSet && end <= nextOffset) {
+        range.setEnd(node, Math.max(0, end - currentOffset));
+        endSet = true;
+        break;
+      }
+
+      currentOffset = nextOffset;
+      node = walker.nextNode();
+    }
+
+    if (!startSet) {
+      range.selectNodeContents(editor);
+      range.collapse(false);
+    } else if (!endSet) {
+      range.setEnd(range.startContainer, range.startOffset);
+    }
+
+    editor.focus();
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
   }
 
   function refreshPromoToolbarFormats(editor = getActivePromoEditor()) {
@@ -360,6 +557,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     if (!currentFieldRef.current) return;
     const editor = getActivePromoEditor();
     if (!editor) return;
+    pushPromoState();
     if (selectionIsInsideEditor(editor)) {
       saveSelection();
       formatText(format);
@@ -389,6 +587,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     if (!currentFieldRef.current) return;
     const editor = getActivePromoEditor();
     if (!editor) return;
+    pushPromoState();
     if (selectionIsInsideEditor(editor)) {
       saveSelection();
       applyColor(color);
@@ -423,6 +622,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   // Update a property on current field's style
   function updateFieldStyle(patch: Record<string, any>) {
     if (!currentField) return;
+    pushPromoState();
     
     if (currentField === 'timer') {
       // Timer uses dateStyle
@@ -452,6 +652,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   // Update a property on the current field's background
   function updateFieldBg(patch: Record<string, any>) {
     if (!currentField) return;
+    pushPromoState();
     
     if (currentField === 'timer') {
       // Timer uses dateStyle
@@ -487,6 +688,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
 
   // Direct style update for a specific style key (used by timer controls)
   function updateFieldStyleDirect(styleKey: string, patch: Record<string, any>) {
+    pushPromoState();
     setConfig({
       ...config,
       promoCard: {
@@ -502,6 +704,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
 
   // Card-level background update
   function updateCardBg(patch: Record<string, any>) {
+    pushPromoState();
     setConfig({
       ...config,
       promoCard: {
@@ -554,7 +757,30 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     setShowCardBgPopup(false);
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+
+      const key = e.key.toLowerCase();
+      const isUndo = key === 'z' && !e.shiftKey;
+      const isRedo = (key === 'z' && e.shiftKey) || key === 'y';
+      if (!isUndo && !isRedo) return;
+
+      const target = e.target as HTMLElement | null;
+      if (target?.isContentEditable) return;
+
+      e.preventDefault();
+      if (isUndo) undoPromo();
+      if (isRedo) redoPromo();
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  });
+
   function toggleActive() {
+    pushPromoState();
     setConfig({
       ...config,
       promoCard: {
@@ -566,6 +792,8 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }
 
   function updateField(field: keyof PromoCard, value: any) {
+    if ((configRef.current.promoCard as any)[field] === value) return;
+    pushPromoState();
     setConfig({
       ...config,
       promoCard: {
@@ -643,6 +871,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }
 
   function applyTemplate(template: PromoCard, templateName: string) {
+    pushPromoState();
     const cloned = JSON.parse(JSON.stringify(template));
     cloned.timerText = normalizeTimerTemplate(cloned.timerText ?? getDefaultTimerStorageHTML());
     setConfig({ ...config, promoCard: cloned });
@@ -902,18 +1131,38 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                 <p className="mt-0.5 max-w-2xl text-xs text-on-surface-variant">Floating widget for special offers.</p>
               </div>
             </div>
-            <button
-              onClick={toggleActive}
-              className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${
-                config.promoCard.active ? 'bg-primary' : 'bg-surface-subtle hover:bg-primary/20'
-              }`}
-            >
-              <span
-                className={`pointer-events-none relative inline-block h-5 w-5 rounded-full bg-white shadow transform transition ${
-                  config.promoCard.active ? 'translate-x-5' : 'translate-x-0'
+            <div className="flex items-center gap-1.5">
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={undoPromo}
+                disabled={!canUndoPromo}
+                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Undo promo action"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={redoPromo}
+                disabled={!canRedoPromo}
+                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Redo promo action"
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={toggleActive}
+                className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${
+                  config.promoCard.active ? 'bg-primary' : 'bg-surface-subtle hover:bg-primary/20'
                 }`}
-              ></span>
-            </button>
+              >
+                <span
+                  className={`pointer-events-none relative inline-block h-5 w-5 rounded-full bg-white shadow transform transition ${
+                    config.promoCard.active ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                ></span>
+              </button>
+            </div>
           </div>
 
           <div className="pt-1">
@@ -926,6 +1175,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
             <p className="text-xs text-on-surface-variant mt-0.5 mb-1">Enter text below</p>
             <div ref={titleRef} contentEditable suppressContentEditableWarning
               onInput={()=>onFieldInput('title')} onFocus={()=>onFieldFocus('title',titleRef)}
+              onKeyDown={onPromoEditorKeyDown}
               onMouseUp={() => refreshPromoToolbarFormats(titleRef.current)} onKeyUp={() => refreshPromoToolbarFormats(titleRef.current)}
               className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[38px] outline-none break-words transition-colors ${
                 currentField === 'title'
@@ -939,6 +1189,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
             <p className="text-xs text-on-surface-variant mt-0.5 mb-1">Enter text below</p>
             <div ref={subtitleRef} contentEditable suppressContentEditableWarning
               onInput={()=>onFieldInput('subtitle')} onFocus={()=>onFieldFocus('subtitle',subtitleRef)}
+              onKeyDown={onPromoEditorKeyDown}
               onMouseUp={() => refreshPromoToolbarFormats(subtitleRef.current)} onKeyUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
               className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[38px] outline-none break-words transition-colors ${
                 currentField === 'subtitle'
@@ -953,6 +1204,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
             <p className="text-xs text-on-surface-variant mt-0.5 mb-1">Enter text below</p>
             <div ref={descRef} contentEditable suppressContentEditableWarning
               onInput={()=>onFieldInput('description')} onFocus={()=>onFieldFocus('description',descRef)}
+              onKeyDown={onPromoEditorKeyDown}
               onMouseUp={() => refreshPromoToolbarFormats(descRef.current)} onKeyUp={() => refreshPromoToolbarFormats(descRef.current)}
               className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[48px] outline-none break-words transition-colors ${
                 currentField === 'description'
@@ -1041,6 +1293,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
               <p className="text-xs text-on-surface-variant mt-0.5 mb-1">Enter text below</p>
               <div ref={timerRef} contentEditable suppressContentEditableWarning
                 onInput={()=>onFieldInput('timer')} onFocus={()=>onFieldFocus('timer',timerRef)}
+                onKeyDown={onPromoEditorKeyDown}
                 onMouseUp={() => refreshPromoToolbarFormats(timerRef.current)} onKeyUp={() => refreshPromoToolbarFormats(timerRef.current)}
                 className={`rich-editor promo-standard-editor shadow-sm focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 block w-full sm:text-sm rounded-md p-2 border outline-none break-words min-h-[48px] transition-colors ${
                   currentField === 'timer'
@@ -1057,6 +1310,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     key={token}
                     onMouseDown={(e) => {
                       e.preventDefault(); // Prevent button from stealing focus
+                      pushPromoState();
                       const el = timerRef.current;
                       if (!el) return;
                       const sel = window.getSelection();
@@ -1119,6 +1373,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                 <div ref={buttonRef} contentEditable suppressContentEditableWarning
                   data-placeholder="Enter text here"
                   onInput={()=>onFieldInput('button')} onFocus={()=>onFieldFocus('button',buttonRef)}
+                  onKeyDown={onPromoEditorKeyDown}
                   onMouseUp={() => refreshPromoToolbarFormats(buttonRef.current)} onKeyUp={() => refreshPromoToolbarFormats(buttonRef.current)}
                   className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[38px] outline-none break-words transition-colors ${
                     currentField === 'button'
@@ -1164,7 +1419,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     options={[{ value: 'bottom-right', label: 'Bottom Right' }, { value: 'bottom-left', label: 'Bottom Left' }]}
                     open={showCardPositionDropdown}
                     onOpen={() => { const next = !showCardPositionDropdown; closeAllPromoDropdowns(); setShowCardPositionDropdown(next); setCardPositionPos(getDropdownPosition(cardPositionBtnRef.current)); }}
-                    onSelect={(v) => { setConfig({ ...config, promoCard: { ...config.promoCard, style: { ...config.promoCard.style, position: v as any } } }); markChanged(); setShowCardPositionDropdown(false); }}
+                    onSelect={(v) => { pushPromoState(); setConfig({ ...config, promoCard: { ...config.promoCard, style: { ...config.promoCard.style, position: v as any } } }); markChanged(); setShowCardPositionDropdown(false); }}
                     buttonRef={cardPositionBtnRef}
                     menuRef={cardPositionMenuRef}
                     menuPosition={cardPositionPos}
