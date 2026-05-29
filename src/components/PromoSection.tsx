@@ -1,21 +1,42 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef, useCallback, type RefObject, type Dispatch, type SetStateAction, type KeyboardEvent } from 'react';
-import { Gift, X, Palette, Undo2, Redo2, LayoutTemplate, History } from 'lucide-react';
-import { CampaignConfig, PromoCard } from '@/types/campaign';
-import { getBackgroundStyle } from '@/lib/utils';
-import { HistoryManager } from '@/lib/historyManager';
-import { SamplePromoTemplates } from './SamplePromoTemplates';
-import { useRichTextEditor } from '@/hooks/useRichTextEditor';
-import { wrapBareTextWithFontSize, rgbToHex, FONT_SIZE_LABEL_MAP } from '@/lib/richTextUtils';
-import RichTextToolbar from './RichTextToolbar';
-import { PopupDropdown } from './PopupDropdown';
-import { 
-  getDefaultTimerStorageHTML, 
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  type RefObject,
+  type Dispatch,
+  type SetStateAction,
+  type KeyboardEvent,
+} from "react";
+import {
+  Gift,
+  X,
+  Palette,
+  Undo2,
+  Redo2,
+  LayoutTemplate,
+  History,
+} from "lucide-react";
+import { CampaignConfig, PromoCard } from "@/types/campaign";
+import { getBackgroundStyle } from "@/lib/utils";
+import { HistoryManager } from "@/lib/historyManager";
+import { SamplePromoTemplates } from "./SamplePromoTemplates";
+import { useRichTextEditor } from "@/hooks/useRichTextEditor";
+import {
+  wrapBareTextWithFontSize,
+  rgbToHex,
+  FONT_SIZE_LABEL_MAP,
+} from "@/lib/richTextUtils";
+import RichTextToolbar from "./RichTextToolbar";
+import { PopupDropdown } from "./PopupDropdown";
+import {
+  getDefaultTimerStorageHTML,
   normalizeTimerTemplate,
   formatTimerText,
   calculateTimeRemaining as calcTimerRemaining,
-} from '@/lib/timerUtils';
+} from "@/lib/timerUtils";
 
 interface PromoSectionProps {
   config: CampaignConfig;
@@ -24,8 +45,8 @@ interface PromoSectionProps {
   toast: (message: string, isError?: boolean) => void;
 }
 
-type PromoField = 'title'|'subtitle'|'description'|'timer'|'button';
-const PROMO_EDITOR_DEFAULT_COLOR = '#ffffff';
+type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
+const PROMO_EDITOR_DEFAULT_COLOR = "#ffffff";
 
 interface PromoSnapshot {
   promoCard: PromoCard;
@@ -38,17 +59,22 @@ interface PromoSelectionSnapshot {
   end: number;
 }
 
-export function PromoSection({ config, setConfig, markChanged, toast }: PromoSectionProps) {
+export function PromoSection({
+  config,
+  setConfig,
+  markChanged,
+  toast,
+}: PromoSectionProps) {
   const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
     const date = new Date();
     date.setDate(date.getDate() + daysFromToday);
     const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
   }, []);
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const [currentField, setCurrentField] = useState<PromoField|null>(null);
+  const [currentField, setCurrentField] = useState<PromoField | null>(null);
   const configRef = useRef(config);
   configRef.current = config;
   const currentFieldRef = useRef<PromoField | null>(currentField);
@@ -81,12 +107,16 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   const startDatePickerRef = useRef<HTMLDivElement>(null);
   const endDatePickerRef = useRef<HTMLDivElement>(null);
 
-  const [showCardPositionDropdown, setShowCardPositionDropdown] = useState(false);
+  const [showCardPositionDropdown, setShowCardPositionDropdown] =
+    useState(false);
   const [showCardBgTypeDropdown, setShowCardBgTypeDropdown] = useState(false);
   const [showFieldBgTypeDropdown, setShowFieldBgTypeDropdown] = useState(false);
-  const [showFieldDirectionDropdown, setShowFieldDirectionDropdown] = useState(false);
+  const [showFieldDirectionDropdown, setShowFieldDirectionDropdown] =
+    useState(false);
   const [showCardBgPopup, setShowCardBgPopup] = useState(false);
-  const [previewFieldDirection, setPreviewFieldDirection] = useState<string | null>(null);
+  const [previewFieldDirection, setPreviewFieldDirection] = useState<
+    string | null
+  >(null);
   const [showPersistentScaffold, setShowPersistentScaffold] = useState(false);
   // Action popups launched from the buttons under the Promo Card heading.
   const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
@@ -94,26 +124,56 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [startDateView, setStartDateView] = useState<Date>(() => {
-    const base = config.promoCard.startDate ? new Date(`${config.promoCard.startDate}T00:00:00`) : new Date();
+    const base = config.promoCard.startDate
+      ? new Date(`${config.promoCard.startDate}T00:00:00`)
+      : new Date();
     return new Date(base.getFullYear(), base.getMonth(), 1);
   });
   const [endDateView, setEndDateView] = useState<Date>(() => {
-    const base = config.promoCard.endDate ? new Date(`${config.promoCard.endDate}T00:00:00`) : new Date();
+    const base = config.promoCard.endDate
+      ? new Date(`${config.promoCard.endDate}T00:00:00`)
+      : new Date();
     return new Date(base.getFullYear(), base.getMonth(), 1);
   });
 
-  const [cardPositionPos, setCardPositionPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const [cardBgTypePos, setCardBgTypePos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const [fieldBgTypePos, setFieldBgTypePos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const [fieldDirectionPos, setFieldDirectionPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [cardPositionPos, setCardPositionPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+  const [cardBgTypePos, setCardBgTypePos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+  const [fieldBgTypePos, setFieldBgTypePos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+  const [fieldDirectionPos, setFieldDirectionPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
 
   // Single hook instance — activeEditorRef is swapped on focus
   const {
-    activeFormats, setActiveFormats, formatText, applyColor, detectFormats,
-    ensureDefaultFontSize, saveSelection, getNormalizedHTML,
-  } = useRichTextEditor(activeEditorRef, { defaultColor: PROMO_EDITOR_DEFAULT_COLOR });
+    activeFormats,
+    setActiveFormats,
+    formatText,
+    applyColor,
+    detectFormats,
+    ensureDefaultFontSize,
+    saveSelection,
+    getNormalizedHTML,
+  } = useRichTextEditor(activeEditorRef, {
+    defaultColor: PROMO_EDITOR_DEFAULT_COLOR,
+  });
 
-  const promoHistory = useRef(new HistoryManager<PromoSnapshot>('Promo')).current;
+  const promoHistory = useRef(
+    new HistoryManager<PromoSnapshot>("Promo"),
+  ).current;
   const restoringSnapshotRef = useRef(false);
   const promoDeletingRef = useRef(false);
   const [canUndoPromo, setCanUndoPromo] = useState(false);
@@ -145,11 +205,11 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }
 
   function getFieldRef(field: PromoField | null) {
-    if (field === 'title') return titleRef;
-    if (field === 'subtitle') return subtitleRef;
-    if (field === 'description') return descRef;
-    if (field === 'timer') return timerRef;
-    if (field === 'button') return buttonRef;
+    if (field === "title") return titleRef;
+    if (field === "subtitle") return subtitleRef;
+    if (field === "description") return descRef;
+    if (field === "timer") return timerRef;
+    if (field === "button") return buttonRef;
     return null;
   }
 
@@ -177,7 +237,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     syncPromoHistoryButtons();
     if (snapshot) {
       applyPromoSnapshot(snapshot);
-      toast('Promo action undone');
+      toast("Promo action undone");
     }
   }
 
@@ -186,16 +246,20 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     syncPromoHistoryButtons();
     if (snapshot) {
       applyPromoSnapshot(snapshot);
-      toast('Promo action redone');
+      toast("Promo action redone");
     }
   }
 
   // Populate editors from config on mount
   useEffect(() => {
-    if (titleRef.current) titleRef.current.innerHTML = config.promoCard.title || '';
-    if (subtitleRef.current) subtitleRef.current.innerHTML = config.promoCard.subtitle || '';
-    if (descRef.current) descRef.current.innerHTML = config.promoCard.description || '';
-    if (buttonRef.current) buttonRef.current.innerHTML = config.promoCard.buttonText || '';
+    if (titleRef.current)
+      titleRef.current.innerHTML = config.promoCard.title || "";
+    if (subtitleRef.current)
+      subtitleRef.current.innerHTML = config.promoCard.subtitle || "";
+    if (descRef.current)
+      descRef.current.innerHTML = config.promoCard.description || "";
+    if (buttonRef.current)
+      buttonRef.current.innerHTML = config.promoCard.buttonText || "";
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -204,7 +268,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   useEffect(() => {
     const el = previewTitleRef.current;
     if (!el) return;
-    const nextHtml = config.promoCard.title || '';
+    const nextHtml = config.promoCard.title || "";
     if (el.innerHTML !== nextHtml) {
       el.innerHTML = nextHtml;
     }
@@ -213,7 +277,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   useEffect(() => {
     const el = previewSubtitleRef.current;
     if (!el) return;
-    const nextHtml = config.promoCard.subtitle || '';
+    const nextHtml = config.promoCard.subtitle || "";
     if (el.innerHTML !== nextHtml) {
       el.innerHTML = nextHtml;
     }
@@ -222,7 +286,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   useEffect(() => {
     const el = previewDescriptionRef.current;
     if (!el) return;
-    const nextHtml = config.promoCard.description || '';
+    const nextHtml = config.promoCard.description || "";
     if (el.innerHTML !== nextHtml) {
       el.innerHTML = nextHtml;
     }
@@ -231,7 +295,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   useEffect(() => {
     const el = previewButtonRef.current;
     if (!el) return;
-    const nextHtml = config.promoCard.buttonText || '';
+    const nextHtml = config.promoCard.buttonText || "";
     if (el.innerHTML !== nextHtml) {
       el.innerHTML = nextHtml;
     }
@@ -249,7 +313,9 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   useEffect(() => {
     const el = timerRef.current;
     if (!el) return;
-    const nextHtml = normalizeTimerTemplate(config.promoCard.timerText ?? getDefaultTimerStorageHTML());
+    const nextHtml = normalizeTimerTemplate(
+      config.promoCard.timerText ?? getDefaultTimerStorageHTML(),
+    );
     if (el.innerHTML !== nextHtml) {
       el.innerHTML = nextHtml;
     }
@@ -277,17 +343,23 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
 
   function syncEditorsFromConfig(pc: PromoCard) {
     setTimeout(() => {
-      if (titleRef.current) titleRef.current.innerHTML = pc.title || '';
-      if (subtitleRef.current) subtitleRef.current.innerHTML = pc.subtitle || '';
-      if (descRef.current) descRef.current.innerHTML = pc.description || '';
-      if (buttonRef.current) buttonRef.current.innerHTML = pc.buttonText || '';
+      if (titleRef.current) titleRef.current.innerHTML = pc.title || "";
+      if (subtitleRef.current)
+        subtitleRef.current.innerHTML = pc.subtitle || "";
+      if (descRef.current) descRef.current.innerHTML = pc.description || "";
+      if (buttonRef.current) buttonRef.current.innerHTML = pc.buttonText || "";
       if (timerRef.current) {
-        timerRef.current.innerHTML = normalizeTimerTemplate(pc.timerText ?? getDefaultTimerStorageHTML());
+        timerRef.current.innerHTML = normalizeTimerTemplate(
+          pc.timerText ?? getDefaultTimerStorageHTML(),
+        );
       }
     }, 0);
   }
 
-  function onFieldFocus(field: PromoField, ref: RefObject<HTMLDivElement|null>) {
+  function onFieldFocus(
+    field: PromoField,
+    ref: RefObject<HTMLDivElement | null>,
+  ) {
     setShowPersistentScaffold(true);
     setCurrentField(field);
     activeEditorRef.current = ref.current;
@@ -300,25 +372,47 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
 
   function onFieldInput(field: PromoField) {
     if (restoringSnapshotRef.current) return;
-    if (field === 'timer') {
+    if (field === "timer") {
       const fallbackEl = timerRef.current;
-      const el = (currentField === 'timer' && activeEditorRef.current) ? activeEditorRef.current : fallbackEl;
+      const el =
+        currentField === "timer" && activeEditorRef.current
+          ? activeEditorRef.current
+          : fallbackEl;
       if (!el) return;
       const html = wrapBareTextWithFontSize(el.innerHTML);
       const text = normalizeTimerTemplate(html);
-      setConfig({ ...config, promoCard: { ...config.promoCard, timerText: text } });
+      setConfig({
+        ...config,
+        promoCard: { ...config.promoCard, timerText: text },
+      });
       markChanged();
       refreshPromoToolbarFormats(el);
       return;
     }
-    
-    const refMap = { title: titleRef, subtitle: subtitleRef, description: descRef, button: buttonRef };
+
+    const refMap = {
+      title: titleRef,
+      subtitle: subtitleRef,
+      description: descRef,
+      button: buttonRef,
+    };
     const fallbackEl = refMap[field].current;
-    const el = (currentField === field && activeEditorRef.current) ? activeEditorRef.current : fallbackEl;
+    const el =
+      currentField === field && activeEditorRef.current
+        ? activeEditorRef.current
+        : fallbackEl;
     if (!el) return;
     const html = wrapBareTextWithFontSize(el.innerHTML);
-    const fieldMap = { title: 'title', subtitle: 'subtitle', description: 'description', button: 'buttonText' } as const;
-    setConfig({ ...config, promoCard: { ...config.promoCard, [fieldMap[field]]: html } });
+    const fieldMap = {
+      title: "title",
+      subtitle: "subtitle",
+      description: "description",
+      button: "buttonText",
+    } as const;
+    setConfig({
+      ...config,
+      promoCard: { ...config.promoCard, [fieldMap[field]]: html },
+    });
     markChanged();
     refreshPromoToolbarFormats(el);
   }
@@ -326,7 +420,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   function onPromoPreviewKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
-    if (mod && (key === 'z' || key === 'y')) {
+    if (mod && (key === "z" || key === "y")) {
       onPromoEditorKeyDown(e);
       return;
     }
@@ -337,10 +431,10 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
 
-    if (mod && (key === 'z' || key === 'y')) {
+    if (mod && (key === "z" || key === "y")) {
       e.preventDefault();
-      const isUndo = key === 'z' && !e.shiftKey;
-      const isRedo = (key === 'z' && e.shiftKey) || key === 'y';
+      const isUndo = key === "z" && !e.shiftKey;
+      const isRedo = (key === "z" && e.shiftKey) || key === "y";
       if (isUndo) undoPromo();
       if (isRedo) redoPromo();
       promoDeletingRef.current = false;
@@ -355,9 +449,9 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       selection &&
       !selection.isCollapsed &&
       selection.rangeCount > 0 &&
-      editor.contains(selection.getRangeAt(0).commonAncestorContainer)
+      editor.contains(selection.getRangeAt(0).commonAncestorContainer),
     );
-    const isDestructiveKey = e.key === 'Backspace' || e.key === 'Delete';
+    const isDestructiveKey = e.key === "Backspace" || e.key === "Delete";
     const overwritesSelection = hasSelectionInEditor && e.key.length === 1;
 
     if (hasSelectionInEditor && (isDestructiveKey || overwritesSelection)) {
@@ -379,16 +473,26 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
 
   function selectionIsInsideEditor(editor: HTMLDivElement): boolean {
     const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return false;
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed)
+      return false;
     const range = selection.getRangeAt(0);
-    return editor.contains(range.commonAncestorContainer) || editor.contains(selection.anchorNode);
+    return (
+      editor.contains(range.commonAncestorContainer) ||
+      editor.contains(selection.anchorNode)
+    );
   }
 
-  function getPromoSelectionSnapshot(editor: HTMLDivElement): PromoSelectionSnapshot | null {
+  function getPromoSelectionSnapshot(
+    editor: HTMLDivElement,
+  ): PromoSelectionSnapshot | null {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return null;
     const range = selection.getRangeAt(0);
-    if (!editor.contains(range.commonAncestorContainer) && !editor.contains(selection.anchorNode)) return null;
+    if (
+      !editor.contains(range.commonAncestorContainer) &&
+      !editor.contains(selection.anchorNode)
+    )
+      return null;
 
     const preStartRange = document.createRange();
     preStartRange.selectNodeContents(editor);
@@ -404,8 +508,11 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     };
   }
 
-  function restorePromoSelection(editor: HTMLDivElement, selectionSnapshot: PromoSelectionSnapshot | null) {
-    if (!selectionSnapshot || typeof window === 'undefined') return;
+  function restorePromoSelection(
+    editor: HTMLDivElement,
+    selectionSnapshot: PromoSelectionSnapshot | null,
+  ) {
+    if (!selectionSnapshot || typeof window === "undefined") return;
     const textLength = editor.textContent?.length || 0;
     const start = Math.max(0, Math.min(selectionSnapshot.start, textLength));
     const end = Math.max(start, Math.min(selectionSnapshot.end, textLength));
@@ -453,7 +560,10 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       detectFormats();
       return;
     }
-    detectPromoFormatsFromHTML(editor.innerHTML, getEditorFallbackColor(editor));
+    detectPromoFormatsFromHTML(
+      editor.innerHTML,
+      getEditorFallbackColor(editor),
+    );
   }
 
   function syncInactiveFieldEditor(field: PromoField, html: string) {
@@ -463,19 +573,24 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }
 
   function getEditorFallbackColor(editor: HTMLDivElement): string {
-    if (typeof window === 'undefined') return PROMO_EDITOR_DEFAULT_COLOR;
+    if (typeof window === "undefined") return PROMO_EDITOR_DEFAULT_COLOR;
     const color = window.getComputedStyle(editor).color;
-    return color.startsWith('rgb') ? rgbToHex(color) : (color || PROMO_EDITOR_DEFAULT_COLOR);
+    return color.startsWith("rgb")
+      ? rgbToHex(color)
+      : color || PROMO_EDITOR_DEFAULT_COLOR;
   }
 
-  function detectPromoFormatsFromHTML(html: string, fallbackColor = PROMO_EDITOR_DEFAULT_COLOR) {
-    const container = document.createElement('div');
+  function detectPromoFormatsFromHTML(
+    html: string,
+    fallbackColor = PROMO_EDITOR_DEFAULT_COLOR,
+  ) {
+    const container = document.createElement("div");
     container.innerHTML = html;
 
     const textNodes: Node[] = [];
     function findTextNodes(node: Node) {
       if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent?.replace(/\u200B/g, '').trim();
+        const text = node.textContent?.replace(/\u200B/g, "").trim();
         if (text) textNodes.push(node);
       } else {
         node.childNodes.forEach(findTextNodes);
@@ -484,7 +599,12 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     findTextNodes(container);
 
     if (textNodes.length === 0) {
-      setActiveFormats({ bold: false, italic: false, size: 'md', color: fallbackColor });
+      setActiveFormats({
+        bold: false,
+        italic: false,
+        size: "md",
+        color: fallbackColor,
+      });
       return;
     }
 
@@ -510,11 +630,11 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
         }
         if (node.style.color) {
           const color = node.style.color;
-          effectiveColor = color.startsWith('rgb') ? rgbToHex(color) : color;
+          effectiveColor = color.startsWith("rgb") ? rgbToHex(color) : color;
         }
         const tag = node.tagName;
-        if (tag === 'B' || tag === 'STRONG') isBold = true;
-        if (tag === 'I' || tag === 'EM') isItalic = true;
+        if (tag === "B" || tag === "STRONG") isBold = true;
+        if (tag === "I" || tag === "EM") isItalic = true;
         node = node.parentElement;
       }
 
@@ -526,13 +646,13 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     setActiveFormats({
       bold: allBold,
       italic: allItalic,
-      size: sizes.size === 1 ? [...sizes][0] : (sizes.size === 0 ? 'md' : ''),
-      color: colors.size === 1 ? [...colors][0] : '',
+      size: sizes.size === 1 ? [...sizes][0] : sizes.size === 0 ? "md" : "",
+      color: colors.size === 1 ? [...colors][0] : "",
     });
   }
 
   function applyPromoFormatToAll(editor: HTMLDivElement, action: () => void) {
-    const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
+    const hasContent = editor.textContent?.replace(/\u200B/g, "").trim();
     if (!hasContent) return;
     const wasFocused = document.activeElement === editor;
     editor.focus();
@@ -548,7 +668,10 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     onFieldInput(currentFieldRef.current as PromoField);
     window.getSelection()?.removeAllRanges();
     if (!wasFocused) editor.blur();
-    detectPromoFormatsFromHTML(editor.innerHTML, getEditorFallbackColor(editor));
+    detectPromoFormatsFromHTML(
+      editor.innerHTML,
+      getEditorFallbackColor(editor),
+    );
   }
 
   function handlePromoToolbarFormat(format: string) {
@@ -560,24 +683,33 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       saveSelection();
       formatText(format);
       onFieldInput(currentFieldRef.current);
-      syncInactiveFieldEditor(currentFieldRef.current, wrapBareTextWithFontSize(editor.innerHTML));
+      syncInactiveFieldEditor(
+        currentFieldRef.current,
+        wrapBareTextWithFontSize(editor.innerHTML),
+      );
       setTimeout(() => refreshPromoToolbarFormats(editor), 0);
       return;
     }
 
-    const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
+    const hasContent = editor.textContent?.replace(/\u200B/g, "").trim();
     if (hasContent) {
       applyPromoFormatToAll(editor, () => formatText(format));
-      syncInactiveFieldEditor(currentFieldRef.current, wrapBareTextWithFontSize(editor.innerHTML));
+      syncInactiveFieldEditor(
+        currentFieldRef.current,
+        wrapBareTextWithFontSize(editor.innerHTML),
+      );
       return;
     }
 
-    if (format.startsWith('size-')) {
-      setActiveFormats(prev => ({ ...prev, size: format.replace('size-', '') }));
-    } else if (format === 'bold') {
-      setActiveFormats(prev => ({ ...prev, bold: !prev.bold }));
-    } else if (format === 'italic') {
-      setActiveFormats(prev => ({ ...prev, italic: !prev.italic }));
+    if (format.startsWith("size-")) {
+      setActiveFormats((prev) => ({
+        ...prev,
+        size: format.replace("size-", ""),
+      }));
+    } else if (format === "bold") {
+      setActiveFormats((prev) => ({ ...prev, bold: !prev.bold }));
+    } else if (format === "italic") {
+      setActiveFormats((prev) => ({ ...prev, italic: !prev.italic }));
     }
   }
 
@@ -590,26 +722,37 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       saveSelection();
       applyColor(color);
       onFieldInput(currentFieldRef.current);
-      syncInactiveFieldEditor(currentFieldRef.current, wrapBareTextWithFontSize(editor.innerHTML));
+      syncInactiveFieldEditor(
+        currentFieldRef.current,
+        wrapBareTextWithFontSize(editor.innerHTML),
+      );
       setTimeout(() => refreshPromoToolbarFormats(editor), 0);
       return;
     }
 
-    const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
+    const hasContent = editor.textContent?.replace(/\u200B/g, "").trim();
     if (hasContent) {
       applyPromoFormatToAll(editor, () => applyColor(color));
-      syncInactiveFieldEditor(currentFieldRef.current, wrapBareTextWithFontSize(editor.innerHTML));
+      syncInactiveFieldEditor(
+        currentFieldRef.current,
+        wrapBareTextWithFontSize(editor.innerHTML),
+      );
     }
-    setActiveFormats(prev => ({ ...prev, color }));
+    setActiveFormats((prev) => ({ ...prev, color }));
   }
 
   // Style key map for field → config path
-  const STYLE_KEY_MAP = { title: 'titleStyle', subtitle: 'subheadingStyle', description: 'descriptionStyle', button: 'buttonStyle' } as const;
+  const STYLE_KEY_MAP = {
+    title: "titleStyle",
+    subtitle: "subheadingStyle",
+    description: "descriptionStyle",
+    button: "buttonStyle",
+  } as const;
 
   // Get current field's style object
   function getFieldStyle() {
     if (!currentField) return null;
-    if (currentField === 'timer') {
+    if (currentField === "timer") {
       // Timer uses dateStyle
       return config.promoCard.style.dateStyle;
     }
@@ -621,16 +764,16 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   function updateFieldStyle(patch: Record<string, any>) {
     if (!currentField) return;
     pushPromoState();
-    
-    if (currentField === 'timer') {
+
+    if (currentField === "timer") {
       // Timer uses dateStyle
       setConfig({
         ...config,
         promoCard: {
           ...config.promoCard,
-          style: { 
-            ...config.promoCard.style, 
-            dateStyle: { ...config.promoCard.style.dateStyle, ...patch } 
+          style: {
+            ...config.promoCard.style,
+            dateStyle: { ...config.promoCard.style.dateStyle, ...patch },
           },
         },
       });
@@ -640,7 +783,10 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
         ...config,
         promoCard: {
           ...config.promoCard,
-          style: { ...config.promoCard.style, [key]: { ...config.promoCard.style[key], ...patch } },
+          style: {
+            ...config.promoCard.style,
+            [key]: { ...config.promoCard.style[key], ...patch },
+          },
         },
       });
     }
@@ -651,17 +797,20 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   function updateFieldBg(patch: Record<string, any>) {
     if (!currentField) return;
     pushPromoState();
-    
-    if (currentField === 'timer') {
+
+    if (currentField === "timer") {
       // Timer uses dateStyle
       const style = config.promoCard.style.dateStyle;
       setConfig({
         ...config,
         promoCard: {
           ...config.promoCard,
-          style: { 
-            ...config.promoCard.style, 
-            dateStyle: { ...style, background: { ...style.background, ...patch } } 
+          style: {
+            ...config.promoCard.style,
+            dateStyle: {
+              ...style,
+              background: { ...style.background, ...patch },
+            },
           },
         },
       });
@@ -672,7 +821,10 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
         ...config,
         promoCard: {
           ...config.promoCard,
-          style: { ...config.promoCard.style, [key]: { ...style, background: { ...style.background, ...patch } } },
+          style: {
+            ...config.promoCard.style,
+            [key]: { ...style, background: { ...style.background, ...patch } },
+          },
         },
       });
     }
@@ -680,12 +832,15 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }
 
   // Alignment helper
-  function setFieldAlignment(align: 'left'|'center'|'right') {
+  function setFieldAlignment(align: "left" | "center" | "right") {
     updateFieldStyle({ textAlign: align });
   }
 
   // Direct style update for a specific style key (used by timer controls)
-  function updateFieldStyleDirect(styleKey: string, patch: Record<string, any>) {
+  function updateFieldStyleDirect(
+    styleKey: string,
+    patch: Record<string, any>,
+  ) {
     pushPromoState();
     setConfig({
       ...config,
@@ -693,7 +848,10 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
         ...config.promoCard,
         style: {
           ...config.promoCard.style,
-          [styleKey]: { ...(config.promoCard.style as any)[styleKey], ...patch },
+          [styleKey]: {
+            ...(config.promoCard.style as any)[styleKey],
+            ...patch,
+          },
         },
       },
     });
@@ -707,7 +865,10 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       ...config,
       promoCard: {
         ...config.promoCard,
-        style: { ...config.promoCard.style, background: { ...config.promoCard.style.background, ...patch } },
+        style: {
+          ...config.promoCard.style,
+          background: { ...config.promoCard.style.background, ...patch },
+        },
       },
     });
     markChanged();
@@ -720,31 +881,50 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     return () => clearInterval(interval);
   }, []);
 
-  const getDropdownPosition = useCallback((button: HTMLButtonElement | null) => {
-    if (!button) return null;
-    const rect = button.getBoundingClientRect();
-    return { top: rect.bottom + 6, left: rect.left, width: rect.width };
-  }, []);
+  const getDropdownPosition = useCallback(
+    (button: HTMLButtonElement | null) => {
+      if (!button) return null;
+      const rect = button.getBoundingClientRect();
+      return { top: rect.bottom + 6, left: rect.left, width: rect.width };
+    },
+    [],
+  );
 
   useEffect(() => {
     const onDocMouseDown = (e: MouseEvent) => {
       const target = e.target as Node;
-      const pairs: Array<[RefObject<HTMLButtonElement | null>, RefObject<HTMLDivElement | null>, Dispatch<SetStateAction<boolean>>]> = [
+      const pairs: Array<
+        [
+          RefObject<HTMLButtonElement | null>,
+          RefObject<HTMLDivElement | null>,
+          Dispatch<SetStateAction<boolean>>,
+        ]
+      > = [
         [cardPositionBtnRef, cardPositionMenuRef, setShowCardPositionDropdown],
         [cardBgTypeBtnRef, cardBgTypeMenuRef, setShowCardBgTypeDropdown],
         [fieldBgTypeBtnRef, fieldBgTypeMenuRef, setShowFieldBgTypeDropdown],
-        [fieldDirectionBtnRef, fieldDirectionMenuRef, setShowFieldDirectionDropdown],
+        [
+          fieldDirectionBtnRef,
+          fieldDirectionMenuRef,
+          setShowFieldDirectionDropdown,
+        ],
       ];
       pairs.forEach(([btnRef, menuRef, setOpen]) => {
-        if (btnRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+        if (
+          btnRef.current?.contains(target) ||
+          menuRef.current?.contains(target)
+        )
+          return;
         setOpen(false);
       });
-      if (!startDatePickerRef.current?.contains(target)) setShowStartDatePicker(false);
-      if (!endDatePickerRef.current?.contains(target)) setShowEndDatePicker(false);
+      if (!startDatePickerRef.current?.contains(target))
+        setShowStartDatePicker(false);
+      if (!endDatePickerRef.current?.contains(target))
+        setShowEndDatePicker(false);
       // Keep card background popup open until explicit close (X button).
     };
-    document.addEventListener('mousedown', onDocMouseDown);
-    return () => document.removeEventListener('mousedown', onDocMouseDown);
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
   }, []);
 
   const closeAllPromoDropdowns = useCallback(() => {
@@ -761,8 +941,8 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       if (!mod) return;
 
       const key = e.key.toLowerCase();
-      const isUndo = key === 'z' && !e.shiftKey;
-      const isRedo = (key === 'z' && e.shiftKey) || key === 'y';
+      const isUndo = key === "z" && !e.shiftKey;
+      const isRedo = (key === "z" && e.shiftKey) || key === "y";
       if (!isUndo && !isRedo) return;
 
       const target = e.target as HTMLElement | null;
@@ -773,8 +953,8 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       if (isRedo) redoPromo();
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
   });
 
   function toggleActive() {
@@ -802,7 +982,10 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     markChanged();
   }
 
-  function getPopupPositionStyle(field: PopupField, popupHeight = 320): { top?: string; bottom?: string } {
+  function getPopupPositionStyle(
+    field: PopupField,
+    popupHeight = 320,
+  ): { top?: string; bottom?: string } {
     const card = promoCardRef.current;
     const refMap = {
       title: previewTitleRef,
@@ -812,37 +995,47 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       timer: previewTimerRef,
     } as const;
     const el = refMap[field].current;
-    if (!card || !el) return { bottom: '8px' };
+    if (!card || !el) return { bottom: "8px" };
     const fieldTop = el.offsetTop;
     const spaceBelow = card.clientHeight - fieldTop;
     if (spaceBelow >= popupHeight + 8) {
       return { top: `${Math.max(8, fieldTop)}px` };
     }
-    return { bottom: '8px' };
+    return { bottom: "8px" };
   }
 
-  const popupEditableFields = ['title', 'subtitle', 'description', 'button', 'timer'] as const;
-  type PopupField = typeof popupEditableFields[number];
+  const popupEditableFields = [
+    "title",
+    "subtitle",
+    "description",
+    "button",
+    "timer",
+  ] as const;
+  type PopupField = (typeof popupEditableFields)[number];
 
   function getPopupFieldStyle(field: PopupField) {
-    if (field === 'title') return config.promoCard.style.titleStyle;
-    if (field === 'subtitle') return config.promoCard.style.subheadingStyle;
-    if (field === 'description') return config.promoCard.style.descriptionStyle;
-    if (field === 'timer') return config.promoCard.style.dateStyle;
+    if (field === "title") return config.promoCard.style.titleStyle;
+    if (field === "subtitle") return config.promoCard.style.subheadingStyle;
+    if (field === "description") return config.promoCard.style.descriptionStyle;
+    if (field === "timer") return config.promoCard.style.dateStyle;
     return config.promoCard.style.buttonStyle;
   }
 
   function getPopupFieldLabel(field: PopupField) {
-    if (field === 'title') return 'Title Style';
-    if (field === 'subtitle') return 'Subtitle Style';
-    if (field === 'description') return 'Description Style';
-    if (field === 'timer') return 'Timer Style';
-    return 'Button Style';
+    if (field === "title") return "Title Style";
+    if (field === "subtitle") return "Subtitle Style";
+    if (field === "description") return "Description Style";
+    if (field === "timer") return "Timer Style";
+    return "Button Style";
   }
 
   function getPreviewFieldBackground(field: PopupField) {
     const bg = getPopupFieldStyle(field).background;
-    if (currentField === field && previewFieldDirection && bg.type === 'linear') {
+    if (
+      currentField === field &&
+      previewFieldDirection &&
+      bg.type === "linear"
+    ) {
       return { ...bg, direction: previewFieldDirection };
     }
     return bg;
@@ -850,20 +1043,32 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
 
   function isPreviewFieldActive() {
     const editor = activeEditorRef.current;
-    return editor === previewTitleRef.current
-      || editor === previewSubtitleRef.current
-      || editor === previewDescriptionRef.current
-      || editor === previewTimerRef.current
-      || editor === previewButtonRef.current;
+    return (
+      editor === previewTitleRef.current ||
+      editor === previewSubtitleRef.current ||
+      editor === previewDescriptionRef.current ||
+      editor === previewTimerRef.current ||
+      editor === previewButtonRef.current
+    );
   }
 
   function getFormattedTimerText(): string {
     const rawHtml = config.promoCard.timerText ?? getDefaultTimerStorageHTML();
-    const timerValue = calcTimerRemaining(config.promoCard.endDate || '');
+    const timerValue = calcTimerRemaining(config.promoCard.endDate || "");
 
-    if ([timerValue.hours, timerValue.minutes, timerValue.seconds, timerValue.days ?? 0].some(Number.isNaN)) {
+    if (
+      [
+        timerValue.hours,
+        timerValue.minutes,
+        timerValue.seconds,
+        timerValue.days ?? 0,
+      ].some(Number.isNaN)
+    ) {
       // Replace tokens with dashes, preserving HTML structure
-      return rawHtml.replace(/\{hhh\}|\{hh\}|\{h\}|\{mmm\}|\{mm\}|\{m\}|\{sss\}|\{ss\}|\{s\}|\{ddd\}|\{dd\}|\{d\}/g, '--');
+      return rawHtml.replace(
+        /\{hhh\}|\{hh\}|\{h\}|\{mmm\}|\{mm\}|\{m\}|\{sss\}|\{ss\}|\{s\}|\{ddd\}|\{dd\}|\{d\}/g,
+        "--",
+      );
     }
     return formatTimerText(rawHtml, timerValue);
   }
@@ -871,7 +1076,9 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   function applyTemplate(template: PromoCard, templateName: string) {
     pushPromoState();
     const cloned = JSON.parse(JSON.stringify(template));
-    cloned.timerText = normalizeTimerTemplate(cloned.timerText ?? getDefaultTimerStorageHTML());
+    cloned.timerText = normalizeTimerTemplate(
+      cloned.timerText ?? getDefaultTimerStorageHTML(),
+    );
     setConfig({ ...config, promoCard: cloned });
     syncEditorsFromConfig(cloned);
     markChanged();
@@ -879,16 +1086,20 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }
 
   function formatDateLabel(value: string): string {
-    if (!value) return 'Select date';
+    if (!value) return "Select date";
     const date = new Date(`${value}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return 'Select date';
-    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    if (Number.isNaN(date.getTime())) return "Select date";
+    return date.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   }
 
   function toISODate(date: Date): string {
     const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
   }
 
@@ -898,11 +1109,19 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     const first = new Date(year, month, 1);
     const startOffset = first.getDay();
     const gridStart = new Date(year, month, 1 - startOffset);
-    return Array.from({ length: 42 }, (_, i) => new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i));
+    return Array.from(
+      { length: 42 },
+      (_, i) =>
+        new Date(
+          gridStart.getFullYear(),
+          gridStart.getMonth(),
+          gridStart.getDate() + i,
+        ),
+    );
   }
 
   function renderDatePicker(params: {
-    mode: 'start' | 'end';
+    mode: "start" | "end";
     value: string;
     viewDate: Date;
     setViewDate: (date: Date) => void;
@@ -910,13 +1129,17 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     setOpen: (open: boolean) => void;
     onSelect: (value: string) => void;
   }) {
-    const { mode, value, viewDate, setViewDate, open, setOpen, onSelect } = params;
+    const { mode, value, viewDate, setViewDate, open, setOpen, onSelect } =
+      params;
     const days = buildMonthDays(viewDate);
     const month = viewDate.getMonth();
     const selected = value;
     const today = toISODate(new Date());
     return (
-      <div ref={mode === 'start' ? startDatePickerRef : endDatePickerRef} className="relative mt-1">
+      <div
+        ref={mode === "start" ? startDatePickerRef : endDatePickerRef}
+        className="relative mt-1"
+      >
         <button
           type="button"
           onMouseDown={(e) => {
@@ -925,52 +1148,99 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
           }}
           className="flex w-full items-center justify-between rounded-md border border-border bg-surface px-3 py-2 text-sm text-on-surface transition-colors hover:border-primary/70"
         >
-          <span className={selected ? 'text-on-surface' : 'text-on-surface-variant'}>{formatDateLabel(value)}</span>
+          <span
+            className={selected ? "text-on-surface" : "text-on-surface-variant"}
+          >
+            {formatDateLabel(value)}
+          </span>
           <svg
-            className={`h-4 w-4 flex-shrink-0 text-on-surface-variant transition-transform duration-200 ${open ? 'rotate-180' : 'rotate-0'}`}
+            className={`h-4 w-4 flex-shrink-0 text-on-surface-variant transition-transform duration-200 ${open ? "rotate-180" : "rotate-0"}`}
             viewBox="0 0 20 20"
             fill="none"
             stroke="currentColor"
             strokeWidth="1.8"
           >
-            <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M6 8l4 4 4-4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         </button>
         {open && (
-          <div className={`absolute z-40 mt-1 w-[260px] rounded-md border border-border bg-surface-elevated p-2 shadow-lg ${mode === 'end' ? 'right-0' : 'left-0'}`}>
+          <div
+            className={`absolute z-40 mt-1 w-[260px] rounded-md border border-border bg-surface-elevated p-2 shadow-lg ${mode === "end" ? "right-0" : "left-0"}`}
+          >
             <div className="mb-2 flex items-center justify-between">
               <button
                 type="button"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1));
+                  setViewDate(
+                    new Date(
+                      viewDate.getFullYear(),
+                      viewDate.getMonth() - 1,
+                      1,
+                    ),
+                  );
                 }}
                 className="h-7 w-7 rounded border border-border text-on-surface-variant hover:border-primary/70 hover:text-primary"
                 aria-label="Previous month"
               >
-                <svg className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M12 6l-4 4 4 4" strokeLinecap="round" strokeLinejoin="round" />
+                <svg
+                  className="mx-auto h-4 w-4"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path
+                    d="M12 6l-4 4 4 4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
               </button>
               <div className="text-xs font-semibold text-on-surface">
-                {viewDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                {viewDate.toLocaleDateString(undefined, {
+                  month: "long",
+                  year: "numeric",
+                })}
               </div>
               <button
                 type="button"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1));
+                  setViewDate(
+                    new Date(
+                      viewDate.getFullYear(),
+                      viewDate.getMonth() + 1,
+                      1,
+                    ),
+                  );
                 }}
                 className="h-7 w-7 rounded border border-border text-on-surface-variant hover:border-primary/70 hover:text-primary"
                 aria-label="Next month"
               >
-                <svg className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M8 6l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+                <svg
+                  className="mx-auto h-4 w-4"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path
+                    d="M8 6l4 4-4 4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
               </button>
             </div>
             <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-on-surface-variant">
-              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => <div key={day}>{day}</div>)}
+              {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
+                <div key={day}>{day}</div>
+              ))}
             </div>
             <div className="grid grid-cols-7 gap-1">
               {days.map((date) => {
@@ -989,11 +1259,11 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     }}
                     className={`h-8 rounded text-xs transition-colors ${
                       isSelected
-                        ? 'bg-primary text-on-primary'
+                        ? "bg-primary text-on-primary"
                         : inMonth
-                          ? 'text-on-surface hover:bg-primary/10 hover:text-primary'
-                          : 'text-on-surface-variant/60 hover:bg-primary/5'
-                    } ${isToday && !isSelected ? 'ring-1 ring-primary/40' : ''}`}
+                          ? "text-on-surface hover:bg-primary/10 hover:text-primary"
+                          : "text-on-surface-variant/60 hover:bg-primary/5"
+                    } ${isToday && !isSelected ? "ring-1 ring-primary/40" : ""}`}
                   >
                     {date.getDate()}
                   </button>
@@ -1005,7 +1275,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                 type="button"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  onSelect('');
+                  onSelect("");
                   setOpen(false);
                 }}
                 className="text-xs text-on-surface-variant hover:text-primary"
@@ -1038,14 +1308,14 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     const degreeMatch = normalized.match(/^(-?\d+(?:\.\d+)?)deg$/);
     if (degreeMatch) return Number(degreeMatch[1]);
     const map: Record<string, number> = {
-      'to top': 0,
-      'to top right': 45,
-      'to right': 90,
-      'to bottom right': 135,
-      'to bottom': 180,
-      'to bottom left': 225,
-      'to left': 270,
-      'to top left': 315,
+      "to top": 0,
+      "to top right": 45,
+      "to right": 90,
+      "to bottom right": 135,
+      "to bottom": 180,
+      "to bottom left": 225,
+      "to left": 270,
+      "to top left": 315,
     };
     return map[normalized] ?? 90;
   }
@@ -1062,7 +1332,10 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     updateCardBg({ direction: angleToCssDirection(angle) });
   }
 
-  function getAngleFromPointer(clientX: number, clientY: number): number | null {
+  function getAngleFromPointer(
+    clientX: number,
+    clientY: number,
+  ): number | null {
     const wheel = cardAngleWheelRef.current;
     if (!wheel) return null;
     const rect = wheel.getBoundingClientRect();
@@ -1077,22 +1350,27 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   }
 
   const presetDirections = [
-    { label: '↑', angle: 0 },
-    { label: '↗', angle: 45 },
-    { label: '→', angle: 90 },
-    { label: '↘', angle: 135 },
-    { label: '↓', angle: 180 },
-    { label: '↙', angle: 225 },
-    { label: '←', angle: 270 },
-    { label: '↖', angle: 315 },
+    { label: "↑", angle: 0 },
+    { label: "↗", angle: 45 },
+    { label: "→", angle: 90 },
+    { label: "↘", angle: 135 },
+    { label: "↓", angle: 180 },
+    { label: "↙", angle: 225 },
+    { label: "←", angle: 270 },
+    { label: "↖", angle: 315 },
   ];
 
-  const cardAngle = directionToAngle(config.promoCard.style.background.direction || 'to right');
+  const cardAngle = directionToAngle(
+    config.promoCard.style.background.direction || "to right",
+  );
   const cardAngleNormalized = normalizeAngle(cardAngle);
 
   function hasVisibleContent(html: string | undefined): boolean {
     if (!html) return false;
-    const plainText = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+    const plainText = html
+      .replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .trim();
     return plainText.length > 0;
   }
 
@@ -1102,20 +1380,24 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
   const hasButtonText = hasVisibleContent(config.promoCard.buttonText);
   const showContentScaffold =
     showPersistentScaffold ||
-    currentField === 'title' ||
-    currentField === 'subtitle' ||
-    currentField === 'description' ||
-    currentField === 'timer' ||
-    currentField === 'button';
+    currentField === "title" ||
+    currentField === "subtitle" ||
+    currentField === "description" ||
+    currentField === "timer" ||
+    currentField === "button";
   const showTitleInPreview = hasTitle || showContentScaffold;
   const showSubtitleInPreview = hasSubtitle || showContentScaffold;
   const showDescriptionInPreview = hasDescription || showContentScaffold;
   const showTimerInPreview = config.promoCard.showTimer || showContentScaffold;
-  const showButtonInPreview = config.promoCard.showButton || showContentScaffold;
+  const showButtonInPreview =
+    config.promoCard.showButton || showContentScaffold;
 
   return (
     <>
-      <div className="p-4 flex gap-5 overflow-hidden" style={{ height: 'calc(100vh - 120px)' }}>
+      <div
+        className="p-4 flex gap-5 overflow-hidden"
+        style={{ height: "calc(100vh - 120px)" }}
+      >
         {/* Left: All editables — 30% width, scrollable */}
         <div className="campaign-custom-scrollbar w-[30%] min-h-0 shrink-0 overflow-y-auto overflow-x-hidden pr-2 space-y-4">
           {/* Header + Toggle */}
@@ -1125,8 +1407,12 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                 <Gift className="w-4 h-4 text-pink-600" />
               </div>
               <div>
-                <h3 className="text-lg leading-6 font-semibold text-on-surface">Promo Card</h3>
-                <p className="mt-0.5 max-w-2xl text-xs text-on-surface-variant">Floating widget for special offers.</p>
+                <h3 className="text-lg leading-6 font-semibold text-on-surface">
+                  Promo Card
+                </h3>
+                <p className="mt-0.5 max-w-2xl text-xs text-on-surface-variant">
+                  Floating widget for special offers.
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-1.5">
@@ -1151,12 +1437,14 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
               <button
                 onClick={toggleActive}
                 className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${
-                  config.promoCard.active ? 'bg-primary' : 'bg-surface-subtle hover:bg-primary/20'
+                  config.promoCard.active
+                    ? "bg-primary"
+                    : "bg-surface-subtle hover:bg-primary/20"
                 }`}
               >
                 <span
                   className={`pointer-events-none relative inline-block h-5 w-5 rounded-full bg-white shadow transform transition ${
-                    config.promoCard.active ? 'translate-x-5' : 'translate-x-0'
+                    config.promoCard.active ? "translate-x-5" : "translate-x-0"
                   }`}
                 ></span>
               </button>
@@ -1184,121 +1472,201 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
           </div>
 
           <div className="pt-1">
-            <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">Content</h4>
-            <p className="text-xs text-on-surface-variant mb-2">Main promo copy shown in the card.</p>
+            <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">
+              Content
+            </h4>
+            <p className="text-xs text-on-surface-variant mb-2">
+              Main promo copy shown in the card.
+            </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-on-surface">Title</label>
-            <p className="text-xs text-on-surface-variant mt-0.5 mb-1">Enter text below</p>
-            <div ref={titleRef} contentEditable suppressContentEditableWarning
-              onInput={()=>onFieldInput('title')} onFocus={()=>onFieldFocus('title',titleRef)}
+            <label className="block text-sm font-medium text-on-surface">
+              Title
+            </label>
+            <p className="text-xs text-on-surface-variant mt-0.5 mb-1">
+              Enter text below
+            </p>
+            <div
+              ref={titleRef}
+              contentEditable
+              suppressContentEditableWarning
+              onInput={() => onFieldInput("title")}
+              onFocus={() => onFieldFocus("title", titleRef)}
               onKeyDown={onPromoEditorKeyDown}
-              onMouseUp={() => refreshPromoToolbarFormats(titleRef.current)} onKeyUp={() => refreshPromoToolbarFormats(titleRef.current)}
+              onMouseUp={() => refreshPromoToolbarFormats(titleRef.current)}
+              onKeyUp={() => refreshPromoToolbarFormats(titleRef.current)}
               className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[38px] outline-none break-words transition-colors ${
-                currentField === 'title'
-                  ? 'border-primary/70'
-                  : 'border-border'
+                currentField === "title" ? "border-primary/70" : "border-border"
               } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
-              style={{ background: getBackgroundStyle(config.promoCard.style.background) }} />
+              style={{
+                background: getBackgroundStyle(
+                  config.promoCard.style.background,
+                ),
+              }}
+            />
           </div>
           <div>
-            <label className="block text-sm font-medium text-on-surface">Subtitle</label>
-            <p className="text-xs text-on-surface-variant mt-0.5 mb-1">Enter text below</p>
-            <div ref={subtitleRef} contentEditable suppressContentEditableWarning
-              onInput={()=>onFieldInput('subtitle')} onFocus={()=>onFieldFocus('subtitle',subtitleRef)}
+            <label className="block text-sm font-medium text-on-surface">
+              Subtitle
+            </label>
+            <p className="text-xs text-on-surface-variant mt-0.5 mb-1">
+              Enter text below
+            </p>
+            <div
+              ref={subtitleRef}
+              contentEditable
+              suppressContentEditableWarning
+              onInput={() => onFieldInput("subtitle")}
+              onFocus={() => onFieldFocus("subtitle", subtitleRef)}
               onKeyDown={onPromoEditorKeyDown}
-              onMouseUp={() => refreshPromoToolbarFormats(subtitleRef.current)} onKeyUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
+              onMouseUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
+              onKeyUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
               className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[38px] outline-none break-words transition-colors ${
-                currentField === 'subtitle'
-                  ? 'border-primary/70'
-                  : 'border-border'
+                currentField === "subtitle"
+                  ? "border-primary/70"
+                  : "border-border"
               } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
-              style={{ background: getBackgroundStyle(config.promoCard.style.background) }} />
+              style={{
+                background: getBackgroundStyle(
+                  config.promoCard.style.background,
+                ),
+              }}
+            />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-on-surface">Description</label>
-            <p className="text-xs text-on-surface-variant mt-0.5 mb-1">Enter text below</p>
-            <div ref={descRef} contentEditable suppressContentEditableWarning
-              onInput={()=>onFieldInput('description')} onFocus={()=>onFieldFocus('description',descRef)}
+            <label className="block text-sm font-medium text-on-surface">
+              Description
+            </label>
+            <p className="text-xs text-on-surface-variant mt-0.5 mb-1">
+              Enter text below
+            </p>
+            <div
+              ref={descRef}
+              contentEditable
+              suppressContentEditableWarning
+              onInput={() => onFieldInput("description")}
+              onFocus={() => onFieldFocus("description", descRef)}
               onKeyDown={onPromoEditorKeyDown}
-              onMouseUp={() => refreshPromoToolbarFormats(descRef.current)} onKeyUp={() => refreshPromoToolbarFormats(descRef.current)}
+              onMouseUp={() => refreshPromoToolbarFormats(descRef.current)}
+              onKeyUp={() => refreshPromoToolbarFormats(descRef.current)}
               className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[48px] outline-none break-words transition-colors ${
-                currentField === 'description'
-                  ? 'border-primary/70'
-                  : 'border-border'
+                currentField === "description"
+                  ? "border-primary/70"
+                  : "border-border"
               } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
-              style={{ background: getBackgroundStyle(config.promoCard.style.background) }} />
-                      </div>
+              style={{
+                background: getBackgroundStyle(
+                  config.promoCard.style.background,
+                ),
+              }}
+            />
+          </div>
 
           <div className="pt-1">
-            <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">Schedule</h4>
-            <p className="text-xs text-on-surface-variant mb-2">Control when the promo card is active.</p>
+            <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">
+              Schedule
+            </h4>
+            <p className="text-xs text-on-surface-variant mb-2">
+              Control when the promo card is active.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-on-surface">Start Date</label>
+              <label className="block text-sm font-medium text-on-surface">
+                Start Date
+              </label>
               {renderDatePicker({
-                mode: 'start',
+                mode: "start",
                 value: config.promoCard.startDate,
                 viewDate: startDateView,
                 setViewDate: setStartDateView,
                 open: showStartDatePicker,
                 setOpen: setShowStartDatePicker,
-                onSelect: (nextValue) => updateField('startDate', nextValue),
+                onSelect: (nextValue) => updateField("startDate", nextValue),
               })}
             </div>
             <div>
-              <label className="block text-sm font-medium text-on-surface">End Date</label>
+              <label className="block text-sm font-medium text-on-surface">
+                End Date
+              </label>
               {renderDatePicker({
-                mode: 'end',
+                mode: "end",
                 value: config.promoCard.endDate,
                 viewDate: endDateView,
                 setViewDate: setEndDateView,
                 open: showEndDatePicker,
                 setOpen: setShowEndDatePicker,
-                onSelect: (nextValue) => updateField('endDate', nextValue),
+                onSelect: (nextValue) => updateField("endDate", nextValue),
               })}
             </div>
           </div>
 
           <div className="pt-1">
-            <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">Timer</h4>
-            <p className="text-xs text-on-surface-variant mb-2">Optional countdown messaging for urgency.</p>
+            <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">
+              Timer
+            </h4>
+            <p className="text-xs text-on-surface-variant mb-2">
+              Optional countdown messaging for urgency.
+            </p>
           </div>
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <label className="text-sm font-medium text-on-surface">Enable Timer</label>
+              <label className="text-sm font-medium text-on-surface">
+                Enable Timer
+              </label>
               {/* Tooltip info icon */}
               <div className="relative group">
-                <svg className="w-4 h-4 text-on-surface-variant cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <svg
+                  className="w-4 h-4 text-on-surface-variant cursor-help"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
                   <circle cx="12" cy="12" r="10" />
                   <path d="M12 16v-4M12 8h.01" />
                 </svg>
                 <div className="absolute bottom-full left-0 mb-2 w-64 p-2.5 bg-gray-900 dark:bg-gray-700 text-white text-[11px] leading-relaxed rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
                   <p className="font-semibold mb-1">How timer works:</p>
-                  <p className="mb-1">Dates are <strong>calendar-based</strong>, not relative to when you set them.</p>
+                  <p className="mb-1">
+                    Dates are <strong>calendar-based</strong>, not relative to
+                    when you set them.
+                  </p>
                   <ul className="space-y-0.5 list-disc list-inside">
-                    <li><strong>Start date</strong> begins at <strong>12:00 AM</strong> (midnight)</li>
-                    <li><strong>End date</strong> runs until <strong>11:59 PM</strong> (end of day)</li>
+                    <li>
+                      <strong>Start date</strong> begins at{" "}
+                      <strong>12:00 AM</strong> (midnight)
+                    </li>
+                    <li>
+                      <strong>End date</strong> runs until{" "}
+                      <strong>11:59 PM</strong> (end of day)
+                    </li>
                   </ul>
-                  <p className="mt-1 text-gray-300 dark:text-gray-300">e.g. Start: Feb 19 → End: Feb 21 means timer counts down from now until Feb 21, 11:59 PM.</p>
+                  <p className="mt-1 text-gray-300 dark:text-gray-300">
+                    e.g. Start: Feb 19 → End: Feb 21 means timer counts down
+                    from now until Feb 21, 11:59 PM.
+                  </p>
                   <div className="absolute top-full left-4 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-900 dark:border-t-gray-700"></div>
                 </div>
               </div>
             </div>
             <button
-              onClick={() => updateField('showTimer', !config.promoCard.showTimer)}
+              onClick={() =>
+                updateField("showTimer", !config.promoCard.showTimer)
+              }
               className={`relative inline-flex h-6 w-11 border-2 border-transparent rounded-full transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${
-                config.promoCard.showTimer ? 'bg-primary' : 'bg-surface-subtle hover:bg-primary/20'
+                config.promoCard.showTimer
+                  ? "bg-primary"
+                  : "bg-surface-subtle hover:bg-primary/20"
               }`}
             >
               <span
                 className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition ${
-                  config.promoCard.showTimer ? 'translate-x-5' : 'translate-x-0'
+                  config.promoCard.showTimer ? "translate-x-5" : "translate-x-0"
                 }`}
               ></span>
             </button>
@@ -1307,23 +1675,38 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
           {/* Timer Controls — rich text editor */}
           {config.promoCard.showTimer && (
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-on-surface">Timer Text</label>
-              <p className="text-xs text-on-surface-variant mt-0.5 mb-1">Enter text below</p>
-              <div ref={timerRef} contentEditable suppressContentEditableWarning
-                onInput={()=>onFieldInput('timer')} onFocus={()=>onFieldFocus('timer',timerRef)}
+              <label className="block text-sm font-medium text-on-surface">
+                Timer Text
+              </label>
+              <p className="text-xs text-on-surface-variant mt-0.5 mb-1">
+                Enter text below
+              </p>
+              <div
+                ref={timerRef}
+                contentEditable
+                suppressContentEditableWarning
+                onInput={() => onFieldInput("timer")}
+                onFocus={() => onFieldFocus("timer", timerRef)}
                 onKeyDown={onPromoEditorKeyDown}
-                onMouseUp={() => refreshPromoToolbarFormats(timerRef.current)} onKeyUp={() => refreshPromoToolbarFormats(timerRef.current)}
+                onMouseUp={() => refreshPromoToolbarFormats(timerRef.current)}
+                onKeyUp={() => refreshPromoToolbarFormats(timerRef.current)}
                 className={`rich-editor promo-standard-editor shadow-sm focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 block w-full sm:text-sm rounded-md p-2 border outline-none break-words min-h-[48px] transition-colors ${
-                  currentField === 'timer'
-                    ? 'border-primary/70'
-                    : 'border-border'
+                  currentField === "timer"
+                    ? "border-primary/70"
+                    : "border-border"
                 }`}
-                style={{ background: getBackgroundStyle(config.promoCard.style.background) }} />
+                style={{
+                  background: getBackgroundStyle(
+                    config.promoCard.style.background,
+                  ),
+                }}
+              />
               <p className="text-xs text-on-surface-variant">
-                Use tokens like {`{d}`}, {`{hh}`}, {`{mm}`}, {`{ss}`}. Select text to apply colors and sizes.
+                Use tokens like {`{d}`}, {`{hh}`}, {`{mm}`}, {`{ss}`}. Select
+                text to apply colors and sizes.
               </p>
               <div className="flex flex-wrap gap-1">
-                {['{d}', '{hh}', '{mm}', '{ss}'].map((token) => (
+                {["{d}", "{hh}", "{mm}", "{ss}"].map((token) => (
                   <button
                     key={token}
                     onMouseDown={(e) => {
@@ -1352,7 +1735,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                           el.innerHTML += token;
                         }
                       }
-                      onFieldInput('timer');
+                      onFieldInput("timer");
                     }}
                     className="px-2 py-0.5 text-xs rounded transition-colors border border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant"
                   >
@@ -1364,21 +1747,33 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
           )}
 
           <div className="pt-1">
-            <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">Call To Action</h4>
-            <p className="text-xs text-on-surface-variant mb-2">Configure button text and destination.</p>
+            <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">
+              Call To Action
+            </h4>
+            <p className="text-xs text-on-surface-variant mb-2">
+              Configure button text and destination.
+            </p>
           </div>
 
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-on-surface">Enable Button</label>
+            <label className="text-sm font-medium text-on-surface">
+              Enable Button
+            </label>
             <button
-              onClick={() => updateField('showButton', !config.promoCard.showButton)}
+              onClick={() =>
+                updateField("showButton", !config.promoCard.showButton)
+              }
               className={`relative inline-flex h-6 w-11 border-2 border-transparent rounded-full transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${
-                config.promoCard.showButton ? 'bg-primary' : 'bg-surface-subtle hover:bg-primary/20'
+                config.promoCard.showButton
+                  ? "bg-primary"
+                  : "bg-surface-subtle hover:bg-primary/20"
               }`}
             >
               <span
                 className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition ${
-                  config.promoCard.showButton ? 'translate-x-5' : 'translate-x-0'
+                  config.promoCard.showButton
+                    ? "translate-x-5"
+                    : "translate-x-0"
                 }`}
               ></span>
             </button>
@@ -1387,26 +1782,45 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
           {config.promoCard.showButton && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-on-surface">Button Text</label>
-                <div ref={buttonRef} contentEditable suppressContentEditableWarning
+                <label className="block text-sm font-medium text-on-surface">
+                  Button Text
+                </label>
+                <div
+                  ref={buttonRef}
+                  contentEditable
+                  suppressContentEditableWarning
                   data-placeholder="Enter text here"
-                  onInput={()=>onFieldInput('button')} onFocus={()=>onFieldFocus('button',buttonRef)}
+                  onInput={() => onFieldInput("button")}
+                  onFocus={() => onFieldFocus("button", buttonRef)}
                   onKeyDown={onPromoEditorKeyDown}
-                  onMouseUp={() => refreshPromoToolbarFormats(buttonRef.current)} onKeyUp={() => refreshPromoToolbarFormats(buttonRef.current)}
+                  onMouseUp={() =>
+                    refreshPromoToolbarFormats(buttonRef.current)
+                  }
+                  onKeyUp={() => refreshPromoToolbarFormats(buttonRef.current)}
                   className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[38px] outline-none break-words transition-colors ${
-                    currentField === 'button'
-                      ? 'border-primary/70'
-                      : 'border-border'
+                    currentField === "button"
+                      ? "border-primary/70"
+                      : "border-border"
                   } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
-                  style={{ background: getBackgroundStyle(config.promoCard.style.buttonStyle?.background || config.promoCard.style.background) }} />
+                  style={{
+                    background: getBackgroundStyle(
+                      config.promoCard.style.buttonStyle?.background ||
+                        config.promoCard.style.background,
+                    ),
+                  }}
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-on-surface">Button URL</label>
+                <label className="block text-sm font-medium text-on-surface">
+                  Button URL
+                </label>
                 <input
                   type="url"
                   value={config.promoCard.buttonUrl}
-                  onChange={(e) => updateField('buttonUrl', e.target.value)}
-                  onBlur={(e) => updateField('buttonUrl', e.target.value.trim())}
+                  onChange={(e) => updateField("buttonUrl", e.target.value)}
+                  onBlur={(e) =>
+                    updateField("buttonUrl", e.target.value.trim())
+                  }
                   placeholder="https://example.com"
                   inputMode="url"
                   autoCapitalize="off"
@@ -1417,7 +1831,6 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
               </div>
             </div>
           )}
-
         </div>
 
         {/* Right: Preview — 70% width, fixed */}
@@ -1425,35 +1838,68 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide">Preview</h4>
-                <p className="text-xs text-on-surface-variant">Live card rendering with editable field styles.</p>
+                <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide">
+                  Preview
+                </h4>
+                <p className="text-xs text-on-surface-variant">
+                  Live card rendering with editable field styles.
+                </p>
               </div>
               <div className="flex flex-col items-end gap-1">
-                <p className="text-[11px] text-primary font-medium flex items-center animate-pulse">💡 click Position to place the card • click Style to edit card background</p>
+                <p className="text-[11px] text-primary font-medium flex items-center animate-pulse">
+                  💡 click Position to place the card • click Style to edit card
+                  background
+                </p>
                 <div className="flex flex-wrap items-center justify-end gap-1.5">
                   <PopupDropdown
                     label="Position"
                     value={config.promoCard.style.position}
-                    options={[{ value: 'bottom-right', label: 'Bottom Right' }, { value: 'bottom-left', label: 'Bottom Left' }]}
+                    options={[
+                      { value: "bottom-right", label: "Bottom Right" },
+                      { value: "bottom-left", label: "Bottom Left" },
+                    ]}
                     open={showCardPositionDropdown}
-                    onOpen={() => { const next = !showCardPositionDropdown; closeAllPromoDropdowns(); setShowCardPositionDropdown(next); setCardPositionPos(getDropdownPosition(cardPositionBtnRef.current)); }}
-                    onSelect={(v) => { pushPromoState(); setConfig({ ...config, promoCard: { ...config.promoCard, style: { ...config.promoCard.style, position: v as any } } }); markChanged(); setShowCardPositionDropdown(false); }}
+                    onOpen={() => {
+                      const next = !showCardPositionDropdown;
+                      closeAllPromoDropdowns();
+                      setShowCardPositionDropdown(next);
+                      setCardPositionPos(
+                        getDropdownPosition(cardPositionBtnRef.current),
+                      );
+                    }}
+                    onSelect={(v) => {
+                      pushPromoState();
+                      setConfig({
+                        ...config,
+                        promoCard: {
+                          ...config.promoCard,
+                          style: {
+                            ...config.promoCard.style,
+                            position: v as any,
+                          },
+                        },
+                      });
+                      markChanged();
+                      setShowCardPositionDropdown(false);
+                    }}
                     buttonRef={cardPositionBtnRef}
                     menuRef={cardPositionMenuRef}
                     menuPosition={cardPositionPos}
                     compact={true}
                   />
                   <div>
-                    <label className="block text-[10px] text-on-surface-variant mb-0.5">Style</label>
-                      <button
-                        ref={cardBgPopupBtnRef}
-                        type="button"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          closeAllPromoDropdowns();
-                          setShowPersistentScaffold(true);
-                          setShowCardBgPopup((prev) => !prev);
-                        }}
+                    <label className="block text-[10px] text-on-surface-variant mb-0.5">
+                      Style
+                    </label>
+                    <button
+                      ref={cardBgPopupBtnRef}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        closeAllPromoDropdowns();
+                        setShowPersistentScaffold(true);
+                        setShowCardBgPopup((prev) => !prev);
+                      }}
                       className="inline-flex h-9 items-center justify-center rounded-md border border-white/10 bg-black/10 px-2 text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10"
                       title="Card Style"
                     >
@@ -1474,14 +1920,17 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                 <div
                   ref={promoCardRef}
                   className={`relative w-[400px] rounded-xl shadow-2xl p-5 transition-all duration-300 flex flex-col ${
-                    config.promoCard.style.position === 'bottom-right' ? 'justify-self-end self-end' :
-                    config.promoCard.style.position === 'bottom-left' ? 'justify-self-start self-end' :
-                    config.promoCard.style.position === 'top-right' ? 'justify-self-end self-start' :
-                    'justify-self-start self-start'
+                    config.promoCard.style.position === "bottom-right"
+                      ? "justify-self-end self-end"
+                      : config.promoCard.style.position === "bottom-left"
+                        ? "justify-self-start self-end"
+                        : config.promoCard.style.position === "top-right"
+                          ? "justify-self-end self-start"
+                          : "justify-self-start self-start"
                   }`}
                   style={{
                     background: getBackgroundStyle(
-                      config.promoCard.style.background
+                      config.promoCard.style.background,
                     ),
                   }}
                 >
@@ -1494,15 +1943,19 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       ref={previewTitleRef}
                       contentEditable
                       suppressContentEditableWarning
-                      className={`text-base font-normal mb-1 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === 'title' ? 'ring-1 ring-primary/70' : ''}`}
+                      className={`text-base font-normal mb-1 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === "title" ? "ring-1 ring-primary/70" : ""}`}
                       onMouseDown={() => {
                         activeEditorRef.current = previewTitleRef.current;
                       }}
                       onClick={() => {
                         setShowCardBgPopup(false);
-                        if (currentField !== 'title') setCurrentField('title');
+                        if (currentField !== "title") setCurrentField("title");
                         activeEditorRef.current = previewTitleRef.current;
-                        setTimeout(() => refreshPromoToolbarFormats(previewTitleRef.current), 0);
+                        setTimeout(
+                          () =>
+                            refreshPromoToolbarFormats(previewTitleRef.current),
+                          0,
+                        );
                       }}
                       onFocus={() => {
                         activeEditorRef.current = previewTitleRef.current;
@@ -1510,18 +1963,22 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       onMouseUp={() => {
                         refreshPromoToolbarFormats(previewTitleRef.current);
                       }}
-                      onInput={() => onFieldInput('title')}
+                      onInput={() => onFieldInput("title")}
                       onKeyDown={onPromoPreviewKeyDown}
                       onPaste={(e) => e.preventDefault()}
                       onDrop={(e) => e.preventDefault()}
                       style={{
-                        background: getBackgroundStyle(getPreviewFieldBackground('title')),
+                        background: getBackgroundStyle(
+                          getPreviewFieldBackground("title"),
+                        ),
                         color: config.promoCard.style.titleStyle.textColor,
-                        textAlign: config.promoCard.style.titleStyle.textAlign || 'center',
-                        caretColor: 'transparent',
-                        userSelect: 'text',
-                        WebkitUserSelect: 'text',
-                        cursor: 'text',
+                        textAlign:
+                          config.promoCard.style.titleStyle.textAlign ||
+                          "center",
+                        caretColor: "transparent",
+                        userSelect: "text",
+                        WebkitUserSelect: "text",
+                        cursor: "text",
                       }}
                     />
                   )}
@@ -1531,7 +1988,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       ref={previewSubtitleRef}
                       contentEditable
                       suppressContentEditableWarning
-                      className={`text-base font-normal mb-2 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === 'subtitle' ? 'ring-1 ring-primary/70' : ''}`}
+                      className={`text-base font-normal mb-2 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === "subtitle" ? "ring-1 ring-primary/70" : ""}`}
                       onMouseDown={() => {
                         // Don't trigger state updates while dragging selection.
                         activeEditorRef.current = previewSubtitleRef.current;
@@ -1539,9 +1996,16 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       onClick={() => {
                         setShowCardBgPopup(false);
                         // Plain click activates subtitle style mode.
-                        if (currentField !== 'subtitle') setCurrentField('subtitle');
+                        if (currentField !== "subtitle")
+                          setCurrentField("subtitle");
                         activeEditorRef.current = previewSubtitleRef.current;
-                        setTimeout(() => refreshPromoToolbarFormats(previewSubtitleRef.current), 0);
+                        setTimeout(
+                          () =>
+                            refreshPromoToolbarFormats(
+                              previewSubtitleRef.current,
+                            ),
+                          0,
+                        );
                       }}
                       onFocus={() => {
                         activeEditorRef.current = previewSubtitleRef.current;
@@ -1549,18 +2013,22 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       onMouseUp={() => {
                         refreshPromoToolbarFormats(previewSubtitleRef.current);
                       }}
-                      onInput={() => onFieldInput('subtitle')}
+                      onInput={() => onFieldInput("subtitle")}
                       onKeyDown={onPromoPreviewKeyDown}
                       onPaste={(e) => e.preventDefault()}
                       onDrop={(e) => e.preventDefault()}
                       style={{
-                        background: getBackgroundStyle(getPreviewFieldBackground('subtitle')),
+                        background: getBackgroundStyle(
+                          getPreviewFieldBackground("subtitle"),
+                        ),
                         color: config.promoCard.style.subheadingStyle.textColor,
-                        textAlign: config.promoCard.style.subheadingStyle.textAlign || 'center',
-                        caretColor: 'transparent',
-                        userSelect: 'text',
-                        WebkitUserSelect: 'text',
-                        cursor: 'text',
+                        textAlign:
+                          config.promoCard.style.subheadingStyle.textAlign ||
+                          "center",
+                        caretColor: "transparent",
+                        userSelect: "text",
+                        WebkitUserSelect: "text",
+                        cursor: "text",
                       }}
                     />
                   )}
@@ -1570,34 +2038,48 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       ref={previewDescriptionRef}
                       contentEditable
                       suppressContentEditableWarning
-                      className={`text-base font-normal mb-2 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === 'description' ? 'ring-1 ring-primary/70' : ''}`}
+                      className={`text-base font-normal mb-2 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === "description" ? "ring-1 ring-primary/70" : ""}`}
                       onMouseDown={() => {
                         activeEditorRef.current = previewDescriptionRef.current;
                       }}
                       onClick={() => {
                         setShowCardBgPopup(false);
-                        if (currentField !== 'description') setCurrentField('description');
+                        if (currentField !== "description")
+                          setCurrentField("description");
                         activeEditorRef.current = previewDescriptionRef.current;
-                        setTimeout(() => refreshPromoToolbarFormats(previewDescriptionRef.current), 0);
+                        setTimeout(
+                          () =>
+                            refreshPromoToolbarFormats(
+                              previewDescriptionRef.current,
+                            ),
+                          0,
+                        );
                       }}
                       onFocus={() => {
                         activeEditorRef.current = previewDescriptionRef.current;
                       }}
                       onMouseUp={() => {
-                        refreshPromoToolbarFormats(previewDescriptionRef.current);
+                        refreshPromoToolbarFormats(
+                          previewDescriptionRef.current,
+                        );
                       }}
-                      onInput={() => onFieldInput('description')}
+                      onInput={() => onFieldInput("description")}
                       onKeyDown={onPromoPreviewKeyDown}
                       onPaste={(e) => e.preventDefault()}
                       onDrop={(e) => e.preventDefault()}
                       style={{
-                        background: getBackgroundStyle(getPreviewFieldBackground('description')),
-                        color: config.promoCard.style.descriptionStyle.textColor,
-                        textAlign: config.promoCard.style.descriptionStyle.textAlign || 'left',
-                        caretColor: 'transparent',
-                        userSelect: 'text',
-                        WebkitUserSelect: 'text',
-                        cursor: 'text',
+                        background: getBackgroundStyle(
+                          getPreviewFieldBackground("description"),
+                        ),
+                        color:
+                          config.promoCard.style.descriptionStyle.textColor,
+                        textAlign:
+                          config.promoCard.style.descriptionStyle.textAlign ||
+                          "left",
+                        caretColor: "transparent",
+                        userSelect: "text",
+                        WebkitUserSelect: "text",
+                        cursor: "text",
                       }}
                     />
                   )}
@@ -1607,15 +2089,19 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       ref={previewTimerRef}
                       contentEditable
                       suppressContentEditableWarning
-                      className={`mb-4 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === 'timer' ? 'ring-1 ring-primary/70' : ''}`}
+                      className={`mb-4 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === "timer" ? "ring-1 ring-primary/70" : ""}`}
                       onMouseDown={() => {
                         activeEditorRef.current = previewTimerRef.current;
                       }}
                       onClick={() => {
                         setShowCardBgPopup(false);
-                        if (currentField !== 'timer') setCurrentField('timer');
+                        if (currentField !== "timer") setCurrentField("timer");
                         activeEditorRef.current = previewTimerRef.current;
-                        setTimeout(() => refreshPromoToolbarFormats(previewTimerRef.current), 0);
+                        setTimeout(
+                          () =>
+                            refreshPromoToolbarFormats(previewTimerRef.current),
+                          0,
+                        );
                       }}
                       onFocus={() => {
                         activeEditorRef.current = previewTimerRef.current;
@@ -1623,18 +2109,22 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                       onMouseUp={() => {
                         refreshPromoToolbarFormats(previewTimerRef.current);
                       }}
-                      onInput={() => onFieldInput('timer')}
+                      onInput={() => onFieldInput("timer")}
                       onKeyDown={onPromoPreviewKeyDown}
                       onPaste={(e) => e.preventDefault()}
                       onDrop={(e) => e.preventDefault()}
                       style={{
-                        background: getBackgroundStyle(getPreviewFieldBackground('timer')),
+                        background: getBackgroundStyle(
+                          getPreviewFieldBackground("timer"),
+                        ),
                         color: config.promoCard.style.dateStyle.textColor,
-                        textAlign: config.promoCard.style.dateStyle.textAlign || 'center',
-                        caretColor: 'transparent',
-                        userSelect: 'text',
-                        WebkitUserSelect: 'text',
-                        cursor: 'text',
+                        textAlign:
+                          config.promoCard.style.dateStyle.textAlign ||
+                          "center",
+                        caretColor: "transparent",
+                        userSelect: "text",
+                        WebkitUserSelect: "text",
+                        cursor: "text",
                       }}
                     />
                   )}
@@ -1643,13 +2133,15 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                     <div
                       className={
                         config.promoCard.buttonFullWidth
-                          ? ''
+                          ? ""
                           : `flex ${
-                              (config.promoCard.style.buttonStyle.textAlign || 'center') === 'left'
-                                ? 'justify-start'
-                                : (config.promoCard.style.buttonStyle.textAlign || 'center') === 'right'
-                                  ? 'justify-end'
-                                  : 'justify-center'
+                              (config.promoCard.style.buttonStyle.textAlign ||
+                                "center") === "left"
+                                ? "justify-start"
+                                : (config.promoCard.style.buttonStyle
+                                      .textAlign || "center") === "right"
+                                  ? "justify-end"
+                                  : "justify-center"
                             }`
                       }
                     >
@@ -1658,16 +2150,23 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                         contentEditable
                         suppressContentEditableWarning
                         className={`py-2 px-4 rounded-lg text-base font-semibold outline-none ${
-                          config.promoCard.buttonFullWidth ? 'w-full' : ''
-                        } ${currentField === 'button' ? 'ring-1 ring-primary/70' : ''} cursor-pointer`}
+                          config.promoCard.buttonFullWidth ? "w-full" : ""
+                        } ${currentField === "button" ? "ring-1 ring-primary/70" : ""} cursor-pointer`}
                         onMouseDown={() => {
                           activeEditorRef.current = previewButtonRef.current;
                         }}
                         onClick={() => {
                           setShowCardBgPopup(false);
-                          if (currentField !== 'button') setCurrentField('button');
+                          if (currentField !== "button")
+                            setCurrentField("button");
                           activeEditorRef.current = previewButtonRef.current;
-                          setTimeout(() => refreshPromoToolbarFormats(previewButtonRef.current), 0);
+                          setTimeout(
+                            () =>
+                              refreshPromoToolbarFormats(
+                                previewButtonRef.current,
+                              ),
+                            0,
+                          );
                         }}
                         onFocus={() => {
                           activeEditorRef.current = previewButtonRef.current;
@@ -1675,88 +2174,166 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                         onMouseUp={() => {
                           refreshPromoToolbarFormats(previewButtonRef.current);
                         }}
-                        onInput={() => onFieldInput('button')}
+                        onInput={() => onFieldInput("button")}
                         onKeyDown={onPromoPreviewKeyDown}
                         onPaste={(e) => e.preventDefault()}
                         onDrop={(e) => e.preventDefault()}
                         style={{
-                          background: getBackgroundStyle(getPreviewFieldBackground('button')),
+                          background: getBackgroundStyle(
+                            getPreviewFieldBackground("button"),
+                          ),
                           color: config.promoCard.style.buttonStyle.textColor,
-                          textAlign: config.promoCard.style.buttonStyle.textAlign || 'center',
-                          caretColor: 'transparent',
-                          userSelect: 'text',
-                          WebkitUserSelect: 'text',
-                          cursor: 'text',
+                          textAlign:
+                            config.promoCard.style.buttonStyle.textAlign ||
+                            "center",
+                          caretColor: "transparent",
+                          userSelect: "text",
+                          WebkitUserSelect: "text",
+                          cursor: "text",
                         }}
                       />
                     </div>
                   )}
 
-                  {popupEditableFields.includes(currentField as PopupField) && isPreviewFieldActive() && !showCardBgPopup && (() => {
-                    const field = currentField as PopupField;
-                    const fieldStyle = getPopupFieldStyle(field);
-                    const isButton = field === 'button';
-                    const fbg = fieldStyle.background;
-                    return (
-                      <div
-                        className={`absolute z-30 w-[280px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 ${
-                          config.promoCard.style.position === 'bottom-right' || config.promoCard.style.position === 'top-right'
-                            ? 'right-full mr-3'
-                            : 'left-full ml-3'
-                        }`}
-                        style={getPopupPositionStyle(field)}
-                      >
-                        <button
-                          type="button"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            setCurrentField(null);
-                          }}
-                          className="absolute -top-[21px] -right-[21px] inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface-elevated text-on-surface-variant shadow-sm transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
-                          aria-label="Close style controls"
-                          title="Close"
+                  {popupEditableFields.includes(currentField as PopupField) &&
+                    isPreviewFieldActive() &&
+                    !showCardBgPopup &&
+                    (() => {
+                      const field = currentField as PopupField;
+                      const fieldStyle = getPopupFieldStyle(field);
+                      const isButton = field === "button";
+                      const fbg = fieldStyle.background;
+                      return (
+                        <div
+                          className={`absolute z-30 w-[280px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 ${
+                            config.promoCard.style.position ===
+                              "bottom-right" ||
+                            config.promoCard.style.position === "top-right"
+                              ? "right-full mr-3"
+                              : "left-full ml-3"
+                          }`}
+                          style={getPopupPositionStyle(field)}
                         >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <label className="text-xs font-semibold text-on-surface">{getPopupFieldLabel(field)}</label>
-                          <div className="flex items-center gap-1">
-                            <button onMouseDown={(e)=>{e.preventDefault();setFieldAlignment('left');}} className={`cursor-pointer h-9 w-9 flex items-center justify-center text-[10px] border rounded transition-colors ${(fieldStyle?.textAlign || 'left') === 'left' ? 'bg-primary/10 text-primary border-primary/80' : 'border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`} title="Align Left"><svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3 4h14v1H3V4zm0 4h10v1H3V8zm0 4h14v1H3v-1zm0 4h10v1H3v-1z" clipRule="evenodd" /></svg></button>
-                            <button onMouseDown={(e)=>{e.preventDefault();setFieldAlignment('center');}} className={`cursor-pointer h-9 w-9 flex items-center justify-center text-[10px] border rounded transition-colors ${(fieldStyle?.textAlign || 'left') === 'center' ? 'bg-primary/10 text-primary border-primary/80' : 'border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`} title="Align Center"><svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 4h10v1H5V4zm2 4h6v1H7V8zm-2 4h10v1H5v-1zm2 4h6v1H7v-1z" clipRule="evenodd" /></svg></button>
-                            <button onMouseDown={(e)=>{e.preventDefault();setFieldAlignment('right');}} className={`cursor-pointer h-9 w-9 flex items-center justify-center text-[10px] border rounded transition-colors ${(fieldStyle?.textAlign || 'left') === 'right' ? 'bg-primary/10 text-primary border-primary/80' : 'border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`} title="Align Right"><svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M7 4h10v1H7V4zm-4 4h14v1H3V8zm4 4h10v1H7v-1zm-4 4h14v1H3v-1z" clipRule="evenodd" /></svg></button>
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setCurrentField(null);
+                            }}
+                            className="absolute -top-[21px] -right-[21px] inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface-elevated text-on-surface-variant shadow-sm transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            aria-label="Close style controls"
+                            title="Close"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <label className="text-xs font-semibold text-on-surface">
+                              {getPopupFieldLabel(field)}
+                            </label>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setFieldAlignment("left");
+                                }}
+                                className={`cursor-pointer h-9 w-9 flex items-center justify-center text-[10px] border rounded transition-colors ${(fieldStyle?.textAlign || "left") === "left" ? "bg-primary/10 text-primary border-primary/80" : "border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant"}`}
+                                title="Align Left"
+                              >
+                                <svg
+                                  className="w-3.5 h-3.5"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M3 4h14v1H3V4zm0 4h10v1H3V8zm0 4h14v1H3v-1zm0 4h10v1H3v-1z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              </button>
+                              <button
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setFieldAlignment("center");
+                                }}
+                                className={`cursor-pointer h-9 w-9 flex items-center justify-center text-[10px] border rounded transition-colors ${(fieldStyle?.textAlign || "left") === "center" ? "bg-primary/10 text-primary border-primary/80" : "border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant"}`}
+                                title="Align Center"
+                              >
+                                <svg
+                                  className="w-3.5 h-3.5"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M5 4h10v1H5V4zm2 4h6v1H7V8zm-2 4h10v1H5v-1zm2 4h6v1H7v-1z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              </button>
+                              <button
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setFieldAlignment("right");
+                                }}
+                                className={`cursor-pointer h-9 w-9 flex items-center justify-center text-[10px] border rounded transition-colors ${(fieldStyle?.textAlign || "left") === "right" ? "bg-primary/10 text-primary border-primary/80" : "border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant"}`}
+                                title="Align Right"
+                              >
+                                <svg
+                                  className="w-3.5 h-3.5"
+                                  fill="currentColor"
+                                  viewBox="0 0 20 20"
+                                >
+                                  <path
+                                    fillRule="evenodd"
+                                    d="M7 4h10v1H7V4zm-4 4h14v1H3V8zm4 4h10v1H7v-1zm-4 4h14v1H3v-1z"
+                                    clipRule="evenodd"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
                           </div>
-                        </div>
 
-                        <RichTextToolbar
-                          activeFormats={activeFormats}
-                          onFormat={handlePromoToolbarFormat}
-                          onColorSelect={handlePromoToolbarColor}
-                          showAlignment={false}
-                          showButtonWidth={isButton}
-                          buttonFullWidth={config.promoCard.buttonFullWidth || false}
-                          onButtonWidthChange={(fullWidth)=>updateField('buttonFullWidth', fullWidth)}
-                          compact={true}
-                        />
+                          <RichTextToolbar
+                            activeFormats={activeFormats}
+                            onFormat={handlePromoToolbarFormat}
+                            onColorSelect={handlePromoToolbarColor}
+                            showAlignment={false}
+                            showButtonWidth={isButton}
+                            buttonFullWidth={
+                              config.promoCard.buttonFullWidth || false
+                            }
+                            onButtonWidthChange={(fullWidth) =>
+                              updateField("buttonFullWidth", fullWidth)
+                            }
+                            compact={true}
+                          />
 
-                        <div className="mt-2 pt-2 border-t border-white/10">
+                          <div className="mt-2 pt-2 border-t border-white/10">
                             {/* Change here to reflect color updates on the selected field preview. */}
-                            <label className="block text-xs text-on-surface-variant mb-1">Field Background</label>
+                            <label className="block text-xs text-on-surface-variant mb-1">
+                              Field Background
+                            </label>
                             <div className="grid grid-cols-3 gap-2">
                               <div>
                                 <PopupDropdown
                                   label="Type"
                                   value={fbg.type}
                                   options={[
-                                    { value: 'solid', label: 'Solid' },
-                                    { value: 'linear', label: 'Linear' },
-                                    { value: 'radial', label: 'Radial' },
+                                    { value: "solid", label: "Solid" },
+                                    { value: "linear", label: "Linear" },
+                                    { value: "radial", label: "Radial" },
                                   ]}
                                   open={showFieldBgTypeDropdown}
                                   onOpen={() => {
                                     const next = !showFieldBgTypeDropdown;
                                     closeAllPromoDropdowns();
                                     setShowFieldBgTypeDropdown(next);
-                                    setFieldBgTypePos(getDropdownPosition(fieldBgTypeBtnRef.current));
+                                    setFieldBgTypePos(
+                                      getDropdownPosition(
+                                        fieldBgTypeBtnRef.current,
+                                      ),
+                                    );
                                   }}
                                   onSelect={(v) => {
                                     updateFieldBg({ type: v });
@@ -1769,63 +2346,122 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                                 />
                               </div>
                               <div className="col-span-2">
-                                {(fbg.type === 'linear' || fbg.type === 'radial') && (
+                                {(fbg.type === "linear" ||
+                                  fbg.type === "radial") && (
                                   <>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">Balance: {fbg.midpoint ?? 50}%</label>
-                                    <input type="range" min="0" max="100" value={fbg.midpoint ?? 50} onChange={e => updateFieldBg({ midpoint: Number(e.target.value) })} className="balance-slider mt-3" />
+                                    <label className="block text-xs text-on-surface-variant mb-0.5">
+                                      Balance: {fbg.midpoint ?? 50}%
+                                    </label>
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max="100"
+                                      value={fbg.midpoint ?? 50}
+                                      onChange={(e) =>
+                                        updateFieldBg({
+                                          midpoint: Number(e.target.value),
+                                        })
+                                      }
+                                      className="balance-slider mt-3"
+                                    />
                                   </>
                                 )}
                               </div>
                             </div>
                             <div className="mt-2 min-h-[56px]">
-                              {fbg.type === 'solid' && (
+                              {fbg.type === "solid" && (
                                 <div className="grid grid-cols-3 gap-2">
                                   <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">Background</label>
-                                    <input type="color" value={fbg.startColor} onChange={e => updateFieldBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                                    <label className="block text-xs text-on-surface-variant mb-0.5">
+                                      Background
+                                    </label>
+                                    <input
+                                      type="color"
+                                      value={fbg.startColor}
+                                      onChange={(e) =>
+                                        updateFieldBg({
+                                          startColor: e.target.value,
+                                        })
+                                      }
+                                      className="bg-color-picker h-9 w-full rounded cursor-pointer"
+                                    />
                                   </div>
                                   <div aria-hidden="true" />
                                   <div aria-hidden="true" />
                                 </div>
                               )}
-                              {fbg.type === 'linear' && (
+                              {fbg.type === "linear" && (
                                 <div className="grid grid-cols-3 gap-2">
                                   <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">Start</label>
-                                    <input type="color" value={fbg.startColor} onChange={e => updateFieldBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                                    <label className="block text-xs text-on-surface-variant mb-0.5">
+                                      Start
+                                    </label>
+                                    <input
+                                      type="color"
+                                      value={fbg.startColor}
+                                      onChange={(e) =>
+                                        updateFieldBg({
+                                          startColor: e.target.value,
+                                        })
+                                      }
+                                      className="bg-color-picker h-9 w-full rounded cursor-pointer"
+                                    />
                                   </div>
                                   <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">End</label>
-                                    <input type="color" value={fbg.endColor} onChange={e => updateFieldBg({ endColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                                    <label className="block text-xs text-on-surface-variant mb-0.5">
+                                      End
+                                    </label>
+                                    <input
+                                      type="color"
+                                      value={fbg.endColor}
+                                      onChange={(e) =>
+                                        updateFieldBg({
+                                          endColor: e.target.value,
+                                        })
+                                      }
+                                      className="bg-color-picker h-9 w-full rounded cursor-pointer"
+                                    />
                                   </div>
                                   <div>
                                     <PopupDropdown
                                       label="Direction"
-                                      value={fbg.direction || 'to right'}
+                                      value={fbg.direction || "to right"}
                                       options={[
-                                        { value: 'to right', label: '→' },
-                                        { value: 'to left', label: '←' },
-                                        { value: 'to bottom', label: '↓' },
-                                        { value: 'to top', label: '↑' },
-                                        { value: 'to bottom right', label: '↘' },
-                                        { value: 'to bottom left', label: '↙' },
-                                        { value: 'to top right', label: '↗' },
-                                        { value: 'to top left', label: '↖' },
+                                        { value: "to right", label: "→" },
+                                        { value: "to left", label: "←" },
+                                        { value: "to bottom", label: "↓" },
+                                        { value: "to top", label: "↑" },
+                                        {
+                                          value: "to bottom right",
+                                          label: "↘",
+                                        },
+                                        { value: "to bottom left", label: "↙" },
+                                        { value: "to top right", label: "↗" },
+                                        { value: "to top left", label: "↖" },
                                       ]}
                                       open={showFieldDirectionDropdown}
                                       onOpen={() => {
-                                        const next = !showFieldDirectionDropdown;
+                                        const next =
+                                          !showFieldDirectionDropdown;
                                         closeAllPromoDropdowns();
                                         setShowFieldDirectionDropdown(next);
-                                        setFieldDirectionPos(getDropdownPosition(fieldDirectionBtnRef.current));
+                                        setFieldDirectionPos(
+                                          getDropdownPosition(
+                                            fieldDirectionBtnRef.current,
+                                          ),
+                                        );
                                       }}
                                       onSelect={(v) => {
                                         updateFieldBg({ direction: v });
                                         setShowFieldDirectionDropdown(false);
                                         setPreviewFieldDirection(null);
                                       }}
-                                      onHover={(dir) => setPreviewFieldDirection(dir)}
-                                      onHoverEnd={() => setPreviewFieldDirection(null)}
+                                      onHover={(dir) =>
+                                        setPreviewFieldDirection(dir)
+                                      }
+                                      onHoverEnd={() =>
+                                        setPreviewFieldDirection(null)
+                                      }
                                       buttonRef={fieldDirectionBtnRef}
                                       menuRef={fieldDirectionMenuRef}
                                       menuPosition={fieldDirectionPos}
@@ -1834,36 +2470,60 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                                   </div>
                                 </div>
                               )}
-                              {fbg.type === 'radial' && (
+                              {fbg.type === "radial" && (
                                 <div className="grid grid-cols-3 gap-2">
                                   <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">Center</label>
-                                    <input type="color" value={fbg.startColor} onChange={e => updateFieldBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                                    <label className="block text-xs text-on-surface-variant mb-0.5">
+                                      Center
+                                    </label>
+                                    <input
+                                      type="color"
+                                      value={fbg.startColor}
+                                      onChange={(e) =>
+                                        updateFieldBg({
+                                          startColor: e.target.value,
+                                        })
+                                      }
+                                      className="bg-color-picker h-9 w-full rounded cursor-pointer"
+                                    />
                                   </div>
                                   <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">Outer</label>
-                                    <input type="color" value={fbg.endColor} onChange={e => updateFieldBg({ endColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                                    <label className="block text-xs text-on-surface-variant mb-0.5">
+                                      Outer
+                                    </label>
+                                    <input
+                                      type="color"
+                                      value={fbg.endColor}
+                                      onChange={(e) =>
+                                        updateFieldBg({
+                                          endColor: e.target.value,
+                                        })
+                                      }
+                                      className="bg-color-picker h-9 w-full rounded cursor-pointer"
+                                    />
                                   </div>
                                   <div aria-hidden="true" />
                                 </div>
                               )}
                             </div>
                           </div>
-                      </div>
-                    );
-                  })()}
+                        </div>
+                      );
+                    })()}
                   {showCardBgPopup && (
                     <div
                       ref={cardBgPopupRef}
                       className={`absolute z-30 w-[320px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 ${
-                        config.promoCard.style.position === 'bottom-right' || config.promoCard.style.position === 'top-right'
-                          ? 'right-full mr-3'
-                          : 'left-full ml-3'
+                        config.promoCard.style.position === "bottom-right" ||
+                        config.promoCard.style.position === "top-right"
+                          ? "right-full mr-3"
+                          : "left-full ml-3"
                       }`}
                       style={(() => {
                         const card = promoCardRef.current;
-                        if (!card || card.clientHeight >= 320 + 8 + 8) return { top: '8px' };
-                        return { bottom: '8px' };
+                        if (!card || card.clientHeight >= 320 + 8 + 8)
+                          return { top: "8px" };
+                        return { bottom: "8px" };
                       })()}
                     >
                       <button
@@ -1879,46 +2539,135 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                         <X className="h-3.5 w-3.5" />
                       </button>
                       {/* Change here to reflect color updates on the full promo card preview. */}
-                      <label className="text-xs font-semibold text-on-surface">Card Background</label>
+                      <label className="text-xs font-semibold text-on-surface">
+                        Card Background
+                      </label>
                       <div className="mt-2.5 space-y-2">
                         <div className="grid grid-cols-3 gap-2">
                           <div>
-                            <PopupDropdown label="Type" value={config.promoCard.style.background.type} options={[{ value: 'solid', label: 'Solid' }, { value: 'linear', label: 'Linear' }, { value: 'radial', label: 'Gradient' }]} open={showCardBgTypeDropdown} onOpen={() => { const next = !showCardBgTypeDropdown; closeAllPromoDropdowns(); setShowCardBgPopup(true); setShowCardBgTypeDropdown(next); setCardBgTypePos(getDropdownPosition(cardBgTypeBtnRef.current)); }} onSelect={(v) => { updateCardBg({ type: v }); setShowCardBgTypeDropdown(false); }} buttonRef={cardBgTypeBtnRef} menuRef={cardBgTypeMenuRef} menuPosition={cardBgTypePos} compact={true} />
+                            <PopupDropdown
+                              label="Type"
+                              value={config.promoCard.style.background.type}
+                              options={[
+                                { value: "solid", label: "Solid" },
+                                { value: "linear", label: "Linear" },
+                                { value: "radial", label: "Gradient" },
+                              ]}
+                              open={showCardBgTypeDropdown}
+                              onOpen={() => {
+                                const next = !showCardBgTypeDropdown;
+                                closeAllPromoDropdowns();
+                                setShowCardBgPopup(true);
+                                setShowCardBgTypeDropdown(next);
+                                setCardBgTypePos(
+                                  getDropdownPosition(cardBgTypeBtnRef.current),
+                                );
+                              }}
+                              onSelect={(v) => {
+                                updateCardBg({ type: v });
+                                setShowCardBgTypeDropdown(false);
+                              }}
+                              buttonRef={cardBgTypeBtnRef}
+                              menuRef={cardBgTypeMenuRef}
+                              menuPosition={cardBgTypePos}
+                              compact={true}
+                            />
                           </div>
                           <div className="col-span-2">
-                            {(config.promoCard.style.background.type === 'linear' || config.promoCard.style.background.type === 'radial') && (
+                            {(config.promoCard.style.background.type ===
+                              "linear" ||
+                              config.promoCard.style.background.type ===
+                                "radial") && (
                               <>
-                                <label className="block text-xs text-on-surface-variant mb-0.5">Balance: {config.promoCard.style.background.midpoint ?? 50}%</label>
-                                <input type="range" min="0" max="100" value={config.promoCard.style.background.midpoint ?? 50} onChange={(e) => updateCardBg({ midpoint: Number(e.target.value) })} className="balance-slider mt-3" />
+                                <label className="block text-xs text-on-surface-variant mb-0.5">
+                                  Balance:{" "}
+                                  {config.promoCard.style.background.midpoint ??
+                                    50}
+                                  %
+                                </label>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="100"
+                                  value={
+                                    config.promoCard.style.background
+                                      .midpoint ?? 50
+                                  }
+                                  onChange={(e) =>
+                                    updateCardBg({
+                                      midpoint: Number(e.target.value),
+                                    })
+                                  }
+                                  className="balance-slider mt-3"
+                                />
                               </>
                             )}
                           </div>
                         </div>
                         <div className="mt-2 min-h-[56px]">
-                          {config.promoCard.style.background.type === 'solid' && (
+                          {config.promoCard.style.background.type ===
+                            "solid" && (
                             <div className="grid grid-cols-3 gap-2">
                               <div>
-                                <label className="block text-xs text-on-surface-variant mb-0.5">Background</label>
-                                <input type="color" value={config.promoCard.style.background.startColor} onChange={e => updateCardBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                                <label className="block text-xs text-on-surface-variant mb-0.5">
+                                  Background
+                                </label>
+                                <input
+                                  type="color"
+                                  value={
+                                    config.promoCard.style.background.startColor
+                                  }
+                                  onChange={(e) =>
+                                    updateCardBg({ startColor: e.target.value })
+                                  }
+                                  className="bg-color-picker h-9 w-full rounded cursor-pointer"
+                                />
                               </div>
                               <div aria-hidden="true" />
                               <div aria-hidden="true" />
                             </div>
                           )}
-                          {config.promoCard.style.background.type === 'linear' && (
+                          {config.promoCard.style.background.type ===
+                            "linear" && (
                             <div className="grid grid-cols-2 gap-2">
                               <div>
-                                <label className="block text-xs text-on-surface-variant mb-0.5">Start</label>
-                                <input type="color" value={config.promoCard.style.background.startColor} onChange={e => updateCardBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                                <label className="block text-xs text-on-surface-variant mb-0.5">
+                                  Start
+                                </label>
+                                <input
+                                  type="color"
+                                  value={
+                                    config.promoCard.style.background.startColor
+                                  }
+                                  onChange={(e) =>
+                                    updateCardBg({ startColor: e.target.value })
+                                  }
+                                  className="bg-color-picker h-9 w-full rounded cursor-pointer"
+                                />
                               </div>
                               <div>
-                                <label className="block text-xs text-on-surface-variant mb-0.5">End</label>
-                                <input type="color" value={config.promoCard.style.background.endColor} onChange={e => updateCardBg({ endColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                                <label className="block text-xs text-on-surface-variant mb-0.5">
+                                  End
+                                </label>
+                                <input
+                                  type="color"
+                                  value={
+                                    config.promoCard.style.background.endColor
+                                  }
+                                  onChange={(e) =>
+                                    updateCardBg({ endColor: e.target.value })
+                                  }
+                                  className="bg-color-picker h-9 w-full rounded cursor-pointer"
+                                />
                               </div>
                               <div className="col-span-2 mt-2 rounded-md border border-border/70 bg-surface/30 p-3">
                                 <div className="mb-1 flex items-center justify-between">
-                                  <label className="block text-xs text-on-surface-variant">Gradient Direction</label>
-                                  <span className="text-[11px] font-medium text-on-surface-variant">{Math.round(cardAngleNormalized)}deg</span>
+                                  <label className="block text-xs text-on-surface-variant">
+                                    Gradient Direction
+                                  </label>
+                                  <span className="text-[11px] font-medium text-on-surface-variant">
+                                    {Math.round(cardAngleNormalized)}deg
+                                  </span>
                                 </div>
                                 <div className="flex items-center justify-center">
                                   <div
@@ -1926,27 +2675,54 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                                     className="relative h-28 w-28 rounded-full border border-border/80 bg-[conic-gradient(from_0deg,_rgba(255,255,255,0.14),_rgba(255,255,255,0.03),_rgba(255,255,255,0.14))] shadow-inner cursor-grab active:cursor-grabbing"
                                     onMouseDown={(e) => {
                                       e.preventDefault();
-                                      const updateFromMouse = (clientX: number, clientY: number) => {
-                                        const nextAngle = getAngleFromPointer(clientX, clientY);
-                                        if (nextAngle !== null) setCardDirectionAngle(nextAngle);
+                                      const updateFromMouse = (
+                                        clientX: number,
+                                        clientY: number,
+                                      ) => {
+                                        const nextAngle = getAngleFromPointer(
+                                          clientX,
+                                          clientY,
+                                        );
+                                        if (nextAngle !== null)
+                                          setCardDirectionAngle(nextAngle);
                                       };
                                       updateFromMouse(e.clientX, e.clientY);
-                                      const onMove = (moveEvent: MouseEvent) => updateFromMouse(moveEvent.clientX, moveEvent.clientY);
+                                      const onMove = (moveEvent: MouseEvent) =>
+                                        updateFromMouse(
+                                          moveEvent.clientX,
+                                          moveEvent.clientY,
+                                        );
                                       const onUp = () => {
-                                        window.removeEventListener('mousemove', onMove);
-                                        window.removeEventListener('mouseup', onUp);
+                                        window.removeEventListener(
+                                          "mousemove",
+                                          onMove,
+                                        );
+                                        window.removeEventListener(
+                                          "mouseup",
+                                          onUp,
+                                        );
                                       };
-                                      window.addEventListener('mousemove', onMove);
-                                      window.addEventListener('mouseup', onUp);
+                                      window.addEventListener(
+                                        "mousemove",
+                                        onMove,
+                                      );
+                                      window.addEventListener("mouseup", onUp);
                                     }}
                                   >
                                     <div
-                                      className="pointer-events-none absolute left-1/2 top-1/2 z-40 h-[2px] w-[42%] origin-left bg-primary"
-                                      style={{ transform: `translateY(-50%) rotate(${cardAngleNormalized - 90}deg)` }}
-                                    />
-                                    <div
-                                      className="pointer-events-none absolute left-1/2 top-1/2 z-50 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-surface-elevated"
-                                    />
+                                      className="pointer-events-none absolute left-1/2 top-1/2 z-40"
+                                      style={{
+                                        transform: `translateY(-50%) rotate(${cardAngleNormalized - 90}deg)`,
+                                        transformOrigin: "left center",
+                                      }}
+                                    >
+                                      {/* Line */}
+                                      <div className="h-[2px] w-6 bg-primary" />
+
+                                      {/* Arrow Head */}
+                                      <div className="absolute right-0 top-1/2 h-0 w-0 -translate-y-1/2 translate-x-full border-y-4 border-y-transparent border-l-[6px] border-l-primary" />
+                                    </div>
+                                    <div className="pointer-events-none absolute left-1/2 top-1/2 z-50 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary bg-surface-elevated" />
                                     {presetDirections.map((preset) => (
                                       <button
                                         key={`wheel-${preset.angle}`}
@@ -1961,9 +2737,11 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                                           e.stopPropagation();
                                         }}
                                         className={`absolute left-1/2 top-1/2 z-20 h-6 w-6 -translate-x-1/2 -translate-y-1/2 text-[12px] leading-none transition-colors ${
-                                          Math.abs(cardAngleNormalized - preset.angle) < 0.6
-                                            ? 'font-semibold text-primary'
-                                            : 'text-on-surface-variant hover:text-primary'
+                                          Math.abs(
+                                            cardAngleNormalized - preset.angle,
+                                          ) < 0.6
+                                            ? "font-semibold text-primary"
+                                            : "text-on-surface-variant hover:text-primary"
                                         }`}
                                         style={{
                                           left: `calc(50% + ${Math.sin((preset.angle * Math.PI) / 180) * 37}px)`,
@@ -1979,15 +2757,38 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                               </div>
                             </div>
                           )}
-                          {config.promoCard.style.background.type === 'radial' && (
+                          {config.promoCard.style.background.type ===
+                            "radial" && (
                             <div className="grid grid-cols-3 gap-2">
                               <div>
-                                <label className="block text-xs text-on-surface-variant mb-0.5">Center</label>
-                                <input type="color" value={config.promoCard.style.background.startColor} onChange={e => updateCardBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                                <label className="block text-xs text-on-surface-variant mb-0.5">
+                                  Center
+                                </label>
+                                <input
+                                  type="color"
+                                  value={
+                                    config.promoCard.style.background.startColor
+                                  }
+                                  onChange={(e) =>
+                                    updateCardBg({ startColor: e.target.value })
+                                  }
+                                  className="bg-color-picker h-9 w-full rounded cursor-pointer"
+                                />
                               </div>
                               <div>
-                                <label className="block text-xs text-on-surface-variant mb-0.5">Outer</label>
-                                <input type="color" value={config.promoCard.style.background.endColor} onChange={e => updateCardBg({ endColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
+                                <label className="block text-xs text-on-surface-variant mb-0.5">
+                                  Outer
+                                </label>
+                                <input
+                                  type="color"
+                                  value={
+                                    config.promoCard.style.background.endColor
+                                  }
+                                  onChange={(e) =>
+                                    updateCardBg({ endColor: e.target.value })
+                                  }
+                                  className="bg-color-picker h-9 w-full rounded cursor-pointer"
+                                />
                               </div>
                               <div aria-hidden="true" />
                             </div>
@@ -1999,21 +2800,26 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                 </div>
               )}
             </div>
-
           </div>
-
         </div>
       </div>
 
       {/* Sample Templates popup — shows the same 6 cards; click one to apply */}
       {showTemplatesPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0" onClick={() => setShowTemplatesPopup(false)} />
+          <div
+            className="absolute inset-0"
+            onClick={() => setShowTemplatesPopup(false)}
+          />
           <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-2xl">
             <div className="flex items-center justify-between border-b border-border px-6 py-4">
               <div>
-                <h3 className="text-base font-semibold text-on-surface">Sample Templates</h3>
-                <p className="text-xs text-on-surface-variant">Click a template to apply it to your promo card.</p>
+                <h3 className="text-base font-semibold text-on-surface">
+                  Sample Templates
+                </h3>
+                <p className="text-xs text-on-surface-variant">
+                  Click a template to apply it to your promo card.
+                </p>
               </div>
               <button
                 type="button"
@@ -2026,7 +2832,10 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
             </div>
             <div className="campaign-custom-scrollbar overflow-y-auto p-6">
               <SamplePromoTemplates
-                onApplyTemplate={(template, name) => { applyTemplate(template, name); setShowTemplatesPopup(false); }}
+                onApplyTemplate={(template, name) => {
+                  applyTemplate(template, name);
+                  setShowTemplatesPopup(false);
+                }}
               />
             </div>
           </div>
@@ -2036,12 +2845,19 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       {/* Versions popup — entry point in place; logic to be implemented next */}
       {showVersionsPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0" onClick={() => setShowVersionsPopup(false)} />
+          <div
+            className="absolute inset-0"
+            onClick={() => setShowVersionsPopup(false)}
+          />
           <div className="relative z-10 flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-2xl">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <div>
-                <h3 className="text-base font-semibold text-on-surface">Versions</h3>
-                <p className="text-xs text-on-surface-variant">Saved snapshots of this promo card.</p>
+                <h3 className="text-base font-semibold text-on-surface">
+                  Versions
+                </h3>
+                <p className="text-xs text-on-surface-variant">
+                  Saved snapshots of this promo card.
+                </p>
               </div>
               <button
                 type="button"
