@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, type RefObject, type Dispatch, type SetStateAction } from 'react';
+import { useState, useEffect, useRef, useCallback, type RefObject, type Dispatch, type SetStateAction, type KeyboardEvent } from 'react';
 import { Gift, X, Palette } from 'lucide-react';
 import { CampaignConfig, PromoCard } from '@/types/campaign';
 import { getBackgroundStyle } from '@/lib/utils';
 import { SamplePromoTemplates } from './SamplePromoTemplates';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
-import { wrapBareTextWithFontSize } from '@/lib/richTextUtils';
+import { wrapBareTextWithFontSize, rgbToHex, FONT_SIZE_LABEL_MAP } from '@/lib/richTextUtils';
 import RichTextToolbar from './RichTextToolbar';
 import { PopupDropdown } from './PopupDropdown';
 import { 
@@ -23,6 +23,9 @@ interface PromoSectionProps {
   toast: (message: string, isError?: boolean) => void;
 }
 
+type PromoField = 'title'|'subtitle'|'description'|'timer'|'button';
+const PROMO_EDITOR_DEFAULT_COLOR = '#ffffff';
+
 export function PromoSection({ config, setConfig, markChanged, toast }: PromoSectionProps) {
   const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
     const date = new Date();
@@ -33,7 +36,9 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     return `${y}-${m}-${d}`;
   }, []);
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const [currentField, setCurrentField] = useState<'title'|'subtitle'|'description'|'timer'|'button'|null>(null);
+  const [currentField, setCurrentField] = useState<PromoField|null>(null);
+  const currentFieldRef = useRef<PromoField | null>(currentField);
+  currentFieldRef.current = currentField;
 
   // Refs for each contenteditable editor
   const titleRef = useRef<HTMLDivElement>(null);
@@ -87,9 +92,18 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
 
   // Single hook instance — activeEditorRef is swapped on focus
   const {
-    activeFormats, formatText, applyColor, detectFormats,
+    activeFormats, setActiveFormats, formatText, applyColor, detectFormats,
     ensureDefaultFontSize, saveSelection, getNormalizedHTML,
-  } = useRichTextEditor(activeEditorRef, { defaultColor: '#ffffff' });
+  } = useRichTextEditor(activeEditorRef, { defaultColor: PROMO_EDITOR_DEFAULT_COLOR });
+
+  function getFieldRef(field: PromoField | null) {
+    if (field === 'title') return titleRef;
+    if (field === 'subtitle') return subtitleRef;
+    if (field === 'description') return descRef;
+    if (field === 'timer') return timerRef;
+    if (field === 'button') return buttonRef;
+    return null;
+  }
 
   // Populate editors from config on mount
   useEffect(() => {
@@ -188,14 +202,17 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     }, 0);
   }
 
-  function onFieldFocus(field: 'title'|'subtitle'|'description'|'timer'|'button', ref: RefObject<HTMLDivElement|null>) {
+  function onFieldFocus(field: PromoField, ref: RefObject<HTMLDivElement|null>) {
     setShowPersistentScaffold(true);
     setCurrentField(field);
     activeEditorRef.current = ref.current;
-    setTimeout(() => { detectFormats(); ensureDefaultFontSize(); }, 0);
+    setTimeout(() => {
+      refreshPromoToolbarFormats(ref.current);
+      ensureDefaultFontSize();
+    }, 0);
   }
 
-  function onFieldInput(field: 'title'|'subtitle'|'description'|'button'|'timer') {
+  function onFieldInput(field: PromoField) {
     if (field === 'timer') {
       const fallbackEl = timerRef.current;
       const el = (currentField === 'timer' && activeEditorRef.current) ? activeEditorRef.current : fallbackEl;
@@ -204,7 +221,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
       const text = normalizeTimerTemplate(html);
       setConfig({ ...config, promoCard: { ...config.promoCard, timerText: text } });
       markChanged();
-      detectFormats();
+      refreshPromoToolbarFormats(el);
       return;
     }
     
@@ -216,7 +233,177 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
     const fieldMap = { title: 'title', subtitle: 'subtitle', description: 'description', button: 'buttonText' } as const;
     setConfig({ ...config, promoCard: { ...config.promoCard, [fieldMap[field]]: html } });
     markChanged();
-    detectFormats();
+    refreshPromoToolbarFormats(el);
+  }
+
+  function onPromoPreviewKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    e.preventDefault();
+  }
+
+  function getActivePromoEditor(): HTMLDivElement | null {
+    if (activeEditorRef.current) return activeEditorRef.current;
+    return getFieldRef(currentFieldRef.current)?.current || null;
+  }
+
+  function selectionIsInsideEditor(editor: HTMLDivElement): boolean {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return false;
+    const range = selection.getRangeAt(0);
+    return editor.contains(range.commonAncestorContainer) || editor.contains(selection.anchorNode);
+  }
+
+  function refreshPromoToolbarFormats(editor = getActivePromoEditor()) {
+    if (!editor) return;
+    if (selectionIsInsideEditor(editor)) {
+      detectFormats();
+      return;
+    }
+    detectPromoFormatsFromHTML(editor.innerHTML, getEditorFallbackColor(editor));
+  }
+
+  function syncInactiveFieldEditor(field: PromoField, html: string) {
+    const ref = getFieldRef(field);
+    if (!ref?.current || ref.current === activeEditorRef.current) return;
+    ref.current.innerHTML = html;
+  }
+
+  function getEditorFallbackColor(editor: HTMLDivElement): string {
+    if (typeof window === 'undefined') return PROMO_EDITOR_DEFAULT_COLOR;
+    const color = window.getComputedStyle(editor).color;
+    return color.startsWith('rgb') ? rgbToHex(color) : (color || PROMO_EDITOR_DEFAULT_COLOR);
+  }
+
+  function detectPromoFormatsFromHTML(html: string, fallbackColor = PROMO_EDITOR_DEFAULT_COLOR) {
+    const container = document.createElement('div');
+    container.innerHTML = html;
+
+    const textNodes: Node[] = [];
+    function findTextNodes(node: Node) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent?.replace(/\u200B/g, '').trim();
+        if (text) textNodes.push(node);
+      } else {
+        node.childNodes.forEach(findTextNodes);
+      }
+    }
+    findTextNodes(container);
+
+    if (textNodes.length === 0) {
+      setActiveFormats({ bold: false, italic: false, size: 'md', color: fallbackColor });
+      return;
+    }
+
+    const sizes = new Set<string>();
+    const colors = new Set<string>();
+    let allBold = true;
+    let allItalic = true;
+
+    textNodes.forEach((textNode) => {
+      let foundSize = false;
+      let isBold = false;
+      let isItalic = false;
+      let effectiveColor = fallbackColor;
+      let node: HTMLElement | null = textNode.parentElement;
+
+      while (node && node !== container) {
+        if (!foundSize && node.style.fontSize) {
+          const label = FONT_SIZE_LABEL_MAP[node.style.fontSize];
+          if (label) {
+            sizes.add(label);
+            foundSize = true;
+          }
+        }
+        if (node.style.color) {
+          const color = node.style.color;
+          effectiveColor = color.startsWith('rgb') ? rgbToHex(color) : color;
+        }
+        const tag = node.tagName;
+        if (tag === 'B' || tag === 'STRONG') isBold = true;
+        if (tag === 'I' || tag === 'EM') isItalic = true;
+        node = node.parentElement;
+      }
+
+      colors.add(effectiveColor);
+      if (!isBold) allBold = false;
+      if (!isItalic) allItalic = false;
+    });
+
+    setActiveFormats({
+      bold: allBold,
+      italic: allItalic,
+      size: sizes.size === 1 ? [...sizes][0] : (sizes.size === 0 ? 'md' : ''),
+      color: colors.size === 1 ? [...colors][0] : '',
+    });
+  }
+
+  function applyPromoFormatToAll(editor: HTMLDivElement, action: () => void) {
+    const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
+    if (!hasContent) return;
+    const wasFocused = document.activeElement === editor;
+    editor.focus();
+    const selection = window.getSelection();
+    if (selection) {
+      selection.removeAllRanges();
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      selection.addRange(range);
+      saveSelection();
+    }
+    action();
+    onFieldInput(currentFieldRef.current as PromoField);
+    window.getSelection()?.removeAllRanges();
+    if (!wasFocused) editor.blur();
+    detectPromoFormatsFromHTML(editor.innerHTML, getEditorFallbackColor(editor));
+  }
+
+  function handlePromoToolbarFormat(format: string) {
+    if (!currentFieldRef.current) return;
+    const editor = getActivePromoEditor();
+    if (!editor) return;
+    if (selectionIsInsideEditor(editor)) {
+      saveSelection();
+      formatText(format);
+      onFieldInput(currentFieldRef.current);
+      syncInactiveFieldEditor(currentFieldRef.current, wrapBareTextWithFontSize(editor.innerHTML));
+      setTimeout(() => refreshPromoToolbarFormats(editor), 0);
+      return;
+    }
+
+    const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
+    if (hasContent) {
+      applyPromoFormatToAll(editor, () => formatText(format));
+      syncInactiveFieldEditor(currentFieldRef.current, wrapBareTextWithFontSize(editor.innerHTML));
+      return;
+    }
+
+    if (format.startsWith('size-')) {
+      setActiveFormats(prev => ({ ...prev, size: format.replace('size-', '') }));
+    } else if (format === 'bold') {
+      setActiveFormats(prev => ({ ...prev, bold: !prev.bold }));
+    } else if (format === 'italic') {
+      setActiveFormats(prev => ({ ...prev, italic: !prev.italic }));
+    }
+  }
+
+  function handlePromoToolbarColor(color: string) {
+    if (!currentFieldRef.current) return;
+    const editor = getActivePromoEditor();
+    if (!editor) return;
+    if (selectionIsInsideEditor(editor)) {
+      saveSelection();
+      applyColor(color);
+      onFieldInput(currentFieldRef.current);
+      syncInactiveFieldEditor(currentFieldRef.current, wrapBareTextWithFontSize(editor.innerHTML));
+      setTimeout(() => refreshPromoToolbarFormats(editor), 0);
+      return;
+    }
+
+    const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
+    if (hasContent) {
+      applyPromoFormatToAll(editor, () => applyColor(color));
+      syncInactiveFieldEditor(currentFieldRef.current, wrapBareTextWithFontSize(editor.innerHTML));
+    }
+    setActiveFormats(prev => ({ ...prev, color }));
   }
 
   // Style key map for field → config path
@@ -739,7 +926,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
             <p className="text-xs text-on-surface-variant mt-0.5 mb-1">Enter text below</p>
             <div ref={titleRef} contentEditable suppressContentEditableWarning
               onInput={()=>onFieldInput('title')} onFocus={()=>onFieldFocus('title',titleRef)}
-              onMouseUp={detectFormats} onKeyUp={detectFormats}
+              onMouseUp={() => refreshPromoToolbarFormats(titleRef.current)} onKeyUp={() => refreshPromoToolbarFormats(titleRef.current)}
               className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[38px] outline-none break-words transition-colors ${
                 currentField === 'title'
                   ? 'border-primary/70'
@@ -752,7 +939,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
             <p className="text-xs text-on-surface-variant mt-0.5 mb-1">Enter text below</p>
             <div ref={subtitleRef} contentEditable suppressContentEditableWarning
               onInput={()=>onFieldInput('subtitle')} onFocus={()=>onFieldFocus('subtitle',subtitleRef)}
-              onMouseUp={detectFormats} onKeyUp={detectFormats}
+              onMouseUp={() => refreshPromoToolbarFormats(subtitleRef.current)} onKeyUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
               className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[38px] outline-none break-words transition-colors ${
                 currentField === 'subtitle'
                   ? 'border-primary/70'
@@ -766,7 +953,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
             <p className="text-xs text-on-surface-variant mt-0.5 mb-1">Enter text below</p>
             <div ref={descRef} contentEditable suppressContentEditableWarning
               onInput={()=>onFieldInput('description')} onFocus={()=>onFieldFocus('description',descRef)}
-              onMouseUp={detectFormats} onKeyUp={detectFormats}
+              onMouseUp={() => refreshPromoToolbarFormats(descRef.current)} onKeyUp={() => refreshPromoToolbarFormats(descRef.current)}
               className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[48px] outline-none break-words transition-colors ${
                 currentField === 'description'
                   ? 'border-primary/70'
@@ -854,7 +1041,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
               <p className="text-xs text-on-surface-variant mt-0.5 mb-1">Enter text below</p>
               <div ref={timerRef} contentEditable suppressContentEditableWarning
                 onInput={()=>onFieldInput('timer')} onFocus={()=>onFieldFocus('timer',timerRef)}
-                onMouseUp={detectFormats} onKeyUp={detectFormats}
+                onMouseUp={() => refreshPromoToolbarFormats(timerRef.current)} onKeyUp={() => refreshPromoToolbarFormats(timerRef.current)}
                 className={`rich-editor promo-standard-editor shadow-sm focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 block w-full sm:text-sm rounded-md p-2 border outline-none break-words min-h-[48px] transition-colors ${
                   currentField === 'timer'
                     ? 'border-primary/70'
@@ -932,7 +1119,7 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                 <div ref={buttonRef} contentEditable suppressContentEditableWarning
                   data-placeholder="Enter text here"
                   onInput={()=>onFieldInput('button')} onFocus={()=>onFieldFocus('button',buttonRef)}
-                  onMouseUp={detectFormats} onKeyUp={detectFormats}
+                  onMouseUp={() => refreshPromoToolbarFormats(buttonRef.current)} onKeyUp={() => refreshPromoToolbarFormats(buttonRef.current)}
                   className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[38px] outline-none break-words transition-colors ${
                     currentField === 'button'
                       ? 'border-primary/70'
@@ -1042,16 +1229,16 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                         setShowCardBgPopup(false);
                         if (currentField !== 'title') setCurrentField('title');
                         activeEditorRef.current = previewTitleRef.current;
-                        setTimeout(() => detectFormats(), 0);
+                        setTimeout(() => refreshPromoToolbarFormats(previewTitleRef.current), 0);
                       }}
                       onFocus={() => {
                         activeEditorRef.current = previewTitleRef.current;
                       }}
                       onMouseUp={() => {
-                        detectFormats();
+                        refreshPromoToolbarFormats(previewTitleRef.current);
                       }}
                       onInput={() => onFieldInput('title')}
-                      onKeyDown={(e) => e.preventDefault()}
+                      onKeyDown={onPromoPreviewKeyDown}
                       onPaste={(e) => e.preventDefault()}
                       onDrop={(e) => e.preventDefault()}
                       style={{
@@ -1081,19 +1268,16 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                         // Plain click activates subtitle style mode.
                         if (currentField !== 'subtitle') setCurrentField('subtitle');
                         activeEditorRef.current = previewSubtitleRef.current;
-                        setTimeout(() => detectFormats(), 0);
+                        setTimeout(() => refreshPromoToolbarFormats(previewSubtitleRef.current), 0);
                       }}
                       onFocus={() => {
                         activeEditorRef.current = previewSubtitleRef.current;
                       }}
                       onMouseUp={() => {
-                        detectFormats();
+                        refreshPromoToolbarFormats(previewSubtitleRef.current);
                       }}
                       onInput={() => onFieldInput('subtitle')}
-                      onKeyDown={(e) => {
-                        // Preview is for selecting + styling only, not text typing/editing.
-                        e.preventDefault();
-                      }}
+                      onKeyDown={onPromoPreviewKeyDown}
                       onPaste={(e) => e.preventDefault()}
                       onDrop={(e) => e.preventDefault()}
                       style={{
@@ -1121,18 +1305,16 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                         setShowCardBgPopup(false);
                         if (currentField !== 'description') setCurrentField('description');
                         activeEditorRef.current = previewDescriptionRef.current;
-                        setTimeout(() => detectFormats(), 0);
+                        setTimeout(() => refreshPromoToolbarFormats(previewDescriptionRef.current), 0);
                       }}
                       onFocus={() => {
                         activeEditorRef.current = previewDescriptionRef.current;
                       }}
                       onMouseUp={() => {
-                        detectFormats();
+                        refreshPromoToolbarFormats(previewDescriptionRef.current);
                       }}
                       onInput={() => onFieldInput('description')}
-                      onKeyDown={(e) => {
-                        e.preventDefault();
-                      }}
+                      onKeyDown={onPromoPreviewKeyDown}
                       onPaste={(e) => e.preventDefault()}
                       onDrop={(e) => e.preventDefault()}
                       style={{
@@ -1160,16 +1342,16 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                         setShowCardBgPopup(false);
                         if (currentField !== 'timer') setCurrentField('timer');
                         activeEditorRef.current = previewTimerRef.current;
-                        setTimeout(() => detectFormats(), 0);
+                        setTimeout(() => refreshPromoToolbarFormats(previewTimerRef.current), 0);
                       }}
                       onFocus={() => {
                         activeEditorRef.current = previewTimerRef.current;
                       }}
                       onMouseUp={() => {
-                        detectFormats();
+                        refreshPromoToolbarFormats(previewTimerRef.current);
                       }}
                       onInput={() => onFieldInput('timer')}
-                      onKeyDown={(e) => e.preventDefault()}
+                      onKeyDown={onPromoPreviewKeyDown}
                       onPaste={(e) => e.preventDefault()}
                       onDrop={(e) => e.preventDefault()}
                       style={{
@@ -1212,16 +1394,16 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
                           setShowCardBgPopup(false);
                           if (currentField !== 'button') setCurrentField('button');
                           activeEditorRef.current = previewButtonRef.current;
-                          setTimeout(() => detectFormats(), 0);
+                          setTimeout(() => refreshPromoToolbarFormats(previewButtonRef.current), 0);
                         }}
                         onFocus={() => {
                           activeEditorRef.current = previewButtonRef.current;
                         }}
                         onMouseUp={() => {
-                          detectFormats();
+                          refreshPromoToolbarFormats(previewButtonRef.current);
                         }}
                         onInput={() => onFieldInput('button')}
-                        onKeyDown={(e) => e.preventDefault()}
+                        onKeyDown={onPromoPreviewKeyDown}
                         onPaste={(e) => e.preventDefault()}
                         onDrop={(e) => e.preventDefault()}
                         style={{
@@ -1274,8 +1456,8 @@ export function PromoSection({ config, setConfig, markChanged, toast }: PromoSec
 
                         <RichTextToolbar
                           activeFormats={activeFormats}
-                          onFormat={(format)=>{saveSelection();formatText(format);onFieldInput(field);}}
-                          onColorSelect={(color)=>{saveSelection();applyColor(color);onFieldInput(field);}}
+                          onFormat={handlePromoToolbarFormat}
+                          onColorSelect={handlePromoToolbarColor}
                           showAlignment={false}
                           showButtonWidth={isButton}
                           buttonFullWidth={config.promoCard.buttonFullWidth || false}
