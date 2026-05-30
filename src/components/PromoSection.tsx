@@ -2924,11 +2924,24 @@ export function PromoSection({
                   maxLength={60}
                   className="w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-on-surface outline-none transition-colors focus:border-primary/80 focus:ring-1 focus:ring-primary/40"
                 />
+                {versions.length >= MAX_VERSIONS && (
+                  <div className="mt-2.5 flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] leading-snug text-amber-700 dark:text-amber-400">
+                    <span className="mt-px">⚠</span>
+                    <span>
+                      Limit of {MAX_VERSIONS} reached — saving will delete the
+                      oldest variant,{" "}
+                      <span className="font-semibold">
+                        “{versions[0]?.label}”
+                      </span>{" "}
+                      (saved {formatVersionTime(versions[0]?.savedAt ?? "")}).
+                    </span>
+                  </div>
+                )}
                 <div className="mt-2.5 flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-on-surface-variant">
-                    {versions.length >= MAX_VERSIONS
-                      ? "Oldest will be replaced"
-                      : `${versions.length}/${MAX_VERSIONS} saved`}
+                  <span className="text-xs text-on-surface-variant">
+                    {versions.length < MAX_VERSIONS
+                      ? `${versions.length}/${MAX_VERSIONS} variants saved`
+                      : `${MAX_VERSIONS}/${MAX_VERSIONS} variants`}
                   </span>
                   <div className="flex items-center gap-1.5">
                     <button
