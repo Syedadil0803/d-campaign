@@ -341,13 +341,13 @@ export function SamplePromoTemplates({ onApplyTemplate }: SamplePromoTemplatesPr
             key={template.id}
             data-template-id={template.id}
             onClick={() => onApplyTemplate(template.promoCard, template.name)}
-            className={`group rounded-xl border border-gray-200 bg-white p-3 shadow-sm hover:shadow-lg cursor-pointer dark:border-gray-700 dark:bg-gray-900 transition-all ease-out ${
+            className={`group rounded-xl border border-gray-200 hover:border-primary hover:ring-1 hover:ring-primary bg-white p-3 shadow-sm hover:shadow-lg cursor-pointer dark:border-gray-700 dark:bg-gray-900 [transition:border-color_150ms_ease,box-shadow_150ms_ease,opacity_var(--reveal-ms)_ease-out_var(--reveal-delay),transform_var(--reveal-ms)_ease-out_var(--reveal-delay)] ${
               isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
             }`}
             style={{
-              transitionDuration: isVisible ? `${REVEAL_DURATION_MS}ms` : '120ms',
-              transitionDelay: isVisible ? `${index * STAGGER_DELAY_MS}ms` : '0ms',
-            }}
+              ['--reveal-ms' as string]: isVisible ? `${REVEAL_DURATION_MS}ms` : '120ms',
+              ['--reveal-delay' as string]: isVisible ? `${index * STAGGER_DELAY_MS}ms` : '0ms',
+            } as React.CSSProperties}
           >
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-semibold text-gray-800 dark:text-gray-200">{template.name}</p>

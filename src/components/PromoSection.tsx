@@ -18,6 +18,7 @@ import {
   Redo2,
   LayoutTemplate,
   History,
+  Save,
 } from "lucide-react";
 import { CampaignConfig, PromoCard } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
@@ -31,6 +32,14 @@ import {
 } from "@/lib/richTextUtils";
 import RichTextToolbar from "./RichTextToolbar";
 import { PopupDropdown } from "./PopupDropdown";
+import { PromoMiniPreview } from "./PromoMiniPreview";
+import {
+  listVersions,
+  saveVersion,
+  deleteVersion,
+  MAX_VERSIONS,
+  type PromoVersion,
+} from "@/lib/promoVersions";
 import {
   getDefaultTimerStorageHTML,
   normalizeTimerTemplate,
@@ -115,6 +124,17 @@ export function PromoSection({
   // Action popups launched from the buttons under the Promo Card heading.
   const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
+  // Saved promo-card versions (local-only for now; see lib/promoVersions).
+  const [versions, setVersions] = useState<PromoVersion[]>([]);
+  const [newVersionName, setNewVersionName] = useState("");
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
+    null,
+  );
+  const [showSaveVersionPopover, setShowSaveVersionPopover] = useState(false);
+  const saveVersionWrapRef = useRef<HTMLDivElement>(null);
+  const saveVersionInputRef = useRef<HTMLInputElement>(null);
+  // Id of the variant awaiting delete confirmation (null = none).
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [startDateView, setStartDateView] = useState<Date>(() => {
@@ -1052,6 +1072,95 @@ export function PromoSection({
     return formatTimerText(rawHtml, timerValue);
   }
 
+  // On mount: load saved versions and auto-select the latest one into the card.
+  useEffect(() => {
+    listVersions().then((list) => {
+      setVersions(list);
+      if (list.length === 0) return;
+      const latest = list[list.length - 1];
+      setSelectedVersionId(latest.id);
+      const restored = clonePromoCard(latest.promoCard);
+      setConfig({ ...configRef.current, promoCard: restored });
+      syncEditorsFromConfig(restored);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Refresh the list whenever the popup is opened (keeps it current).
+  useEffect(() => {
+    if (!showVersionsPopup) {
+      setPendingDeleteId(null);
+      return;
+    }
+    let active = true;
+    listVersions().then((list) => {
+      if (active) setVersions(list);
+    });
+    return () => {
+      active = false;
+    };
+  }, [showVersionsPopup]);
+
+  // Save-version popover: focus the name field on open, close on outside click.
+  useEffect(() => {
+    if (!showSaveVersionPopover) return;
+    setTimeout(() => saveVersionInputRef.current?.focus(), 0);
+    const onDown = (e: MouseEvent) => {
+      if (!saveVersionWrapRef.current?.contains(e.target as Node)) {
+        setShowSaveVersionPopover(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [showSaveVersionPopover]);
+
+  function formatVersionTime(savedAt: string): string {
+    const date = new Date(savedAt);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  async function handleSaveVersion() {
+    const name = newVersionName.trim();
+    if (!name) {
+      toast("Enter a variant name first", true);
+      return;
+    }
+    const updated = await saveVersion(configRef.current.promoCard, name);
+    setVersions(updated);
+    // The just-saved version is the current card → select it.
+    const latest = updated[updated.length - 1];
+    if (latest) setSelectedVersionId(latest.id);
+    setNewVersionName("");
+    setShowSaveVersionPopover(false);
+    toast(`Variant saved: ${name}`);
+  }
+
+  async function handleDeleteVersion(id: string) {
+    const updated = await deleteVersion(id);
+    setVersions(updated);
+    if (selectedVersionId === id) setSelectedVersionId(null);
+    setPendingDeleteId(null);
+    toast("Variant deleted");
+  }
+
+  // Apply a saved version to the live card — click-to-apply, like a template.
+  function applyVersion(version: PromoVersion) {
+    pushPromoState();
+    const restored = clonePromoCard(version.promoCard);
+    setConfig({ ...configRef.current, promoCard: restored });
+    syncEditorsFromConfig(restored);
+    markChanged();
+    setSelectedVersionId(version.id);
+    setShowVersionsPopup(false);
+    toast(`Variant applied: ${version.label}`);
+  }
+
   function applyTemplate(template: PromoCard, templateName: string) {
     pushPromoState();
     const cloned = JSON.parse(JSON.stringify(template));
@@ -1498,32 +1607,18 @@ export function PromoSection({
               >
                 <Redo2 className="w-3.5 h-3.5" />
               </button>
-              <button
-                onClick={toggleActive}
-                className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${
-                  config.promoCard.active
-                    ? "bg-primary"
-                    : "bg-surface-subtle hover:bg-primary/20"
-                }`}
-              >
-                <span
-                  className={`pointer-events-none relative inline-block h-5 w-5 rounded-full bg-white shadow transform transition ${
-                    config.promoCard.active ? "translate-x-5" : "translate-x-0"
-                  }`}
-                ></span>
-              </button>
             </div>
           </div>
 
-          {/* Quick actions: pick a saved version, or start from a sample template */}
+          {/* Quick actions: browse versions, or start from a sample */}
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setShowVersionsPopup(true)}
               className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
-              title="Saved versions of this promo card"
+              title="Saved variants of this promo card"
             >
-              <History className="h-4 w-4" /> Versions
+              <History className="h-4 w-4" /> Variants
             </button>
             <button
               type="button"
@@ -1968,6 +2063,32 @@ export function PromoSection({
                       title="Card Style"
                     >
                       <Palette className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="flex flex-col items-start pl-3">
+                    <label className="block text-[10px] text-on-surface-variant mb-0.5">
+                      {config.promoCard.active ? "Active" : "Inactive"}
+                    </label>
+                    <button
+                      onClick={toggleActive}
+                      title={
+                        config.promoCard.active
+                          ? "Promo card is ON — click to turn off"
+                          : "Promo card is OFF — click to turn on"
+                      }
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full border-2 border-transparent transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${
+                        config.promoCard.active
+                          ? "bg-primary"
+                          : "bg-surface-subtle hover:bg-primary/20"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+                          config.promoCard.active
+                            ? "translate-x-5"
+                            : "translate-x-0"
+                        }`}
+                      />
                     </button>
                   </div>
                 </div>
@@ -2764,6 +2885,72 @@ export function PromoSection({
               )}
             </div>
           </div>
+          {/* Save the current design as a version — sits below the live card */}
+          <div className="relative shrink-0" ref={saveVersionWrapRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setNewVersionName("");
+                setShowSaveVersionPopover((open) => !open);
+              }}
+              className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary ${
+                showSaveVersionPopover
+                  ? "border-primary/70 bg-primary/10 text-primary"
+                  : "border-border text-on-surface-variant"
+              }`}
+              title="Save this design as a variant"
+            >
+              <Save className="h-4 w-4" /> Save as variant
+            </button>
+            {showSaveVersionPopover && (
+              <div className="absolute bottom-full left-0 right-0 z-50 mb-2 rounded-lg border border-border bg-surface-elevated p-3 shadow-xl">
+                <label className="mb-1.5 block text-xs font-medium text-on-surface">
+                  Name this variant
+                </label>
+                <input
+                  ref={saveVersionInputRef}
+                  type="text"
+                  value={newVersionName}
+                  onChange={(e) => setNewVersionName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSaveVersion();
+                    } else if (e.key === "Escape") {
+                      setShowSaveVersionPopover(false);
+                    }
+                  }}
+                  placeholder="e.g. Diwali sale v1"
+                  maxLength={60}
+                  className="w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-on-surface outline-none transition-colors focus:border-primary/80 focus:ring-1 focus:ring-primary/40"
+                />
+                <div className="mt-2.5 flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-on-surface-variant">
+                    {versions.length >= MAX_VERSIONS
+                      ? "Oldest will be replaced"
+                      : `${versions.length}/${MAX_VERSIONS} saved`}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowSaveVersionPopover(false)}
+                      className="rounded-md px-2.5 py-1.5 text-xs font-medium text-on-surface-variant transition-colors hover:text-primary"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveVersion}
+                      disabled={!newVersionName.trim()}
+                      className="rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-on-primary transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -2775,12 +2962,9 @@ export function PromoSection({
             onClick={() => setShowTemplatesPopup(false)}
           />
           <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border px-6 py-4">
+            <div className="flex items-center justify-between border-b border-border px-6 py-2">
               <div>
-                <h3 className="text-base font-semibold text-on-surface">
-                  Sample Templates
-                </h3>
-                <p className="text-xs text-on-surface-variant">
+                <p className="text-sm text-on-surface-variant">
                   Click a template to apply it to your promo card.
                 </p>
               </div>
@@ -2805,34 +2989,113 @@ export function PromoSection({
         </div>
       )}
 
-      {/* Versions popup — entry point in place; logic to be implemented next */}
+      {/* Versions popup — save / restore / delete up to MAX_VERSIONS snapshots */}
       {showVersionsPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
             className="absolute inset-0"
             onClick={() => setShowVersionsPopup(false)}
           />
-          <div className="relative z-10 flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-6 py-4">
               <div>
-                <h3 className="text-base font-semibold text-on-surface">
-                  Versions
-                </h3>
-                <p className="text-xs text-on-surface-variant">
-                  Saved snapshots of this promo card.
+                <p className="text-sm text-on-surface-variant">
+                  Click a variant to apply it to your promo card ({versions.length}/
+                  {MAX_VERSIONS}). Use “Save as variant” to add a new one.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowVersionsPopup(false)}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
-                aria-label="Close versions"
+                aria-label="Close variants"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="p-6 text-center text-sm text-on-surface-variant">
-              Version management is coming here next.
+
+            {/* Saved versions grid (newest first) — click a card to apply */}
+            <div className="campaign-custom-scrollbar overflow-y-auto p-6">
+              {versions.length === 0 ? (
+                <div className="p-10 text-center text-sm text-on-surface-variant">
+                  No saved variants yet. Design your card, then use “Save as
+                  variant” below the preview to add one.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                  {[...versions].reverse().map((version) => {
+                    return (
+                      <div
+                        key={version.id}
+                        onClick={() => applyVersion(version)}
+                        className="group relative rounded-xl border border-gray-200 hover:border-primary hover:ring-1 hover:ring-primary bg-white p-3 shadow-sm transition-colors hover:shadow-lg cursor-pointer dark:border-gray-700 dark:bg-gray-900"
+                      >
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="min-w-0 truncate text-xs font-semibold text-gray-800 dark:text-gray-200">
+                            {version.label}
+                          </p>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium dark:bg-gray-700 dark:text-gray-200">
+                              Click to apply
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPendingDeleteId(version.id);
+                              }}
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                              aria-label={`Delete variant ${version.label}`}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        <PromoMiniPreview promoCard={version.promoCard} />
+                        <p className="mt-2 text-[11px] text-gray-400 dark:text-gray-500">
+                          Saved {formatVersionTime(version.savedAt)}
+                        </p>
+
+                        {pendingDeleteId === version.id && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            className="absolute inset-0 z-10 flex cursor-default flex-col items-center justify-center gap-3 rounded-xl bg-surface-elevated/95 p-4 text-center backdrop-blur-sm"
+                          >
+                            <p className="text-sm font-medium text-on-surface">
+                              Delete “{version.label}”?
+                            </p>
+                            <p className="-mt-1 text-[11px] text-on-surface-variant">
+                              This can’t be undone.
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPendingDeleteId(null);
+                                }}
+                                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteVersion(version.id);
+                                }}
+                                className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
