@@ -3024,6 +3024,7 @@ export function PromoSection({
               ) : (
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                   {[...versions].reverse().map((version) => {
+                    const isLive = version.id === selectedVersionId;
                     return (
                       <div
                         key={version.id}
@@ -3035,9 +3036,16 @@ export function PromoSection({
                             {version.label}
                           </p>
                           <div className="flex shrink-0 items-center gap-1">
-                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium dark:bg-gray-700 dark:text-gray-200">
-                              Click to apply
-                            </span>
+                            {isLive ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] font-semibold text-green-600 dark:text-green-400">
+                                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                                Live
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium dark:bg-gray-700 dark:text-gray-200">
+                                Click to apply
+                              </span>
+                            )}
                             <button
                               type="button"
                               onClick={(e) => {
