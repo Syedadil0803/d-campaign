@@ -451,7 +451,11 @@ export function PromoSection({
 
     if (isDestructiveKey && !promoDeletingRef.current) {
       promoDeletingRef.current = true;
-      pushPromoState();
+      // Start of a new delete session: unlock any stale lock (e.g. from an
+      // earlier style/format change) so we capture a fresh pre-delete snapshot,
+      // matching the select+delete path. The promoDeletingRef guard keeps the
+      // whole session collapsed into a single undo step.
+      pushPromoState({ replace: true });
     }
   }
 
