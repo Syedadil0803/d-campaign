@@ -2974,8 +2974,8 @@ export function PromoSection({
             className="absolute inset-0"
             onClick={() => setShowTemplatesPopup(false)}
           />
-          <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border px-6 py-2">
+          <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border campaign-card-surface shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-6 py-3">
               <div>
                 <p className="text-sm text-on-surface-variant">
                   Click a template to apply it to your promo card.
@@ -3009,8 +3009,8 @@ export function PromoSection({
             className="absolute inset-0"
             onClick={() => setShowVersionsPopup(false)}
           />
-          <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border campaign-card-surface shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-6 py-3">
               <div>
                 <p className="text-sm text-on-surface-variant">
                   Click a variant to apply it to your promo card ({versions.length}/
