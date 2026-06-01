@@ -19,7 +19,6 @@ import {
   RotateCcw,
   LayoutTemplate,
   History,
-  Save,
 } from "lucide-react";
 import { CampaignConfig, PromoCard } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
@@ -36,7 +35,6 @@ import { PopupDropdown } from "./PopupDropdown";
 import { PromoMiniPreview } from "./PromoMiniPreview";
 import {
   listVersions,
-  saveVersion,
   deleteVersion,
   MAX_VERSIONS,
   type PromoVersion,
@@ -132,13 +130,11 @@ export function PromoSection({
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
   // Saved promo-card versions (local-only for now; see lib/promoVersions).
   const [versions, setVersions] = useState<PromoVersion[]>([]);
-  const [newVersionName, setNewVersionName] = useState("");
+
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
     null,
   );
-  const [showSaveVersionPopover, setShowSaveVersionPopover] = useState(false);
-  const saveVersionWrapRef = useRef<HTMLDivElement>(null);
-  const saveVersionInputRef = useRef<HTMLInputElement>(null);
+
   // Id of the variant awaiting delete confirmation (null = none).
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
@@ -1216,19 +1212,6 @@ export function PromoSection({
     };
   }, [showVersionsPopup]);
 
-  // Save-version popover: focus the name field on open, close on outside click.
-  useEffect(() => {
-    if (!showSaveVersionPopover) return;
-    setTimeout(() => saveVersionInputRef.current?.focus(), 0);
-    const onDown = (e: MouseEvent) => {
-      if (!saveVersionWrapRef.current?.contains(e.target as Node)) {
-        setShowSaveVersionPopover(false);
-      }
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [showSaveVersionPopover]);
-
   function formatVersionTime(savedAt: string): string {
     const date = new Date(savedAt);
     if (Number.isNaN(date.getTime())) return "";
@@ -1240,21 +1223,6 @@ export function PromoSection({
     });
   }
 
-  async function handleSaveVersion() {
-    const name = newVersionName.trim();
-    if (!name) {
-      toast("Enter a variant name first", true);
-      return;
-    }
-    const updated = await saveVersion(configRef.current.promoCard, name);
-    setVersions(updated);
-    // The just-saved version is the current card → select it.
-    const latest = updated[updated.length - 1];
-    if (latest) setSelectedVersionId(latest.id);
-    setNewVersionName("");
-    setShowSaveVersionPopover(false);
-    toast(`Variant saved: ${name}`);
-  }
 
   async function handleDeleteVersion(id: string) {
     const updated = await deleteVersion(id);
@@ -3015,85 +2983,6 @@ export function PromoSection({
               )}
             </div>
           </div>
-          {/* Save the current design as a version — sits below the live card */}
-          <div className="relative shrink-0" ref={saveVersionWrapRef}>
-            <button
-              type="button"
-              onClick={() => {
-                setNewVersionName("");
-                setShowSaveVersionPopover((open) => !open);
-              }}
-              className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary ${
-                showSaveVersionPopover
-                  ? "border-primary/70 bg-primary/10 text-primary"
-                  : "border-border text-on-surface-variant"
-              }`}
-              title="Save this design as a variant"
-            >
-              <Save className="h-4 w-4" /> Save as variant
-            </button>
-            {showSaveVersionPopover && (
-              <div className="absolute bottom-full left-0 right-0 z-50 mb-2 rounded-lg border border-border bg-surface-elevated p-3 shadow-xl">
-                <label className="mb-1.5 block text-xs font-medium text-on-surface">
-                  Name this variant
-                </label>
-                <input
-                  ref={saveVersionInputRef}
-                  type="text"
-                  value={newVersionName}
-                  onChange={(e) => setNewVersionName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleSaveVersion();
-                    } else if (e.key === "Escape") {
-                      setShowSaveVersionPopover(false);
-                    }
-                  }}
-                  placeholder="e.g. Diwali sale v1"
-                  maxLength={60}
-                  className="w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-on-surface outline-none transition-colors focus:border-primary/80 focus:ring-1 focus:ring-primary/40"
-                />
-                {versions.length >= MAX_VERSIONS && (
-                  <div className="mt-2.5 flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-[11px] leading-snug text-amber-700 dark:text-amber-400">
-                    <span className="mt-px">⚠</span>
-                    <span>
-                      Limit of {MAX_VERSIONS} reached — saving will delete the
-                      oldest variant,{" "}
-                      <span className="font-semibold">
-                        “{versions[0]?.label}”
-                      </span>{" "}
-                      (saved {formatVersionTime(versions[0]?.savedAt ?? "")}).
-                    </span>
-                  </div>
-                )}
-                <div className="mt-2.5 flex items-center justify-between gap-2">
-                  <span className="text-xs text-on-surface-variant">
-                    {versions.length < MAX_VERSIONS
-                      ? `${versions.length}/${MAX_VERSIONS} variants saved`
-                      : `${MAX_VERSIONS}/${MAX_VERSIONS} variants`}
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setShowSaveVersionPopover(false)}
-                      className="rounded-md px-2.5 py-1.5 text-xs font-medium text-on-surface-variant transition-colors hover:text-primary"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveVersion}
-                      disabled={!newVersionName.trim()}
-                      className="rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-on-primary transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -3144,7 +3033,7 @@ export function PromoSection({
               <div>
                 <p className="text-sm text-on-surface-variant">
                   Click a variant to apply it to your promo card ({versions.length}/
-                  {MAX_VERSIONS}). Use “Save as variant” to add a new one.
+                  {MAX_VERSIONS}).
                 </p>
               </div>
               <button
@@ -3161,8 +3050,7 @@ export function PromoSection({
             <div className="campaign-custom-scrollbar overflow-y-auto p-6">
               {versions.length === 0 ? (
                 <div className="p-10 text-center text-sm text-on-surface-variant">
-                  No saved variants yet. Design your card, then use “Save as
-                  variant” below the preview to add one.
+                  No saved variants yet.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">

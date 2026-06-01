@@ -1,10 +1,8 @@
 import { LayoutDashboard, Megaphone, Gift, LayoutGrid, Save, Sun, Moon, LogOut } from 'lucide-react';
-import { CampaignConfig } from '@/types/campaign';
 
 interface HeaderProps {
   activeTab: 'dashboard' | 'announcement' | 'promo';
   setActiveTab: (tab: 'dashboard' | 'announcement' | 'promo') => void;
-  config: CampaignConfig;
   hasChanges: boolean;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
@@ -15,7 +13,6 @@ interface HeaderProps {
 export function Header({
   activeTab,
   setActiveTab,
-  config,
   hasChanges,
   isDarkMode,
   toggleDarkMode,
@@ -89,15 +86,7 @@ export function Header({
             <span className="sm:hidden">Save</span>
           </button>
           <button
-            onClick={() => {
-              if (hasChanges) {
-                if (confirm('You have unsaved changes. Are you sure you want to logout? Any unsaved changes will be lost.')) {
-                  handleLogout();
-                }
-              } else {
-                handleLogout();
-              }
-            }}
+            onClick={handleLogout}
             className="rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-elevated hover:text-on-surface"
             title="Logout"
           >

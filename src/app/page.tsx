@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { X } from 'lucide-react';
 import { CampaignConfig, defaultConfig } from '@/types/campaign';
 import { Header } from '@/components/Header';
 import { Dashboard } from '@/components/Dashboard';
@@ -138,11 +139,29 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'announcement' | 'promo'>('dashboard');
   const [config, setConfig] = useState<CampaignConfig>(defaultConfig);
   const [hasChanges, setHasChanges] = useState(false);
+  const [pendingDraftAction, setPendingDraftAction] = useState<
+    | { type: 'tab'; tab: 'dashboard' | 'announcement' | 'promo' }
+    | { type: 'logout' }
+    | null
+  >(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastIsError, setToastIsError] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const mainScrollRef = useRef<HTMLElement>(null);
+  const configRef = useRef(config);
+  configRef.current = config;
+  const hasChangesRef = useRef(hasChanges);
+  hasChangesRef.current = hasChanges;
+  const draftSignatureRef = useRef<string | null>(null);
+
+  function getConfigSignature(cfg: CampaignConfig) {
+    return JSON.stringify(cfg);
+  }
+
+  function hasChangesSinceDraft() {
+    return hasChangesRef.current && draftSignatureRef.current !== getConfigSignature(configRef.current);
+  }
 
   useEffect(() => {
     loadConfig();
@@ -153,6 +172,31 @@ export default function Home() {
     } else {
       setIsDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches);
     }
+  }, []);
+
+  // Browser close/refresh can only show the native unload warning. Keep drafting,
+  // but do not mark the draft prompt as handled unless the user chooses an in-app action.
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasChangesRef.current) {
+        saveDraft(configRef.current, { markHandled: false });
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  // Auto-save as draft to localStorage when tool/tab becomes hidden (timeout, switch away)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && hasChangesSinceDraft()) {
+        saveDraft(configRef.current, { markHandled: false });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
   useEffect(() => {
@@ -167,13 +211,72 @@ export default function Home() {
     mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab]);
 
+  // Wrap setActiveTab to prompt save-as-draft when switching tabs with unsaved edits since the last draft
+  const handleTabSwitch = useCallback((tab: 'dashboard' | 'announcement' | 'promo') => {
+    if (tab === activeTab) return;
+    if (hasChangesSinceDraft()) {
+      setPendingDraftAction({ type: 'tab', tab });
+      return;
+    }
+    setActiveTab(tab);
+  }, [activeTab]);
+
+  function saveDraft(
+    cfg: CampaignConfig,
+    options: { markHandled?: boolean } = {},
+  ) {
+    localStorage.setItem('campaign-draft', JSON.stringify(cfg));
+    if (options.markHandled !== false) {
+      draftSignatureRef.current = getConfigSignature(cfg);
+    }
+  }
+
+  function clearDraft() {
+    localStorage.removeItem('campaign-draft');
+    draftSignatureRef.current = null;
+  }
+
+  function completePendingDraftAction(action = pendingDraftAction) {
+    if (!action) return;
+    setPendingDraftAction(null);
+    if (action.type === 'tab') {
+      setActiveTab(action.tab);
+      return;
+    }
+    performLogout();
+  }
+
+  function saveDraftAndContinue() {
+    saveDraft(configRef.current);
+    toast('Draft saved');
+    completePendingDraftAction();
+  }
+
+  function continueWithoutDraft() {
+    draftSignatureRef.current = getConfigSignature(configRef.current);
+    completePendingDraftAction();
+  }
+
   async function loadConfig() {
     try {
+      // Check for a saved draft first
+      const draft = localStorage.getItem('campaign-draft');
+      if (draft) {
+        const parsed = JSON.parse(draft) as CampaignConfig;
+        const migrated = migrateConfig(parsed, parsed.version);
+        setConfig(migrated);
+        draftSignatureRef.current = getConfigSignature(migrated);
+        setHasChanges(true);
+        toast('Restored from draft');
+        return;
+      }
+
       const response = await fetch('/api/config');
       if (response.ok) {
         const data = await response.json();
         const migrated = migrateConfig(data, data.version);
         setConfig(migrated);
+        draftSignatureRef.current = getConfigSignature(migrated);
       }
     } catch (error) {
       console.error('Failed to load config:', error);
@@ -190,6 +293,7 @@ export default function Home() {
 
       if (response.ok) {
         setHasChanges(false);
+        clearDraft();
         toast('Settings saved successfully');
       } else {
         toast('Failed to save settings', true);
@@ -214,6 +318,14 @@ export default function Home() {
   }
 
   function handleLogout() {
+    if (hasChangesSinceDraft()) {
+      setPendingDraftAction({ type: 'logout' });
+      return;
+    }
+    performLogout();
+  }
+
+  function performLogout() {
     // Clear any user session data
     localStorage.removeItem('authToken');
     localStorage.removeItem('userEmail');
@@ -230,8 +342,7 @@ export default function Home() {
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <Header
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          config={config}
+          setActiveTab={handleTabSwitch}
           hasChanges={hasChanges}
           isDarkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode}
@@ -247,7 +358,7 @@ export default function Home() {
         >
           <div className={`max-w-[1840px] mx-auto ${activeTab === 'promo' ? '' : 'space-y-8 pb-12'}`}>
             {activeTab === 'dashboard' && (
-              <Dashboard config={config} setActiveTab={setActiveTab} />
+              <Dashboard config={config} setActiveTab={handleTabSwitch} />
             )}
 
             {activeTab === 'announcement' && (
@@ -269,6 +380,59 @@ export default function Home() {
           </div>
         </main>
       </div>
+
+      {pendingDraftAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
+          <div
+            className="absolute inset-0"
+            onClick={() => setPendingDraftAction(null)}
+          />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold">
+                  Save changes as draft?
+                </h2>
+                <p className="mt-1 text-sm text-on-surface-variant">
+                  You have changes that are not saved as a draft yet.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingDraftAction(null)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+                aria-label="Close draft prompt"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={continueWithoutDraft}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                Continue without draft
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingDraftAction(null)}
+                className="rounded-md border border-white/10 bg-black/10 px-4 py-2 text-sm font-medium text-on-surface transition-colors hover:border-primary/70"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveDraftAndContinue}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+              >
+                Save Draft
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Toast show={showToast} message={toastMessage} isError={toastIsError} />
     </div>
