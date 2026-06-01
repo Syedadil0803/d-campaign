@@ -51,6 +51,7 @@ interface PromoSectionProps {
   setConfig: (config: CampaignConfig) => void;
   markChanged: () => void;
   toast: (message: string, isError?: boolean) => void;
+  onSelectedVersionChange?: (versionId: string | null) => void;
 }
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
@@ -77,6 +78,7 @@ export function PromoSection({
   setConfig,
   markChanged,
   toast,
+  onSelectedVersionChange,
 }: PromoSectionProps) {
   const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
     const date = new Date();
@@ -1183,19 +1185,21 @@ export function PromoSection({
     return formatTimerText(rawHtml, timerValue);
   }
 
-  // On mount: load saved versions and auto-select the latest one into the card.
+  // On mount: load saved versions. The saved config remains the source of truth.
   useEffect(() => {
     listVersions().then((list) => {
       setVersions(list);
-      if (list.length === 0) return;
-      const latest = list[list.length - 1];
-      setSelectedVersionId(latest.id);
-      const restored = clonePromoCard(latest.promoCard);
-      setConfig({ ...configRef.current, promoCard: restored });
-      syncEditorsFromConfig(restored);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const matchingVersion = [...versions]
+      .reverse()
+      .find((version) => promoCardsEqual(version.promoCard, config.promoCard));
+    if (!matchingVersion) return;
+    setSelectedVersionId(matchingVersion.id);
+    onSelectedVersionChange?.(matchingVersion.id);
+  }, [config.promoCard, versions, onSelectedVersionChange]);
 
   // Refresh the list whenever the popup is opened (keeps it current).
   useEffect(() => {
@@ -1227,7 +1231,10 @@ export function PromoSection({
   async function handleDeleteVersion(id: string) {
     const updated = await deleteVersion(id);
     setVersions(updated);
-    if (selectedVersionId === id) setSelectedVersionId(null);
+    if (selectedVersionId === id) {
+      setSelectedVersionId(null);
+      onSelectedVersionChange?.(null);
+    }
     setPendingDeleteId(null);
     toast("Variant deleted");
   }
@@ -1243,6 +1250,7 @@ export function PromoSection({
     markChanged();
     setPromoAppliedCardBaseline(restored, previousSnapshot);
     setSelectedVersionId(version.id);
+    onSelectedVersionChange?.(version.id);
     setShowVersionsPopup(false);
     toast(`Variant applied: ${version.label}`);
   }
@@ -1259,6 +1267,8 @@ export function PromoSection({
     syncEditorsFromConfig(cloned);
     markChanged();
     setPromoAppliedCardBaseline(cloned, previousSnapshot);
+    setSelectedVersionId(null);
+    onSelectedVersionChange?.(null);
     toast(`Template applied: ${templateName}`);
   }
 

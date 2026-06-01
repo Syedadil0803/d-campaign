@@ -82,6 +82,25 @@ export async function saveVersion(
   return versions;
 }
 
+/** Replace an existing version snapshot by id. Returns the updated list. */
+export async function updateVersion(
+  id: string,
+  promoCard: PromoCard,
+  label?: string,
+): Promise<PromoVersion[]> {
+  const versions = read();
+  const index = versions.findIndex((version) => version.id === id);
+  if (index === -1) return versions;
+  versions[index] = {
+    ...versions[index],
+    savedAt: new Date().toISOString(),
+    label: label?.trim() || versions[index].label,
+    promoCard: JSON.parse(JSON.stringify(promoCard)) as PromoCard,
+  };
+  write(versions);
+  return versions;
+}
+
 /** Delete one version by id. Returns the updated list. */
 export async function deleteVersion(id: string): Promise<PromoVersion[]> {
   const versions = read().filter((v) => v.id !== id);

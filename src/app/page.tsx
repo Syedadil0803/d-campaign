@@ -8,7 +8,13 @@ import { Dashboard } from '@/components/Dashboard';
 import { AnnouncementSection } from '@/components/AnnouncementSection';
 import { PromoSection } from '@/components/PromoSection';
 import { Toast } from '@/components/Toast';
-import { listVersions, MAX_VERSIONS, saveVersion } from '@/lib/promoVersions';
+import {
+  listVersions,
+  MAX_VERSIONS,
+  saveVersion,
+  updateVersion,
+  type PromoVersion,
+} from '@/lib/promoVersions';
 
 // Migration functions
 function migrateAnnouncements(config: any): CampaignConfig['announcementBar']['announcements'] {
@@ -145,7 +151,11 @@ export default function Home() {
     | { type: 'logout' }
     | null
   >(null);
-  const [pendingVariantSave, setPendingVariantSave] = useState<CampaignConfig | null>(null);
+  const [pendingVariantSave, setPendingVariantSave] = useState<{
+    config: CampaignConfig;
+    versions: PromoVersion[];
+  } | null>(null);
+  const [selectedPromoVersionId, setSelectedPromoVersionId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastIsError, setToastIsError] = useState(false);
@@ -196,7 +206,8 @@ export default function Home() {
   }
 
   async function savePromoVariant(cfg: CampaignConfig, allowOverflow = false) {
-    await saveVersion(cfg.promoCard, getAutoVariantLabel(), { allowOverflow });
+    const updatedVersions = await saveVersion(cfg.promoCard, getAutoVariantLabel(), { allowOverflow });
+    setSelectedPromoVersionId(updatedVersions[updatedVersions.length - 1]?.id ?? null);
     savedPromoSignatureRef.current = getPromoSignature(cfg);
   }
 
@@ -320,14 +331,34 @@ export default function Home() {
 
   async function savePendingVariantAndClose() {
     if (!pendingVariantSave) return;
-    const cfg = pendingVariantSave;
+    const cfg = pendingVariantSave.config;
     setPendingVariantSave(null);
     await savePromoVariant(cfg, true);
     await persistConfig(cfg, 'Settings saved and promo variant saved');
   }
 
+  async function updateExistingVariantAndClose(versionId: string) {
+    if (!pendingVariantSave) return;
+    const cfg = pendingVariantSave.config;
+    const version = pendingVariantSave.versions.find((item) => item.id === versionId);
+    setPendingVariantSave(null);
+    await updateVersion(versionId, cfg.promoCard, version?.label);
+    setSelectedPromoVersionId(versionId);
+    savedPromoSignatureRef.current = getPromoSignature(cfg);
+    await persistConfig(cfg, 'Settings saved and promo variant updated');
+  }
+
   function cancelPendingVariantSave() {
     setPendingVariantSave(null);
+  }
+
+  function getSelectedPendingVariant() {
+    if (!pendingVariantSave || !selectedPromoVersionId) return null;
+    return (
+      pendingVariantSave.versions.find(
+        (version) => version.id === selectedPromoVersionId,
+      ) ?? null
+    );
   }
 
   async function loadConfig() {
@@ -361,7 +392,7 @@ export default function Home() {
   async function handleSave() {
     const variantStatus = await getPromoVariantSaveStatus(config);
     if (variantStatus === 'pending') {
-      setPendingVariantSave(config);
+      setPendingVariantSave({ config, versions: await listVersions() });
       return;
     }
 
@@ -407,6 +438,8 @@ export default function Home() {
     setHasChanges(true);
   }
 
+  const selectedPendingVariant = getSelectedPendingVariant();
+
   return (
     <div className="campaign-page-bg flex h-screen text-on-surface">
       <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -445,6 +478,7 @@ export default function Home() {
                 setConfig={setConfig}
                 markChanged={markChanged}
                 toast={toast}
+                onSelectedVersionChange={setSelectedPromoVersionId}
               />
             )}
           </div>
@@ -517,7 +551,7 @@ export default function Home() {
                   Save promo variant?
                 </h2>
                 <p className="mt-1 text-sm text-on-surface-variant">
-                  You already have {MAX_VERSIONS} variants. Saving this one will remove the oldest variant.
+                  You already have {MAX_VERSIONS} variants. Update the selected variant or replace the oldest.
                 </p>
               </div>
               <button
@@ -530,21 +564,37 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={cancelPendingVariantSave}
-                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={savePendingVariantAndClose}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
-              >
-                Save and Replace Oldest
-              </button>
+            <div className="space-y-2">
+              {selectedPendingVariant && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateExistingVariantAndClose(selectedPendingVariant.id)
+                  }
+                  className="flex w-full items-center justify-between gap-3 rounded-md border border-primary/40 bg-primary/10 px-4 py-2 text-left text-sm font-medium text-on-surface transition-colors hover:border-primary/70 hover:bg-primary/15"
+                >
+                  <span>Update Selected</span>
+                  <span className="min-w-0 truncate text-xs text-on-surface-variant">
+                    {selectedPendingVariant.label}
+                  </span>
+                </button>
+              )}
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={cancelPendingVariantSave}
+                  className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={savePendingVariantAndClose}
+                  className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+                >
+                  Save and Replace Oldest
+                </button>
+              </div>
             </div>
           </div>
         </div>
