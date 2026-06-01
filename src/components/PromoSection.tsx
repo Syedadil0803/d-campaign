@@ -16,6 +16,7 @@ import {
   Palette,
   Undo2,
   Redo2,
+  RotateCcw,
   LayoutTemplate,
   History,
   Save,
@@ -66,6 +67,11 @@ interface PromoSnapshot {
 interface PromoSelectionSnapshot {
   start: number;
   end: number;
+}
+
+interface PromoAppliedRedoSnapshot {
+  snapshot: PromoSnapshot;
+  baseline: PromoSnapshot | null;
 }
 
 export function PromoSection({
@@ -185,35 +191,62 @@ export function PromoSection({
   ).current;
   const restoringSnapshotRef = useRef(false);
   const promoDeletingRef = useRef(false);
-  const promoAppliedCardBaselinePendingRef = useRef(false);
+  const promoAppliedCardBaselineRef = useRef<PromoSnapshot | null>(null);
+  const promoPreAppliedCardRef = useRef<PromoSnapshot | null>(null);
+  const promoAppliedRedoRef = useRef<PromoAppliedRedoSnapshot | null>(null);
   const [canUndoPromo, setCanUndoPromo] = useState(false);
   const [canRedoPromo, setCanRedoPromo] = useState(false);
+  const [canResetPromoEdits, setCanResetPromoEdits] = useState(false);
 
   function clonePromoCard(card: PromoCard): PromoCard {
     return JSON.parse(JSON.stringify(card)) as PromoCard;
   }
 
+  function promoCardsEqual(a: PromoCard, b: PromoCard): boolean {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+
   function syncPromoHistoryButtons() {
-    setCanUndoPromo(promoHistory.canUndo());
-    setCanRedoPromo(promoHistory.canRedo());
+    setCanUndoPromo(promoHistory.canUndo() || Boolean(promoPreAppliedCardRef.current));
+    setCanRedoPromo(promoHistory.canRedo() || Boolean(promoAppliedRedoRef.current));
+  }
+
+  function syncResetPromoEditsButton(nextPromoCard = configRef.current.promoCard) {
+    const baseline = promoAppliedCardBaselineRef.current?.promoCard;
+    setCanResetPromoEdits(
+      Boolean(baseline && !promoCardsEqual(nextPromoCard, baseline)),
+    );
   }
 
   function getPromoSnapshot(): PromoSnapshot {
     const editor = getActivePromoEditor();
+    const promoCard = clonePromoCard(configRef.current.promoCard);
+    const currentField = currentFieldRef.current;
+    if (editor && currentField) {
+      const html = wrapBareTextWithFontSize(editor.innerHTML);
+      if (currentField === "title") promoCard.title = html;
+      if (currentField === "subtitle") promoCard.subtitle = html;
+      if (currentField === "description") promoCard.description = html;
+      if (currentField === "button") promoCard.buttonText = html;
+      if (currentField === "timer") promoCard.timerText = normalizeTimerTemplate(html);
+    }
     return {
-      promoCard: clonePromoCard(configRef.current.promoCard),
-      currentField: currentFieldRef.current,
+      promoCard,
+      currentField,
       selection: editor ? getPromoSelectionSnapshot(editor) : null,
     };
   }
 
   function pushPromoState(options: { replace?: boolean } = {}) {
     if (restoringSnapshotRef.current) return;
-    const replaceLockedSnapshot =
-      options.replace || promoAppliedCardBaselinePendingRef.current;
+    if (promoAppliedCardBaselineRef.current) {
+      syncPromoHistoryButtons();
+      return;
+    }
+    promoAppliedRedoRef.current = null;
+    const replaceLockedSnapshot = options.replace;
     if (replaceLockedSnapshot) promoHistory.unlock();
     promoHistory.pushState(getPromoSnapshot());
-    promoAppliedCardBaselinePendingRef.current = false;
     syncPromoHistoryButtons();
   }
 
@@ -233,6 +266,7 @@ export function PromoSection({
     setShowPersistentScaffold(Boolean(snapshot.currentField));
     setConfig({ ...configRef.current, promoCard: nextPromoCard });
     syncEditorsFromConfig(nextPromoCard);
+    syncResetPromoEditsButton(nextPromoCard);
     setTimeout(() => {
       const ref = getFieldRef(snapshot.currentField);
       activeEditorRef.current = ref?.current || null;
@@ -246,24 +280,83 @@ export function PromoSection({
   }
 
   function undoPromo() {
-    promoAppliedCardBaselinePendingRef.current = false;
     const snapshot = promoHistory.undo(getPromoSnapshot());
-    syncPromoHistoryButtons();
     if (snapshot) {
       applyPromoSnapshot(snapshot);
       toast("Promo action undone");
+      syncPromoHistoryButtons();
+      return;
     }
+
+    const preAppliedSnapshot = promoPreAppliedCardRef.current;
+    if (preAppliedSnapshot) {
+      const currentSnapshot = getPromoSnapshot();
+      promoAppliedRedoRef.current = {
+        snapshot: currentSnapshot,
+        baseline: promoAppliedCardBaselineRef.current
+          ? {
+              ...promoAppliedCardBaselineRef.current,
+              promoCard: clonePromoCard(promoAppliedCardBaselineRef.current.promoCard),
+            }
+          : null,
+      };
+      promoPreAppliedCardRef.current = null;
+      if (promoAppliedCardBaselineRef.current) {
+        promoAppliedCardBaselineRef.current = null;
+        setCanResetPromoEdits(false);
+      }
+      applyPromoSnapshot(preAppliedSnapshot);
+      toast("Promo action undone");
+    }
+    syncPromoHistoryButtons();
   }
 
   function redoPromo() {
-    promoAppliedCardBaselinePendingRef.current = false;
     const snapshot = promoHistory.redo(getPromoSnapshot());
-    syncPromoHistoryButtons();
     if (snapshot) {
       applyPromoSnapshot(snapshot);
       toast("Promo action redone");
+      syncPromoHistoryButtons();
+      return;
     }
+
+    const appliedRedo = promoAppliedRedoRef.current;
+    if (appliedRedo) {
+      promoAppliedRedoRef.current = null;
+      promoPreAppliedCardRef.current = getPromoSnapshot();
+      promoAppliedCardBaselineRef.current = appliedRedo.baseline;
+      applyPromoSnapshot(appliedRedo.snapshot);
+      syncResetPromoEditsButton(appliedRedo.snapshot.promoCard);
+      toast("Promo action redone");
+    }
+    syncPromoHistoryButtons();
   }
+
+  function resetPromoEdits() {
+    const snapshot = promoAppliedCardBaselineRef.current;
+    if (!snapshot) return;
+    promoHistory.clear();
+    syncPromoHistoryButtons();
+    applyPromoSnapshot(snapshot);
+    setCanResetPromoEdits(false);
+    toast("Promo edits reset");
+  }
+
+  function setPromoAppliedCardBaseline(promoCard: PromoCard, previousSnapshot: PromoSnapshot) {
+    promoAppliedCardBaselineRef.current = {
+      promoCard: clonePromoCard(promoCard),
+      currentField: currentFieldRef.current,
+      selection: null,
+    };
+    promoPreAppliedCardRef.current = previousSnapshot;
+    setCanResetPromoEdits(false);
+    syncPromoHistoryButtons();
+  }
+
+  useEffect(() => {
+    syncResetPromoEditsButton(config.promoCard);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.promoCard]);
 
   // Populate editors from config on mount
   useEffect(() => {
@@ -396,10 +489,12 @@ export function PromoSection({
       if (!el) return;
       const html = wrapBareTextWithFontSize(el.innerHTML);
       const text = normalizeTimerTemplate(html);
+      const nextPromoCard = { ...config.promoCard, timerText: text };
       setConfig({
         ...config,
-        promoCard: { ...config.promoCard, timerText: text },
+        promoCard: nextPromoCard,
       });
+      syncResetPromoEditsButton(nextPromoCard);
       markChanged();
       refreshPromoToolbarFormats(el);
       return;
@@ -424,10 +519,15 @@ export function PromoSection({
       description: "description",
       button: "buttonText",
     } as const;
+    const nextPromoCard = {
+      ...config.promoCard,
+      [fieldMap[field]]: html,
+    };
     setConfig({
       ...config,
-      promoCard: { ...config.promoCard, [fieldMap[field]]: html },
+      promoCard: nextPromoCard,
     });
+    syncResetPromoEditsButton(nextPromoCard);
     markChanged();
     refreshPromoToolbarFormats(el);
   }
@@ -485,11 +585,9 @@ export function PromoSection({
       return;
     }
 
-    const startsTextInput = e.key.length === 1 || e.key === "Enter";
-    if (promoAppliedCardBaselinePendingRef.current && startsTextInput) {
-      promoDeletingRef.current = false;
-      pushPromoState();
-    }
+    // Keep a delete/replace text session grouped across follow-up typing.
+    // Example: delete "DROP", type "TODAY ONLY", delete "ONLY" should undo
+    // to the original text with "DROP", not just restore "ONLY".
   }
 
   function getActivePromoEditor(): HTMLDivElement | null {
@@ -979,26 +1077,30 @@ export function PromoSection({
 
   function toggleActive() {
     pushPromoState();
+    const nextPromoCard = {
+      ...config.promoCard,
+      active: !config.promoCard.active,
+    };
     setConfig({
       ...config,
-      promoCard: {
-        ...config.promoCard,
-        active: !config.promoCard.active,
-      },
+      promoCard: nextPromoCard,
     });
+    syncResetPromoEditsButton(nextPromoCard);
     markChanged();
   }
 
   function updateField(field: keyof PromoCard, value: any) {
     if ((configRef.current.promoCard as any)[field] === value) return;
     pushPromoState();
+    const nextPromoCard = {
+      ...config.promoCard,
+      [field]: value,
+    };
     setConfig({
       ...config,
-      promoCard: {
-        ...config.promoCard,
-        [field]: value,
-      },
+      promoCard: nextPromoCard,
     });
+    syncResetPromoEditsButton(nextPromoCard);
     markChanged();
   }
 
@@ -1164,19 +1266,23 @@ export function PromoSection({
 
   // Apply a saved version to the live card — click-to-apply, like a template.
   function applyVersion(version: PromoVersion) {
-    pushPromoState({ replace: true });
+    const previousSnapshot = getPromoSnapshot();
+    promoAppliedRedoRef.current = null;
+    promoHistory.clear();
     const restored = clonePromoCard(version.promoCard);
     setConfig({ ...configRef.current, promoCard: restored });
     syncEditorsFromConfig(restored);
     markChanged();
-    promoAppliedCardBaselinePendingRef.current = true;
+    setPromoAppliedCardBaseline(restored, previousSnapshot);
     setSelectedVersionId(version.id);
     setShowVersionsPopup(false);
     toast(`Variant applied: ${version.label}`);
   }
 
   function applyTemplate(template: PromoCard, templateName: string) {
-    pushPromoState({ replace: true });
+    const previousSnapshot = getPromoSnapshot();
+    promoAppliedRedoRef.current = null;
+    promoHistory.clear();
     const cloned = JSON.parse(JSON.stringify(template));
     cloned.timerText = normalizeTimerTemplate(
       cloned.timerText ?? getDefaultTimerStorageHTML(),
@@ -1184,7 +1290,7 @@ export function PromoSection({
     setConfig({ ...configRef.current, promoCard: cloned });
     syncEditorsFromConfig(cloned);
     markChanged();
-    promoAppliedCardBaselinePendingRef.current = true;
+    setPromoAppliedCardBaseline(cloned, previousSnapshot);
     toast(`Template applied: ${templateName}`);
   }
 
@@ -1604,6 +1710,15 @@ export function PromoSection({
               </div>
             </div>
             <div className="flex items-center gap-1.5">
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={resetPromoEdits}
+                disabled={!canResetPromoEdits}
+                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Reset edits to selected template or variant"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
               <button
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={undoPromo}
