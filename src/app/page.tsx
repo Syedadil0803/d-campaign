@@ -8,6 +8,7 @@ import { Dashboard } from '@/components/Dashboard';
 import { AnnouncementSection } from '@/components/AnnouncementSection';
 import { PromoSection } from '@/components/PromoSection';
 import { Toast } from '@/components/Toast';
+import { listVersions, MAX_VERSIONS, saveVersion } from '@/lib/promoVersions';
 
 // Migration functions
 function migrateAnnouncements(config: any): CampaignConfig['announcementBar']['announcements'] {
@@ -144,6 +145,7 @@ export default function Home() {
     | { type: 'logout' }
     | null
   >(null);
+  const [pendingVariantSave, setPendingVariantSave] = useState<CampaignConfig | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastIsError, setToastIsError] = useState(false);
@@ -154,6 +156,7 @@ export default function Home() {
   const hasChangesRef = useRef(hasChanges);
   hasChangesRef.current = hasChanges;
   const draftSignatureRef = useRef<string | null>(null);
+  const savedPromoSignatureRef = useRef<string | null>(null);
 
   function getConfigSignature(cfg: CampaignConfig) {
     return JSON.stringify(cfg);
@@ -161,6 +164,40 @@ export default function Home() {
 
   function hasChangesSinceDraft() {
     return hasChangesRef.current && draftSignatureRef.current !== getConfigSignature(configRef.current);
+  }
+
+  function getPromoSignature(cfg: CampaignConfig) {
+    return JSON.stringify(cfg.promoCard);
+  }
+
+  function getAutoVariantLabel() {
+    return `Saved ${new Date().toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })}`;
+  }
+
+  async function getPromoVariantSaveStatus(cfg: CampaignConfig) {
+    const promoSignature = getPromoSignature(cfg);
+    if (savedPromoSignatureRef.current === promoSignature) return 'skipped';
+
+    const existingVersions = await listVersions();
+    const matchingVersion = existingVersions.some(
+      (version) => JSON.stringify(version.promoCard) === promoSignature,
+    );
+    if (matchingVersion) {
+      savedPromoSignatureRef.current = promoSignature;
+      return 'skipped';
+    }
+
+    return existingVersions.length >= MAX_VERSIONS ? 'pending' : 'ready';
+  }
+
+  async function savePromoVariant(cfg: CampaignConfig, allowOverflow = false) {
+    await saveVersion(cfg.promoCard, getAutoVariantLabel(), { allowOverflow });
+    savedPromoSignatureRef.current = getPromoSignature(cfg);
   }
 
   useEffect(() => {
@@ -257,6 +294,42 @@ export default function Home() {
     completePendingDraftAction();
   }
 
+  async function persistConfig(
+    cfg: CampaignConfig,
+    successMessage = 'Settings saved successfully',
+  ) {
+    try {
+      const response = await fetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfg),
+      });
+
+      if (response.ok) {
+        setHasChanges(false);
+        clearDraft();
+        toast(successMessage);
+      } else {
+        toast('Failed to save settings', true);
+      }
+    } catch (error) {
+      console.error('Failed to save config:', error);
+      toast('Failed to save settings', true);
+    }
+  }
+
+  async function savePendingVariantAndClose() {
+    if (!pendingVariantSave) return;
+    const cfg = pendingVariantSave;
+    setPendingVariantSave(null);
+    await savePromoVariant(cfg, true);
+    await persistConfig(cfg, 'Settings saved and promo variant saved');
+  }
+
+  function cancelPendingVariantSave() {
+    setPendingVariantSave(null);
+  }
+
   async function loadConfig() {
     try {
       // Check for a saved draft first
@@ -266,6 +339,7 @@ export default function Home() {
         const migrated = migrateConfig(parsed, parsed.version);
         setConfig(migrated);
         draftSignatureRef.current = getConfigSignature(migrated);
+        savedPromoSignatureRef.current = getPromoSignature(migrated);
         setHasChanges(true);
         toast('Restored from draft');
         return;
@@ -277,6 +351,7 @@ export default function Home() {
         const migrated = migrateConfig(data, data.version);
         setConfig(migrated);
         draftSignatureRef.current = getConfigSignature(migrated);
+        savedPromoSignatureRef.current = getPromoSignature(migrated);
       }
     } catch (error) {
       console.error('Failed to load config:', error);
@@ -284,24 +359,19 @@ export default function Home() {
   }
 
   async function handleSave() {
-    try {
-      const response = await fetch('/api/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
-      });
-
-      if (response.ok) {
-        setHasChanges(false);
-        clearDraft();
-        toast('Settings saved successfully');
-      } else {
-        toast('Failed to save settings', true);
-      }
-    } catch (error) {
-      console.error('Failed to save config:', error);
-      toast('Failed to save settings', true);
+    const variantStatus = await getPromoVariantSaveStatus(config);
+    if (variantStatus === 'pending') {
+      setPendingVariantSave(config);
+      return;
     }
+
+    if (variantStatus === 'ready') {
+      await savePromoVariant(config);
+      await persistConfig(config, 'Settings saved and promo variant saved');
+      return;
+    }
+
+    await persistConfig(config);
   }
 
   function toast(message: string, isError = false) {
@@ -428,6 +498,52 @@ export default function Home() {
                 className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
               >
                 Save Draft
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingVariantSave && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
+          <div
+            className="absolute inset-0"
+            onClick={cancelPendingVariantSave}
+          />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold">
+                  Save promo variant?
+                </h2>
+                <p className="mt-1 text-sm text-on-surface-variant">
+                  You already have {MAX_VERSIONS} variants. Saving this one will remove the oldest variant.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={cancelPendingVariantSave}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+                aria-label="Close variant prompt"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={cancelPendingVariantSave}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={savePendingVariantAndClose}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+              >
+                Save and Replace Oldest
               </button>
             </div>
           </div>

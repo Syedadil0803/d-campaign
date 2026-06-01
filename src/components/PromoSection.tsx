@@ -3091,9 +3091,6 @@ export function PromoSection({
                           </div>
                         </div>
                         <PromoMiniPreview promoCard={version.promoCard} />
-                        <p className="mt-2 text-[11px] text-gray-400 dark:text-gray-500">
-                          Saved {formatVersionTime(version.savedAt)}
-                        </p>
 
                         {pendingDeleteId === version.id && (
                           <div

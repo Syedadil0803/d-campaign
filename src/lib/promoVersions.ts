@@ -59,13 +59,17 @@ export async function listVersions(): Promise<PromoVersion[]> {
 
 /**
  * Save a new named snapshot. Returns the updated list (oldest first).
- * Enforces the FIFO cap by dropping the oldest entries beyond MAX_VERSIONS.
+ * Enforces the cap unless allowOverflow is passed, then drops oldest entries FIFO.
  */
 export async function saveVersion(
   promoCard: PromoCard,
   label: string,
+  options: { allowOverflow?: boolean } = {},
 ): Promise<PromoVersion[]> {
   const versions = read();
+  if (!options.allowOverflow && versions.length >= MAX_VERSIONS) {
+    return versions;
+  }
   const next: PromoVersion = {
     id: makeId(),
     savedAt: new Date().toISOString(),
