@@ -1485,7 +1485,7 @@ export function PromoSection({
         </button>
         {open && (
           <div
-            className={`absolute z-40 mt-1 w-[260px] rounded-md border border-border bg-surface-elevated p-2 shadow-lg ${mode === "end" ? "right-0" : "left-0"}`}
+            className={`absolute z-40 mt-1 w-[260px] rounded-xl border border-border bg-surface-elevated p-2 shadow-2xl ${mode === "end" ? "right-0" : "left-0"}`}
           >
             <div className="mb-2 flex items-center justify-between">
               <button

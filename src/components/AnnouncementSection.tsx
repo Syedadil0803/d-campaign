@@ -104,6 +104,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   // Popup state
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [showSchedulePopup, setShowSchedulePopup] = useState(false);
+  const [showStartDateCalendar, setShowStartDateCalendar] = useState(false);
+  const [showEndDateCalendar, setShowEndDateCalendar] = useState(false);
+  const [startDateView, setStartDateView] = useState<Date>(new Date());
+  const [endDateView, setEndDateView] = useState<Date>(new Date());
   const [linkPos, setLinkPos] = useState<{ top: number; left: number } | null>(null);
   const [schedulePos, setSchedulePos] = useState<{ top: number; left: number } | null>(null);
   const [showBackgroundTypeDropdown, setShowBackgroundTypeDropdown] = useState(false);
@@ -121,6 +125,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   const scheduleBtnRef = useRef<HTMLButtonElement>(null);
   const linkPopupRef = useRef<HTMLDivElement>(null);
   const schedulePopupRef = useRef<HTMLDivElement>(null);
+  const startDateCalendarRef = useRef<HTMLDivElement>(null);
+  const endDateCalendarRef = useRef<HTMLDivElement>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
   const backgroundTypeBtnRef = useRef<HTMLButtonElement>(null);
   const backgroundTypeMenuRef = useRef<HTMLDivElement>(null);
@@ -350,6 +356,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     }
   }, [showDirectionDropdown]);
 
+  useEffect(() => {
+    if (showSchedulePopup) return;
+    setShowStartDateCalendar(false);
+    setShowEndDateCalendar(false);
+  }, [showSchedulePopup]);
+
   // Delete selected announcement on Delete/Backspace key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -391,8 +403,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
       if (
         showSchedulePopup &&
         schedulePopupRef.current && !schedulePopupRef.current.contains(target) &&
-        scheduleBtnRef.current && !scheduleBtnRef.current.contains(target) &&
-        !(target instanceof HTMLInputElement && target.type === 'date')
+        scheduleBtnRef.current && !scheduleBtnRef.current.contains(target)
       ) {
         setShowSchedulePopup(false);
       }
@@ -418,6 +429,41 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     document.addEventListener('mousedown', handleMouseDown);
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, [showLinkPopup, showSchedulePopup, showBackgroundTypeDropdown, showDirectionDropdown, actionMenuIndex]);
+
+  function formatDateLabel(value: string): string {
+    if (!value) return 'Select date';
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return 'Select date';
+    return date.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+
+  function toISODate(date: Date): string {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function buildMonthDays(viewDate: Date): Date[] {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    const first = new Date(year, month, 1);
+    const startOffset = first.getDay();
+    const gridStart = new Date(year, month, 1 - startOffset);
+    return Array.from(
+      { length: 42 },
+      (_, i) =>
+        new Date(
+          gridStart.getFullYear(),
+          gridStart.getMonth(),
+          gridStart.getDate() + i,
+        ),
+    );
+  }
 
   function addAnnouncement() {
     pushListUndo();
@@ -1394,41 +1440,209 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 <div className="space-y-2">
                   <div>
                     <label className="block text-[11px] text-on-surface-variant mb-0.5">Start Date</label>
-                    <input
-                      type="date"
-                      value={selectedStartDate}
-                      onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
-                      onChange={(e) => {
-                        const nextStart = e.target.value;
-                        setSelectedStartDate(nextStart);
-                        if (selectedIndex !== null) {
-                          const updated = [...config.announcementBar.announcements];
-                          updated[selectedIndex] = { ...updated[selectedIndex], startDate: nextStart || undefined, richText: true };
-                          setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-                          markChanged();
-                        }
-                      }}
-                      className="block w-full border-border rounded-md p-1.5 border bg-surface text-on-surface text-sm [color-scheme:light] dark:[color-scheme:dark]"
-                    />
+                    <div ref={startDateCalendarRef} className="relative">
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          if (selectedStartDate) {
+                            const date = new Date(`${selectedStartDate}T00:00:00`);
+                            if (!Number.isNaN(date.getTime())) setStartDateView(new Date(date.getFullYear(), date.getMonth(), 1));
+                          }
+                          setShowStartDateCalendar((prev) => !prev);
+                          setShowEndDateCalendar(false);
+                        }}
+                        className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/10 p-1.5 text-sm text-on-surface backdrop-blur-md"
+                      >
+                        <span className={selectedStartDate ? 'text-on-surface' : 'text-on-surface-variant'}>
+                          {formatDateLabel(selectedStartDate)}
+                        </span>
+                        <svg
+                          className={`h-4 w-4 flex-shrink-0 text-on-surface-variant transition-transform duration-200 ${showStartDateCalendar ? 'rotate-180' : 'rotate-0'}`}
+                          viewBox="0 0 20 20"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                        >
+                          <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                      {showStartDateCalendar && (
+                        <div className="absolute z-50 mt-1 w-[260px] rounded-xl border border-border bg-surface-elevated p-2 shadow-2xl">
+                          <div className="mb-2 flex items-center justify-between">
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setStartDateView(new Date(startDateView.getFullYear(), startDateView.getMonth() - 1, 1));
+                              }}
+                              className="h-7 w-7 rounded border border-border text-on-surface-variant hover:border-primary/70 hover:text-primary"
+                            >
+                              <svg className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d="M12 6l-4 4 4 4" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </button>
+                            <div className="text-xs font-semibold text-on-surface">
+                              {startDateView.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                            </div>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setStartDateView(new Date(startDateView.getFullYear(), startDateView.getMonth() + 1, 1));
+                              }}
+                              className="h-7 w-7 rounded border border-border text-on-surface-variant hover:border-primary/70 hover:text-primary"
+                            >
+                              <svg className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d="M8 6l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </button>
+                          </div>
+                          <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-on-surface-variant">
+                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, idx) => <span key={`s-${label}-${idx}`}>{label}</span>)}
+                          </div>
+                          <div className="grid grid-cols-7 gap-1">
+                            {buildMonthDays(startDateView).map((day) => {
+                              const iso = toISODate(day);
+                              const inMonth = day.getMonth() === startDateView.getMonth();
+                              const isSelected = selectedStartDate === iso;
+                              const isToday = iso === toISODate(new Date());
+                              return (
+                                <button
+                                  key={`start-${iso}`}
+                                  type="button"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    setSelectedStartDate(iso);
+                                    if (selectedIndex !== null) {
+                                      const updated = [...config.announcementBar.announcements];
+                                      updated[selectedIndex] = { ...updated[selectedIndex], startDate: iso || undefined, richText: true };
+                                      setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+                                      markChanged();
+                                    }
+                                    setShowStartDateCalendar(false);
+                                  }}
+                                  className={`h-7 rounded text-[11px] transition-colors ${
+                                    isSelected
+                                      ? 'bg-primary/20 text-primary border border-primary/60'
+                                      : isToday
+                                      ? 'border border-primary/50 text-primary hover:bg-primary/10'
+                                      : inMonth
+                                      ? 'text-on-surface hover:bg-primary/10'
+                                      : 'text-on-surface-variant/60 hover:bg-primary/5'
+                                  }`}
+                                >
+                                  {day.getDate()}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-[11px] text-on-surface-variant mb-0.5">End Date</label>
-                    <input
-                      type="date"
-                      value={selectedEndDate}
-                      onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
-                      onChange={(e) => {
-                        const nextEnd = e.target.value;
-                        setSelectedEndDate(nextEnd);
-                        if (selectedIndex !== null) {
-                          const updated = [...config.announcementBar.announcements];
-                          updated[selectedIndex] = { ...updated[selectedIndex], endDate: nextEnd || undefined, richText: true };
-                          setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-                          markChanged();
-                        }
-                      }}
-                      className="block w-full border-border rounded-md p-1.5 border bg-surface text-on-surface text-sm [color-scheme:light] dark:[color-scheme:dark]"
-                    />
+                    <div ref={endDateCalendarRef} className="relative">
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          if (selectedEndDate) {
+                            const date = new Date(`${selectedEndDate}T00:00:00`);
+                            if (!Number.isNaN(date.getTime())) setEndDateView(new Date(date.getFullYear(), date.getMonth(), 1));
+                          }
+                          setShowEndDateCalendar((prev) => !prev);
+                          setShowStartDateCalendar(false);
+                        }}
+                        className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/10 p-1.5 text-sm text-on-surface backdrop-blur-md"
+                      >
+                        <span className={selectedEndDate ? 'text-on-surface' : 'text-on-surface-variant'}>
+                          {formatDateLabel(selectedEndDate)}
+                        </span>
+                        <svg
+                          className={`h-4 w-4 flex-shrink-0 text-on-surface-variant transition-transform duration-200 ${showEndDateCalendar ? 'rotate-180' : 'rotate-0'}`}
+                          viewBox="0 0 20 20"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                        >
+                          <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                      {showEndDateCalendar && (
+                        <div className="absolute z-50 mt-1 w-[260px] right-0 rounded-xl border border-border bg-surface-elevated p-2 shadow-2xl">
+                          <div className="mb-2 flex items-center justify-between">
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setEndDateView(new Date(endDateView.getFullYear(), endDateView.getMonth() - 1, 1));
+                              }}
+                              className="h-7 w-7 rounded border border-border text-on-surface-variant hover:border-primary/70 hover:text-primary"
+                            >
+                              <svg className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d="M12 6l-4 4 4 4" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </button>
+                            <div className="text-xs font-semibold text-on-surface">
+                              {endDateView.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                            </div>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setEndDateView(new Date(endDateView.getFullYear(), endDateView.getMonth() + 1, 1));
+                              }}
+                              className="h-7 w-7 rounded border border-border text-on-surface-variant hover:border-primary/70 hover:text-primary"
+                            >
+                              <svg className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                <path d="M8 6l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </button>
+                          </div>
+                          <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-on-surface-variant">
+                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, idx) => <span key={`e-${label}-${idx}`}>{label}</span>)}
+                          </div>
+                          <div className="grid grid-cols-7 gap-1">
+                            {buildMonthDays(endDateView).map((day) => {
+                              const iso = toISODate(day);
+                              const inMonth = day.getMonth() === endDateView.getMonth();
+                              const isSelected = selectedEndDate === iso;
+                              const isToday = iso === toISODate(new Date());
+                              return (
+                                <button
+                                  key={`end-${iso}`}
+                                  type="button"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    setSelectedEndDate(iso);
+                                    if (selectedIndex !== null) {
+                                      const updated = [...config.announcementBar.announcements];
+                                      updated[selectedIndex] = { ...updated[selectedIndex], endDate: iso || undefined, richText: true };
+                                      setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+                                      markChanged();
+                                    }
+                                    setShowEndDateCalendar(false);
+                                  }}
+                                  className={`h-7 rounded text-[11px] transition-colors ${
+                                    isSelected
+                                      ? 'bg-primary/20 text-primary border border-primary/60'
+                                      : isToday
+                                      ? 'border border-primary/50 text-primary hover:bg-primary/10'
+                                      : inMonth
+                                      ? 'text-on-surface hover:bg-primary/10'
+                                      : 'text-on-surface-variant/60 hover:bg-primary/5'
+                                  }`}
+                                >
+                                  {day.getDate()}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <p className="text-[10px] text-on-surface-variant">Leave empty to always show when bar is active.</p>
                 </div>
