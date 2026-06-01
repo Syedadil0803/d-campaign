@@ -117,7 +117,7 @@ export function PromoSection({
   const cardBgPopupBtnRef = useRef<HTMLButtonElement>(null);
   const cardBgPopupRef = useRef<HTMLDivElement>(null);
   const promoCardRef = useRef<HTMLDivElement>(null);
-  const leftStylePopupRef = useRef<HTMLDivElement>(null);
+
   const cardAngleWheelRef = useRef<HTMLDivElement>(null);
   const fieldAngleWheelRef = useRef<HTMLDivElement>(null);
   const startDatePickerRef = useRef<HTMLDivElement>(null);
@@ -132,9 +132,7 @@ export function PromoSection({
   // Action popups launched from the buttons under the Promo Card heading.
   const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
-  const [stylePopupSource, setStylePopupSource] = useState<"left" | "preview">(
-    "preview",
-  );
+
   // Saved promo-card versions (local-only for now; see lib/promoVersions).
   const [versions, setVersions] = useState<PromoVersion[]>([]);
 
@@ -520,7 +518,6 @@ export function PromoSection({
     ref: RefObject<HTMLDivElement | null>,
   ) {
     setShowPersistentScaffold(true);
-    setStylePopupSource("left");
     setCurrentField(field);
     activeEditorRef.current = ref.current;
     promoDeletingRef.current = false;
@@ -541,7 +538,6 @@ export function PromoSection({
     }
     setShowPersistentScaffold(true);
     setShowCardBgPopup(false);
-    setStylePopupSource("left");
     setCurrentField(field);
     activeEditorRef.current = nextEditor;
     promoDeletingRef.current = false;
@@ -1239,30 +1235,6 @@ export function PromoSection({
     return { bottom: "8px" };
   }
 
-  function getLeftPopupPositionStyle(
-    field: PopupField,
-  ): { top: string; left: string } {
-    const refMap = {
-      title: titleRef,
-      subtitle: subtitleRef,
-      description: descRef,
-      button: buttonRef,
-      timer: timerRef,
-    } as const;
-    const el = refMap[field].current;
-    if (!el || typeof window === "undefined") {
-      return { top: "120px", left: "420px" };
-    }
-    const rect = el.getBoundingClientRect();
-    const popupWidth = 280;
-    const popupHeight = leftStylePopupRef.current?.offsetHeight ?? 360;
-    const gutter = 12;
-    const maxLeft = window.innerWidth - popupWidth - 12;
-    const left = Math.min(rect.right + gutter, Math.max(12, maxLeft));
-    const maxTop = window.innerHeight - popupHeight - 12;
-    const top = Math.min(Math.max(12, rect.top - 6), Math.max(12, maxTop));
-    return { top: `${top}px`, left: `${left}px` };
-  }
 
   const popupEditableFields = [
     "title",
@@ -1370,7 +1342,11 @@ export function PromoSection({
 
   // Apply a saved version to the live card — click-to-apply, like a template.
   function applyVersion(version: PromoVersion) {
-    const previousSnapshot = getPromoSnapshot();
+    // If a baseline exists, undo should go to the clean baseline (not the edited state)
+    // except for the very first apply where no baseline exists yet
+    const previousSnapshot = promoAppliedCardBaselineRef.current
+      ? promoAppliedCardBaselineRef.current
+      : getPromoSnapshot();
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
     const restored = clonePromoCard(version.promoCard);
@@ -1385,7 +1361,9 @@ export function PromoSection({
   }
 
   function applyTemplate(template: PromoCard, templateName: string) {
-    const previousSnapshot = getPromoSnapshot();
+    const previousSnapshot = promoAppliedCardBaselineRef.current
+      ? promoAppliedCardBaselineRef.current
+      : getPromoSnapshot();
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
     const cloned = JSON.parse(JSON.stringify(template));
@@ -2419,18 +2397,6 @@ export function PromoSection({
               {config.promoCard.active && (
                 <div
                   ref={promoCardRef}
-                  onMouseDownCapture={(e) => {
-                    const target = e.target as HTMLElement | null;
-                    if (target?.isContentEditable) {
-                      setStylePopupSource("preview");
-                    }
-                  }}
-                  onFocusCapture={(e) => {
-                    const target = e.target as HTMLElement | null;
-                    if (target?.isContentEditable) {
-                      setStylePopupSource("preview");
-                    }
-                  }}
                   className={`relative w-[400px] rounded-xl shadow-2xl p-5 transition-all duration-300 flex flex-col ${
                     config.promoCard.style.position === "bottom-right"
                       ? "justify-self-end self-end"
@@ -2710,7 +2676,6 @@ export function PromoSection({
 
                   {popupEditableFields.includes(currentField as PopupField) &&
                     !showCardBgPopup &&
-                    stylePopupSource === "preview" &&
                     (() => {
                       const field = currentField as PopupField;
                       const fieldStyle = getPopupFieldStyle(field);
@@ -2989,139 +2954,6 @@ export function PromoSection({
                                       }
                                       className="bg-color-picker h-9 w-full rounded cursor-pointer"
                                     />
-                                  </div>
-                                  <div aria-hidden="true" />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  {popupEditableFields.includes(currentField as PopupField) &&
-                    !showCardBgPopup &&
-                    stylePopupSource === "left" &&
-                    (() => {
-                      const field = currentField as PopupField;
-                      const fieldStyle = getPopupFieldStyle(field);
-                      const isButton = field === "button";
-                      const fbg = fieldStyle.background;
-                      const fieldAngle = directionToAngle(
-                        fbg.direction || "to right",
-                      );
-                      const fieldAngleNormalized = normalizeAngle(fieldAngle);
-                      return (
-                        <div
-                          ref={leftStylePopupRef}
-                          className="fixed z-40 w-[280px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3"
-                          style={getLeftPopupPositionStyle(field)}
-                        >
-                          <button
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setCurrentField(null);
-                            }}
-                            className="absolute -top-[28px] -right-[28px] inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface-elevated text-on-surface-variant shadow-sm transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
-                            aria-label="Close style controls"
-                            title="Close"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                          <div className="mb-2 flex items-center justify-between gap-2">
-                            <label className="text-xs font-semibold text-on-surface">
-                              {getPopupFieldLabel(field)}
-                            </label>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  setFieldAlignment("left");
-                                }}
-                                className={`cursor-pointer h-9 w-9 flex items-center justify-center text-[10px] border rounded transition-colors ${(fieldStyle?.textAlign || "left") === "left" ? "bg-primary/10 text-primary border-primary/80" : "border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant"}`}
-                                title="Align Left"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3 4h14v1H3V4zm0 4h10v1H3V8zm0 4h14v1H3v-1zm0 4h10v1H3v-1z" clipRule="evenodd" /></svg>
-                              </button>
-                              <button
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  setFieldAlignment("center");
-                                }}
-                                className={`cursor-pointer h-9 w-9 flex items-center justify-center text-[10px] border rounded transition-colors ${(fieldStyle?.textAlign || "left") === "center" ? "bg-primary/10 text-primary border-primary/80" : "border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant"}`}
-                                title="Align Center"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 4h10v1H5V4zm2 4h6v1H7V8zm-2 4h10v1H5v-1zm2 4h6v1H7v-1z" clipRule="evenodd" /></svg>
-                              </button>
-                              <button
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  setFieldAlignment("right");
-                                }}
-                                className={`cursor-pointer h-9 w-9 flex items-center justify-center text-[10px] border rounded transition-colors ${(fieldStyle?.textAlign || "left") === "right" ? "bg-primary/10 text-primary border-primary/80" : "border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant"}`}
-                                title="Align Right"
-                              >
-                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M7 4h10v1H7V4zm-4 4h14v1H3V8zm4 4h10v1H7v-1zm-4 4h14v1H3v-1z" clipRule="evenodd" /></svg>
-                              </button>
-                            </div>
-                          </div>
-                          <RichTextToolbar activeFormats={activeFormats} onFormat={handlePromoToolbarFormat} onColorSelect={handlePromoToolbarColor} showAlignment={false} showButtonWidth={isButton} buttonFullWidth={config.promoCard.buttonFullWidth || false} onButtonWidthChange={(fullWidth) => updateField("buttonFullWidth", fullWidth)} compact={true} />
-                          <div className="mt-2 pt-2 border-t border-white/10">
-                            <label className="block text-xs text-on-surface-variant mb-1">Field Background</label>
-                            <div className="grid grid-cols-3 gap-2">
-                              <div>
-                                <PopupDropdown label="Type" value={fbg.type} options={[{ value: "solid", label: "Solid" }, { value: "linear", label: "Linear" }, { value: "radial", label: "Radial" }]} open={showFieldBgTypeDropdown} onOpen={() => { const next = !showFieldBgTypeDropdown; closeAllPromoDropdowns(); setShowFieldBgTypeDropdown(next); setFieldBgTypePos(getDropdownPosition(fieldBgTypeBtnRef.current)); }} onSelect={(v) => { updateFieldBg({ type: v }); setShowFieldBgTypeDropdown(false); }} buttonRef={fieldBgTypeBtnRef} menuRef={fieldBgTypeMenuRef} menuPosition={fieldBgTypePos} compact={true} />
-                              </div>
-                              <div className="col-span-2">
-                                {(fbg.type === "linear" || fbg.type === "radial") && (
-                                  <>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">Balance: {fbg.midpoint ?? 50}%</label>
-                                    <input type="range" min="0" max="100" value={fbg.midpoint ?? 50} onChange={(e) => updateFieldBg({ midpoint: Number(e.target.value) })} className="balance-slider mt-3" />
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            <div className="mt-2 min-h-[56px]">
-                              {fbg.type === "solid" && (
-                                <div className="grid grid-cols-3 gap-2">
-                                  <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">Background</label>
-                                    <input type="color" value={fbg.startColor} onChange={(e) => updateFieldBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
-                                  </div>
-                                  <div aria-hidden="true" />
-                                  <div aria-hidden="true" />
-                                </div>
-                              )}
-                              {fbg.type === "linear" && (
-                                <div className="grid grid-cols-2 gap-2">
-                                  <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">Start</label>
-                                    <input type="color" value={fbg.startColor} onChange={(e) => updateFieldBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">End</label>
-                                    <input type="color" value={fbg.endColor} onChange={(e) => updateFieldBg({ endColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
-                                  </div>
-                                  <div className="col-span-2 mt-2 rounded-md border border-border/70 bg-surface/30 p-3">
-                                    <div className="mb-1 flex items-center justify-between">
-                                      <label className="block text-xs text-on-surface-variant">Gradient Direction</label>
-                                      <span className="text-[11px] font-medium text-on-surface-variant">{Math.round(fieldAngleNormalized)}deg</span>
-                                    </div>
-                                    <div className="flex items-center justify-center">
-                                      {renderGradientDirectionWheel({ angle: fieldAngle, wheelRef: fieldAngleWheelRef, onAngleChange: setFieldDirectionAngle, keyPrefix: "field-wheel-left" })}
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              {fbg.type === "radial" && (
-                                <div className="grid grid-cols-3 gap-2">
-                                  <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">Center</label>
-                                    <input type="color" value={fbg.startColor} onChange={(e) => updateFieldBg({ startColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">Outer</label>
-                                    <input type="color" value={fbg.endColor} onChange={(e) => updateFieldBg({ endColor: e.target.value })} className="bg-color-picker h-9 w-full rounded cursor-pointer" />
                                   </div>
                                   <div aria-hidden="true" />
                                 </div>
