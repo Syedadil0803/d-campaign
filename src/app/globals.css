@@ -63,6 +63,13 @@
   pointer-events: none;
 }
 
+/* Promo preview button placeholder uses the button's own text color so the
+   "Button" label stays legible on the configured (e.g. indigo) button fill. */
+.promo-preview-button:empty:before {
+  color: inherit;
+  opacity: 0.7;
+}
+
 /* Hide scrollbar on rich editor but keep scroll functional */
 .rich-editor {
   background-color: transparent;

@@ -19,8 +19,9 @@ import {
   RotateCcw,
   LayoutTemplate,
   History,
+  FilePlus2,
 } from "lucide-react";
-import { CampaignConfig, PromoCard } from "@/types/campaign";
+import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
 import { HistoryManager } from "@/lib/historyManager";
 import { SamplePromoTemplates } from "./SamplePromoTemplates";
@@ -261,7 +262,9 @@ export function PromoSection({
     restoringSnapshotRef.current = true;
     const nextPromoCard = clonePromoCard(snapshot.promoCard);
     setCurrentField(snapshot.currentField);
-    setShowPersistentScaffold(Boolean(snapshot.currentField));
+    setShowPersistentScaffold(
+      nextPromoCard.active || Boolean(snapshot.currentField),
+    );
     setConfig({ ...configRef.current, promoCard: nextPromoCard });
     syncEditorsFromConfig(nextPromoCard);
     syncResetPromoEditsButton(nextPromoCard);
@@ -351,6 +354,51 @@ export function PromoSection({
     syncPromoHistoryButtons();
   }
 
+  function getFreshPromoCard(): PromoCard {
+    const baseStyle = clonePromoCard(defaultConfig.promoCard).style;
+    return {
+      ...clonePromoCard(defaultConfig.promoCard),
+      active: true,
+      title: "",
+      subtitle: "",
+      description: "",
+      buttonText: "",
+      buttonUrl: "",
+      showTimer: false,
+      showButton: false,
+      timerText: "Ends in {hh}:{mm}:{ss}",
+      style: {
+        ...baseStyle,
+        background: {
+          type: "solid",
+          startColor: "#ffffff",
+          endColor: "#ffffff",
+          midpoint: 50,
+        },
+        textColor: "#111827",
+      },
+    };
+  }
+
+  function startFreshPromoCard() {
+    const previousSnapshot = getPromoSnapshot();
+    const freshCard = getFreshPromoCard();
+    promoAppliedRedoRef.current = null;
+    promoHistory.clear();
+    setConfig({ ...configRef.current, promoCard: freshCard });
+    syncEditorsFromConfig(freshCard);
+    setCurrentField(null);
+    currentFieldRef.current = null;
+    activeEditorRef.current = null;
+    setShowPersistentScaffold(true);
+    setSelectedVersionId(null);
+    onSelectedVersionChange?.(null);
+    setPromoAppliedCardBaseline(freshCard, previousSnapshot);
+    setCanResetPromoEdits(false);
+    markChanged();
+    toast("Fresh promo card started");
+  }
+
   useEffect(() => {
     syncResetPromoEditsButton(config.promoCard);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -428,9 +476,10 @@ export function PromoSection({
   }, [config.promoCard.timerText, config.promoCard.showTimer]);
 
   useEffect(() => {
-    if (!config.promoCard.active) {
-      setShowPersistentScaffold(false);
-    }
+    // Keep the field scaffold visible whenever the card is active so the
+    // preview shows the placeholder structure (title/subtitle/.../button)
+    // instead of rendering as a bare empty white box. Turns off when inactive.
+    setShowPersistentScaffold(config.promoCard.active);
   }, [config.promoCard.active]);
 
   useEffect(() => {
@@ -1662,7 +1711,7 @@ export function PromoSection({
   const showDescriptionInPreview = hasDescription || showContentScaffold;
   const showTimerInPreview = config.promoCard.showTimer || showContentScaffold;
   const showButtonInPreview =
-    config.promoCard.showButton || showContentScaffold;
+    config.promoCard.showButton || hasButtonText || showContentScaffold;
 
   return (
     <>
@@ -1722,8 +1771,16 @@ export function PromoSection({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={startFreshPromoCard}
+              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 py-2 text-xs font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              title="Start from a blank promo card"
+            >
+              <FilePlus2 className="h-4 w-4" /> Start Fresh
+            </button>
+            <button
+              type="button"
               onClick={() => setShowVersionsPopup(true)}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 py-2 text-xs font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="Saved variants of this promo card"
             >
               <History className="h-4 w-4" /> Variants
@@ -1731,10 +1788,10 @@ export function PromoSection({
             <button
               type="button"
               onClick={() => setShowTemplatesPopup(true)}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-3 py-2 text-xs font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 py-2 text-xs font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="Start from a ready-made sample template"
             >
-              <LayoutTemplate className="h-4 w-4" /> Sample Templates
+              <LayoutTemplate className="h-4 w-4" /> Sample Template
             </button>
           </div>
 
@@ -2442,7 +2499,8 @@ export function PromoSection({
                         ref={previewButtonRef}
                         contentEditable
                         suppressContentEditableWarning
-                        className={`py-2 px-4 rounded-lg text-base font-semibold outline-none ${
+                        data-placeholder="Button"
+                        className={`promo-preview-button py-2 px-4 rounded-lg text-base font-semibold outline-none min-h-10 ${
                           config.promoCard.buttonFullWidth ? "w-full" : ""
                         } ${currentField === "button" ? "ring-1 ring-primary/70" : ""} cursor-pointer`}
                         onMouseDown={() => {
