@@ -185,6 +185,7 @@ export function PromoSection({
   ).current;
   const restoringSnapshotRef = useRef(false);
   const promoDeletingRef = useRef(false);
+  const promoAppliedCardBaselinePendingRef = useRef(false);
   const [canUndoPromo, setCanUndoPromo] = useState(false);
   const [canRedoPromo, setCanRedoPromo] = useState(false);
 
@@ -208,8 +209,11 @@ export function PromoSection({
 
   function pushPromoState(options: { replace?: boolean } = {}) {
     if (restoringSnapshotRef.current) return;
-    if (options.replace) promoHistory.unlock();
+    const replaceLockedSnapshot =
+      options.replace || promoAppliedCardBaselinePendingRef.current;
+    if (replaceLockedSnapshot) promoHistory.unlock();
     promoHistory.pushState(getPromoSnapshot());
+    promoAppliedCardBaselinePendingRef.current = false;
     syncPromoHistoryButtons();
   }
 
@@ -242,6 +246,7 @@ export function PromoSection({
   }
 
   function undoPromo() {
+    promoAppliedCardBaselinePendingRef.current = false;
     const snapshot = promoHistory.undo(getPromoSnapshot());
     syncPromoHistoryButtons();
     if (snapshot) {
@@ -251,6 +256,7 @@ export function PromoSection({
   }
 
   function redoPromo() {
+    promoAppliedCardBaselinePendingRef.current = false;
     const snapshot = promoHistory.redo(getPromoSnapshot());
     syncPromoHistoryButtons();
     if (snapshot) {
@@ -476,6 +482,13 @@ export function PromoSection({
       // matching the select+delete path. The promoDeletingRef guard keeps the
       // whole session collapsed into a single undo step.
       pushPromoState({ replace: true });
+      return;
+    }
+
+    const startsTextInput = e.key.length === 1 || e.key === "Enter";
+    if (promoAppliedCardBaselinePendingRef.current && startsTextInput) {
+      promoDeletingRef.current = false;
+      pushPromoState();
     }
   }
 
@@ -1151,25 +1164,27 @@ export function PromoSection({
 
   // Apply a saved version to the live card — click-to-apply, like a template.
   function applyVersion(version: PromoVersion) {
-    pushPromoState();
+    pushPromoState({ replace: true });
     const restored = clonePromoCard(version.promoCard);
     setConfig({ ...configRef.current, promoCard: restored });
     syncEditorsFromConfig(restored);
     markChanged();
+    promoAppliedCardBaselinePendingRef.current = true;
     setSelectedVersionId(version.id);
     setShowVersionsPopup(false);
     toast(`Variant applied: ${version.label}`);
   }
 
   function applyTemplate(template: PromoCard, templateName: string) {
-    pushPromoState();
+    pushPromoState({ replace: true });
     const cloned = JSON.parse(JSON.stringify(template));
     cloned.timerText = normalizeTimerTemplate(
       cloned.timerText ?? getDefaultTimerStorageHTML(),
     );
-    setConfig({ ...config, promoCard: cloned });
+    setConfig({ ...configRef.current, promoCard: cloned });
     syncEditorsFromConfig(cloned);
     markChanged();
+    promoAppliedCardBaselinePendingRef.current = true;
     toast(`Template applied: ${templateName}`);
   }
 
