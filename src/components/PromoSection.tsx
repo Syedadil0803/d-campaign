@@ -360,6 +360,18 @@ export function PromoSection({
     syncPromoHistoryButtons();
   }
 
+  // Fill default start/end dates if missing. Must be applied BEFORE a card's
+  // baseline is captured — otherwise the date-defaulting effect mutates the
+  // card after the baseline, making it look "edited" and wrongly enabling Reset.
+  function withDefaultDates(card: PromoCard): PromoCard {
+    if (card.startDate && card.endDate) return card;
+    return {
+      ...card,
+      startDate: card.startDate || getISODateWithOffset(0),
+      endDate: card.endDate || getISODateWithOffset(1),
+    };
+  }
+
   function getFreshPromoCard(): PromoCard {
     const baseStyle = clonePromoCard(defaultConfig.promoCard).style;
     return {
@@ -388,7 +400,7 @@ export function PromoSection({
 
   function startFreshPromoCard() {
     const previousSnapshot = getPromoSnapshot();
-    const freshCard = getFreshPromoCard();
+    const freshCard = withDefaultDates(getFreshPromoCard());
     // Mark as a fresh card: leaving it later, undo should land on its edited state.
     isFreshCardRef.current = true;
     promoAppliedRedoRef.current = null;
@@ -1358,7 +1370,7 @@ export function PromoSection({
         : getPromoSnapshot();
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
-    const restored = clonePromoCard(version.promoCard);
+    const restored = withDefaultDates(clonePromoCard(version.promoCard));
     setConfig({ ...configRef.current, promoCard: restored });
     syncEditorsFromConfig(restored);
     markChanged();
@@ -1380,10 +1392,11 @@ export function PromoSection({
         : getPromoSnapshot();
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
-    const cloned = JSON.parse(JSON.stringify(template));
+    let cloned = JSON.parse(JSON.stringify(template));
     cloned.timerText = normalizeTimerTemplate(
       cloned.timerText ?? getDefaultTimerStorageHTML(),
     );
+    cloned = withDefaultDates(cloned);
     setConfig({ ...configRef.current, promoCard: cloned });
     syncEditorsFromConfig(cloned);
     markChanged();
