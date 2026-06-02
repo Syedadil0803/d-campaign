@@ -1843,10 +1843,10 @@ export function PromoSection({
                 <Gift className="w-4 h-4 text-pink-600" />
               </div>
               <div>
-                <h3 className="text-lg leading-6 font-semibold text-on-surface">
-                  Promo Card
+                <h3 className="text-[1.75rem] leading-9 font-bold text-on-surface">
+                    Promo Card
                 </h3>
-                <p className="mt-0.5 max-w-2xl text-xs text-on-surface-variant">
+                <p className="mt-0.5 max-w-2xl text-sm text-on-surface-variant">
                   Floating widget for special offers.
                 </p>
               </div>
@@ -1895,11 +1895,11 @@ export function PromoSection({
           </div>
 
           {/* Quick actions: browse versions, or start from a sample */}
-          <div className="flex items-center gap-2">
+          <div className="!mt-6 flex items-center gap-2">
             <button
               type="button"
               onClick={startFreshPromoCard}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 py-2 text-xs font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="Start from a blank promo card"
             >
               <FilePlus2 className="h-4 w-4" /> Start Fresh
@@ -1907,7 +1907,7 @@ export function PromoSection({
             <button
               type="button"
               onClick={() => setShowVersionsPopup(true)}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 py-2 text-xs font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="Saved variants of this promo card"
             >
               <History className="h-4 w-4" /> Variants
@@ -1915,25 +1915,25 @@ export function PromoSection({
             <button
               type="button"
               onClick={() => setShowTemplatesPopup(true)}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 py-2 text-xs font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="Start from a ready-made sample template"
             >
-              <LayoutTemplate className="h-4 w-4" /> Sample Template
+              <LayoutTemplate className="h-4 w-4" /> Template Hub
             </button>
           </div>
 
-          <div className="pt-1">
-            <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">
+          <div className="!mt-8">
+            <h4 className="text-sm font-bold text-on-surface-variant uppercase tracking-wide">
               Content
             </h4>
-            <p className="text-xs text-on-surface-variant mb-2">
+            <p className="text-sm text-on-surface-variant">
               Main promo copy shown in the card.
             </p>
           </div>
 
           <div>
-            <div className="flex items-center justify-between">
-              <label className="block text-sm font-medium text-on-surface">
+            <div className="!mt-0 flex items-center justify-between">
+              <label className="block text-sm font-medium text-on-surface mb-1">
                 Title
               </label>
               <button
@@ -1949,19 +1949,18 @@ export function PromoSection({
                 <Palette className="w-3.5 h-3.5" />
               </button>
             </div>
-            <p className="text-xs text-on-surface-variant mt-0.5 mb-1">
-              Enter text below
-            </p>
+
             <div
               ref={titleRef}
               contentEditable
+             // data-placeholder="Enter text here"
               suppressContentEditableWarning
               onInput={() => onFieldInput("title")}
               onFocus={() => onFieldFocus("title", titleRef)}
               onKeyDown={onPromoEditorKeyDown}
               onMouseUp={() => refreshPromoToolbarFormats(titleRef.current)}
               onKeyUp={() => refreshPromoToolbarFormats(titleRef.current)}
-              className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[38px] outline-none break-words transition-colors ${
+              className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[44px] outline-none break-words transition-colors ${
                 currentField === "title" ? "border-primary/70" : "border-border"
               } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
               style={{
@@ -1973,7 +1972,7 @@ export function PromoSection({
           </div>
           <div>
             <div className="flex items-center justify-between">
-              <label className="block text-sm font-medium text-on-surface">
+              <label className="block text-sm font-medium text-on-surface mb-1">
                 Subtitle
               </label>
               <button
@@ -1989,19 +1988,17 @@ export function PromoSection({
                 <Palette className="w-3.5 h-3.5" />
               </button>
             </div>
-            <p className="text-xs text-on-surface-variant mt-0.5 mb-1">
-              Enter text below
-            </p>
             <div
               ref={subtitleRef}
               contentEditable
+             // data-placeholder="Enter text here"
               suppressContentEditableWarning
               onInput={() => onFieldInput("subtitle")}
               onFocus={() => onFieldFocus("subtitle", subtitleRef)}
               onKeyDown={onPromoEditorKeyDown}
               onMouseUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
               onKeyUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
-              className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[38px] outline-none break-words transition-colors ${
+              className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[44px] outline-none break-words transition-colors ${
                 currentField === "subtitle"
                   ? "border-primary/70"
                   : "border-border"
@@ -2016,7 +2013,7 @@ export function PromoSection({
 
           <div>
             <div className="flex items-center justify-between">
-              <label className="block text-sm font-medium text-on-surface">
+              <label className="block text-sm font-medium text-on-surface mb-1">
                 Description
               </label>
               <button
@@ -2032,13 +2029,11 @@ export function PromoSection({
                 <Palette className="w-3.5 h-3.5" />
               </button>
             </div>
-            <p className="text-xs text-on-surface-variant mt-0.5 mb-1">
-              Enter text below
-            </p>
             <div
               ref={descRef}
               contentEditable
               suppressContentEditableWarning
+             // data-placeholder="Enter text here"
               onInput={() => onFieldInput("description")}
               onFocus={() => onFieldFocus("description", descRef)}
               onKeyDown={onPromoEditorKeyDown}
@@ -2058,10 +2053,10 @@ export function PromoSection({
           </div>
 
           <div className="pt-1">
-            <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">
+            <h4 className="text-sm font-bold text-on-surface-variant uppercase tracking-wide">
               Schedule
             </h4>
-            <p className="text-xs text-on-surface-variant mb-2">
+            <p className="text-sm text-on-surface-variant mb-2">
               Control when the promo card is active.
             </p>
           </div>
@@ -2098,10 +2093,10 @@ export function PromoSection({
           </div>
 
           <div className="pt-1">
-            <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">
+            <h4 className="text-sm font-bold text-on-surface-variant uppercase tracking-wide">
               Timer
             </h4>
-            <p className="text-xs text-on-surface-variant mb-2">
+            <p className="text-sm text-on-surface-variant">
               Optional countdown messaging for urgency.
             </p>
           </div>
@@ -2168,7 +2163,7 @@ export function PromoSection({
           {/* Timer Controls — rich text editor */}
           {config.promoCard.showTimer && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-1">
                 <label className="block text-sm font-medium text-on-surface">
                   Timer Text
                 </label>
@@ -2185,9 +2180,6 @@ export function PromoSection({
                   <Palette className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <p className="text-xs text-on-surface-variant mt-0.5 mb-1">
-                Enter text below
-              </p>
               <div
                 ref={timerRef}
                 contentEditable
@@ -2359,10 +2351,10 @@ export function PromoSection({
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide">
+                <h4 className="text-sm font-bold text-on-surface-variant uppercase tracking-wide">
                   Preview
                 </h4>
-                <p className="text-xs text-on-surface-variant">
+                <p className="text-sm text-on-surface-variant">
                   Live card rendering with editable field styles.
                 </p>
               </div>
