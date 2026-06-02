@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import { Megaphone, Gift, Calendar, Code, ChevronDown } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { stripHtml } from '@/lib/utils';
@@ -8,6 +11,8 @@ interface DashboardProps {
 }
 
 export function Dashboard({ config, setActiveTab }: DashboardProps) {
+  const [showJsonConfig, setShowJsonConfig] = useState(false);
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <div
@@ -96,18 +101,29 @@ export function Dashboard({ config, setActiveTab }: DashboardProps) {
       </div>
 
       {/* JSON Configuration */}
-      <details className="group col-span-1 md:col-span-2 bg-surface-elevated rounded-lg border border-border shadow-sm">
-        <summary className="flex items-center justify-between p-4 cursor-pointer">
+      <div className="col-span-1 md:col-span-2 bg-surface-elevated rounded-lg border border-border shadow-sm">
+        <button
+          type="button"
+          aria-expanded={showJsonConfig}
+          onClick={() => setShowJsonConfig((isOpen) => !isOpen)}
+          className="flex w-full items-center justify-between p-4 text-left"
+        >
           <h3 className="text-sm font-medium text-on-surface-variant font-mono flex items-center">
             <Code className="w-4 h-4 mr-2" />
             JSON Configuration
           </h3>
-          <ChevronDown className="w-4 h-4 text-on-surface-variant group-open:rotate-180 transition-transform" />
-        </summary>
-        <div className="p-4 bg-surface-subtle border-t border-border font-mono text-xs overflow-x-auto text-on-surface-variant">
-          <pre>{JSON.stringify(config, null, 2)}</pre>
-        </div>
-      </details>
+          <ChevronDown
+            className={`w-4 h-4 text-on-surface-variant transition-transform ${
+              showJsonConfig ? 'rotate-180' : ''
+            }`}
+          />
+        </button>
+        {showJsonConfig && (
+          <div className="p-4 bg-surface-subtle border-t border-border font-mono text-xs overflow-x-auto text-on-surface-variant">
+            <pre>{JSON.stringify(config, null, 2)}</pre>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
