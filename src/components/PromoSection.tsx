@@ -1831,11 +1831,11 @@ export function PromoSection({
   return (
     <>
       <div
-        className="p-4 flex gap-5 overflow-hidden"
+        className="p-4 flex gap-4 overflow-hidden"
         style={{ height: "calc(100vh - 120px)" }}
       >
         {/* Left: All editables — 30% width, scrollable */}
-        <div className="campaign-custom-scrollbar w-[30%] min-h-0 shrink-0 overflow-y-auto overflow-x-hidden pr-2 space-y-4">
+        <div className="campaign-custom-scrollbar w-[30%] min-h-0 shrink-0 overflow-y-auto overflow-x-hidden pr-4 space-y-4">
           {/* Header + Toggle */}
           <div className="flex items-center justify-between">
             <div className="flex items-center">
