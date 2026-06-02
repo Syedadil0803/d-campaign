@@ -20,9 +20,10 @@ import {
   LayoutTemplate,
   History,
   FilePlus2,
+  Sparkles,
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
-import { getBackgroundStyle } from "@/lib/utils";
+import { getBackgroundStyle, stripHtml } from "@/lib/utils";
 import { HistoryManager } from "@/lib/historyManager";
 import { SamplePromoTemplates } from "./SamplePromoTemplates";
 import { useRichTextEditor } from "@/hooks/useRichTextEditor";
@@ -1216,6 +1217,35 @@ export function PromoSection({
     markChanged();
   }
 
+  function openChatGptWithPromoPrompt() {
+    const title = stripHtml(config.promoCard.title || "").trim();
+    const subtitle = stripHtml(config.promoCard.subtitle || "").trim();
+    const description = stripHtml(config.promoCard.description || "").trim();
+    const buttonText = stripHtml(config.promoCard.buttonText || "").trim();
+    const timerText = stripHtml(config.promoCard.timerText || "").trim();
+
+    const existingCopy = [
+      title && `Title: ${title}`,
+      subtitle && `Subtitle: ${subtitle}`,
+      description && `Description: ${description}`,
+      buttonText && `Button: ${buttonText}`,
+      timerText && `Timer: ${timerText}`,
+    ].filter(Boolean);
+
+    const prompt = [
+      "Write 3 polished promo card variants for a website floating offer widget.",
+      "Keep each variant concise, conversion-focused, and friendly.",
+      "For each variant include: title, subtitle, short description, timer text, and CTA button text.",
+      "Avoid long sentences. Make the CTA action-oriented.",
+      existingCopy.length
+        ? `Use this existing copy as context:\n${existingCopy.join("\n")}`
+        : "Base it on a general ecommerce promotion.",
+    ].join("\n");
+
+    const url = `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   function updateField(field: keyof PromoCard, value: any) {
     if ((configRef.current.promoCard as any)[field] === value) return;
     pushPromoState();
@@ -1822,6 +1852,18 @@ export function PromoSection({
               </div>
             </div>
             <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  openChatGptWithPromoPrompt();
+                }}
+                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
+                title="Open ChatGPT with a promo copy prompt"
+                aria-label="Open ChatGPT with a promo copy prompt"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+              </button>
               <button
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={resetPromoEdits}
