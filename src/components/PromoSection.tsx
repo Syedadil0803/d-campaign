@@ -195,6 +195,10 @@ export function PromoSection({
   const promoAppliedCardBaselineRef = useRef<PromoSnapshot | null>(null);
   const promoPreAppliedCardRef = useRef<PromoSnapshot | null>(null);
   const promoAppliedRedoRef = useRef<PromoAppliedRedoSnapshot | null>(null);
+  // True while the current card is a Start-Fresh card. Leaving a fresh card,
+  // undo should land on its EDITED state; leaving a template/variant, undo
+  // should land on that card's CLEAN baseline (not the edited state).
+  const isFreshCardRef = useRef(false);
   const [canUndoPromo, setCanUndoPromo] = useState(false);
   const [canRedoPromo, setCanRedoPromo] = useState(false);
   const [canResetPromoEdits, setCanResetPromoEdits] = useState(false);
@@ -385,6 +389,8 @@ export function PromoSection({
   function startFreshPromoCard() {
     const previousSnapshot = getPromoSnapshot();
     const freshCard = getFreshPromoCard();
+    // Mark as a fresh card: leaving it later, undo should land on its edited state.
+    isFreshCardRef.current = true;
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
     setConfig({ ...configRef.current, promoCard: freshCard });
@@ -1342,11 +1348,14 @@ export function PromoSection({
 
   // Apply a saved version to the live card — click-to-apply, like a template.
   function applyVersion(version: PromoVersion) {
-    // If a baseline exists, undo should go to the clean baseline (not the edited state)
-    // except for the very first apply where no baseline exists yet
-    const previousSnapshot = promoAppliedCardBaselineRef.current
-      ? promoAppliedCardBaselineRef.current
-      : getPromoSnapshot();
+    // Leaving a fresh card → undo lands on its EDITED state (getPromoSnapshot).
+    // Leaving a template/variant → undo lands on its CLEAN baseline.
+    const leavingFresh = isFreshCardRef.current;
+    isFreshCardRef.current = false;
+    const previousSnapshot =
+      !leavingFresh && promoAppliedCardBaselineRef.current
+        ? promoAppliedCardBaselineRef.current
+        : getPromoSnapshot();
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
     const restored = clonePromoCard(version.promoCard);
@@ -1361,9 +1370,14 @@ export function PromoSection({
   }
 
   function applyTemplate(template: PromoCard, templateName: string) {
-    const previousSnapshot = promoAppliedCardBaselineRef.current
-      ? promoAppliedCardBaselineRef.current
-      : getPromoSnapshot();
+    // Leaving a fresh card → undo lands on its EDITED state (getPromoSnapshot).
+    // Leaving a template/variant → undo lands on its CLEAN baseline.
+    const leavingFresh = isFreshCardRef.current;
+    isFreshCardRef.current = false;
+    const previousSnapshot =
+      !leavingFresh && promoAppliedCardBaselineRef.current
+        ? promoAppliedCardBaselineRef.current
+        : getPromoSnapshot();
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
     const cloned = JSON.parse(JSON.stringify(template));
