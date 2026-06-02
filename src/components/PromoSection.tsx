@@ -389,12 +389,63 @@ export function PromoSection({
       style: {
         ...baseStyle,
         background: {
-          type: "solid",
-          startColor: "#ffffff",
-          endColor: "#ffffff",
+          type: "linear",
+          startColor: "#2c8da0",
+          endColor: "#4d9a52",
+          direction: "to right",
           midpoint: 50,
         },
-        textColor: "#111827",
+        textColor: "#ffffff",
+        titleStyle: {
+          ...baseStyle.titleStyle,
+          background: {
+            type: "solid",
+            startColor: "#1f7a8c",
+            endColor: "#1f7a8c",
+            midpoint: 50,
+          },
+          textColor: "#ffffff",
+        },
+        subheadingStyle: {
+          ...baseStyle.subheadingStyle,
+          background: {
+            type: "solid",
+            startColor: "#2c8da0",
+            endColor: "#2c8da0",
+            midpoint: 50,
+          },
+          textColor: "#ffffff",
+        },
+        descriptionStyle: {
+          ...baseStyle.descriptionStyle,
+          background: {
+            type: "solid",
+            startColor: "#4d9a52",
+            endColor: "#4d9a52",
+            midpoint: 50,
+          },
+          textColor: "#ffffff",
+        },
+        dateStyle: {
+          ...baseStyle.dateStyle,
+          background: {
+            type: "solid",
+            startColor: "#aed136",
+            endColor: "#aed136",
+            midpoint: 50,
+          },
+          textColor: "#1f2937",
+        },
+        buttonStyle: {
+          ...baseStyle.buttonStyle,
+          background: {
+            type: "solid",
+            startColor: "#3f8f47",
+            endColor: "#3f8f47",
+            midpoint: 50,
+          },
+          textColor: "#ffffff",
+        },
       },
     };
   }
