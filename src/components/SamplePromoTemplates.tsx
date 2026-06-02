@@ -590,8 +590,8 @@ const sampleTemplates = [
 export function SamplePromoTemplates({ onApplyTemplate }: SamplePromoTemplatesProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [visibleTemplateIds, setVisibleTemplateIds] = useState<Set<string>>(new Set());
-  const REVEAL_DURATION_MS = 900;
-  const STAGGER_DELAY_MS = 180;
+  const REVEAL_DURATION_MS = 350;
+  const STAGGER_DELAY_MS = 60;
 
   useEffect(() => {
     const root = containerRef.current;
