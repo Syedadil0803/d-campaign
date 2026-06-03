@@ -455,7 +455,7 @@ export default function Home() {
 
         <main
           ref={mainScrollRef}
-          className={`flex-1 overflow-y-auto bg-transparent p-6 ${
+          className={`flex-1 overflow-y-auto bg-transparent px-6 pt-8 pb-6 ${
             activeTab === 'promo' || activeTab === 'announcement' ? 'campaign-custom-scrollbar' : ''
           }`}
         >

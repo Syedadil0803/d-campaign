@@ -1882,7 +1882,7 @@ export function PromoSection({
   return (
     <>
       <div
-        className="p-4 flex gap-4 overflow-hidden"
+        className="flex gap-4 overflow-hidden"
         style={{ height: "calc(100vh - 120px)" }}
       >
         {/* Left: All editables — 30% width, scrollable */}

@@ -20,7 +20,7 @@ export function Header({
   handleLogout,
 }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-20 h-16 border-b border-border bg-surface/95 shadow-sm backdrop-blur">
+    <header className="sticky top-0 z-20 h-16  border-b border-border bg-surface/95 shadow-sm backdrop-blur">
       <div className="flex h-full items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-12">
           <LayoutDashboard className="mr-3 hidden h-6 w-6 text-primary sm:block" />
