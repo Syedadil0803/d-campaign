@@ -13,6 +13,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1060.0",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.30.0",
     "lucide-react": "^0.460.0",
