@@ -2090,7 +2090,7 @@ export function PromoSection({
               onKeyDown={onPromoEditorKeyDown}
               onMouseUp={() => refreshPromoToolbarFormats(descRef.current)}
               onKeyUp={() => refreshPromoToolbarFormats(descRef.current)}
-              className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[96px] outline-none break-words transition-colors ${
+              className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[44px] outline-none break-words transition-colors ${
                 currentField === "description"
                   ? "border-primary/70"
                   : "border-border"
