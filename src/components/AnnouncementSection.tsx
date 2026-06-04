@@ -889,7 +889,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     <section className="rounded-2xl border-border overflow-hidden">
       <Toast show={toast.show} message={toast.message} isError={toast.isError} />
       {/* Header */}
-      <div className="px-4 py-2 border-b border-border bg-surface/60 flex items-center justify-between">
+      <div className="px-4 py-2 border-border bg-surface/60 flex items-center justify-between">
         <div className="flex items-center">
           <div className="p-1 bg-primary/15 rounded-lg mr-3 border border-primary/60"><Megaphone className="w-4 h-4 text-primary" /></div>
           <div>
@@ -904,7 +904,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
         </div>
       </div>
 
-      <div className=" space-y-6">
+      <div className="space-y-8">
         {/* Preview */}
         <div className="py-4 border-border rounded-md">
           <h4 className="text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] mb-4">Preview</h4>
@@ -957,18 +957,18 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
           {/* Left: Input + Chips + Link */}
-          <div className="space-y-4 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[460px] transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
-            <div className="border-b border-border pb-3">
+          <div className="space-y-5 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[490px] transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
+            <div className="border-b border-border pb-4">
               <h4 className="text-2xl font-semibold leading-8 text-on-surface">Announcement Content</h4>
               <p className="mt-2 text-sm text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
             </div>
 
             {/* Announcement Input */}
             <div className="flex-1 flex flex-col justify-between">
-              <label className="block text-sm font-semibold text-on-surface mb-2">Message</label>
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] mb-4">Message</label>
 
               {/* Rich Text Toolbar + Link/Schedule buttons — same row, show/hide with focus */}
-              <div className="mb-2">
+              <div className="mb-4">
                 <div className="flex items-center gap-1">
                   <div className="flex-1 min-w-0">
                     <RichTextToolbar
@@ -1093,7 +1093,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
               <div className="flex gap-2 items-end">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-on-surface-variant mb-1">Enter text below</p>
+                  <p className="text-sm text-on-surface-variant mb-2">Enter text below</p>
                   <div ref={richEditorRef} contentEditable suppressContentEditableWarning
                     onInput={onRichTextInput}
                     onPaste={(e) => {
@@ -1788,9 +1788,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 {bg.type === 'solid' && (
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">Background Color</label>
+                      <label className="block text-sm font-semibold text-on-surface mb-2">Background Color</label>
                       <input type="color" value={bg.startColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ startColor: e.target.value })}
-                        className="bg-color-picker h-10 w-full rounded cursor-pointer" />
+                        className="bg-color-picker h-11 w-full rounded cursor-pointer" />
                     </div>
                     <div aria-hidden="true" />
                     <div aria-hidden="true" />
@@ -1800,14 +1800,14 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 {bg.type === 'linear' && (
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">Start Color</label>
+                      <label className="block text-sm font-semibold text-on-surface mb-2">Start Color</label>
                       <input type="color" value={bg.startColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ startColor: e.target.value })}
-                        className="bg-color-picker h-10 w-full rounded cursor-pointer" />
+                        className="bg-color-picker h-11 w-full rounded cursor-pointer" />
                     </div>
                     <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">End Color</label>
+                      <label className="block text-sm font-semibold text-on-surface mb-2">End Color</label>
                       <input type="color" value={bg.endColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ endColor: e.target.value })}
-                        className="bg-color-picker h-10 w-full rounded cursor-pointer" />
+                        className="bg-color-picker h-11 w-full rounded cursor-pointer" />
                     </div>
                     <div>
                       <PopupDropdown
@@ -1847,14 +1847,14 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 {bg.type === 'radial' && (
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">Center Color</label>
+                      <label className="block text-sm font-semibold text-on-surface mb-2">Center Color</label>
                       <input type="color" value={bg.startColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ startColor: e.target.value })}
-                        className="bg-color-picker h-10 w-full rounded cursor-pointer" />
+                        className="bg-color-picker h-11 w-full rounded cursor-pointer" />
                     </div>
                     <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">Outer Color</label>
+                      <label className="block text-sm font-semibold text-on-surface mb-2">Outer Color</label>
                       <input type="color" value={bg.endColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ endColor: e.target.value })}
-                        className="bg-color-picker h-10 w-full rounded cursor-pointer" />
+                        className="bg-color-picker h-11 w-full rounded cursor-pointer" />
                     </div>
                     <div aria-hidden="true" />
                   </div>
@@ -1865,9 +1865,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
           {/* Right: Message List + Style (single card split into equal halves) */}
           <div className="min-h-0">
-            <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[460px] overflow-hidden transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
+            <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[490px] overflow-hidden transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
               {/* Header */}
-              <div className="border-b border-border pb-3 mb-4 shrink-0 flex items-center justify-between">
+              <div className="border-b border-border pb-4 mb-5 shrink-0 flex items-center justify-between">
                 <div>
                   <h4 className="text-2xl font-semibold leading-8 text-on-surface">Manage Announcements</h4>
                   <p className="mt-2 text-sm text-on-surface-variant">View, reorder, and style your announcement messages.</p>
@@ -1981,10 +1981,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
               {/* Bottom: Loop + Style pinned to bottom */}
               <div className="shrink-0 mt-auto">
                 {/* Section 2: Loop Toggle */}
-                <div className="flex items-center justify-between py-3 border-t border-border">
+                <div className="flex items-center justify-between pt-8 pb-4 border-t border-border">
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">Loop</label>
-                    <p className="text-xs text-on-surface-variant">Seamless continuous scroll (duplicates content to fill the bar)</p>
+                    <p className="mt-2 text-sm text-on-surface-variant">Seamless continuous scroll (duplicates content to fill the bar)</p>
                   </div>
                   <button
                     onClick={() => {
@@ -2001,10 +2001,10 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 </div>
 
                 {/* Section 3: Background Type Guide */}
-                <div className="border-t border-border pt-2">
+                <div className="border-t border-border pt-8">
                   <div className="pb-1">
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] mb-2">Background Type Guide</label>
-                    <p className="mb-1 text-xs text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
+                    <p className="mb-4 text-sm text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1">
                         <div

@@ -568,8 +568,25 @@ export function serializeTimerHtml(editorHtml: string): string {
     });
   });
 
-  // Undeletable: if no block remains, append a fresh one.
-  if (!root.querySelector('[data-timer-fixed]')) {
+  const hasChip = !!root.querySelector('[data-timer-fixed]');
+  if (hasChip) {
+    // A chip is the canonical block — strip any leftover bare {timer} markers
+    // so buildTimerDisplayHtml doesn't render a SECOND block from them.
+    const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    const markerNodes: Text[] = [];
+    let tn: Text | null;
+    while ((tn = walker.nextNode() as Text | null)) {
+      if (tn.textContent && tn.textContent.includes(TIMER_FIXED_TOKEN)) {
+        markerNodes.push(tn);
+      }
+    }
+    markerNodes.forEach((t) => {
+      t.textContent = (t.textContent || '').split(TIMER_FIXED_TOKEN).join('');
+    });
+  } else if (!root.innerHTML.includes(TIMER_FIXED_TOKEN)) {
+    // No block at all (neither a chip nor a {timer} marker) → append a fresh
+    // one so the countdown always exists (undeletable). A bare {timer} marker
+    // is left as-is; build will turn it into a single chip.
     const chip = doc.createElement('span');
     chip.setAttribute('data-timer-fixed', '');
     chip.innerHTML = chipInnerHtml({ hours: 0, minutes: 0, seconds: 0, days: 0 });
