@@ -39,11 +39,20 @@ export interface TimerValue {
  */
 export function calculateTimeRemaining(endDate: string): TimerValue {
   const now = new Date();
-  const end = new Date(endDate);
+  // A date-only value (YYYY-MM-DD) means the campaign runs through the whole of
+  // that day, so count down to LOCAL end-of-day (23:59:59) using the device's
+  // clock — otherwise a same-day end parses to midnight and shows 0.
+  let end: Date;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    const [y, m, d] = endDate.split("-").map(Number);
+    end = new Date(y, m - 1, d, 23, 59, 59, 999);
+  } else {
+    end = new Date(endDate);
+  }
   const diff = end.getTime() - now.getTime();
 
-  if (diff <= 0) {
-    return { hours: 0, minutes: 0, seconds: 0 };
+  if (Number.isNaN(diff) || diff <= 0) {
+    return { hours: 0, minutes: 0, seconds: 0, days: 0 };
   }
 
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
@@ -118,11 +127,16 @@ export function getTemplateTimerPreviewText(timerText?: string): string {
  */
 export function isTimerActive(startDate?: string, endDate?: string): boolean {
   if (!endDate) return false;
-  
+
   const now = new Date();
+  // Date-only values cover the whole day: start from 00:00:00, end at
+  // 23:59:59.999 — so the final day is inclusive and back-to-back campaigns
+  // (one ending day X, next starting day X+1 at 00:00) are seamless.
   const start = startDate ? new Date(startDate) : new Date(0);
+  start.setHours(0, 0, 0, 0);
   const end = new Date(endDate);
-  
+  end.setHours(23, 59, 59, 999);
+
   return now >= start && now <= end;
 }
 
