@@ -893,8 +893,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
         <div className="flex items-center">
           <div className="p-1 bg-primary/15 rounded-lg mr-3 border border-primary/60"><Megaphone className="w-4 h-4 text-primary" /></div>
           <div>
-            <h3 className="text-lg leading-6 font-semibold text-on-surface">Announcement Bar</h3>
-            <p className="mt-0.5 max-w-2xl text-xs text-on-surface-variant">Top banner for site-wide alerts.</p>
+            <h3 className="text-[1.75rem] leading-9 font-bold text-on-surface">Announcement Bar</h3>
+            <p className="mt-2 max-w-2xl text-sm text-on-surface-variant">Top banner for site-wide alerts.</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -906,8 +906,8 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
       <div className=" space-y-6">
         {/* Preview */}
-        <div className=" py-4  border-border rounded-md">
-          <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">Preview</h4>
+        <div className="py-4 border-border rounded-md">
+          <h4 className="text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] mb-4">Preview</h4>
           <div className="w-full bg-surface-elevated border-border rounded overflow-hidden">
             {config.announcementBar.active && visibleAnnouncements.length > 0 && (
               <div ref={scrollContainerRef} className="h-10 text-sm font-medium overflow-hidden flex items-center group"
@@ -957,15 +957,15 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
           {/* Left: Input + Chips + Link */}
-          <div className="space-y-4 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[420px] transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
+          <div className="space-y-4 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[460px] transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
             <div className="border-b border-border pb-3">
-              <h4 className="text-base font-semibold text-on-surface">Announcement Content</h4>
-              <p className="mt-1 text-xs text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
+              <h4 className="text-2xl font-semibold leading-8 text-on-surface">Announcement Content</h4>
+              <p className="mt-2 text-sm text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
             </div>
 
             {/* Announcement Input */}
             <div className="flex-1 flex flex-col justify-between">
-              <label className="block text-sm font-medium text-on-surface mb-2">Message</label>
+              <label className="block text-sm font-semibold text-on-surface mb-2">Message</label>
 
               {/* Rich Text Toolbar + Link/Schedule buttons — same row, show/hide with focus */}
               <div className="mb-2">
@@ -1734,7 +1734,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
             {/* Style Customization */}
             <div>
-              <label className="block text-sm font-medium text-on-surface mb-2">Style Customization</label>
+              <label className="block text-xl font-semibold leading-7 text-on-surface mb-4">Style Customization</label>
 
               {/* Type + inline control */}
               <div className="grid grid-cols-3 gap-4">
@@ -1865,12 +1865,12 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
           {/* Right: Message List + Style (single card split into equal halves) */}
           <div className="min-h-0">
-            <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[420px] overflow-hidden transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
+            <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[460px] overflow-hidden transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
               {/* Header */}
               <div className="border-b border-border pb-3 mb-4 shrink-0 flex items-center justify-between">
                 <div>
-                  <h4 className="text-base font-semibold text-on-surface">Manage Announcements</h4>
-                  <p className="mt-1 text-xs text-on-surface-variant">View, reorder, and style your announcement messages.</p>
+                  <h4 className="text-2xl font-semibold leading-8 text-on-surface">Manage Announcements</h4>
+                  <p className="mt-2 text-sm text-on-surface-variant">View, reorder, and style your announcement messages.</p>
                 </div>
                 <div className="flex items-center gap-0.5">
                   <button
@@ -1896,7 +1896,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
               {/* Section 1: Message List */}
               <div className="flex-1 min-h-0 flex flex-col pr-1">
                 <div className="flex items-center justify-between mb-2 shrink-0">
-                  <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wide">Message List</label>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">Message List</label>
                   {config.announcementBar.announcements.length > 0 && (
                     <span className="text-[11px] text-primary font-medium flex items-center animate-pulse">
                       💡 hover a chip & click ••• to manage
@@ -1983,7 +1983,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 {/* Section 2: Loop Toggle */}
                 <div className="flex items-center justify-between py-3 border-t border-border">
                   <div>
-                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wide">Loop</label>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">Loop</label>
                     <p className="text-xs text-on-surface-variant">Seamless continuous scroll (duplicates content to fill the bar)</p>
                   </div>
                   <button
@@ -2003,7 +2003,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 {/* Section 3: Background Type Guide */}
                 <div className="border-t border-border pt-2">
                   <div className="pb-1">
-                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1">Background Type Guide</label>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] mb-2">Background Type Guide</label>
                     <p className="mb-1 text-xs text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1">
