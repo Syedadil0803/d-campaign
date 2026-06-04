@@ -103,9 +103,13 @@ export function normalizeTimerTemplate(template?: string): string {
  * Get preview timer text for templates (shows sample values)
  */
 export function getTemplateTimerPreviewText(timerText?: string): string {
-  const template = timerText || 'Ends in <strong>{h}h</strong> {mm}m {ss}s';
   const sampleValue = { hours: 24, minutes: 18, seconds: 7, days: 2 };
-  
+  const template = normalizeLegacyTimerTokens(timerText || 'Ends in {timer}');
+  // New fixed-block templates: swap the {timer} marker for sample countdown words.
+  if (template.includes(TIMER_FIXED_TOKEN)) {
+    return template.split(TIMER_FIXED_TOKEN).join(formatCountdownWords(sampleValue));
+  }
+  // Legacy token templates fallback.
   return formatTimerText(template, sampleValue);
 }
 

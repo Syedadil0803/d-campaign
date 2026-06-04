@@ -384,7 +384,7 @@ export function PromoSection({
       description: "",
       buttonText: "",
       buttonUrl: "",
-      showTimer: false,
+      showTimer: true,
       showButton: false,
       timerText: "Ends in {timer}",
       style: {
@@ -542,7 +542,13 @@ export function PromoSection({
     if (el.innerHTML !== nextHtml) {
       el.innerHTML = nextHtml;
     }
-  }, [config.promoCard.timerText, config.promoCard.endDate]);
+    // showTimer is a dep so the preview repopulates when the timer is toggled
+    // back on (the element unmounts/remounts empty otherwise).
+  }, [
+    config.promoCard.timerText,
+    config.promoCard.endDate,
+    config.promoCard.showTimer,
+  ]);
 
   useEffect(() => {
     const el = timerRef.current;
@@ -2075,7 +2081,9 @@ export function PromoSection({
   const showTitleInPreview = hasTitle || showContentScaffold;
   const showSubtitleInPreview = hasSubtitle || showContentScaffold;
   const showDescriptionInPreview = hasDescription || showContentScaffold;
-  const showTimerInPreview = config.promoCard.showTimer || showContentScaffold;
+  // The timer is opt-in via "Enable Timer" — it must follow the toggle only,
+  // NOT the editing scaffold, so disabling it hides the countdown immediately.
+  const showTimerInPreview = config.promoCard.showTimer;
   const showButtonInPreview =
     config.promoCard.showButton || hasButtonText || showContentScaffold;
 
@@ -2327,7 +2335,17 @@ export function PromoSection({
                 // Start can't be in the past, and can't be after the end date.
                 minDate: toISODate(new Date()),
                 maxDate: config.promoCard.endDate || undefined,
-                onSelect: (nextValue) => updateField("startDate", nextValue),
+                onSelect: (nextValue) => {
+                  pushPromoState();
+                  const nextPromoCard = {
+                    ...config.promoCard,
+                    startDate: nextValue,
+                    ...(nextValue ? { showTimer: true } : {}),
+                  };
+                  setConfig({ ...config, promoCard: nextPromoCard });
+                  syncResetPromoEditsButton(nextPromoCard);
+                  markChanged();
+                },
               })}
             </div>
             <div>
@@ -2347,7 +2365,17 @@ export function PromoSection({
                   config.promoCard.startDate > toISODate(new Date())
                     ? config.promoCard.startDate
                     : toISODate(new Date()),
-                onSelect: (nextValue) => updateField("endDate", nextValue),
+                onSelect: (nextValue) => {
+                  pushPromoState();
+                  const nextPromoCard = {
+                    ...config.promoCard,
+                    endDate: nextValue,
+                    ...(nextValue ? { showTimer: true } : {}),
+                  };
+                  setConfig({ ...config, promoCard: nextPromoCard });
+                  syncResetPromoEditsButton(nextPromoCard);
+                  markChanged();
+                },
               })}
             </div>
           </div>

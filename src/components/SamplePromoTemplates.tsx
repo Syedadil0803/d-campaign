@@ -23,7 +23,7 @@ const sampleTemplates = [
       endDate: getISODateWithOffset(12),
       showTimer: true,
       showButton: true,
-      timerText: '<strong>{h}h</strong> <span style="font-size:1rem;">{mm}m</span> <span style="font-size:0.75rem;">{ss}s</span> left for executive pricing',
+      timerText: '{timer} left for executive pricing',
       style: {
         position: 'bottom-right' as const,
         background: { type: 'linear' as const, startColor: '#f8fafc', endColor: '#e2e8f0', direction: 'to bottom right', midpoint: 46 },
@@ -71,7 +71,7 @@ const sampleTemplates = [
       endDate: getISODateWithOffset(7),
       showTimer: true,
       showButton: true,
-      timerText: 'Offer ends in <strong>{h}h</strong> <span style="font-size:1.125rem;">{mm}m</span> <span style="font-size:0.75rem;">{ss}s</span>',
+      timerText: 'Offer ends in {timer}',
       style: {
         position: 'bottom-right' as const,
         background: { type: 'linear' as const, startColor: '#fff7ed', endColor: '#ffedd5', direction: 'to bottom right', midpoint: 45 },
@@ -119,7 +119,7 @@ const sampleTemplates = [
       endDate: getISODateWithOffset(3),
       showTimer: true,
       showButton: true,
-      timerText: 'Private window closes in <strong>{h}h</strong> <span style="font-size:1.125rem;">{mm}m</span> <span style="font-size:0.75rem;">{ss}s</span>',
+      timerText: 'Private window closes in {timer}',
       style: {
         position: 'bottom-right' as const,
         background: { type: 'linear' as const, startColor: '#0f172a', endColor: '#111827', direction: 'to bottom right', midpoint: 50 },
@@ -167,7 +167,7 @@ const sampleTemplates = [
       endDate: getISODateWithOffset(10),
       showTimer: true,
       showButton: true,
-      timerText: 'Spring deal ends in <strong>{h}h</strong> <span style="font-size:1.125rem;">{mm}m</span> <span style="font-size:0.75rem;">{ss}s</span>',
+      timerText: 'Spring deal ends in {timer}',
       style: {
         position: 'bottom-right' as const,
         background: { type: 'linear' as const, startColor: '#fdf2f8', endColor: '#ecfeff', direction: 'to right', midpoint: 50 },
@@ -215,7 +215,7 @@ const sampleTemplates = [
       endDate: getISODateWithOffset(2),
       showTimer: true,
       showButton: true,
-      timerText: 'Flash ends in <strong>{h}h</strong> <span style="font-size:1.125rem;">{mm}m</span> <span style="font-size:0.75rem;">{ss}s</span>',
+      timerText: 'Flash ends in {timer}',
       style: {
         position: 'bottom-right' as const,
         background: { type: 'linear' as const, startColor: '#020617', endColor: '#111827', direction: 'to bottom right', midpoint: 55 },
@@ -263,7 +263,7 @@ const sampleTemplates = [
       endDate: getISODateWithOffset(14),
       showTimer: true,
       showButton: true,
-      timerText: 'Cozy week ends in <strong>{h}h</strong> <span style="font-size:1.125rem;">{mm}m</span> <span style="font-size:0.75rem;">{ss}s</span>',
+      timerText: 'Cozy week ends in {timer}',
       style: {
         position: 'bottom-right' as const,
         background: { type: 'linear' as const, startColor: '#fffbeb', endColor: '#fef3c7', direction: 'to bottom right', midpoint: 42 },
@@ -311,7 +311,7 @@ const sampleTemplates = [
       endDate: getISODateWithOffset(9),
       showTimer: true,
       showButton: true,
-      timerText: 'Harvest deal ends in <strong>{h}h</strong> <span style="font-size:1.125rem;">{mm}m</span> <span style="font-size:0.75rem;">{ss}s</span>',
+      timerText: 'Harvest deal ends in {timer}',
       style: {
         position: 'bottom-right' as const,
         background: { type: 'linear' as const, startColor: '#431407', endColor: '#7c2d12', direction: 'to bottom right', midpoint: 48 },
@@ -359,7 +359,7 @@ const sampleTemplates = [
       endDate: getISODateWithOffset(21),
       showTimer: true,
       showButton: true,
-      timerText: 'Styling event ends in <strong style="font-size:1.5rem;">{d}d</strong> <span style="font-size:1rem;">{h}h</span> <span style="font-size:0.7rem;">{mm}m</span>',
+      timerText: 'Styling event ends in {timer}',
       style: {
         position: 'bottom-right' as const,
         background: { type: 'linear' as const, startColor: '#faf7f2', endColor: '#ede8e0', direction: 'to bottom', midpoint: 50 },
@@ -407,7 +407,7 @@ const sampleTemplates = [
       endDate: getISODateWithOffset(5),
       showTimer: true,
       showButton: true,
-      timerText: 'Basket closes in <strong>{d}d</strong> <strong style="font-size:1.125rem;">{h}h</strong> <span style="font-size:0.7rem;">{mm}m {ss}s</span>',
+      timerText: 'Basket closes in {timer}',
       style: {
         position: 'bottom-right' as const,
         background: { type: 'linear' as const, startColor: '#f5f3ff', endColor: '#fefce8', direction: 'to bottom right', midpoint: 50 },
@@ -455,7 +455,7 @@ const sampleTemplates = [
       endDate: getISODateWithOffset(6),
       showTimer: true,
       showButton: true,
-      timerText: 'Sleigh leaves in <strong style="font-size:1.4rem;">{d}d</strong> <strong>{h}h</strong> <span style="font-size:0.7rem;">{mm}m {ss}s</span>',
+      timerText: 'Sleigh leaves in {timer}',
       style: {
         position: 'bottom-right' as const,
         background: { type: 'linear' as const, startColor: '#022c22', endColor: '#064e3b', direction: 'to bottom right', midpoint: 50 },
@@ -503,7 +503,7 @@ const sampleTemplates = [
       endDate: getISODateWithOffset(4),
       showTimer: true,
       showButton: true,
-      timerText: 'Countdown to midnight: <strong style="font-size:1.5rem;">{d}d</strong> <strong style="font-size:1.25rem;">{h}h</strong> <span>{mm}m</span> <span style="font-size:0.7rem;">{ss}s</span>',
+      timerText: 'Countdown to midnight: {timer}',
       style: {
         position: 'bottom-right' as const,
         background: { type: 'radial' as const, startColor: '#1e1b4b', endColor: '#030712', midpoint: 60 },
@@ -551,7 +551,7 @@ const sampleTemplates = [
       endDate: getISODateWithOffset(8),
       showTimer: true,
       showButton: true,
-      timerText: 'Heat ends in <strong style="font-size:1.4rem;">{d}d</strong> <strong>{h}h</strong> <span style="font-size:0.8rem;">{mm}m</span> <span style="font-size:0.7rem;">{ss}s</span>',
+      timerText: 'Heat ends in {timer}',
       style: {
         position: 'bottom-right' as const,
         background: { type: 'linear' as const, startColor: '#fb7185', endColor: '#fb923c', direction: 'to bottom right', midpoint: 50 },

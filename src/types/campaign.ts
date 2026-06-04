@@ -113,7 +113,7 @@ export const defaultConfig: CampaignConfig = {
     buttonFullWidth: true,
     startDate: '',
     endDate: '',
-    showTimer: false,
+    showTimer: true,
     showButton: false,
     timerText: 'Ends in {timer}',
     style: {
