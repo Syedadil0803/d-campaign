@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X } from 'lucide-react';
 import { CampaignConfig, defaultConfig } from '@/types/campaign';
+import { normalizeLegacyTimerTokens, TIMER_FIXED_TOKEN } from '@/lib/timerUtils';
 import { Header } from '@/components/Header';
 import { Dashboard } from '@/components/Dashboard';
 import { AnnouncementSection } from '@/components/AnnouncementSection';
@@ -47,21 +48,35 @@ function normalizePromoCardFontSizes(promoCard: any): CampaignConfig['promoCard'
 }
 
 function migrateTimerText(promoCard: any): CampaignConfig['promoCard'] {
-  const normalizedTimerText = (promoCard.timerText || '')
+  const raw = (promoCard.timerText || '').trim();
+
+  // Already in the new fixed-block format (chip span or {timer} marker) — leave
+  // it untouched so the per-word structure/styling survives reloads.
+  if (raw.includes('data-timer-fixed') || raw.includes(TIMER_FIXED_TOKEN)) {
+    return { ...promoCard, timerText: promoCard.timerText };
+  }
+
+  // Empty → countdown only (placeholders guide the rest); no "Ends in" default.
+  if (!raw) {
+    return { ...promoCard, timerText: TIMER_FIXED_TOKEN };
+  }
+
+  // Legacy token / placeholder-span template → flatten to plain text, collapse
+  // the {hh}:{mm}:{ss} run into a single {timer}, keep surrounding text as prefix.
+  const flattened = raw
     .replace(/<span[^>]*data-timer-placeholder="hhh"[^>]*>.*?<\/span>/gi, '{hh}')
     .replace(/<span[^>]*data-timer-placeholder="mmm"[^>]*>.*?<\/span>/gi, '{mm}')
     .replace(/<span[^>]*data-timer-placeholder="sss"[^>]*>.*?<\/span>/gi, '{ss}')
-    .replace(/<span[^>]*data-timer-placeholder="ddd"[^>]*>.*?<\/span>/gi, '{d}')
-    .replace(/<span[^>]*data-timer-placeholder="dd"[^>]*>.*?<\/span>/gi, '{d}')
-    .replace(/<span[^>]*data-timer-placeholder="d"[^>]*>.*?<\/span>/gi, '{d}')
+    .replace(/<span[^>]*data-timer-placeholder="(?:ddd|dd|d)"[^>]*>.*?<\/span>/gi, '{d}')
     .replace(/<[^>]+>/g, '')
     .replace(/\s+/g, ' ')
-    .trim() || 'Ends in {hh}:{mm}:{ss}';
+    .trim();
+  const collapsed = normalizeLegacyTimerTokens(flattened);
+  const withMarker = collapsed.includes(TIMER_FIXED_TOKEN)
+    ? collapsed
+    : `${collapsed ? collapsed + ' ' : ''}${TIMER_FIXED_TOKEN}`;
 
-  return {
-    ...promoCard,
-    timerText: normalizedTimerText,
-  };
+  return { ...promoCard, timerText: withMarker };
 }
 
 function migrateButtonStyle(promoCard: any): CampaignConfig['promoCard'] {

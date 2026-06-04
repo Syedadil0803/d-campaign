@@ -437,7 +437,7 @@ export function PromoSection({
       buttonUrl: "",
       showTimer: true,
       showButton: true,
-      timerText: "Ends in {timer}",
+      timerText: "{timer}",
       style: {
         ...baseStyle,
         background: {
@@ -3744,6 +3744,35 @@ export function PromoSection({
           text-transform: none !important;
           text-align: left !important;
           background: transparent !important;
+        }
+        /* Per-side "Enter text here" placeholders around the fixed countdown.
+           Scoped to the panel editor only — never shown in the live preview.
+           inline-block so the empty slot is a focusable box (caret can land at
+           the very start, before the countdown). */
+        [data-timer-prefix],
+        [data-timer-suffix] {
+          display: inline-block;
+          vertical-align: baseline;
+          min-width: 1px;
+        }
+        .promo-standard-editor [data-timer-prefix]:empty::before {
+          content: "Enter text here ";
+          color: #dbc1b2;
+          opacity: 0.6;
+          pointer-events: none;
+          user-select: none;
+        }
+        .promo-standard-editor [data-timer-suffix]:empty::after {
+          content: " Enter text here";
+          color: #dbc1b2;
+          opacity: 0.6;
+          pointer-events: none;
+          user-select: none;
+        }
+        /* Subtle grey on the fixed countdown in the editor only (no chip bg). */
+        .promo-standard-editor [data-timer-fixed],
+        .promo-standard-editor [data-timer-fixed] * {
+          color: rgb(var(--on-surface-variant) / 0.7) !important;
         }
       `}</style>
     </>

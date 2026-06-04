@@ -532,6 +532,25 @@ export function buildTimerDisplayHtml(storedHtml: string, timerValue: TimerValue
     tn.replaceWith(frag);
   });
 
+  // Wrap the text before/after the (first) block into editable slot spans so
+  // each side can show its own ":empty" placeholder. Slots are stripped on save.
+  const firstChip = root.querySelector('[data-timer-fixed]');
+  if (firstChip) {
+    const prefix = doc.createElement('span');
+    prefix.setAttribute('data-timer-prefix', '');
+    while (root.firstChild && root.firstChild !== firstChip) {
+      prefix.appendChild(root.firstChild);
+    }
+    root.insertBefore(prefix, firstChip);
+
+    const suffix = doc.createElement('span');
+    suffix.setAttribute('data-timer-suffix', '');
+    while (firstChip.nextSibling) {
+      suffix.appendChild(firstChip.nextSibling);
+    }
+    root.appendChild(suffix);
+  }
+
   return root.innerHTML;
 }
 
@@ -549,6 +568,14 @@ export function serializeTimerHtml(editorHtml: string): string {
   const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
   const root = doc.body.firstElementChild as HTMLElement;
   if (!root) return TIMER_FIXED_TOKEN;
+
+  // Unwrap editor-only prefix/suffix slot spans back to flat content.
+  root.querySelectorAll('[data-timer-prefix],[data-timer-suffix]').forEach((slot) => {
+    const parent = slot.parentNode;
+    if (!parent) return;
+    while (slot.firstChild) parent.insertBefore(slot.firstChild, slot);
+    parent.removeChild(slot);
+  });
 
   let seen = false;
   root.querySelectorAll('[data-timer-fixed]').forEach((el) => {
