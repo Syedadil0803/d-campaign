@@ -390,19 +390,21 @@ export default function Home() {
   }
 
   async function handleSave() {
-    const variantStatus = await getPromoVariantSaveStatus(config);
+    let cfgToSave = config;
+
+    const variantStatus = await getPromoVariantSaveStatus(cfgToSave);
     if (variantStatus === 'pending') {
-      setPendingVariantSave({ config, versions: await listVersions() });
+      setPendingVariantSave({ config: cfgToSave, versions: await listVersions() });
       return;
     }
 
     if (variantStatus === 'ready') {
-      await savePromoVariant(config);
-      await persistConfig(config, 'Settings saved and promo variant saved');
+      await savePromoVariant(cfgToSave);
+      await persistConfig(cfgToSave, 'Settings saved and promo variant saved');
       return;
     }
 
-    await persistConfig(config);
+    await persistConfig(cfgToSave);
   }
 
   function toast(message: string, isError = false) {

@@ -184,6 +184,7 @@ export function PromoSection({
   // Action popups launched from the buttons under the Promo Card heading.
   const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
 
   // Saved promo-card versions (local-only for now; see lib/promoVersions).
   const [versions, setVersions] = useState<PromoVersion[]>([]);
@@ -435,7 +436,7 @@ export function PromoSection({
       buttonText: "",
       buttonUrl: "",
       showTimer: true,
-      showButton: false,
+      showButton: true,
       timerText: "Ends in {timer}",
       style: {
         ...baseStyle,
@@ -576,7 +577,7 @@ export function PromoSection({
     if (el.innerHTML !== nextHtml) {
       el.innerHTML = nextHtml;
     }
-  }, [config.promoCard.buttonText]);
+  }, [config.promoCard.buttonText, config.promoCard.showButton]);
 
   // Structural sync: prefix/suffix HTML + the fixed countdown chip. Numbers are
   // refreshed separately (tick effect below) so typing never resets the caret.
@@ -1514,10 +1515,16 @@ export function PromoSection({
   // control in the UI is one-way: it can only STOP a running campaign.
   function stopCampaign() {
     if (!config.promoCard.active) return;
+    setShowStopConfirm(true);
+  }
+
+  function confirmStopCampaign() {
+    setShowStopConfirm(false);
     pushPromoState();
     const nextPromoCard = {
       ...config.promoCard,
       active: false,
+      stoppedByUser: true,
     };
     setConfig({
       ...config,
@@ -1525,6 +1532,7 @@ export function PromoSection({
     });
     syncResetPromoEditsButton(nextPromoCard);
     markChanged();
+    toast("Campaign stopped");
   }
 
   function openChatGptWithPromoPrompt() {
@@ -2137,8 +2145,7 @@ export function PromoSection({
   // The timer is opt-in via "Enable Timer" — it must follow the toggle only,
   // NOT the editing scaffold, so disabling it hides the countdown immediately.
   const showTimerInPreview = config.promoCard.showTimer;
-  const showButtonInPreview =
-    config.promoCard.showButton || hasButtonText || showContentScaffold;
+  const showButtonInPreview = config.promoCard.showButton;
 
   return (
     <>
@@ -2265,20 +2272,27 @@ export function PromoSection({
             <div
               ref={titleRef}
               contentEditable
-             // data-placeholder="Enter text here"
+              data-placeholder="Enter text here"
               suppressContentEditableWarning
               onInput={() => onFieldInput("title")}
               onFocus={() => onFieldFocus("title", titleRef)}
               onKeyDown={onPromoEditorKeyDown}
               onMouseUp={() => refreshPromoToolbarFormats(titleRef.current)}
               onKeyUp={() => refreshPromoToolbarFormats(titleRef.current)}
-              className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[44px] outline-none break-words transition-colors ${
+              onPaste={(e) => {
+                e.preventDefault();
+                const text = e.clipboardData.getData('text/plain');
+                document.execCommand('insertText', false, text);
+              }}
+              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-y overflow-y-auto outline-none break-words transition-colors ${
                 currentField === "title" ? "border-primary/70" : "border-border"
               } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
               style={{
                 background: getBackgroundStyle(
                   config.promoCard.style.background,
                 ),
+                paddingTop: '10px',
+                paddingBottom: '10px',
               }}
             />
           </div>
@@ -2303,14 +2317,19 @@ export function PromoSection({
             <div
               ref={subtitleRef}
               contentEditable
-             // data-placeholder="Enter text here"
+              data-placeholder="Enter text here"
               suppressContentEditableWarning
               onInput={() => onFieldInput("subtitle")}
               onFocus={() => onFieldFocus("subtitle", subtitleRef)}
               onKeyDown={onPromoEditorKeyDown}
               onMouseUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
               onKeyUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
-              className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[44px] outline-none break-words transition-colors ${
+              onPaste={(e) => {
+                e.preventDefault();
+                const text = e.clipboardData.getData('text/plain');
+                document.execCommand('insertText', false, text);
+              }}
+              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-y overflow-y-auto outline-none break-words transition-colors ${
                 currentField === "subtitle"
                   ? "border-primary/70"
                   : "border-border"
@@ -2319,6 +2338,8 @@ export function PromoSection({
                 background: getBackgroundStyle(
                   config.promoCard.style.background,
                 ),
+                paddingTop: '10px',
+                paddingBottom: '10px',
               }}
             />
           </div>
@@ -2345,13 +2366,18 @@ export function PromoSection({
               ref={descRef}
               contentEditable
               suppressContentEditableWarning
-             // data-placeholder="Enter text here"
+              data-placeholder="Enter text here"
               onInput={() => onFieldInput("description")}
               onFocus={() => onFieldFocus("description", descRef)}
               onKeyDown={onPromoEditorKeyDown}
               onMouseUp={() => refreshPromoToolbarFormats(descRef.current)}
               onKeyUp={() => refreshPromoToolbarFormats(descRef.current)}
-              className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[44px] outline-none break-words transition-colors ${
+              onPaste={(e) => {
+                e.preventDefault();
+                const text = e.clipboardData.getData('text/plain');
+                document.execCommand('insertText', false, text);
+              }}
+              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-y overflow-y-auto outline-none break-words transition-colors ${
                 currentField === "description"
                   ? "border-primary/70"
                   : "border-border"
@@ -2360,6 +2386,8 @@ export function PromoSection({
                 background: getBackgroundStyle(
                   config.promoCard.style.background,
                 ),
+                paddingTop: '10px',
+                paddingBottom: '10px',
               }}
             />
           </div>
@@ -2392,7 +2420,7 @@ export function PromoSection({
                   const nextPromoCard = {
                     ...config.promoCard,
                     startDate: nextValue,
-                    ...(nextValue ? { showTimer: true, active: true } : {}),
+                    ...(nextValue ? { showTimer: true, active: true, stoppedByUser: false } : {}),
                   };
                   setConfig({ ...config, promoCard: nextPromoCard });
                   syncResetPromoEditsButton(nextPromoCard);
@@ -2421,7 +2449,7 @@ export function PromoSection({
                   const nextPromoCard = {
                     ...config.promoCard,
                     endDate: nextValue,
-                    ...(nextValue ? { showTimer: true, active: true } : {}),
+                    ...(nextValue ? { showTimer: true, active: true, stoppedByUser: false } : {}),
                   };
                   setConfig({ ...config, promoCard: nextPromoCard });
                   syncResetPromoEditsButton(nextPromoCard);
@@ -2442,8 +2470,7 @@ export function PromoSection({
           </div>
 
           {/* Timer Controls — rich text editor */}
-          {config.promoCard.showTimer && (
-            <div>
+          <div className={!config.promoCard.showTimer ? "opacity-50 pointer-events-none" : ""}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
                   <label className="block text-sm font-semibold text-on-surface">
@@ -2481,7 +2508,12 @@ export function PromoSection({
                 onKeyDown={onTimerEditorKeyDown}
                 onMouseUp={() => refreshPromoToolbarFormats(timerRef.current)}
                 onKeyUp={() => refreshPromoToolbarFormats(timerRef.current)}
-                className={`rich-editor promo-standard-editor shadow-sm focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 block w-full sm:text-sm rounded-md p-2 border outline-none break-words min-h-[48px] transition-colors ${
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const text = e.clipboardData.getData('text/plain');
+                  document.execCommand('insertText', false, text);
+                }}
+                className={`rich-editor promo-standard-editor shadow-sm focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 block w-full sm:text-sm rounded-md px-2 border outline-none break-words min-h-[48px] transition-colors ${
                   currentField === "timer"
                     ? "border-primary/70"
                     : "border-border"
@@ -2491,11 +2523,12 @@ export function PromoSection({
                     config.promoCard.style.background,
                   ),
                   whiteSpace: "pre-wrap",
+                  paddingTop: '12px',
+                  paddingBottom: '12px',
                 }}
               />
 
-            </div>
-          )}
+          </div>
 
           <div className="!mt-8">
             <h4 className="text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">
@@ -2508,30 +2541,15 @@ export function PromoSection({
 
           <div className="flex items-center justify-between">
             <label className="text-sm font-semibold text-on-surface">
-              Enable Button
+              CTA Button
             </label>
-            <button
-              onClick={() =>
-                updateField("showButton", !config.promoCard.showButton)
-              }
-              className={`relative inline-flex h-6 w-11 border-2 border-transparent rounded-full transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${
-                config.promoCard.showButton
-                  ? "bg-primary"
-                  : "bg-surface-subtle hover:bg-primary/20"
-              }`}
-            >
-              <span
-                className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition ${
-                  config.promoCard.showButton
-                    ? "translate-x-5"
-                    : "translate-x-0"
-                }`}
-              ></span>
-            </button>
+            <SegmentedToggle
+              value={config.promoCard.showButton}
+              onChange={(v) => updateField("showButton", v)}
+            />
           </div>
 
-          {config.promoCard.showButton && (
-            <div className="grid grid-cols-2 gap-3">
+          <div className={`grid grid-cols-2 gap-3 ${!config.promoCard.showButton ? "opacity-50 pointer-events-none" : ""}`}>
               <div>
                 <div className="flex items-center justify-between mb-2 min-h-[28px]">
                   <label className="block text-sm font-semibold text-on-surface">
@@ -2545,13 +2563,14 @@ export function PromoSection({
                   onBlur={(e) =>
                     updateField("buttonUrl", e.target.value.trim())
                   }
-                  placeholder="https://example.com"
+                  placeholder="https://wa.me/91XXXXXXXXXX"
                   inputMode="url"
                   autoCapitalize="off"
                   autoCorrect="off"
                   spellCheck={false}
                   className="block w-full rounded-md p-2 border h-[44px] outline-none text-sm transition-colors border-border bg-surface text-on-surface focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70"
                 />
+                <p className="mt-1 text-[11px] text-on-surface-variant">💬 Use WhatsApp link: wa.me/91XXXXXXXXXX</p>
               </div>
               <div>
                 <div className="flex items-center justify-between mb-2 min-h-[28px]">
@@ -2583,7 +2602,12 @@ export function PromoSection({
                     refreshPromoToolbarFormats(buttonRef.current)
                   }
                   onKeyUp={() => refreshPromoToolbarFormats(buttonRef.current)}
-                  className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border h-[44px] outline-none break-words transition-colors ${
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const text = e.clipboardData.getData('text/plain');
+                    document.execCommand('insertText', false, text);
+                  }}
+                  className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border h-[44px] outline-none break-words transition-colors ${
                     currentField === "button"
                       ? "border-primary/70"
                       : "border-border"
@@ -2593,11 +2617,12 @@ export function PromoSection({
                       config.promoCard.style.buttonStyle?.background ||
                         config.promoCard.style.background,
                     ),
+                    paddingTop: '10px',
+                    paddingBottom: '10px',
                   }}
                 />
               </div>
             </div>
-          )}
         </div>
 
         {/* Right: Preview — 70% width, fixed */}
@@ -2714,16 +2739,16 @@ export function PromoSection({
                       <span
                         title={
                           config.promoCard.active
-                            ? "Campaign is live"
+                            ? "Campaign is on air"
                             : "Select a start/end date to activate the campaign"
                         }
                         className={`relative z-10 flex-1 rounded-full py-1 text-center transition-colors ${
                           config.promoCard.active
                             ? "text-on-primary"
-                            : "text-on-surface-variant/50"
+                            : "text-on-surface-variant/20"
                         }`}
                       >
-                        Active
+                        On Air
                       </span>
                     </div>
                   </div>
@@ -3526,6 +3551,35 @@ export function PromoSection({
           </div>
         </div>
       </div>
+
+      {/* Stop Campaign Confirmation */}
+      {showStopConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" onClick={() => setShowStopConfirm(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <h2 className="text-base font-semibold">Stop this campaign?</h2>
+            <p className="mt-2 text-sm text-on-surface-variant">
+              Your promo card will stop showing on the website. Whenever you&apos;re ready to run it again, simply update your schedule dates and save &mdash; it&apos;ll go on air automatically.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowStopConfirm(false)}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmStopCampaign}
+                className="rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:bg-red-600"
+              >
+                Stop Campaign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sample Templates popup — shows the same 6 cards; click one to apply */}
       {showTemplatesPopup && (
