@@ -1507,12 +1507,18 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                               const inMonth = day.getMonth() === startDateView.getMonth();
                               const isSelected = selectedStartDate === iso;
                               const isToday = iso === toISODate(new Date());
+                              // Start can't be in the past, nor after the end date.
+                              const disabled =
+                                iso < toISODate(new Date()) ||
+                                (!!selectedEndDate && iso > selectedEndDate);
                               return (
                                 <button
                                   key={`start-${iso}`}
                                   type="button"
+                                  disabled={disabled}
                                   onMouseDown={(e) => {
                                     e.preventDefault();
+                                    if (disabled) return;
                                     setSelectedStartDate(iso);
                                     if (selectedIndex !== null) {
                                       const updated = [...config.announcementBar.announcements];
@@ -1523,7 +1529,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                                     setShowStartDateCalendar(false);
                                   }}
                                   className={`h-7 rounded text-[11px] transition-colors ${
-                                    isSelected
+                                    disabled
+                                      ? 'text-on-surface-variant/30 cursor-not-allowed line-through'
+                                      : isSelected
                                       ? 'bg-primary/20 text-primary border border-primary/60'
                                       : isToday
                                       ? 'border border-primary/50 text-primary hover:bg-primary/10'
@@ -1610,12 +1618,20 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                               const inMonth = day.getMonth() === endDateView.getMonth();
                               const isSelected = selectedEndDate === iso;
                               const isToday = iso === toISODate(new Date());
+                              // End can't be before the start date (or today if start unset).
+                              const endMin =
+                                selectedStartDate && selectedStartDate > toISODate(new Date())
+                                  ? selectedStartDate
+                                  : toISODate(new Date());
+                              const disabled = iso < endMin;
                               return (
                                 <button
                                   key={`end-${iso}`}
                                   type="button"
+                                  disabled={disabled}
                                   onMouseDown={(e) => {
                                     e.preventDefault();
+                                    if (disabled) return;
                                     setSelectedEndDate(iso);
                                     if (selectedIndex !== null) {
                                       const updated = [...config.announcementBar.announcements];
@@ -1626,7 +1642,9 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                                     setShowEndDateCalendar(false);
                                   }}
                                   className={`h-7 rounded text-[11px] transition-colors ${
-                                    isSelected
+                                    disabled
+                                      ? 'text-on-surface-variant/30 cursor-not-allowed line-through'
+                                      : isSelected
                                       ? 'bg-primary/20 text-primary border border-primary/60'
                                       : isToday
                                       ? 'border border-primary/50 text-primary hover:bg-primary/10'

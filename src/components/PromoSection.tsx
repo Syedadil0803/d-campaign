@@ -1707,13 +1707,29 @@ export function PromoSection({
     open: boolean;
     setOpen: (open: boolean) => void;
     onSelect: (value: string) => void;
+    minDate?: string;
+    maxDate?: string;
   }) {
-    const { mode, value, viewDate, setViewDate, open, setOpen, onSelect } =
-      params;
+    const {
+      mode,
+      value,
+      viewDate,
+      setViewDate,
+      open,
+      setOpen,
+      onSelect,
+      minDate,
+      maxDate,
+    } = params;
     const days = buildMonthDays(viewDate);
     const month = viewDate.getMonth();
     const selected = value;
     const today = toISODate(new Date());
+    // A day is out of range if before minDate or after maxDate (ISO strings
+    // compare correctly as YYYY-MM-DD).
+    const isOutOfRange = (iso: string) =>
+      (minDate && iso < minDate) || (maxDate && iso > maxDate);
+    const todayDisabled = Boolean(isOutOfRange(today));
     return (
       <div
         ref={mode === "start" ? startDatePickerRef : endDatePickerRef}
@@ -1827,22 +1843,27 @@ export function PromoSection({
                 const inMonth = date.getMonth() === month;
                 const isSelected = selected === iso;
                 const isToday = today === iso;
+                const disabled = Boolean(isOutOfRange(iso));
                 return (
                   <button
                     key={iso}
                     type="button"
+                    disabled={disabled}
                     onMouseDown={(e) => {
                       e.preventDefault();
+                      if (disabled) return;
                       onSelect(iso);
                       setOpen(false);
                     }}
                     className={`h-8 rounded text-xs transition-colors ${
-                      isSelected
-                        ? "bg-primary text-on-primary"
-                        : inMonth
-                          ? "text-on-surface hover:bg-primary/10 hover:text-primary"
-                          : "text-on-surface-variant/60 hover:bg-primary/5"
-                    } ${isToday && !isSelected ? "ring-1 ring-primary/40" : ""}`}
+                      disabled
+                        ? "text-on-surface-variant/30 cursor-not-allowed line-through"
+                        : isSelected
+                          ? "bg-primary text-on-primary"
+                          : inMonth
+                            ? "text-on-surface hover:bg-primary/10 hover:text-primary"
+                            : "text-on-surface-variant/60 hover:bg-primary/5"
+                    } ${isToday && !isSelected && !disabled ? "ring-1 ring-primary/40" : ""}`}
                   >
                     {date.getDate()}
                   </button>
@@ -1863,14 +1884,16 @@ export function PromoSection({
               </button>
               <button
                 type="button"
+                disabled={todayDisabled}
                 onMouseDown={(e) => {
                   e.preventDefault();
+                  if (todayDisabled) return;
                   const now = new Date();
                   onSelect(toISODate(now));
                   setViewDate(new Date(now.getFullYear(), now.getMonth(), 1));
                   setOpen(false);
                 }}
-                className="text-xs font-medium text-primary hover:opacity-80"
+                className="text-xs font-medium text-primary hover:opacity-80 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 Today
               </button>
@@ -2301,6 +2324,9 @@ export function PromoSection({
                 setViewDate: setStartDateView,
                 open: showStartDatePicker,
                 setOpen: setShowStartDatePicker,
+                // Start can't be in the past, and can't be after the end date.
+                minDate: toISODate(new Date()),
+                maxDate: config.promoCard.endDate || undefined,
                 onSelect: (nextValue) => updateField("startDate", nextValue),
               })}
             </div>
@@ -2315,6 +2341,12 @@ export function PromoSection({
                 setViewDate: setEndDateView,
                 open: showEndDatePicker,
                 setOpen: setShowEndDatePicker,
+                // End can't be before the start date (or today if start unset).
+                minDate:
+                  config.promoCard.startDate &&
+                  config.promoCard.startDate > toISODate(new Date())
+                    ? config.promoCard.startDate
+                    : toISODate(new Date()),
                 onSelect: (nextValue) => updateField("endDate", nextValue),
               })}
             </div>
