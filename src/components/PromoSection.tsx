@@ -2375,7 +2375,7 @@ export function PromoSection({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-semibold text-on-surface">
+              <label className="block text-sm font-semibold text-on-surface mb-2">
                 Start Date
               </label>
               {renderDatePicker({
@@ -2401,7 +2401,7 @@ export function PromoSection({
               })}
             </div>
             <div>
-              <label className="block text-sm font-semibold text-on-surface">
+              <label className="block text-sm font-semibold text-on-surface mb-2">
                 End Date
               </label>
               {renderDatePicker({
@@ -2443,10 +2443,10 @@ export function PromoSection({
 
           {/* Timer Controls — rich text editor */}
           {config.promoCard.showTimer && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between mb-1">
+            <div>
+              <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
-                  <label className="block text-sm font-medium text-on-surface">
+                  <label className="block text-sm font-semibold text-on-surface">
                     Timer Text
                   </label>
                   <div className="relative group">
@@ -2497,17 +2497,17 @@ export function PromoSection({
             </div>
           )}
 
-          <div className="pt-1">
-            <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-2">
+          <div className="!mt-8">
+            <h4 className="text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">
               Call To Action
             </h4>
-            <p className="text-xs text-on-surface-variant mb-2">
+            <p className="mt-2 text-sm text-on-surface-variant">
               Configure button text and destination.
             </p>
           </div>
 
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-on-surface">
+            <label className="text-sm font-semibold text-on-surface">
               Enable Button
             </label>
             <button
@@ -2533,9 +2533,11 @@ export function PromoSection({
           {config.promoCard.showButton && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-on-surface">
-                  Button URL
-                </label>
+                <div className="flex items-center justify-between mb-2 min-h-[28px]">
+                  <label className="block text-sm font-semibold text-on-surface">
+                    Button URL
+                  </label>
+                </div>
                 <input
                   type="url"
                   value={config.promoCard.buttonUrl}
@@ -2548,12 +2550,12 @@ export function PromoSection({
                   autoCapitalize="off"
                   autoCorrect="off"
                   spellCheck={false}
-                  className="block w-full rounded-md p-2 border min-h-[38px] outline-none text-sm transition-colors border-border bg-surface text-on-surface focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70"
+                  className="block w-full rounded-md p-2 border h-[44px] outline-none text-sm transition-colors border-border bg-surface text-on-surface focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70"
                 />
               </div>
               <div>
-                <div className="flex items-center justify-between">
-                  <label className="block text-sm font-medium text-on-surface">
+                <div className="flex items-center justify-between mb-2 min-h-[28px]">
+                  <label className="block text-sm font-semibold text-on-surface">
                     Button Text
                   </label>
                   <button
@@ -2581,7 +2583,7 @@ export function PromoSection({
                     refreshPromoToolbarFormats(buttonRef.current)
                   }
                   onKeyUp={() => refreshPromoToolbarFormats(buttonRef.current)}
-                  className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border min-h-[38px] outline-none break-words transition-colors ${
+                  className={`rich-editor promo-standard-editor block w-full rounded-md p-2 border h-[44px] outline-none break-words transition-colors ${
                     currentField === "button"
                       ? "border-primary/70"
                       : "border-border"
