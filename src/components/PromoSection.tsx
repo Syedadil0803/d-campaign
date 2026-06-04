@@ -729,7 +729,14 @@ export function PromoSection({
         ? activeEditorRef.current
         : fallbackEl;
     if (!el) return;
-    const html = wrapBareTextWithFontSize(el.innerHTML);
+    let html = wrapBareTextWithFontSize(el.innerHTML);
+    // When all text is deleted, browsers leave a stray <br>/empty span so the
+    // editor is no longer :empty and the placeholder won't return. Reset it to
+    // truly empty so the placeholder shows again.
+    if (!hasVisibleContent(html)) {
+      html = "";
+      if (el.innerHTML !== "") el.innerHTML = "";
+    }
     const fieldMap = {
       title: "title",
       subtitle: "subtitle",
@@ -2124,6 +2131,7 @@ export function PromoSection({
     const plainText = html
       .replace(/<[^>]*>/g, "")
       .replace(/&nbsp;/g, " ")
+      .replace(/[\u200B\u200C\u200D\uFEFF]/g, "")
       .trim();
     return plainText.length > 0;
   }

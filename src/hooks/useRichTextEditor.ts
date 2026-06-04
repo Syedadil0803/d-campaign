@@ -366,6 +366,14 @@ export function useRichTextEditor(
     const editor = editorRef.current;
     if (!editor) return;
 
+    // Don't inject a font-size span into an empty editor — that adds a node and
+    // breaks the `:empty` placeholder (it would vanish on focus and never
+    // return). The default size is applied once the user actually types.
+    const text = (editor.textContent || '')
+      .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
+      .trim();
+    if (!text) return;
+
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
     if (!editor.contains(selection.anchorNode)) return;
