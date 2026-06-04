@@ -573,10 +573,10 @@ export function PromoSection({
   }, [currentTime, config.promoCard.endDate]);
 
   useEffect(() => {
-    // Keep the field scaffold visible whenever the card is active so the
-    // preview shows the placeholder structure (title/subtitle/.../button)
-    // instead of rendering as a bare empty white box. Turns off when inactive.
-    setShowPersistentScaffold(config.promoCard.active);
+    // The preview popup is always shown now, so keep the field scaffold visible
+    // regardless of active state — the card always shows its placeholder
+    // structure instead of rendering as a bare empty white box.
+    setShowPersistentScaffold(true);
   }, [config.promoCard.active]);
 
   useEffect(() => {
@@ -1460,11 +1460,14 @@ export function PromoSection({
     return () => document.removeEventListener("keydown", handleKeyDown);
   });
 
-  function toggleActive() {
+  // Campaign activation is date-driven (selecting a date activates it). The
+  // control in the UI is one-way: it can only STOP a running campaign.
+  function stopCampaign() {
+    if (!config.promoCard.active) return;
     pushPromoState();
     const nextPromoCard = {
       ...config.promoCard,
-      active: !config.promoCard.active,
+      active: false,
     };
     setConfig({
       ...config,
@@ -2340,7 +2343,8 @@ export function PromoSection({
                   const nextPromoCard = {
                     ...config.promoCard,
                     startDate: nextValue,
-                    ...(nextValue ? { showTimer: true } : {}),
+                    // Selecting a date activates the campaign (date-driven).
+                    ...(nextValue ? { showTimer: true, active: true } : {}),
                   };
                   setConfig({ ...config, promoCard: nextPromoCard });
                   syncResetPromoEditsButton(nextPromoCard);
@@ -2370,7 +2374,8 @@ export function PromoSection({
                   const nextPromoCard = {
                     ...config.promoCard,
                     endDate: nextValue,
-                    ...(nextValue ? { showTimer: true } : {}),
+                    // Selecting a date activates the campaign (date-driven).
+                    ...(nextValue ? { showTimer: true, active: true } : {}),
                   };
                   setConfig({ ...config, promoCard: nextPromoCard });
                   syncResetPromoEditsButton(nextPromoCard);
@@ -2674,29 +2679,57 @@ export function PromoSection({
                   </div>
                   <div className="flex flex-col items-start pl-3">
                     <label className="block text-[10px] text-on-surface-variant mb-0.5">
-                      {config.promoCard.active ? "Active" : "Inactive"}
+                      Status
                     </label>
-                    <button
-                      onClick={toggleActive}
-                      title={
-                        config.promoCard.active
-                          ? "Promo card is ON — click to turn off"
-                          : "Promo card is OFF — click to turn on"
-                      }
-                      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full border-2 border-transparent transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${
-                        config.promoCard.active
-                          ? "bg-primary"
-                          : "bg-surface-subtle hover:bg-primary/20"
-                      }`}
-                    >
+                    {/* Segmented pills with a sliding thumb. One-way: only
+                        "Stopped" is actionable; activation is date-driven.
+                        Stopped = left, Active = right; thumb slides right when
+                        the campaign is active. */}
+                    <div className="relative flex w-[136px] items-center rounded-full border border-border bg-surface-subtle p-0.5 text-[11px] font-semibold">
+                      {/* sliding highlight */}
                       <span
-                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
-                          config.promoCard.active
-                            ? "translate-x-5"
-                            : "translate-x-0"
+                        aria-hidden
+                        className={`absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full shadow-sm transition-transform duration-300 ease-out ${
+                          config.promoCard.active ? "bg-primary" : "bg-surface"
                         }`}
+                        style={{
+                          transform: config.promoCard.active
+                            ? "translateX(100%)"
+                            : "translateX(0)",
+                        }}
                       />
-                    </button>
+                      <button
+                        type="button"
+                        onClick={stopCampaign}
+                        disabled={!config.promoCard.active}
+                        title={
+                          config.promoCard.active
+                            ? "Stop the running campaign"
+                            : "Campaign is stopped"
+                        }
+                        className={`relative z-10 flex-1 rounded-full py-1 text-center transition-colors ${
+                          !config.promoCard.active
+                            ? "text-on-surface cursor-default"
+                            : "text-on-surface-variant hover:text-on-surface cursor-pointer"
+                        }`}
+                      >
+                        {config.promoCard.active ? "Stop" : "Stopped"}
+                      </button>
+                      <span
+                        title={
+                          config.promoCard.active
+                            ? "Campaign is live"
+                            : "Select a start/end date to activate the campaign"
+                        }
+                        className={`relative z-10 flex-1 rounded-full py-1 text-center transition-colors ${
+                          config.promoCard.active
+                            ? "text-on-primary"
+                            : "text-on-surface-variant/50"
+                        }`}
+                      >
+                        Active
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2708,7 +2741,10 @@ export function PromoSection({
             </div>
 
             <div className="relative z-10 w-full h-full min-h-[228px] grid">
-              {config.promoCard.active && (
+              {/* Preview popup is ALWAYS rendered (even when the campaign is
+                  stopped) so editing stays visible; `active` only controls the
+                  live website output, not this editor preview. */}
+              {(
                 <div
                   ref={promoCardRef}
                   className={`relative w-[400px] rounded-xl shadow-2xl p-5 transition-all duration-300 flex flex-col ${
