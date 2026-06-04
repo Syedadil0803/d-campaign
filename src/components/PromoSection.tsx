@@ -2630,10 +2630,10 @@ export function PromoSection({
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h4 className="text-sm font-bold text-on-surface-variant uppercase tracking-wide">
+                <h4 className="text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">
                   Preview
                 </h4>
-                <p className="text-sm text-on-surface-variant">
+                <p className="mt-2 text-sm text-on-surface-variant">
                   Live card rendering with editable field styles.
                 </p>
               </div>
