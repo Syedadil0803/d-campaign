@@ -145,7 +145,9 @@ function migrateConfig(config: any, version: string): CampaignConfig {
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'announcement' | 'promo'>('dashboard');
   const [config, setConfig] = useState<CampaignConfig>(defaultConfig);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [hasAnnouncementChanges, setHasAnnouncementChanges] = useState(false);
+  const [hasPromoChanges, setHasPromoChanges] = useState(false);
+  const hasChanges = hasAnnouncementChanges || hasPromoChanges;
   const [pendingDraftAction, setPendingDraftAction] = useState<
     | { type: 'tab'; tab: 'dashboard' | 'announcement' | 'promo' }
     | { type: 'logout' }
@@ -308,6 +310,7 @@ export default function Home() {
   async function persistConfig(
     cfg: CampaignConfig,
     successMessage = 'Settings saved successfully',
+    scope?: 'announcement' | 'promo',
   ) {
     try {
       const response = await fetch('/api/config', {
@@ -317,7 +320,9 @@ export default function Home() {
       });
 
       if (response.ok) {
-        setHasChanges(false);
+        if (scope === 'announcement') setHasAnnouncementChanges(false);
+        else if (scope === 'promo') setHasPromoChanges(false);
+        else { setHasAnnouncementChanges(false); setHasPromoChanges(false); }
         clearDraft();
         toast(successMessage);
       } else {
@@ -371,7 +376,8 @@ export default function Home() {
         setConfig(migrated);
         draftSignatureRef.current = getConfigSignature(migrated);
         savedPromoSignatureRef.current = getPromoSignature(migrated);
-        setHasChanges(true);
+        setHasAnnouncementChanges(true);
+        setHasPromoChanges(true);
         toast('Restored from draft');
         return;
       }
@@ -387,6 +393,28 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to load config:', error);
     }
+  }
+
+  async function handleSaveAnnouncement() {
+    await persistConfig(config, 'Announcement saved', 'announcement');
+  }
+
+  async function handleSavePromo() {
+    let cfgToSave = config;
+
+    const variantStatus = await getPromoVariantSaveStatus(cfgToSave);
+    if (variantStatus === 'pending') {
+      setPendingVariantSave({ config: cfgToSave, versions: await listVersions() });
+      return;
+    }
+
+    if (variantStatus === 'ready') {
+      await savePromoVariant(cfgToSave);
+      await persistConfig(cfgToSave, 'Promo saved and variant saved', 'promo');
+      return;
+    }
+
+    await persistConfig(cfgToSave, 'Promo saved', 'promo');
   }
 
   async function handleSave() {
@@ -437,7 +465,16 @@ export default function Home() {
   }
 
   function markChanged() {
-    setHasChanges(true);
+    setHasAnnouncementChanges(true);
+    setHasPromoChanges(true);
+  }
+
+  function markAnnouncementChanged() {
+    setHasAnnouncementChanges(true);
+  }
+
+  function markPromoChanged() {
+    setHasPromoChanges(true);
   }
 
   const selectedPendingVariant = getSelectedPendingVariant();
@@ -449,9 +486,13 @@ export default function Home() {
           activeTab={activeTab}
           setActiveTab={handleTabSwitch}
           hasChanges={hasChanges}
+          hasAnnouncementChanges={hasAnnouncementChanges}
+          hasPromoChanges={hasPromoChanges}
           isDarkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode}
           handleSave={handleSave}
+          handleSaveAnnouncement={handleSaveAnnouncement}
+          handleSavePromo={handleSavePromo}
           handleLogout={handleLogout}
         />
 
@@ -470,7 +511,7 @@ export default function Home() {
               <AnnouncementSection
                 config={config}
                 setConfig={setConfig}
-                markChanged={markChanged}
+                markChanged={markAnnouncementChanged}
               />
             )}
 
@@ -478,7 +519,7 @@ export default function Home() {
               <PromoSection
                 config={config}
                 setConfig={setConfig}
-                markChanged={markChanged}
+                markChanged={markPromoChanged}
                 toast={toast}
                 onSelectedVersionChange={setSelectedPromoVersionId}
               />
