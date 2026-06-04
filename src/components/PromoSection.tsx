@@ -60,6 +60,56 @@ interface PromoSectionProps {
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
 const PROMO_EDITOR_DEFAULT_COLOR = "#ffffff";
 
+/**
+ * Two-state segmented pill toggle (Off ◀ / ▶ On) with a sliding thumb.
+ * Matches the status pills; replaces the old switch toggles.
+ */
+function SegmentedToggle({
+  value,
+  onChange,
+  offLabel = "Off",
+  onLabel = "On",
+}: {
+  value: boolean;
+  onChange: (next: boolean) => void;
+  offLabel?: string;
+  onLabel?: string;
+}) {
+  return (
+    <div className="relative flex w-[96px] items-center rounded-full border border-border bg-surface-subtle p-0.5 text-[11px] font-semibold">
+      <span
+        aria-hidden
+        className={`absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full shadow-sm will-change-transform transition-[transform,background-color] duration-300 ease-in-out ${
+          value ? "bg-primary" : "bg-surface"
+        }`}
+        style={{ transform: value ? "translateX(100%)" : "translateX(0)" }}
+      />
+      <button
+        type="button"
+        onClick={() => value && onChange(false)}
+        className={`relative z-10 flex-1 rounded-full py-1 text-center transition-colors ${
+          !value
+            ? "text-on-surface cursor-default"
+            : "text-on-surface-variant hover:text-on-surface cursor-pointer"
+        }`}
+      >
+        {offLabel}
+      </button>
+      <button
+        type="button"
+        onClick={() => !value && onChange(true)}
+        className={`relative z-10 flex-1 rounded-full py-1 text-center transition-colors ${
+          value
+            ? "text-on-primary cursor-default"
+            : "text-on-surface-variant hover:text-on-surface cursor-pointer"
+        }`}
+      >
+        {onLabel}
+      </button>
+    </div>
+  );
+}
+
 interface PromoSnapshot {
   promoCard: PromoCard;
   currentField: PromoField | null;
@@ -2435,22 +2485,10 @@ export function PromoSection({
                 </div>
               </div>
             </div>
-            <button
-              onClick={() =>
-                updateField("showTimer", !config.promoCard.showTimer)
-              }
-              className={`relative inline-flex h-6 w-11 border-2 border-transparent rounded-full transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${
-                config.promoCard.showTimer
-                  ? "bg-primary"
-                  : "bg-surface-subtle hover:bg-primary/20"
-              }`}
-            >
-              <span
-                className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition ${
-                  config.promoCard.showTimer ? "translate-x-5" : "translate-x-0"
-                }`}
-              ></span>
-            </button>
+            <SegmentedToggle
+              value={config.promoCard.showTimer}
+              onChange={(v) => updateField("showTimer", v)}
+            />
           </div>
 
           {/* Timer Controls — rich text editor */}
@@ -2689,7 +2727,7 @@ export function PromoSection({
                       {/* sliding highlight */}
                       <span
                         aria-hidden
-                        className={`absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full shadow-sm transition-transform duration-300 ease-out ${
+                        className={`absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full shadow-sm will-change-transform transition-[transform,background-color] duration-300 ease-in-out ${
                           config.promoCard.active ? "bg-primary" : "bg-surface"
                         }`}
                         style={{
