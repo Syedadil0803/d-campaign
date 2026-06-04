@@ -263,8 +263,8 @@ export default function Home() {
   const handleTabSwitch = useCallback((tab: 'dashboard' | 'announcement' | 'promo') => {
     if (tab === activeTab) return;
     if (hasChangesSinceDraft()) {
-      setPendingDraftAction({ type: 'tab', tab });
-      return;
+      saveDraft(configRef.current);
+      toast('Draft saved');
     }
     setActiveTab(tab);
   }, [activeTab]);
