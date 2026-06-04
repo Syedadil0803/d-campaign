@@ -711,6 +711,21 @@ export function PromoSection({
         ...config,
         promoCard: nextPromoCard,
       });
+      // Self-heal: the fixed countdown is undeletable. If an edit removed it,
+      // rebuild the editor immediately (serializeTimerHtml already re-injected
+      // it into `text`) and drop the caret at the end so typing continues.
+      if (!el.querySelector("[data-timer-fixed]")) {
+        el.innerHTML = buildTimerDisplayHtml(
+          text,
+          calcTimerRemaining(config.promoCard.endDate || ""),
+        );
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        r.collapse(false);
+        const s = window.getSelection();
+        s?.removeAllRanges();
+        s?.addRange(r);
+      }
       syncResetPromoEditsButton(nextPromoCard);
       markChanged();
       refreshPromoToolbarFormats(el);
