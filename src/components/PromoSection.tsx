@@ -2373,7 +2373,7 @@ export function PromoSection({
             </p>
           </div>
 
-          <div className="!mt-6 grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-semibold text-on-surface">
                 Start Date
@@ -2385,7 +2385,6 @@ export function PromoSection({
                 setViewDate: setStartDateView,
                 open: showStartDatePicker,
                 setOpen: setShowStartDatePicker,
-                // Start can't be in the past, and can't be after the end date.
                 minDate: toISODate(new Date()),
                 maxDate: config.promoCard.endDate || undefined,
                 onSelect: (nextValue) => {
@@ -2393,7 +2392,6 @@ export function PromoSection({
                   const nextPromoCard = {
                     ...config.promoCard,
                     startDate: nextValue,
-                    // Selecting a date activates the campaign (date-driven).
                     ...(nextValue ? { showTimer: true, active: true } : {}),
                   };
                   setConfig({ ...config, promoCard: nextPromoCard });
@@ -2413,7 +2411,6 @@ export function PromoSection({
                 setViewDate: setEndDateView,
                 open: showEndDatePicker,
                 setOpen: setShowEndDatePicker,
-                // End can't be before the start date (or today if start unset).
                 minDate:
                   config.promoCard.startDate &&
                   config.promoCard.startDate > toISODate(new Date())
@@ -2424,7 +2421,6 @@ export function PromoSection({
                   const nextPromoCard = {
                     ...config.promoCard,
                     endDate: nextValue,
-                    // Selecting a date activates the campaign (date-driven).
                     ...(nextValue ? { showTimer: true, active: true } : {}),
                   };
                   setConfig({ ...config, promoCard: nextPromoCard });
@@ -2435,56 +2431,10 @@ export function PromoSection({
             </div>
           </div>
 
-          <div className="pt-1">
-            <h4 className="text-sm font-bold text-on-surface-variant uppercase tracking-wide">
-              Timer
-            </h4>
-            <p className="text-sm text-on-surface-variant">
-              Optional countdown messaging for urgency.
-            </p>
-          </div>
-
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <label className="text-sm font-medium text-on-surface">
-                Enable Timer
-              </label>
-              {/* Tooltip info icon */}
-              <div className="relative group">
-                <svg
-                  className="w-4 h-4 text-on-surface-variant cursor-help"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 16v-4M12 8h.01" />
-                </svg>
-                <div className="absolute bottom-full left-0 mb-2 w-64 p-2.5 bg-gray-900 dark:bg-gray-700 text-white text-[11px] leading-relaxed rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
-                  <p className="font-semibold mb-1">How timer works:</p>
-                  <p className="mb-1">
-                    Dates are <strong>calendar-based</strong>, not relative to
-                    when you set them.
-                  </p>
-                  <ul className="space-y-0.5 list-disc list-inside">
-                    <li>
-                      <strong>Start date</strong> begins at{" "}
-                      <strong>12:00 AM</strong> (midnight)
-                    </li>
-                    <li>
-                      <strong>End date</strong> runs until{" "}
-                      <strong>11:59 PM</strong> (end of day)
-                    </li>
-                  </ul>
-                  <p className="mt-1 text-gray-300 dark:text-gray-300">
-                    e.g. Start: Feb 19 → End: Feb 21 means timer counts down
-                    from now until Feb 21, 11:59 PM.
-                  </p>
-                  <div className="absolute top-full left-4 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-900 dark:border-t-gray-700"></div>
-                </div>
-              </div>
-            </div>
+            <label className="text-sm font-semibold text-on-surface">
+              Countdown Timer
+            </label>
             <SegmentedToggle
               value={config.promoCard.showTimer}
               onChange={(v) => updateField("showTimer", v)}
@@ -2495,9 +2445,20 @@ export function PromoSection({
           {config.promoCard.showTimer && (
             <div className="space-y-2">
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-sm font-medium text-on-surface">
-                  Timer Text
-                </label>
+                <div className="flex items-center gap-1.5">
+                  <label className="block text-sm font-medium text-on-surface">
+                    Timer Text
+                  </label>
+                  <div className="relative group">
+                    <div className="flex items-center justify-center w-4 h-4 rounded-full bg-on-surface-variant/25 text-[9px] font-bold text-on-surface-variant cursor-help select-none">
+                      i
+                    </div>
+                    <div className="absolute bottom-full left-0 mb-1.5 w-52 p-2 bg-gray-900 dark:bg-gray-700 text-white text-[11px] leading-relaxed rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+                      Type text before/after the countdown. The countdown updates automatically and can&apos;t be edited. Select text in preview to style it.
+                      <div className="absolute top-full left-3 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+                    </div>
+                  </div>
+                </div>
                 <button
                   type="button"
                   onMouseDown={(e) => {
@@ -2532,12 +2493,7 @@ export function PromoSection({
                   whiteSpace: "pre-wrap",
                 }}
               />
-              <p className="text-xs text-on-surface-variant">
-                Type text before/after the fixed countdown. The countdown
-                (days&nbsp;:&nbsp;hours&nbsp;:&nbsp;mins) updates automatically
-                from the end date and can&apos;t be edited or deleted. Select
-                text to apply colors and sizes.
-              </p>
+
             </div>
           )}
 
