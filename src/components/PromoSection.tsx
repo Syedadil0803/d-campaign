@@ -31,6 +31,7 @@ import {
   wrapBareTextWithFontSize,
   rgbToHex,
   FONT_SIZE_LABEL_MAP,
+  FONT_SIZE_MAP,
 } from "@/lib/richTextUtils";
 import RichTextToolbar from "./RichTextToolbar";
 import { PopupDropdown } from "./PopupDropdown";
@@ -42,9 +43,9 @@ import {
   type PromoVersion,
 } from "@/lib/promoVersions";
 import {
-  getDefaultTimerStorageHTML,
-  normalizeTimerTemplate,
-  formatTimerText,
+  buildTimerDisplayHtml,
+  serializeTimerHtml,
+  refreshTimerValueSpans,
   calculateTimeRemaining as calcTimerRemaining,
 } from "@/lib/timerUtils";
 
@@ -234,7 +235,7 @@ export function PromoSection({
       if (currentField === "subtitle") promoCard.subtitle = html;
       if (currentField === "description") promoCard.description = html;
       if (currentField === "button") promoCard.buttonText = html;
-      if (currentField === "timer") promoCard.timerText = normalizeTimerTemplate(html);
+      if (currentField === "timer") promoCard.timerText = serializeTimerHtml(html);
     }
     return {
       promoCard,
@@ -385,7 +386,7 @@ export function PromoSection({
       buttonUrl: "",
       showTimer: false,
       showButton: false,
-      timerText: "Ends in {hh}:{mm}:{ss}",
+      timerText: "Ends in {timer}",
       style: {
         ...baseStyle,
         background: {
@@ -527,25 +528,43 @@ export function PromoSection({
     }
   }, [config.promoCard.buttonText]);
 
+  // Structural sync: prefix/suffix HTML + the fixed countdown chip. Numbers are
+  // refreshed separately (tick effect below) so typing never resets the caret.
   useEffect(() => {
     const el = previewTimerRef.current;
     if (!el) return;
-    const nextHtml = getFormattedTimerText();
-    if (el.innerHTML !== nextHtml) {
-      el.innerHTML = nextHtml;
-    }
-  }, [config.promoCard.timerText, config.promoCard.endDate, currentTime]);
-
-  useEffect(() => {
-    const el = timerRef.current;
-    if (!el) return;
-    const nextHtml = normalizeTimerTemplate(
-      config.promoCard.timerText ?? getDefaultTimerStorageHTML(),
+    // Never rebuild the editor the user is actively typing in — it resets caret.
+    if (el === activeEditorRef.current || document.activeElement === el) return;
+    const nextHtml = buildTimerDisplayHtml(
+      config.promoCard.timerText ?? "",
+      calcTimerRemaining(config.promoCard.endDate || ""),
     );
     if (el.innerHTML !== nextHtml) {
       el.innerHTML = nextHtml;
     }
-  }, [config.promoCard.timerText, config.promoCard.showTimer]);
+  }, [config.promoCard.timerText, config.promoCard.endDate]);
+
+  useEffect(() => {
+    const el = timerRef.current;
+    if (!el) return;
+    if (el === activeEditorRef.current || document.activeElement === el) return;
+    const nextHtml = buildTimerDisplayHtml(
+      config.promoCard.timerText ?? "",
+      calcTimerRemaining(config.promoCard.endDate || ""),
+    );
+    if (el.innerHTML !== nextHtml) {
+      el.innerHTML = nextHtml;
+    }
+  }, [config.promoCard.timerText, config.promoCard.endDate, config.promoCard.showTimer]);
+
+  // Live tick: update only the fixed chip's text in-place (no innerHTML reset,
+  // so the caret and any prefix/suffix styling are preserved while editing).
+  useEffect(() => {
+    const value = calcTimerRemaining(config.promoCard.endDate || "");
+    [timerRef.current, previewTimerRef.current].forEach((el) => {
+      if (el) refreshTimerValueSpans(el, value);
+    });
+  }, [currentTime, config.promoCard.endDate]);
 
   useEffect(() => {
     // Keep the field scaffold visible whenever the card is active so the
@@ -576,8 +595,9 @@ export function PromoSection({
       if (descRef.current) descRef.current.innerHTML = pc.description || "";
       if (buttonRef.current) buttonRef.current.innerHTML = pc.buttonText || "";
       if (timerRef.current) {
-        timerRef.current.innerHTML = normalizeTimerTemplate(
-          pc.timerText ?? getDefaultTimerStorageHTML(),
+        timerRef.current.innerHTML = buildTimerDisplayHtml(
+          pc.timerText ?? "",
+          calcTimerRemaining(pc.endDate || ""),
         );
       }
     }, 0);
@@ -628,7 +648,7 @@ export function PromoSection({
           : fallbackEl;
       if (!el) return;
       const html = wrapBareTextWithFontSize(el.innerHTML);
-      const text = normalizeTimerTemplate(html);
+      const text = serializeTimerHtml(html);
       const nextPromoCard = { ...config.promoCard, timerText: text };
       setConfig({
         ...config,
@@ -670,6 +690,70 @@ export function PromoSection({
     syncResetPromoEditsButton(nextPromoCard);
     markChanged();
     refreshPromoToolbarFormats(el);
+  }
+
+  // Returns true (and blocks the event) if the keystroke would delete or
+  // overwrite the fixed, non-editable countdown chip. Keeps it undeletable.
+  function blocksFixedTimer(e: KeyboardEvent<HTMLDivElement>): boolean {
+    const el = e.currentTarget;
+    const chips = el.querySelectorAll("[data-timer-fixed]");
+    if (chips.length === 0) return false;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return false;
+    const range = sel.getRangeAt(0);
+    const isDelete = e.key === "Backspace" || e.key === "Delete";
+    const isDestructive =
+      isDelete ||
+      e.key === "Enter" ||
+      (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey);
+
+    // A selection that touches the chip → any destructive key would wipe it.
+    if (!sel.isCollapsed) {
+      if (!isDestructive) return false;
+      for (const chip of Array.from(chips)) {
+        if (range.intersectsNode(chip)) {
+          e.preventDefault();
+          return true;
+        }
+      }
+      return false;
+    }
+
+    if (!isDelete) return false;
+
+    // Collapsed caret directly beside the chip → block the directional delete.
+    const node = range.startContainer;
+    const offset = range.startOffset;
+    const back = e.key === "Backspace";
+    let adjacent: Node | null = null;
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = node.textContent?.length ?? 0;
+      if (back && offset === 0) adjacent = node.previousSibling;
+      else if (!back && offset === len) adjacent = node.nextSibling;
+    } else {
+      adjacent = back
+        ? node.childNodes[offset - 1] ?? null
+        : node.childNodes[offset] ?? null;
+    }
+    if (
+      adjacent &&
+      adjacent.nodeType === Node.ELEMENT_NODE &&
+      (adjacent as Element).hasAttribute?.("data-timer-fixed")
+    ) {
+      e.preventDefault();
+      return true;
+    }
+    return false;
+  }
+
+  function onTimerEditorKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (blocksFixedTimer(e)) return;
+    onPromoEditorKeyDown(e);
+  }
+
+  function onTimerPreviewKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (blocksFixedTimer(e)) return;
+    onPromoPreviewKeyDown(e);
   }
 
   function onPromoPreviewKeyDown(e: KeyboardEvent<HTMLDivElement>) {
@@ -969,6 +1053,107 @@ export function PromoSection({
     unwrapInlineTags(editor, "i,em");
   }
 
+  // True if the current selection touches the non-editable countdown block.
+  // When it does, we must style via direct DOM (never execCommand, which clones
+  // and mangles the contenteditable=false block).
+  function selectionHasTimerChip(editor: HTMLDivElement): boolean {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return false;
+    return Array.from(
+      editor.querySelectorAll<HTMLElement>("[data-timer-fixed]"),
+    ).some((c) => sel.containsNode(c, true));
+  }
+
+  // The word/number spans inside the fixed block the selection touches.
+  function selectedTimerWordSpans(editor: HTMLDivElement): HTMLElement[] {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return [];
+    const words = Array.from(
+      editor.querySelectorAll<HTMLElement>(
+        "[data-timer-fixed] [data-timer-val], [data-timer-fixed] [data-timer-word]",
+      ),
+    );
+    let targets = words.filter((w) => sel.containsNode(w, true));
+    // Whole-block selection: style every word in any touched block.
+    if (targets.length === 0) {
+      targets = Array.from(
+        editor.querySelectorAll<HTMLElement>("[data-timer-fixed]"),
+      )
+        .filter((c) => sel.containsNode(c, true))
+        .flatMap((c) =>
+          Array.from(
+            c.querySelectorAll<HTMLElement>("[data-timer-val], [data-timer-word]"),
+          ),
+        );
+    }
+    return targets;
+  }
+
+  // Wrap the plain prefix/suffix text inside the selection (outside the block)
+  // in styled spans — direct DOM, so the fixed block is never touched.
+  function styleSelectedTimerText(
+    editor: HTMLDivElement,
+    patch: Record<string, string>,
+  ): void {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT, null);
+    const nodes: Text[] = [];
+    let tn: Text | null;
+    while ((tn = walker.nextNode() as Text | null)) {
+      if ((tn.parentElement as HTMLElement | null)?.closest("[data-timer-fixed]"))
+        continue;
+      if (range.intersectsNode(tn) && (tn.textContent || "").trim()) nodes.push(tn);
+    }
+    nodes.forEach((node) => {
+      const span = document.createElement("span");
+      Object.entries(patch).forEach(([k, v]) => {
+        if (v) span.style.setProperty(k, v);
+      });
+      node.parentNode?.insertBefore(span, node);
+      span.appendChild(node);
+    });
+  }
+
+  // Apply a style patch to the selected timer word-spans (direct DOM).
+  function styleSelectedTimerChips(
+    editor: HTMLDivElement,
+    patch: Record<string, string>,
+  ): void {
+    selectedTimerWordSpans(editor).forEach((el) => {
+      Object.entries(patch).forEach(([k, v]) => {
+        if (v === "") el.style.removeProperty(k);
+        else el.style.setProperty(k, v);
+      });
+    });
+  }
+
+  // Turn a toolbar format action into a CSS patch for the timer block.
+  function timerFormatPatch(format: string): Record<string, string> {
+    if (format.startsWith("size-")) {
+      const key = format.replace("size-", "");
+      return { "font-size": FONT_SIZE_MAP[key] || FONT_SIZE_MAP.md };
+    }
+    if (format === "bold") return { "font-weight": "bold" };
+    if (format === "italic") return { "font-style": "italic" };
+    return {};
+  }
+
+  // Style the whole timer selection (block words + prefix/suffix text) directly.
+  // Returns true when handled, so callers skip execCommand entirely.
+  function applyTimerSelectionStyle(
+    editor: HTMLDivElement,
+    patch: Record<string, string>,
+  ): boolean {
+    if (!Object.keys(patch).length) return false;
+    styleSelectedTimerChips(editor, patch);
+    styleSelectedTimerText(editor, patch);
+    onFieldInput("timer");
+    setTimeout(() => refreshPromoToolbarFormats(editor), 0);
+    return true;
+  }
+
   function handlePromoToolbarFormat(format: string) {
     if (!currentFieldRef.current) return;
     const editor = getActivePromoEditor();
@@ -976,6 +1161,13 @@ export function PromoSection({
     pushPromoState();
     if (selectionIsInsideEditor(editor)) {
       saveSelection();
+      if (
+        currentFieldRef.current === "timer" &&
+        selectionHasTimerChip(editor)
+      ) {
+        applyTimerSelectionStyle(editor, timerFormatPatch(format));
+        return;
+      }
       formatText(format);
       onFieldInput(currentFieldRef.current);
       syncInactiveFieldEditor(
@@ -1023,6 +1215,14 @@ export function PromoSection({
     pushPromoState();
     if (selectionIsInsideEditor(editor)) {
       saveSelection();
+      if (
+        currentFieldRef.current === "timer" &&
+        selectionHasTimerChip(editor)
+      ) {
+        applyTimerSelectionStyle(editor, { color });
+        setActiveFormats((prev) => ({ ...prev, color }));
+        return;
+      }
       applyColor(color);
       onFieldInput(currentFieldRef.current);
       syncInactiveFieldEditor(
@@ -1364,27 +1564,6 @@ export function PromoSection({
     return getPopupFieldStyle(field).background;
   }
 
-  function getFormattedTimerText(): string {
-    const rawHtml = config.promoCard.timerText ?? getDefaultTimerStorageHTML();
-    const timerValue = calcTimerRemaining(config.promoCard.endDate || "");
-
-    if (
-      [
-        timerValue.hours,
-        timerValue.minutes,
-        timerValue.seconds,
-        timerValue.days ?? 0,
-      ].some(Number.isNaN)
-    ) {
-      // Replace tokens with dashes, preserving HTML structure
-      return rawHtml.replace(
-        /\{hhh\}|\{hh\}|\{h\}|\{mmm\}|\{mm\}|\{m\}|\{sss\}|\{ss\}|\{s\}|\{ddd\}|\{dd\}|\{d\}/g,
-        "--",
-      );
-    }
-    return formatTimerText(rawHtml, timerValue);
-  }
-
   // On mount: load saved versions. The saved config remains the source of truth.
   useEffect(() => {
     listVersions().then((list) => {
@@ -1474,9 +1653,7 @@ export function PromoSection({
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
     let cloned = JSON.parse(JSON.stringify(template));
-    cloned.timerText = normalizeTimerTemplate(
-      cloned.timerText ?? getDefaultTimerStorageHTML(),
-    );
+    cloned.timerText = serializeTimerHtml(cloned.timerText ?? "");
     cloned = withDefaultDates(cloned);
     setConfig({ ...configRef.current, promoCard: cloned });
     syncEditorsFromConfig(cloned);
@@ -2237,7 +2414,7 @@ export function PromoSection({
                 suppressContentEditableWarning
                 onInput={() => onFieldInput("timer")}
                 onFocus={() => onFieldFocus("timer", timerRef)}
-                onKeyDown={onPromoEditorKeyDown}
+                onKeyDown={onTimerEditorKeyDown}
                 onMouseUp={() => refreshPromoToolbarFormats(timerRef.current)}
                 onKeyUp={() => refreshPromoToolbarFormats(timerRef.current)}
                 className={`rich-editor promo-standard-editor shadow-sm focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 block w-full sm:text-sm rounded-md p-2 border outline-none break-words min-h-[48px] transition-colors ${
@@ -2249,50 +2426,15 @@ export function PromoSection({
                   background: getBackgroundStyle(
                     config.promoCard.style.background,
                   ),
+                  whiteSpace: "pre-wrap",
                 }}
               />
               <p className="text-xs text-on-surface-variant">
-                Use tokens like {`{d}`}, {`{hh}`}, {`{mm}`}, {`{ss}`}. Select
+                Type text before/after the fixed countdown. The countdown
+                (days&nbsp;:&nbsp;hours&nbsp;:&nbsp;mins) updates automatically
+                from the end date and can&apos;t be edited or deleted. Select
                 text to apply colors and sizes.
               </p>
-              <div className="flex flex-wrap gap-1">
-                {["{d}", "{hh}", "{mm}", "{ss}"].map((token) => (
-                  <button
-                    key={token}
-                    onMouseDown={(e) => {
-                      e.preventDefault(); // Prevent button from stealing focus
-                      pushPromoState();
-                      const el = timerRef.current;
-                      if (!el) return;
-                      const sel = window.getSelection();
-                      if (!sel || sel.rangeCount === 0) {
-                        // No selection, append to end
-                        el.innerHTML += token;
-                      } else {
-                        const range = sel.getRangeAt(0);
-                        if (el.contains(range.commonAncestorContainer)) {
-                          // Insert at cursor position
-                          const textNode = document.createTextNode(token);
-                          range.deleteContents();
-                          range.insertNode(textNode);
-                          // Move cursor after inserted token
-                          range.setStartAfter(textNode);
-                          range.setEndAfter(textNode);
-                          sel.removeAllRanges();
-                          sel.addRange(range);
-                        } else {
-                          // Selection outside editor, append to end
-                          el.innerHTML += token;
-                        }
-                      }
-                      onFieldInput("timer");
-                    }}
-                    className="px-2 py-0.5 text-xs rounded transition-colors border border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant"
-                  >
-                    {token}
-                  </button>
-                ))}
-              </div>
             </div>
           )}
 
@@ -2700,7 +2842,7 @@ export function PromoSection({
                         refreshPromoToolbarFormats(previewTimerRef.current);
                       }}
                       onInput={() => onFieldInput("timer")}
-                      onKeyDown={onPromoPreviewKeyDown}
+                      onKeyDown={onTimerPreviewKeyDown}
                       onPaste={(e) => e.preventDefault()}
                       onDrop={(e) => e.preventDefault()}
                       style={{
@@ -2715,6 +2857,7 @@ export function PromoSection({
                         userSelect: "text",
                         WebkitUserSelect: "text",
                         cursor: "text",
+                        whiteSpace: "pre-wrap",
                       }}
                     />
                   )}

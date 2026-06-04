@@ -352,6 +352,219 @@ export function ensureTimerPlaceholders(html: string): string {
 // Helper Functions
 // ============================================================
 
+// ============================================================
+// Fixed (non-editable) countdown block — prefix/suffix model
+// ============================================================
+
+/** Single marker representing the whole fixed "X days : Y hours : Z mins" block. */
+export const TIMER_FIXED_TOKEN = '{timer}';
+
+/** Format the fixed center block, e.g. "3 days : 4 hours : 12 mins". Dashes if invalid. */
+export function formatCountdownWords(timerValue: TimerValue): string {
+  const { hours, minutes, seconds, days = 0 } = timerValue;
+  if ([hours, minutes, seconds, days].some(Number.isNaN)) {
+    return '-- days : -- hours : -- mins';
+  }
+  return `${days} days : ${hours} hours : ${minutes} mins`;
+}
+
+/** Collapse a legacy {hh}:{mm}:{ss}/{d} token run into a single {timer} marker. */
+export function normalizeLegacyTimerTokens(text: string): string {
+  if (!text || text.includes(TIMER_FIXED_TOKEN)) return text;
+  if (!/\{(?:d{1,3}|h{1,3}|m{1,3}|s{1,3})\}/i.test(text)) return text;
+  return text.replace(
+    /(\{(?:d{1,3}|h{1,3}|m{1,3}|s{1,3})\}\s*[:：·\-]?\s*)+/gi,
+    TIMER_FIXED_TOKEN,
+  );
+}
+
+// User-applied style props that should survive on the fixed chip. Layout-only
+// props (white-space, user-select) are editor chrome and are stripped on save.
+const TIMER_USER_STYLE_PROPS = [
+  'color',
+  'font-size',
+  'font-weight',
+  'font-style',
+  'text-decoration',
+  'text-decoration-line',
+  'background',
+  'background-color',
+];
+
+function filterStyle(style: string, keep: string[]): string {
+  return (style || '')
+    .split(';')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((s) => keep.includes(s.split(':')[0].trim().toLowerCase()))
+    .join('; ');
+}
+
+/** Keep only user-applied styles (color/size/weight/etc.) for storage. */
+function keepUserStyles(style: string): string {
+  return filterStyle(style, TIMER_USER_STYLE_PROPS);
+}
+
+/** Editor display style for the chip: user styles + layout chrome. Selectable. */
+function chipDisplayStyle(userStyle: string): string {
+  const user = keepUserStyles(userStyle);
+  return `${user ? user + '; ' : ''}white-space:nowrap;user-select:text;-webkit-user-select:text;`;
+}
+
+/** The numeric segments inside the fixed block, keyed for live updates. */
+export const TIMER_VALUE_KINDS = ['days', 'hours', 'mins'] as const;
+
+function timerSegmentText(kind: string, v: TimerValue): string {
+  const bad = [v.hours, v.minutes, v.seconds, v.days ?? 0].some(Number.isNaN);
+  if (bad) return '--';
+  if (kind === 'days') return String(v.days ?? 0);
+  if (kind === 'hours') return String(v.hours);
+  return String(v.minutes);
+}
+
+/**
+ * Inner HTML for the fixed block: each number and each word is its own
+ * selectable span, so the user can style a single word independently.
+ * Value spans are tagged data-timer-val for live updates.
+ */
+function chipInnerHtml(v: TimerValue): string {
+  const ut = 'user-select:text;-webkit-user-select:text;';
+  const val = (kind: string) =>
+    `<span data-timer-val="${kind}" style="${ut}">${timerSegmentText(kind, v)}</span>`;
+  const lab = (t: string) => `<span data-timer-word style="${ut}">${t}</span>`;
+  return (
+    val('days') +
+    lab(' days ') +
+    lab(': ') +
+    val('hours') +
+    lab(' hours ') +
+    lab(': ') +
+    val('mins') +
+    lab(' mins')
+  );
+}
+
+/** Refresh only the numeric segments in place (keeps per-word styles + caret). */
+export function refreshTimerValueSpans(rootEl: HTMLElement, v: TimerValue): void {
+  rootEl.querySelectorAll('[data-timer-val]').forEach((el) => {
+    const kind = el.getAttribute('data-timer-val') || '';
+    const t = timerSegmentText(kind, v);
+    if (el.textContent !== t) el.textContent = t;
+  });
+}
+
+/**
+ * Build editor/preview HTML: the user's prefix/suffix HTML with the fixed
+ * countdown block injected where the {timer} marker is. The block is
+ * non-editable but SELECTABLE, and is split into per-word spans so each
+ * word/number can be styled independently; existing per-word styles and the
+ * block's live numbers are preserved. If no block exists, one is appended.
+ */
+export function buildTimerDisplayHtml(storedHtml: string, timerValue: TimerValue): string {
+  let html = normalizeLegacyTimerTokens(storedHtml || '');
+  if (!html.includes(TIMER_FIXED_TOKEN) && !/data-timer-fixed/i.test(html)) {
+    html = (html ? html + ' ' : '') + TIMER_FIXED_TOKEN;
+  }
+
+  if (typeof DOMParser === 'undefined') {
+    const chip =
+      `<span data-timer-fixed contenteditable="false" style="white-space:nowrap;">` +
+      `${chipInnerHtml(timerValue)}</span>`;
+    return html.split(TIMER_FIXED_TOKEN).join(chip);
+  }
+
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  const root = doc.body.firstElementChild as HTMLElement;
+  if (!root) return html;
+
+  // Existing blocks: keep per-word styles, refresh numbers (or build structure
+  // if it's an old flat chip).
+  root.querySelectorAll('[data-timer-fixed]').forEach((el) => {
+    const chip = el as HTMLElement;
+    chip.setAttribute('contenteditable', 'false');
+    chip.setAttribute('style', chipDisplayStyle(chip.getAttribute('style') || ''));
+    if (!chip.querySelector('[data-timer-val]')) {
+      chip.innerHTML = chipInnerHtml(timerValue);
+    } else {
+      refreshTimerValueSpans(chip, timerValue);
+    }
+  });
+
+  // Bare {timer} markers in text nodes → fresh structured blocks.
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  const hits: Text[] = [];
+  let n: Text | null;
+  while ((n = walker.nextNode() as Text | null)) {
+    if (n.textContent && n.textContent.includes(TIMER_FIXED_TOKEN)) hits.push(n);
+  }
+  hits.forEach((tn) => {
+    const parts = (tn.textContent || '').split(TIMER_FIXED_TOKEN);
+    const frag = doc.createDocumentFragment();
+    parts.forEach((part, i) => {
+      if (part) frag.appendChild(doc.createTextNode(part));
+      if (i < parts.length - 1) {
+        const chip = doc.createElement('span');
+        chip.setAttribute('data-timer-fixed', '');
+        chip.setAttribute('contenteditable', 'false');
+        chip.setAttribute('style', 'white-space:nowrap;');
+        chip.innerHTML = chipInnerHtml(timerValue);
+        frag.appendChild(chip);
+      }
+    });
+    tn.replaceWith(frag);
+  });
+
+  return root.innerHTML;
+}
+
+/**
+ * Serialize editor HTML back to storage: keep the fixed block (its per-word
+ * structure + user styles, so styling persists), ensure exactly one exists
+ * (re-inject if deleted — keeps it undeletable), keep prefix/suffix HTML.
+ * Numeric values are blanked so storage doesn't churn every second.
+ */
+export function serializeTimerHtml(editorHtml: string): string {
+  const html = normalizeLegacyTimerTokens(editorHtml || '');
+
+  if (typeof DOMParser === 'undefined') return html || TIMER_FIXED_TOKEN;
+
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  const root = doc.body.firstElementChild as HTMLElement;
+  if (!root) return TIMER_FIXED_TOKEN;
+
+  let seen = false;
+  root.querySelectorAll('[data-timer-fixed]').forEach((el) => {
+    const chip = el as HTMLElement;
+    if (seen) {
+      chip.remove(); // dedupe
+      return;
+    }
+    seen = true;
+    chip.removeAttribute('contenteditable');
+    const cleaned = keepUserStyles(chip.getAttribute('style') || '');
+    if (cleaned) chip.setAttribute('style', cleaned);
+    else chip.removeAttribute('style');
+    // Blank the live numbers (build refreshes them) to keep storage stable.
+    chip.querySelectorAll('[data-timer-val]').forEach((v) => {
+      v.textContent = '';
+    });
+  });
+
+  // Undeletable: if no block remains, append a fresh one.
+  if (!root.querySelector('[data-timer-fixed]')) {
+    const chip = doc.createElement('span');
+    chip.setAttribute('data-timer-fixed', '');
+    chip.innerHTML = chipInnerHtml({ hours: 0, minutes: 0, seconds: 0, days: 0 });
+    chip.querySelectorAll('[data-timer-val]').forEach((v) => {
+      v.textContent = '';
+    });
+    if (root.lastChild) root.appendChild(doc.createTextNode(' '));
+    root.appendChild(chip);
+  }
+
+  return root.innerHTML;
+}
+
 /**
  * Check if HTML contains timer placeholders
  * @param html - HTML to check
