@@ -46,7 +46,7 @@ export function Header({
           <LayoutDashboard className="mr-3 hidden h-6 w-6 text-primary sm:block" />
           <h1 className="font-display text-lg font-bold tracking-tight text-on-surface md:text-xl">Campaign Admin</h1>
         </div>
-        <nav className="ml-5 flex items-center gap-6 overflow-x-auto whitespace-nowrap md:ml-8">
+        <nav className="absolute left-1/2 -translate-x-1/2 flex items-center gap-6 overflow-x-auto whitespace-nowrap">
         <button
           onClick={() => setActiveTab('dashboard')}
           className={`flex items-center rounded-md border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${

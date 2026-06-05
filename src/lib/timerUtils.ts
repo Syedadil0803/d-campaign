@@ -92,23 +92,6 @@ export function formatTimerText(template: string, timerValue: TimerValue): strin
   }
 
 /**
- * Normalize a timer template to the plain token string used by the input box.
- * Supports legacy HTML templates that wrap placeholders in span tags.
- */
-export function normalizeTimerTemplate(template?: string): string {
-  if (!template) return '';
-
-  return template
-    .replace(/<span[^>]*data-timer-placeholder="hhh"[^>]*>.*?<\/span>/gi, '{hh}')
-    .replace(/<span[^>]*data-timer-placeholder="mmm"[^>]*>.*?<\/span>/gi, '{mm}')
-    .replace(/<span[^>]*data-timer-placeholder="sss"[^>]*>.*?<\/span>/gi, '{ss}')
-    .replace(/<span[^>]*data-timer-placeholder="ddd"[^>]*>.*?<\/span>/gi, '{d}')
-    .replace(/<span[^>]*data-timer-placeholder="dd"[^>]*>.*?<\/span>/gi, '{d}')
-    .replace(/<span[^>]*data-timer-placeholder="d"[^>]*>.*?<\/span>/gi, '{d}')
-    .trim();
-}
-
-/**
  * Get preview timer text for templates (shows sample values)
  */
 export function getTemplateTimerPreviewText(timerText?: string): string {
@@ -120,24 +103,6 @@ export function getTemplateTimerPreviewText(timerText?: string): string {
   }
   // Legacy token templates fallback.
   return formatTimerText(template, sampleValue);
-}
-
-/**
- * Check if timer should be active based on dates
- */
-export function isTimerActive(startDate?: string, endDate?: string): boolean {
-  if (!endDate) return false;
-
-  const now = new Date();
-  // Date-only values cover the whole day: start from 00:00:00, end at
-  // 23:59:59.999 — so the final day is inclusive and back-to-back campaigns
-  // (one ending day X, next starting day X+1 at 00:00) are seamless.
-  const start = startDate ? new Date(startDate) : new Date(0);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999);
-
-  return now >= start && now <= end;
 }
 
 /**
@@ -524,7 +489,10 @@ export function buildTimerDisplayHtml(storedHtml: string, timerValue: TimerValue
         const chip = doc.createElement('span');
         chip.setAttribute('data-timer-fixed', '');
         chip.setAttribute('contenteditable', 'false');
-        chip.setAttribute('style', 'white-space:nowrap;');
+        chip.setAttribute(
+          'style',
+          'white-space:nowrap;user-select:text;-webkit-user-select:text;',
+        );
         chip.innerHTML = chipInnerHtml(timerValue);
         frag.appendChild(chip);
       }
