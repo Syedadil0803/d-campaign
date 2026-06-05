@@ -23,6 +23,9 @@ export interface PromoCard {
   buttonText: string;
   buttonUrl: string;
   buttonFullWidth?: boolean;
+  ctaType?: 'whatsapp' | 'link';
+  whatsappNumber?: string;
+  whatsappCountryCode?: string;
   startDate: string;
   endDate: string;
   showTimer: boolean;
@@ -111,6 +114,8 @@ export const defaultConfig: CampaignConfig = {
     description: '',
     buttonText: 'Shop Now',
     buttonUrl: '',
+    ctaType: 'whatsapp',
+    whatsappNumber: '',
     buttonFullWidth: true,
     startDate: '',
     endDate: '',

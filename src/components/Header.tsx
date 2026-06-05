@@ -1,46 +1,70 @@
-import { LayoutDashboard, Megaphone, Gift, LayoutGrid, Save, Sun, Moon, LogOut } from 'lucide-react';
+import { useState } from 'react';
+import { LayoutDashboard, Megaphone, Gift, LayoutGrid, Save, Upload, Sun, Moon, LogOut, Loader2 } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: 'dashboard' | 'announcement' | 'promo';
   setActiveTab: (tab: 'dashboard' | 'announcement' | 'promo') => void;
-  hasChanges: boolean;
   hasAnnouncementChanges: boolean;
   hasPromoChanges: boolean;
+  readyToPublishAnnouncement: boolean;
+  readyToPublishPromo: boolean;
+  isPublishing: boolean;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
-  handleSave: () => void;
   handleSaveAnnouncement: () => void;
   handleSavePromo: () => void;
+  handlePublishAnnouncement: () => Promise<void> | void;
+  handlePublishPromo: () => Promise<void> | void;
   handleLogout: () => void;
 }
 
 export function Header({
   activeTab,
   setActiveTab,
-  hasChanges,
   hasAnnouncementChanges,
   hasPromoChanges,
+  readyToPublishAnnouncement,
+  readyToPublishPromo,
+  isPublishing,
   isDarkMode,
   toggleDarkMode,
-  handleSave,
   handleSaveAnnouncement,
   handleSavePromo,
+  handlePublishAnnouncement,
+  handlePublishPromo,
   handleLogout,
 }: HeaderProps) {
+  const [saving, setSaving] = useState(false);
+
   const currentHasChanges =
     activeTab === 'announcement' ? hasAnnouncementChanges :
     activeTab === 'promo' ? hasPromoChanges :
-    hasChanges;
-  const currentSave =
-    activeTab === 'announcement' ? handleSaveAnnouncement :
-    activeTab === 'promo' ? handleSavePromo :
-    handleSave;
-  const saveLabel =
-    activeTab === 'announcement' ? 'Save Announcement' :
-    activeTab === 'promo' ? 'Save Promo' :
-    'Save Changes';
+    false;
+  const currentReadyToPublish =
+    activeTab === 'announcement' ? readyToPublishAnnouncement :
+    activeTab === 'promo' ? readyToPublishPromo :
+    false;
+
+  const state: 'published' | 'unsaved' | 'ready' =
+    currentReadyToPublish ? 'ready' :
+    currentHasChanges ? 'unsaved' :
+    'published';
+
+  async function onSave() {
+    setSaving(true);
+    await new Promise(r => setTimeout(r, 1000));
+    if (activeTab === 'announcement') handleSaveAnnouncement();
+    else handleSavePromo();
+    setSaving(false);
+  }
+
+  async function onPublish() {
+    if (activeTab === 'announcement') await handlePublishAnnouncement();
+    else await handlePublishPromo();
+  }
+
   return (
-    <header className="sticky top-0 z-20 h-16  border-b border-border bg-surface/95 shadow-sm backdrop-blur">
+    <header className="sticky top-0 z-20 h-16 border-b border-border bg-surface/95 shadow-sm backdrop-blur">
       <div className="flex h-full items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-12">
           <LayoutDashboard className="mr-3 hidden h-6 w-6 text-primary sm:block" />
@@ -90,24 +114,55 @@ export function Header({
           >
             {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
+
           {activeTab !== 'dashboard' && (
             <>
-              {currentHasChanges && (
+              {/* Status badge */}
+              {state === 'unsaved' && (
                 <div className="hidden items-center text-sm font-medium text-primary sm:flex">
                   <span className="mr-2 h-2 w-2 animate-pulse rounded-full bg-primary"></span>
                   Unsaved changes
                 </div>
               )}
-              <button
-                onClick={currentSave}
-                disabled={!currentHasChanges}
-                className="inline-flex items-center rounded-md border border-primary/40 bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-all hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {activeTab === 'announcement' ? <Megaphone className="w-4 h-4 mr-2" /> : <Gift className="w-4 h-4 mr-2" />}
-                <span>{currentHasChanges ? 'Save' : 'Saved'}</span>
-              </button>
+              {state === 'ready' && (
+                <div className="hidden items-center text-sm font-medium text-primary sm:flex">
+                  <span className="mr-2 h-2 w-2 rounded-full bg-primary"></span>
+                  Unpublished changes
+                </div>
+              )}
+
+              {/* Action button */}
+              {state === 'unsaved' && (
+                <button
+                  onClick={onSave}
+                  disabled={saving}
+                  className="inline-flex items-center rounded-md border border-primary/40 bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-all hover:opacity-95 disabled:opacity-70"
+                >
+                  {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  <span>{saving ? 'Saving...' : 'Save'}</span>
+                </button>
+              )}
+              {state === 'ready' && (
+                <button
+                  onClick={onPublish}
+                  disabled={isPublishing}
+                  className="inline-flex items-center rounded-md border border-primary/40 bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-all hover:opacity-95 disabled:opacity-70"
+                >
+                  {isPublishing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+                  <span>{isPublishing ? 'Publishing...' : 'Publish'}</span>
+                </button>
+              )}
+              {state === 'published' && (
+                <button
+                  disabled
+                  className="inline-flex items-center rounded-md border border-primary/20 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary shadow-sm cursor-default opacity-60"
+                >
+                  <span>Published</span>
+                </button>
+              )}
             </>
           )}
+
           <button
             onClick={handleLogout}
             className="rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-elevated hover:text-on-surface"

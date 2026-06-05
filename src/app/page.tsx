@@ -162,6 +162,8 @@ export default function Home() {
   const [config, setConfig] = useState<CampaignConfig>(defaultConfig);
   const [hasAnnouncementChanges, setHasAnnouncementChanges] = useState(false);
   const [hasPromoChanges, setHasPromoChanges] = useState(false);
+  const [readyToPublishAnnouncement, setReadyToPublishAnnouncement] = useState(false);
+  const [readyToPublishPromo, setReadyToPublishPromo] = useState(false);
   const hasChanges = hasAnnouncementChanges || hasPromoChanges;
   const [pendingDraftAction, setPendingDraftAction] = useState<
     | { type: 'tab'; tab: 'dashboard' | 'announcement' | 'promo' }
@@ -176,7 +178,13 @@ export default function Home() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastIsError, setToastIsError] = useState(false);
+  const [publishConfirm, setPublishConfirm] = useState<{
+    warnings: string[];
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [draftBanner, setDraftBanner] = useState<{ date: string } | null>(null);
   const mainScrollRef = useRef<HTMLElement>(null);
   const configRef = useRef(config);
   configRef.current = config;
@@ -184,6 +192,7 @@ export default function Home() {
   hasChangesRef.current = hasChanges;
   const draftSignatureRef = useRef<string | null>(null);
   const savedPromoSignatureRef = useRef<string | null>(null);
+  const publishedConfigRef = useRef<string | null>(null);
 
   function getConfigSignature(cfg: CampaignConfig) {
     return JSON.stringify(cfg);
@@ -291,6 +300,7 @@ export default function Home() {
     options: { markHandled?: boolean } = {},
   ) {
     localStorage.setItem('campaign-draft', JSON.stringify(cfg));
+    localStorage.setItem('campaign-draft-date', new Date().toISOString());
     if (options.markHandled !== false) {
       draftSignatureRef.current = getConfigSignature(cfg);
     }
@@ -298,6 +308,7 @@ export default function Home() {
 
   function clearDraft() {
     localStorage.removeItem('campaign-draft');
+    localStorage.removeItem('campaign-draft-date');
     draftSignatureRef.current = null;
   }
 
@@ -328,16 +339,26 @@ export default function Home() {
     scope?: 'announcement' | 'promo',
   ) {
     try {
+      // Build whatsapp link into buttonUrl if ctaType is whatsapp
+      const cfgToSend = { ...cfg };
+      const pc = cfgToSend.promoCard;
+      if ((pc.ctaType || 'whatsapp') === 'whatsapp' && pc.whatsappNumber) {
+        const code = (pc.whatsappCountryCode || '+44').replace('+', '');
+        const num = pc.whatsappNumber.replace(/\D/g, '');
+        cfgToSend.promoCard = { ...pc, buttonUrl: `https://wa.me/${code}${num}` };
+      }
+
       const response = await fetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cfg),
+        body: JSON.stringify(cfgToSend),
       });
 
       if (response.ok) {
         if (scope === 'announcement') setHasAnnouncementChanges(false);
         else if (scope === 'promo') setHasPromoChanges(false);
         else { setHasAnnouncementChanges(false); setHasPromoChanges(false); }
+        publishedConfigRef.current = getConfigSignature(cfg);
         clearDraft();
         toast(successMessage);
       } else {
@@ -383,27 +404,41 @@ export default function Home() {
 
   async function loadConfig() {
     try {
-      // Check for a saved draft first
       const draft = localStorage.getItem('campaign-draft');
+      const draftDate = localStorage.getItem('campaign-draft-date');
+
+      // Always fetch the published config from API
+      const response = await fetch('/api/config');
+      let publishedCfg: CampaignConfig | null = null;
+      if (response.ok) {
+        const data = await response.json();
+        publishedCfg = migrateConfig(data, data.version);
+        publishedConfigRef.current = getConfigSignature(publishedCfg);
+      }
+
       if (draft) {
         const parsed = JSON.parse(draft) as CampaignConfig;
         const migrated = migrateConfig(parsed, parsed.version);
-        setConfig(migrated);
-        draftSignatureRef.current = getConfigSignature(migrated);
-        savedPromoSignatureRef.current = getPromoSignature(migrated);
-        setHasAnnouncementChanges(true);
-        setHasPromoChanges(true);
-        toast('Restored from draft');
-        return;
+        // Only show banner if draft differs from published
+        if (publishedCfg && getConfigSignature(migrated) !== getConfigSignature(publishedCfg)) {
+          setConfig(migrated);
+          draftSignatureRef.current = getConfigSignature(migrated);
+          savedPromoSignatureRef.current = getPromoSignature(migrated);
+          setHasAnnouncementChanges(true);
+          setHasPromoChanges(true);
+          setReadyToPublishAnnouncement(true);
+          setReadyToPublishPromo(true);
+          setDraftBanner({ date: draftDate || new Date().toISOString() });
+          return;
+        }
+        // Draft matches published — discard it silently
+        clearDraft();
       }
 
-      const response = await fetch('/api/config');
-      if (response.ok) {
-        const data = await response.json();
-        const migrated = migrateConfig(data, data.version);
-        setConfig(migrated);
-        draftSignatureRef.current = getConfigSignature(migrated);
-        savedPromoSignatureRef.current = getPromoSignature(migrated);
+      if (publishedCfg) {
+        setConfig(publishedCfg);
+        draftSignatureRef.current = getConfigSignature(publishedCfg);
+        savedPromoSignatureRef.current = getPromoSignature(publishedCfg);
       }
     } catch (error) {
       console.error('Failed to load config:', error);
@@ -411,13 +446,28 @@ export default function Home() {
   }
 
   async function handleSaveAnnouncement() {
-    await persistConfig(config, 'Announcement saved', 'announcement');
+    saveDraft(config);
+    setHasAnnouncementChanges(false);
+    setReadyToPublishAnnouncement(true);
+    toast('Changes saved locally');
+  }
+
+  async function handlePublishAnnouncement() {
+    await persistConfig(config, 'Changes are live on your website', 'announcement');
+    setReadyToPublishAnnouncement(false);
   }
 
   async function handleSavePromo() {
+    saveDraft(config);
+    setHasPromoChanges(false);
+    setReadyToPublishPromo(true);
+    toast('Changes saved locally');
+  }
+
+  async function handlePublishPromo() {
     let cfgToSave = { ...config };
 
-    // Activate on save if dates are set and user hasn't manually stopped
+    // Activate on publish if dates are set and user hasn't manually stopped
     const pc = cfgToSave.promoCard;
     const shouldActivate = pc.startDate && pc.endDate && !pc.stoppedByUser;
     if (shouldActivate && !pc.active) {
@@ -433,11 +483,85 @@ export default function Home() {
 
     if (variantStatus === 'ready') {
       await savePromoVariant(cfgToSave);
-      await persistConfig(cfgToSave, shouldActivate && !pc.active ? 'Promo saved — campaign is on air' : 'Promo saved and variant saved', 'promo');
+      await persistConfig(cfgToSave, shouldActivate && !pc.active ? 'Changes are live — campaign is on air' : 'Changes are live on your website', 'promo');
+      setReadyToPublishPromo(false);
       return;
     }
 
-    await persistConfig(cfgToSave, shouldActivate && !pc.active ? 'Promo saved — campaign is on air' : 'Promo saved', 'promo');
+    await persistConfig(cfgToSave, shouldActivate && !pc.active ? 'Changes are live — campaign is on air' : 'Changes are live on your website', 'promo');
+    setReadyToPublishPromo(false);
+  }
+
+  function validatePromo(): string[] {
+    const warnings: string[] = [];
+    const pc = config.promoCard;
+    const strip = (html: string) => html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+    const formatDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+    // 1. Content fields
+    if (!strip(pc.title || '')) warnings.push('Title is empty');
+    if (!strip(pc.subtitle || '')) warnings.push('Subtitle is empty');
+    if (!strip(pc.description || '')) warnings.push('Description is empty');
+
+    // 2. Schedule
+    if (!pc.startDate || !pc.endDate) {
+      warnings.push('Start date or end date is not set');
+    } else {
+      const today = new Date().toISOString().split('T')[0];
+      if (pc.endDate < today) {
+        warnings.push('End date is in the past');
+      } else if (pc.startDate <= today) {
+        warnings.push(`Campaign will go live immediately (${formatDate(pc.startDate)} – ${formatDate(pc.endDate)})`);
+      } else {
+        warnings.push(`Campaign is scheduled for ${formatDate(pc.startDate)} – ${formatDate(pc.endDate)}`);
+      }
+    }
+
+    // 3. Timer text
+    if (pc.showTimer) {
+      const timerPlain = strip(pc.timerText || '').replace(/\{timer\}/gi, '').trim();
+      if (!timerPlain) warnings.push('Timer has no prefix or suffix — you can add text like "Ends in" or "Hurry!" around the countdown');
+    }
+
+    // 4. CTA
+    if (pc.showButton) {
+      const btnText = strip(pc.buttonText || '');
+      const ctaType = pc.ctaType || 'whatsapp';
+      if (ctaType === 'whatsapp') {
+        const num = pc.whatsappNumber?.trim() || '';
+        const code = pc.whatsappCountryCode || '+44';
+        if (!btnText && !num) {
+          warnings.push('Button text and WhatsApp number are empty');
+        } else if (!btnText) {
+          warnings.push('Button text is empty');
+        } else if (!num) {
+          warnings.push('WhatsApp number is empty');
+        } else {
+          warnings.push(`WhatsApp number: ${code} ${num}`);
+        }
+      } else {
+        const url = pc.buttonUrl?.trim() || '';
+        if (!btnText && !url) {
+          warnings.push('Button text and URL are empty');
+        } else if (!btnText) {
+          warnings.push('Button text is empty');
+        } else if (!url) {
+          warnings.push('Button URL is empty');
+        }
+      }
+    }
+
+    return warnings;
+  }
+
+  function handlePublishPromoWithValidation() {
+    const warnings = validatePromo();
+    setPublishConfirm({ warnings, onConfirm: handlePublishPromo });
+  }
+
+  function handlePublishAnnouncementWithValidation() {
+    // Simple confirmation for announcement
+    setPublishConfirm({ warnings: [], onConfirm: handlePublishAnnouncement });
   }
 
   async function handleSave() {
@@ -487,17 +611,68 @@ export default function Home() {
     window.location.href = '/login';
   }
 
+  function dismissDraftBanner() {
+    setDraftBanner(null);
+  }
+
+  async function discardDraft() {
+    clearDraft();
+    setDraftBanner(null);
+    setHasAnnouncementChanges(false);
+    setHasPromoChanges(false);
+    setReadyToPublishAnnouncement(false);
+    setReadyToPublishPromo(false);
+    // Reload published config
+    try {
+      const response = await fetch('/api/config');
+      if (response.ok) {
+        const data = await response.json();
+        const migrated = migrateConfig(data, data.version);
+        setConfig(migrated);
+        draftSignatureRef.current = getConfigSignature(migrated);
+        savedPromoSignatureRef.current = getPromoSignature(migrated);
+        publishedConfigRef.current = getConfigSignature(migrated);
+      }
+    } catch (e) {
+      console.error('Failed to reload config:', e);
+    }
+    toast('Draft discarded');
+  }
+
+  function reviewDraft() {
+    setDraftBanner(null);
+    setActiveTab('promo');
+  }
+
   function markChanged() {
     setHasAnnouncementChanges(true);
     setHasPromoChanges(true);
+    setReadyToPublishAnnouncement(false);
+    setReadyToPublishPromo(false);
   }
 
   function markAnnouncementChanged() {
-    setHasAnnouncementChanges(true);
+    // If config matches published state, no actual changes
+    setTimeout(() => {
+      if (publishedConfigRef.current && publishedConfigRef.current === getConfigSignature(configRef.current)) {
+        setHasAnnouncementChanges(false);
+        return;
+      }
+      setHasAnnouncementChanges(true);
+      setReadyToPublishAnnouncement(false);
+    }, 0);
   }
 
   function markPromoChanged() {
-    setHasPromoChanges(true);
+    // If config matches published state, no actual changes
+    setTimeout(() => {
+      if (publishedConfigRef.current && publishedConfigRef.current === getConfigSignature(configRef.current)) {
+        setHasPromoChanges(false);
+        return;
+      }
+      setHasPromoChanges(true);
+      setReadyToPublishPromo(false);
+    }, 0);
   }
 
   const selectedPendingVariant = getSelectedPendingVariant();
@@ -508,14 +683,17 @@ export default function Home() {
         <Header
           activeTab={activeTab}
           setActiveTab={handleTabSwitch}
-          hasChanges={hasChanges}
           hasAnnouncementChanges={hasAnnouncementChanges}
           hasPromoChanges={hasPromoChanges}
+          readyToPublishAnnouncement={readyToPublishAnnouncement}
+          readyToPublishPromo={readyToPublishPromo}
+          isPublishing={isPublishing}
           isDarkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode}
-          handleSave={handleSave}
           handleSaveAnnouncement={handleSaveAnnouncement}
           handleSavePromo={handleSavePromo}
+          handlePublishAnnouncement={handlePublishAnnouncementWithValidation}
+          handlePublishPromo={handlePublishPromoWithValidation}
           handleLogout={handleLogout}
         />
 
@@ -661,6 +839,90 @@ export default function Home() {
                   Save and Replace Oldest
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Welcome Back — Unpublished Draft Popup */}
+      {draftBanner && activeTab === 'promo' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <p className="text-base font-semibold">
+              <span className="mr-1.5">💡</span>Welcome back
+            </p>
+            <p className="mt-2 text-sm text-on-surface-variant">
+              You have an unpublished draft from{' '}
+              <span className="font-semibold text-on-surface">
+                {new Date(draftBanner.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+              </span>.
+              These changes haven&apos;t gone live yet.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={discardDraft}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                Discard Draft
+              </button>
+              <button
+                type="button"
+                onClick={reviewDraft}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+              >
+                Review & Publish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Publish Confirmation */}
+      {publishConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" onClick={() => setPublishConfirm(null)} />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <h2 className="text-base font-semibold">Publish to website?</h2>
+            <p className="mt-2 text-sm text-on-surface-variant">
+              These changes will go live on your website immediately.
+            </p>
+            {publishConfirm.warnings.length > 0 && (
+              <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+                <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1.5">Heads up</p>
+                <ul className="space-y-1">
+                  {publishConfirm.warnings.map((w, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-on-surface-variant">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                      {w}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPublishConfirm(null)}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const onConfirm = publishConfirm.onConfirm;
+                  setPublishConfirm(null);
+                  setIsPublishing(true);
+                  await onConfirm();
+                  await new Promise(r => setTimeout(r, 1000));
+                  setIsPublishing(false);
+                }}
+                className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+              >
+                Publish Now
+              </button>
             </div>
           </div>
         </div>
