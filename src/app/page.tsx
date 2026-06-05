@@ -415,7 +415,15 @@ export default function Home() {
   }
 
   async function handleSavePromo() {
-    let cfgToSave = config;
+    let cfgToSave = { ...config };
+
+    // Activate on save if dates are set and user hasn't manually stopped
+    const pc = cfgToSave.promoCard;
+    const shouldActivate = pc.startDate && pc.endDate && !pc.stoppedByUser;
+    if (shouldActivate && !pc.active) {
+      cfgToSave = { ...cfgToSave, promoCard: { ...pc, active: true } };
+      setConfig(cfgToSave);
+    }
 
     const variantStatus = await getPromoVariantSaveStatus(cfgToSave);
     if (variantStatus === 'pending') {
@@ -425,11 +433,11 @@ export default function Home() {
 
     if (variantStatus === 'ready') {
       await savePromoVariant(cfgToSave);
-      await persistConfig(cfgToSave, 'Promo saved and variant saved', 'promo');
+      await persistConfig(cfgToSave, shouldActivate && !pc.active ? 'Promo saved — campaign is on air' : 'Promo saved and variant saved', 'promo');
       return;
     }
 
-    await persistConfig(cfgToSave, 'Promo saved', 'promo');
+    await persistConfig(cfgToSave, shouldActivate && !pc.active ? 'Promo saved — campaign is on air' : 'Promo saved', 'promo');
   }
 
   async function handleSave() {

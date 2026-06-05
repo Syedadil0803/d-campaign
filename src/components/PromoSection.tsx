@@ -441,7 +441,7 @@ export function PromoSection({
     const baseStyle = clonePromoCard(defaultConfig.promoCard).style;
     return {
       ...clonePromoCard(defaultConfig.promoCard),
-      active: true,
+      active: false,
       title: "",
       subtitle: "",
       description: "",
@@ -2535,7 +2535,7 @@ export function PromoSection({
                   const nextPromoCard = {
                     ...config.promoCard,
                     startDate: nextValue,
-                    ...(nextValue ? { showTimer: true, active: true, stoppedByUser: false } : {}),
+                    ...(nextValue ? { showTimer: true, stoppedByUser: false, ...(config.promoCard.stoppedByUser ? { active: true } : {}) } : {}),
                   };
                   setConfig({ ...config, promoCard: nextPromoCard });
                   syncResetPromoEditsButton(nextPromoCard);
@@ -2564,7 +2564,7 @@ export function PromoSection({
                   const nextPromoCard = {
                     ...config.promoCard,
                     endDate: nextValue,
-                    ...(nextValue ? { showTimer: true, active: true, stoppedByUser: false } : {}),
+                    ...(nextValue ? { showTimer: true, stoppedByUser: false, ...(config.promoCard.stoppedByUser ? { active: true } : {}) } : {}),
                   };
                   setConfig({ ...config, promoCard: nextPromoCard });
                   syncResetPromoEditsButton(nextPromoCard);
