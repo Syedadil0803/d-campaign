@@ -130,7 +130,7 @@ export function PopupDropdown({
           ref={menuRef}
           onMouseDown={(e) => e.stopPropagation()}
           onMouseLeave={() => onHoverEnd?.()}
-          style={{ position: 'fixed', zIndex: 9999, top: livePosition?.top ?? menuPosition?.top ?? 0, left: livePosition?.left ?? menuPosition?.left ?? 0, width: `${livePosition?.width ?? popupWidth}px` }}
+          style={{ position: 'fixed', zIndex: 9999, top: livePosition?.top ?? menuPosition?.top ?? 0, left: livePosition?.left ?? menuPosition?.left ?? 0, minWidth: `${livePosition?.width ?? popupWidth}px`, width: 'auto' }}
           className="bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-3 rounded-xl"
         >
           {options.map((option) => (
@@ -150,7 +150,7 @@ export function PopupDropdown({
                   onSelect(option.value);
                 }
               }}
-              className={`block w-full cursor-pointer border-0 bg-transparent px-3 py-2 text-left text-sm transition-colors hover:bg-surface-subtle ${option.value === value ? 'text-primary' : 'text-on-surface'}`}
+              className={`block w-full cursor-pointer border-0 bg-transparent px-3 py-2 text-left text-sm whitespace-nowrap transition-colors hover:bg-surface-subtle ${option.value === value ? 'text-primary' : 'text-on-surface'}`}
             >
               {option.label}
             </div>

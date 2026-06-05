@@ -3284,8 +3284,8 @@ export function PromoSection({
                           className={`absolute z-30 w-[280px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 ${
                             config.promoCard.style.position === "bottom-right" ||
                             config.promoCard.style.position === "top-right"
-                              ? "right-full mr-3"
-                              : "left-full ml-3"
+                              ? "right-full mr-10"
+                              : "left-full ml-10"
                           }`}
                           style={getPopupPositionStyle(field)}
                         >
@@ -3563,8 +3563,8 @@ export function PromoSection({
                       className={`absolute z-30 w-[320px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 ${
                         config.promoCard.style.position === "bottom-right" ||
                         config.promoCard.style.position === "top-right"
-                          ? "right-full mr-3"
-                          : "left-full ml-3"
+                          ? "right-full mr-10"
+                          : "left-full ml-10"
                       }`}
                       style={(() => {
                         const card = promoCardRef.current;
