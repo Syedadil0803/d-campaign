@@ -55,6 +55,7 @@ interface PromoSectionProps {
   markChanged: () => void;
   toast: (message: string, isError?: boolean) => void;
   onSelectedVersionChange?: (versionId: string | null) => void;
+  onStopCampaign: () => Promise<void>;
 }
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
@@ -132,6 +133,7 @@ export function PromoSection({
   markChanged,
   toast,
   onSelectedVersionChange,
+  onStopCampaign,
 }: PromoSectionProps) {
   const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
     const date = new Date();
@@ -1634,7 +1636,7 @@ export function PromoSection({
     setShowStopConfirm(true);
   }
 
-  function confirmStopCampaign() {
+  async function confirmStopCampaign() {
     setShowStopConfirm(false);
     pushPromoState();
     const nextPromoCard = {
@@ -1647,8 +1649,7 @@ export function PromoSection({
       promoCard: nextPromoCard,
     });
     syncResetPromoEditsButton(nextPromoCard);
-    markChanged();
-    toast("Campaign stopped");
+    await onStopCampaign();
   }
 
   function openChatGptWithPromoPrompt() {
@@ -1813,7 +1814,7 @@ export function PromoSection({
         : getPromoSnapshot();
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
-    const restored = withDefaultDates(clonePromoCard(version.promoCard));
+    const restored = withDefaultDates({ ...clonePromoCard(version.promoCard), active: false });
     setConfig({ ...configRef.current, promoCard: restored });
     syncEditorsFromConfig(restored);
     markChanged();
@@ -1837,6 +1838,7 @@ export function PromoSection({
     promoHistory.clear();
     let cloned = JSON.parse(JSON.stringify(template));
     cloned.timerText = serializeTimerHtml(cloned.timerText ?? "");
+    cloned.active = false;
     cloned = withDefaultDates(cloned);
     setConfig({ ...configRef.current, promoCard: cloned });
     syncEditorsFromConfig(cloned);
@@ -2537,7 +2539,7 @@ export function PromoSection({
                   const nextPromoCard = {
                     ...config.promoCard,
                     startDate: nextValue,
-                    ...(nextValue ? { showTimer: true, stoppedByUser: false, ...(config.promoCard.stoppedByUser ? { active: true } : {}) } : {}),
+                    ...(nextValue ? { showTimer: true } : {}),
                   };
                   setConfig({ ...config, promoCard: nextPromoCard });
                   syncResetPromoEditsButton(nextPromoCard);
@@ -2566,7 +2568,7 @@ export function PromoSection({
                   const nextPromoCard = {
                     ...config.promoCard,
                     endDate: nextValue,
-                    ...(nextValue ? { showTimer: true, stoppedByUser: false, ...(config.promoCard.stoppedByUser ? { active: true } : {}) } : {}),
+                    ...(nextValue ? { showTimer: true } : {}),
                   };
                   setConfig({ ...config, promoCard: nextPromoCard });
                   syncResetPromoEditsButton(nextPromoCard);
@@ -3781,7 +3783,7 @@ export function PromoSection({
           <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
             <h2 className="text-base font-semibold">Stop this campaign?</h2>
             <p className="mt-2 text-sm text-on-surface-variant">
-              Your promo card will stop showing on the website. Whenever you&apos;re ready to run it again, simply update your schedule dates and save &mdash; it&apos;ll go on air automatically.
+              Your promo card will be removed from the website. Whenever you&apos;re ready to launch again, just set up a new card and hit publish &mdash; easy as that.
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button

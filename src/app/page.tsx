@@ -467,13 +467,16 @@ export default function Home() {
   async function handlePublishPromo() {
     let cfgToSave = { ...config };
 
-    // Activate on publish if dates are set and user hasn't manually stopped
+    // Activate on publish only if not intentionally stopped
     const pc = cfgToSave.promoCard;
-    const shouldActivate = pc.startDate && pc.endDate && !pc.stoppedByUser;
-    if (shouldActivate && !pc.active) {
+    if (!pc.active && !pc.stoppedByUser) {
       cfgToSave = { ...cfgToSave, promoCard: { ...pc, active: true } };
       setConfig(cfgToSave);
     }
+
+    const successMsg = cfgToSave.promoCard.active
+      ? 'Campaign is live on your website'
+      : 'Changes saved';
 
     const variantStatus = await getPromoVariantSaveStatus(cfgToSave);
     if (variantStatus === 'pending') {
@@ -483,12 +486,12 @@ export default function Home() {
 
     if (variantStatus === 'ready') {
       await savePromoVariant(cfgToSave);
-      await persistConfig(cfgToSave, shouldActivate && !pc.active ? 'Changes are live — campaign is on air' : 'Changes are live on your website', 'promo');
+      await persistConfig(cfgToSave, successMsg, 'promo');
       setReadyToPublishPromo(false);
       return;
     }
 
-    await persistConfig(cfgToSave, shouldActivate && !pc.active ? 'Changes are live — campaign is on air' : 'Changes are live on your website', 'promo');
+    await persistConfig(cfgToSave, successMsg, 'promo');
     setReadyToPublishPromo(false);
   }
 
@@ -511,7 +514,7 @@ export default function Home() {
       if (pc.endDate < today) {
         warnings.push('End date is in the past');
       } else if (pc.startDate <= today) {
-        warnings.push(`Campaign will go live immediately (${formatDate(pc.startDate)} – ${formatDate(pc.endDate)})`);
+        warnings.push(`Campaign will run from ${formatDate(pc.startDate)} – ${formatDate(pc.endDate)} (starts immediately)`);
       } else {
         warnings.push(`Campaign is scheduled for ${formatDate(pc.startDate)} – ${formatDate(pc.endDate)}`);
       }
@@ -562,6 +565,17 @@ export default function Home() {
   function handlePublishAnnouncementWithValidation() {
     // Simple confirmation for announcement
     setPublishConfirm({ warnings: [], onConfirm: handlePublishAnnouncement });
+  }
+
+  async function handleStopCampaign() {
+    // Directly publish the stopped state to backend
+    const stoppedConfig = {
+      ...configRef.current,
+      promoCard: { ...configRef.current.promoCard, active: false, stoppedByUser: true },
+    };
+    await persistConfig(stoppedConfig, 'Campaign stopped — taken off your website', 'promo');
+    setHasPromoChanges(false);
+    setReadyToPublishPromo(false);
   }
 
   async function handleSave() {
@@ -723,6 +737,7 @@ export default function Home() {
                 markChanged={markPromoChanged}
                 toast={toast}
                 onSelectedVersionChange={setSelectedPromoVersionId}
+                onStopCampaign={handleStopCampaign}
               />
             )}
           </div>

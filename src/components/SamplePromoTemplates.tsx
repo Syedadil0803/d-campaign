@@ -12,7 +12,7 @@ const sampleTemplates = [
     id: 'professional-slate',
     name: 'Executive Slate',
     promoCard: {
-      active: true,
+      active: false,
       title: '<strong>Premium Workspace Collection</strong>',
       subtitle: '<span style="font-size:0.9rem;">Designed for modern offices and executive homes</span>',
       description: 'Elevate your interiors with refined textures, durable weaves, and a professional finish built for everyday performance.',
@@ -60,7 +60,7 @@ const sampleTemplates = [
     id: 'all-features',
     name: 'Festival Spotlight',
     promoCard: {
-      active: true,
+      active: false,
       title: '<strong>Weekend Carpet Festival</strong> <span style="font-size: 0.8rem; letter-spacing:0.08em;">LIMITED DROP</span>',
       subtitle: '<span style="font-size: 0.85rem;">Flat</span> <span style="font-size: 1.35rem;"><strong>35% OFF</strong></span> + Free Delivery',
       description: 'Give your room a full glow-up with premium carpets. Apply <strong>COZY35</strong> before this drop disappears.',
@@ -108,7 +108,7 @@ const sampleTemplates = [
     id: 'luxury-gold',
     name: 'Luxury Gold',
     promoCard: {
-      active: true,
+      active: false,
       title: '<strong>Royal Loom Collection</strong> <span style="font-size:0.8rem;">SIGNATURE EDIT</span>',
       subtitle: 'Exclusive <strong>Members Access</strong> to Luxury Drops',
       description: 'Handcrafted statement pieces with deep texture and heritage finishes. Concierge pricing is now live.',
@@ -156,7 +156,7 @@ const sampleTemplates = [
     id: 'spring-bloom',
     name: 'Spring Bloom',
     promoCard: {
-      active: true,
+      active: false,
       title: '<strong>Spring Refresh</strong> <span style="font-size:0.8rem;">NEW SEASON</span>',
       subtitle: 'Bring <strong>fresh colors</strong> and airy textures home',
       description: 'From pastel runners to floral accents, this edit instantly brightens every corner.',
@@ -204,7 +204,7 @@ const sampleTemplates = [
     id: 'midnight-neon',
     name: 'Midnight Neon',
     promoCard: {
-      active: true,
+      active: false,
       title: '<strong>Midnight Flash Drop</strong>',
       subtitle: '<span style="font-size: 1.125rem;"><strong>Buy 1 Get 1</strong></span> on Select Rugs',
       description: 'After-dark offer for modern homes. Neon accents + deep contrasts = maximum attention.',
@@ -252,7 +252,7 @@ const sampleTemplates = [
     id: 'earthy-cozy',
     name: 'Earthy Cozy',
     promoCard: {
-      active: true,
+      active: false,
       title: '<strong>Cozy Home Week</strong> <span style="font-size:0.8rem;">CALM LIVING</span>',
       subtitle: 'Natural tones, soft textures, and calm spaces',
       description: 'Create a warm sanctuary with earthy layers and plush comfort made for everyday living.',
@@ -300,7 +300,7 @@ const sampleTemplates = [
     id: 'autumn-harvest',
     name: 'Autumn Sale',
     promoCard: {
-      active: true,
+      active: false,
       title: '<strong>Autumn Harvest Sale</strong> <span style="font-size:0.8rem; letter-spacing:0.08em;">FALL EDIT</span>',
       subtitle: '<span style="font-size:0.85rem;">Up to</span> <span style="font-size:1.35rem;"><strong>40% OFF</strong></span> warm-tone rugs',
       description: 'Wrap your home in the colors of the season — rust, amber, and deep berry weaves crafted for cozy autumn evenings.',
@@ -348,7 +348,7 @@ const sampleTemplates = [
     id: 'home-makeover-editorial',
     name: 'Home Makeover',
     promoCard: {
-      active: true,
+      active: false,
       title: '<span style="font-size:0.75rem; letter-spacing:0.25em;">THE</span> <strong style="font-size:1.6rem;">MAKEOVER</strong> <span style="font-size:0.75rem; letter-spacing:0.25em;">EVENT</span>',
       subtitle: 'Redesign every room — <strong>floor up</strong>. Curated looks, styled for you.',
       description: 'From statement rugs to layered runners, our stylists picked the pieces that transform a space in a single weekend.',
@@ -396,7 +396,7 @@ const sampleTemplates = [
     id: 'easter-pastel-egg',
     name: 'Easter Sale',
     promoCard: {
-      active: true,
+      active: false,
      title: '<strong style="font-size:1.25rem;">Easter Bloom Sale</strong> <span style="font-size:0.7rem; letter-spacing:0.15em;">🐣 SPRING DROP</span>',
       subtitle: '<span style="font-size:0.85rem;">Hop in for</span> <span style="font-size:1.4rem;"><strong>30% OFF</strong></span> <span style="font-size:0.85rem;">+ a free runner</span>',
       description: 'Pastel weaves, fresh florals, and feather-soft textures to wake up your home for the season of new beginnings.',
@@ -444,7 +444,7 @@ const sampleTemplates = [
     id: 'christmas-evergreen-gold',
     name: 'Christmas Sale',
     promoCard: {
-      active: true,
+      active: false,
       title: '<span style="font-size:0.75rem; letter-spacing:0.2em;">❄ THE</span> <strong style="font-size:1.6rem;">CHRISTMAS</strong> <span style="font-size:0.9rem;">Sale</span>',
       subtitle: '<span style="font-size:1.3rem;"><strong>Up to 50% OFF</strong></span> <span style="font-size:0.8rem;">+ gift-wrapped delivery</span>',
       description: 'Dress your home for the holidays with plush, warm-toned rugs that turn every room into a cozy celebration.',
@@ -492,7 +492,7 @@ const sampleTemplates = [
     id: 'newyear-champagne-confetti',
     name: 'New Year Sale',
     promoCard: {
-      active: true,
+      active: false,
       title: '<span style="font-size:2rem;"><strong>2026</strong></span> <span style="font-size:0.8rem; letter-spacing:0.25em;">NEW YEAR SALE</span>',
       subtitle: '<span style="font-size:0.85rem;">Pop into savings —</span> <span style="font-size:1.35rem;"><strong>up to 60% OFF</strong></span>',
       description: 'Ring in the new year with a fresh floor. Clearance pricing on our best-selling weaves while stocks last.',
@@ -540,7 +540,7 @@ const sampleTemplates = [
     id: 'summer-sunset-splash',
     name: 'Summer Offers',
     promoCard: {
-      active: true,
+      active: false,
      title: '<strong style="font-size:1.25rem;">Summer Splash Sale</strong> <span style="font-size:0.7rem; letter-spacing:0.15em;">☀ HOT DEALS</span>',
       subtitle: '<span style="font-size:1.4rem;"><strong>Buy 2 Get 1 Free</strong></span> <span style="font-size:0.8rem;">on all summer weaves</span>',
       description: 'Lighten up every room with breezy, easy-clean rugs in vibrant sun-soaked shades — built for barefoot season.',
