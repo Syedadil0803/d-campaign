@@ -2561,7 +2561,7 @@ export function PromoSection({
               onMouseUp={() => refreshPromoToolbarFormats(titleRef.current)}
               onKeyUp={() => refreshPromoToolbarFormats(titleRef.current)}
               onPaste={(e) => smartPaste(e, 'title')}
-              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-y overflow-y-auto outline-none break-words transition-colors ${
+              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-none overflow-y-auto outline-none break-words transition-colors ${
                 currentField === "title" ? "border-primary/70" : "border-border"
               } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
               style={{
@@ -2610,7 +2610,7 @@ export function PromoSection({
               onMouseUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
               onKeyUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
               onPaste={(e) => smartPaste(e, 'subtitle')}
-              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-y overflow-y-auto outline-none break-words transition-colors ${
+              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-none overflow-y-auto outline-none break-words transition-colors ${
                 currentField === "subtitle"
                   ? "border-primary/70"
                   : "border-border"
@@ -2662,7 +2662,7 @@ export function PromoSection({
               onMouseUp={() => refreshPromoToolbarFormats(descRef.current)}
               onKeyUp={() => refreshPromoToolbarFormats(descRef.current)}
               onPaste={(e) => smartPaste(e, 'description')}
-              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-y overflow-y-auto outline-none break-words transition-colors ${
+              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-none overflow-y-auto outline-none break-words transition-colors ${
                 currentField === "description"
                   ? "border-primary/70"
                   : "border-border"
