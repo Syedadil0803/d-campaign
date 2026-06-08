@@ -106,6 +106,37 @@ function measureOverflow(html: string, field: 'title' | 'subtitle' | 'descriptio
   return contentHeight > singleLineHeight * maxLines;
 }
 
+function getDisabledSizes(html: string, field: 'title' | 'subtitle' | 'description'): string[] {
+  if (!html || typeof document === 'undefined') return [];
+  const plainText = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim();
+  if (!plainText) return [];
+  const sizes = ['xs', 'sm', 'md', 'lg', 'xl', 'xxl'];
+  const sizeMap: Record<string, string> = {
+    xs: '0.75rem', sm: '0.875rem', md: '1rem',
+    lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem',
+  };
+  const disabled: string[] = [];
+  for (const size of sizes) {
+    const testHtml = `<span style="font-size:${sizeMap[size]}">${plainText}</span>`;
+    if (measureOverflow(testHtml, field)) disabled.push(size);
+  }
+  return disabled;
+}
+
+function wouldBoldOverflow(html: string, field: 'title' | 'subtitle' | 'description'): boolean {
+  if (!html || typeof document === 'undefined') return false;
+  const plainText = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim();
+  if (!plainText) return false;
+  return measureOverflow(`<b>${html}</b>`, field);
+}
+
+function wouldItalicOverflow(html: string, field: 'title' | 'subtitle' | 'description'): boolean {
+  if (!html || typeof document === 'undefined') return false;
+  const plainText = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim();
+  if (!plainText) return false;
+  return measureOverflow(`<i>${html}</i>`, field);
+}
+
 /**
  * Two-state segmented pill toggle (Off ◀ / ▶ On) with a sliding thumb.
  * Matches the status pills; replaces the old switch toggles.
@@ -199,6 +230,7 @@ export function PromoSection({
   const titleRef = useRef<HTMLDivElement>(null);
   const subtitleRef = useRef<HTMLDivElement>(null);
   const descRef = useRef<HTMLDivElement>(null);
+  const lastValidHtmlRef = useRef<Record<string, string>>({ title: '', subtitle: '', description: '' });
   const buttonRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<HTMLDivElement>(null);
   const previewTitleRef = useRef<HTMLDivElement>(null);
@@ -227,7 +259,7 @@ export function PromoSection({
   const [showCardBgTypeDropdown, setShowCardBgTypeDropdown] = useState(false);
   const [showFieldBgTypeDropdown, setShowFieldBgTypeDropdown] = useState(false);
   const [showCardBgPopup, setShowCardBgPopup] = useState(false);
-  const [showPersistentScaffold, setShowPersistentScaffold] = useState(false);
+  const [showPersistentScaffold, setShowPersistentScaffold] = useState(true);
   // Action popups launched from the buttons under the Promo Card heading.
   const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
@@ -598,6 +630,11 @@ export function PromoSection({
       descRef.current.innerHTML = config.promoCard.description || "";
     if (buttonRef.current)
       buttonRef.current.innerHTML = config.promoCard.buttonText || "";
+    lastValidHtmlRef.current = {
+      title: config.promoCard.title || '',
+      subtitle: config.promoCard.subtitle || '',
+      description: config.promoCard.description || '',
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -725,6 +762,57 @@ export function PromoSection({
     }, 0);
   }
 
+  function smartPaste(e: React.ClipboardEvent<HTMLDivElement>, field: 'title' | 'subtitle' | 'description') {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    if (!text) return;
+    const el = e.currentTarget;
+    const currentHtml = el.innerHTML;
+
+    // Extract the style wrapper from existing content to match font size
+    // Use the actual editor HTML as base for measurement
+    const buildTestHtml = (addedText: string) => {
+      // If there's existing styled content, append plain text after it
+      if (currentHtml && currentHtml !== '<br>') {
+        return currentHtml + addedText;
+      }
+      // Empty field — inherit whatever the default style would be
+      return addedText;
+    };
+
+    // Try full paste
+    const fullTestHtml = buildTestHtml(text);
+    if (!measureOverflow(fullTestHtml, field)) {
+      document.execCommand('insertText', false, text);
+      const resultHtml = wrapBareTextWithFontSize(el.innerHTML);
+      lastValidHtmlRef.current[field] = resultHtml;
+      onFieldInput(field);
+      return;
+    }
+
+    // Binary search for max that fits
+    let low = 0;
+    let high = text.length;
+    let best = 0;
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const testHtml = buildTestHtml(text.slice(0, mid));
+      if (!measureOverflow(testHtml, field)) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    if (best > 0) {
+      document.execCommand('insertText', false, text.slice(0, best));
+      const resultHtml = wrapBareTextWithFontSize(el.innerHTML);
+      lastValidHtmlRef.current[field] = resultHtml;
+      onFieldInput(field);
+    }
+  }
+
   function onFieldFocus(
     field: PromoField,
     ref: RefObject<HTMLDivElement | null>,
@@ -813,12 +901,28 @@ export function PromoSection({
         : fallbackEl;
     if (!el) return;
     let html = wrapBareTextWithFontSize(el.innerHTML);
-    // When all text is deleted, browsers leave a stray <br>/empty span so the
-    // editor is no longer :empty and the placeholder won't return. Reset it to
-    // truly empty so the placeholder shows again.
     if (!hasVisibleContent(html)) {
       html = "";
       if (el.innerHTML !== "") el.innerHTML = "";
+    }
+
+    // Block typing if overflow
+    const overflowFields: PromoField[] = ['title', 'subtitle', 'description'];
+    if (overflowFields.includes(field) && html && measureOverflow(html, field as 'title' | 'subtitle' | 'description')) {
+      const lastValid = lastValidHtmlRef.current[field] || '';
+      el.innerHTML = lastValid;
+      const sel = window.getSelection();
+      if (sel && el.lastChild) {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      return;
+    }
+    if (overflowFields.includes(field)) {
+      lastValidHtmlRef.current[field] = html;
     }
     const fieldMap = {
       title: "title",
@@ -1377,14 +1481,25 @@ export function PromoSection({
     const editor = getActivePromoEditor();
     if (!editor) return;
     pushPromoState();
-    // Timer: ALWAYS style via direct DOM, handled FIRST so execCommand (which
-    // clones the non-editable chip → duplicate) is never reached — including the
-    // collapsed-selection path the color picker triggers.
     if (currentFieldRef.current === "timer") {
       const timerEl = getActiveTimerEditor();
       if (timerEl) applyTimerSelectionStyle(timerEl, timerFormatPatch(format));
       return;
     }
+    const field = currentFieldRef.current;
+    const overflowFields: PromoField[] = ['title', 'subtitle', 'description'];
+    const syncLastValid = () => {
+      if (overflowFields.includes(field) && editor) {
+        const newHtml = wrapBareTextWithFontSize(editor.innerHTML);
+        if (measureOverflow(newHtml, field as 'title' | 'subtitle' | 'description')) {
+          const lastValid = lastValidHtmlRef.current[field] || '';
+          editor.innerHTML = lastValid;
+          onFieldInput(field);
+          return;
+        }
+        lastValidHtmlRef.current[field] = newHtml;
+      }
+    };
     if (selectionIsInsideEditor(editor)) {
       saveSelection();
       formatText(format);
@@ -1393,6 +1508,7 @@ export function PromoSection({
         currentFieldRef.current,
         wrapBareTextWithFontSize(editor.innerHTML),
       );
+      syncLastValid();
       setTimeout(() => refreshPromoToolbarFormats(editor), 0);
       return;
     }
@@ -1412,6 +1528,7 @@ export function PromoSection({
         currentFieldRef.current,
         wrapBareTextWithFontSize(editor.innerHTML),
       );
+      syncLastValid();
       return;
     }
 
@@ -2443,11 +2560,7 @@ export function PromoSection({
               onKeyDown={onPromoEditorKeyDown}
               onMouseUp={() => refreshPromoToolbarFormats(titleRef.current)}
               onKeyUp={() => refreshPromoToolbarFormats(titleRef.current)}
-              onPaste={(e) => {
-                e.preventDefault();
-                const text = e.clipboardData.getData('text/plain');
-                document.execCommand('insertText', false, text);
-              }}
+              onPaste={(e) => smartPaste(e, 'title')}
               className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-y overflow-y-auto outline-none break-words transition-colors ${
                 currentField === "title" ? "border-primary/70" : "border-border"
               } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
@@ -2459,9 +2572,14 @@ export function PromoSection({
                 paddingBottom: '10px',
               }}
             />
-            {measureOverflow(config.promoCard.title || '', 'title') && (
-              <p className="mt-1 text-[11px] text-amber-500">Content exceeds available space. Shorten your text or use a smaller size.</p>
-            )}
+            {(() => {
+              const html = config.promoCard.title || '';
+              if (!html) return null;
+              const testHtml = html + 'x';
+              return measureOverflow(testHtml, 'title') ? (
+                <p className="mt-1.5 text-[11px] text-on-surface-variant/70 animate-pulse">⚠️ Field limit reached</p>
+              ) : null;
+            })()}
           </div>
           <div>
             <div className="flex items-center justify-between">
@@ -2491,11 +2609,7 @@ export function PromoSection({
               onKeyDown={onPromoEditorKeyDown}
               onMouseUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
               onKeyUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
-              onPaste={(e) => {
-                e.preventDefault();
-                const text = e.clipboardData.getData('text/plain');
-                document.execCommand('insertText', false, text);
-              }}
+              onPaste={(e) => smartPaste(e, 'subtitle')}
               className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-y overflow-y-auto outline-none break-words transition-colors ${
                 currentField === "subtitle"
                   ? "border-primary/70"
@@ -2509,9 +2623,14 @@ export function PromoSection({
                 paddingBottom: '10px',
               }}
             />
-            {measureOverflow(config.promoCard.subtitle || '', 'subtitle') && (
-              <p className="mt-1 text-[11px] text-amber-500">Content exceeds available space. Shorten your text or use a smaller size.</p>
-            )}
+            {(() => {
+              const html = config.promoCard.subtitle || '';
+              if (!html) return null;
+              const testHtml = html + 'x';
+              return measureOverflow(testHtml, 'subtitle') ? (
+                <p className="mt-1.5 text-[11px] text-on-surface-variant/70 animate-pulse">⚠️ Field limit reached</p>
+              ) : null;
+            })()}
           </div>
 
           <div>
@@ -2542,11 +2661,7 @@ export function PromoSection({
               onKeyDown={onPromoEditorKeyDown}
               onMouseUp={() => refreshPromoToolbarFormats(descRef.current)}
               onKeyUp={() => refreshPromoToolbarFormats(descRef.current)}
-              onPaste={(e) => {
-                e.preventDefault();
-                const text = e.clipboardData.getData('text/plain');
-                document.execCommand('insertText', false, text);
-              }}
+              onPaste={(e) => smartPaste(e, 'description')}
               className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-y overflow-y-auto outline-none break-words transition-colors ${
                 currentField === "description"
                   ? "border-primary/70"
@@ -2560,9 +2675,14 @@ export function PromoSection({
                 paddingBottom: '10px',
               }}
             />
-            {measureOverflow(config.promoCard.description || '', 'description') && (
-              <p className="mt-1 text-[11px] text-amber-500">Content exceeds available space. Shorten your text or use a smaller size.</p>
-            )}
+            {(() => {
+              const html = config.promoCard.description || '';
+              if (!html) return null;
+              const testHtml = html + 'x';
+              return measureOverflow(testHtml, 'description') ? (
+                <p className="mt-1.5 text-[11px] text-on-surface-variant/70 animate-pulse">⚠️ Field limit reached</p>
+              ) : null;
+            })()}
           </div>
 
           <div className="!mt-8">
@@ -3494,6 +3614,21 @@ export function PromoSection({
                               updateField("buttonFullWidth", fullWidth)
                             }
                             compact={true}
+                            disabledSizes={
+                              (field === 'title' || field === 'subtitle' || field === 'description')
+                                ? getDisabledSizes(config.promoCard[field] || '', field)
+                                : []
+                            }
+                            disabledBold={
+                              (field === 'title' || field === 'subtitle' || field === 'description')
+                                ? wouldBoldOverflow(config.promoCard[field] || '', field)
+                                : false
+                            }
+                            disabledItalic={
+                              (field === 'title' || field === 'subtitle' || field === 'description')
+                                ? wouldItalicOverflow(config.promoCard[field] || '', field)
+                                : false
+                            }
                           />
 
                           <div className="mt-2 pt-2 border-t border-white/10">
