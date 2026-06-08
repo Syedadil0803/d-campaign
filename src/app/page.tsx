@@ -506,6 +506,29 @@ export default function Home() {
     if (!strip(pc.subtitle || '')) warnings.push('Subtitle is empty');
     if (!strip(pc.description || '')) warnings.push('Description is empty');
 
+    // 1b. DOM overflow check (pixel-perfect mirror)
+    const fieldMaxLines: Record<string, number> = { title: 1, subtitle: 2, description: 3 };
+    (['title', 'subtitle', 'description'] as const).forEach((field) => {
+      const html = pc[field];
+      if (!strip(html || '')) return;
+      const ghost = document.createElement('div');
+      ghost.style.cssText = `
+        position:absolute;visibility:hidden;pointer-events:none;
+        width:344px;padding:0;font-family:inherit;line-height:1.5;
+        word-break:break-word;overflow-wrap:break-word;
+      `;
+      ghost.innerHTML = '<span style="font-size:1rem">&nbsp;</span>';
+      document.body.appendChild(ghost);
+      const singleLineHeight = ghost.offsetHeight;
+      ghost.innerHTML = html;
+      const contentHeight = ghost.offsetHeight;
+      document.body.removeChild(ghost);
+      const maxHeight = singleLineHeight * fieldMaxLines[field] + (singleLineHeight * 0.5);
+      if (contentHeight > maxHeight) {
+        warnings.push(`${field.charAt(0).toUpperCase() + field.slice(1)} text may overflow the card layout`);
+      }
+    });
+
     // 2. Schedule
     if (!pc.startDate || !pc.endDate) {
       warnings.push('Start date or end date is not set');

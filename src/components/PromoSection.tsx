@@ -61,6 +61,51 @@ interface PromoSectionProps {
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
 const PROMO_EDITOR_DEFAULT_COLOR = "#ffffff";
 
+// Virtual Mirror: max lines per field
+const FIELD_MAX_LINES: Record<string, number> = {
+  title: 1,
+  subtitle: 2,
+  description: 3,
+};
+
+function getPlainTextLength(html: string): number {
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim().length;
+}
+
+/**
+ * Virtual Mirror measurement.
+ * Renders the HTML in a hidden 360px div, measures how many lines it takes,
+ * and checks against the field's allowed max lines.
+ */
+function measureOverflow(html: string, field: 'title' | 'subtitle' | 'description'): boolean {
+  if (!html || typeof document === 'undefined') return false;
+  const plainText = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim();
+  if (!plainText) return false;
+
+  const maxLines = FIELD_MAX_LINES[field] || 1;
+
+  // Render content with no wrapping to get single-line height
+  const ghost = document.createElement('div');
+  ghost.style.cssText = `
+    position:absolute;visibility:hidden;pointer-events:none;
+    width:344px;padding:0;
+    font-family:inherit;line-height:1.5;
+    word-break:break-word;overflow-wrap:break-word;
+    white-space:nowrap;
+  `;
+  ghost.innerHTML = html;
+  document.body.appendChild(ghost);
+  const singleLineHeight = ghost.offsetHeight;
+
+  // Now allow wrapping and measure actual height
+  ghost.style.whiteSpace = 'normal';
+  const contentHeight = ghost.offsetHeight;
+  document.body.removeChild(ghost);
+
+  if (singleLineHeight === 0) return false;
+  return contentHeight > singleLineHeight * maxLines;
+}
+
 /**
  * Two-state segmented pill toggle (Off ◀ / ▶ On) with a sliding thumb.
  * Matches the status pills; replaces the old switch toggles.
@@ -2414,6 +2459,9 @@ export function PromoSection({
                 paddingBottom: '10px',
               }}
             />
+            {measureOverflow(config.promoCard.title || '', 'title') && (
+              <p className="mt-1 text-[11px] text-amber-500">Content exceeds available space. Shorten your text or use a smaller size.</p>
+            )}
           </div>
           <div>
             <div className="flex items-center justify-between">
@@ -2461,6 +2509,9 @@ export function PromoSection({
                 paddingBottom: '10px',
               }}
             />
+            {measureOverflow(config.promoCard.subtitle || '', 'subtitle') && (
+              <p className="mt-1 text-[11px] text-amber-500">Content exceeds available space. Shorten your text or use a smaller size.</p>
+            )}
           </div>
 
           <div>
@@ -2509,6 +2560,9 @@ export function PromoSection({
                 paddingBottom: '10px',
               }}
             />
+            {measureOverflow(config.promoCard.description || '', 'description') && (
+              <p className="mt-1 text-[11px] text-amber-500">Content exceeds available space. Shorten your text or use a smaller size.</p>
+            )}
           </div>
 
           <div className="!mt-8">
