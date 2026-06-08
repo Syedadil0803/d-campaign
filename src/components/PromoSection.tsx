@@ -2725,20 +2725,75 @@ export function PromoSection({
                         </svg>
                       </button>
                       {showCountryCodeDropdown && (
-                        <div className="absolute bottom-full left-full ml-1 mb-0 z-50 w-[80px] max-h-[200px] overflow-y-auto rounded-xl bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-1 campaign-custom-scrollbar">
+                        <div className="absolute bottom-full left-full ml-1 mb-0 z-50 w-[100px] max-h-[200px] overflow-y-auto rounded-xl bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-1 campaign-custom-scrollbar">
                           {[
-                            '+1', '+7', '+20', '+27', '+30', '+31', '+32', '+33', '+34', '+36',
-                            '+39', '+40', '+41', '+43', '+44', '+45', '+46', '+47', '+48', '+49',
-                            '+51', '+52', '+53', '+54', '+55', '+56', '+57', '+58', '+60', '+61',
-                            '+62', '+63', '+64', '+65', '+66', '+81', '+82', '+84', '+86', '+90',
-                            '+91', '+92', '+93', '+94', '+95', '+98', '+212', '+213', '+216',
-                            '+218', '+220', '+221', '+234', '+249', '+251', '+254', '+255',
-                            '+256', '+260', '+261', '+263', '+265', '+267', '+351', '+353',
-                            '+354', '+358', '+370', '+371', '+372', '+380', '+381', '+385',
-                            '+420', '+421', '+852', '+853', '+855', '+856', '+880', '+886',
-                            '+960', '+961', '+962', '+963', '+964', '+965', '+966', '+968',
-                            '+970', '+971', '+972', '+973', '+974', '+975', '+976', '+977',
-                          ].map((code) => (
+                            { code: '+1', flag: '🇺🇸' },
+                            { code: '+7', flag: '🇷🇺' },
+                            { code: '+20', flag: '🇪🇬' },
+                            { code: '+27', flag: '🇿🇦' },
+                            { code: '+30', flag: '🇬🇷' },
+                            { code: '+31', flag: '🇳🇱' },
+                            { code: '+32', flag: '🇧🇪' },
+                            { code: '+33', flag: '🇫🇷' },
+                            { code: '+34', flag: '🇪🇸' },
+                            { code: '+36', flag: '🇭🇺' },
+                            { code: '+39', flag: '🇮🇹' },
+                            { code: '+40', flag: '🇷🇴' },
+                            { code: '+41', flag: '🇨🇭' },
+                            { code: '+43', flag: '🇦🇹' },
+                            { code: '+44', flag: '🇬🇧' },
+                            { code: '+45', flag: '🇩🇰' },
+                            { code: '+46', flag: '🇸🇪' },
+                            { code: '+47', flag: '🇳🇴' },
+                            { code: '+48', flag: '🇵🇱' },
+                            { code: '+49', flag: '🇩🇪' },
+                            { code: '+51', flag: '🇵🇪' },
+                            { code: '+52', flag: '🇲🇽' },
+                            { code: '+54', flag: '🇦🇷' },
+                            { code: '+55', flag: '🇧🇷' },
+                            { code: '+56', flag: '🇨🇱' },
+                            { code: '+57', flag: '🇨🇴' },
+                            { code: '+58', flag: '🇻🇪' },
+                            { code: '+60', flag: '🇲🇾' },
+                            { code: '+61', flag: '🇦🇺' },
+                            { code: '+62', flag: '🇮🇩' },
+                            { code: '+63', flag: '🇵🇭' },
+                            { code: '+64', flag: '🇳🇿' },
+                            { code: '+65', flag: '🇸🇬' },
+                            { code: '+66', flag: '🇹🇭' },
+                            { code: '+81', flag: '🇯🇵' },
+                            { code: '+82', flag: '🇰🇷' },
+                            { code: '+84', flag: '🇻🇳' },
+                            { code: '+86', flag: '🇨🇳' },
+                            { code: '+90', flag: '🇹🇷' },
+                            { code: '+91', flag: '🇮🇳' },
+                            { code: '+92', flag: '🇵🇰' },
+                            { code: '+93', flag: '🇦🇫' },
+                            { code: '+94', flag: '🇱🇰' },
+                            { code: '+95', flag: '🇲🇲' },
+                            { code: '+98', flag: '🇮🇷' },
+                            { code: '+212', flag: '🇲🇦' },
+                            { code: '+213', flag: '🇩🇿' },
+                            { code: '+234', flag: '🇳🇬' },
+                            { code: '+254', flag: '🇰🇪' },
+                            { code: '+351', flag: '🇵🇹' },
+                            { code: '+353', flag: '🇮🇪' },
+                            { code: '+358', flag: '🇫🇮' },
+                            { code: '+380', flag: '🇺🇦' },
+                            { code: '+852', flag: '🇭🇰' },
+                            { code: '+880', flag: '🇧🇩' },
+                            { code: '+886', flag: '🇹🇼' },
+                            { code: '+961', flag: '🇱🇧' },
+                            { code: '+962', flag: '🇯🇴' },
+                            { code: '+965', flag: '🇰🇼' },
+                            { code: '+966', flag: '🇸🇦' },
+                            { code: '+968', flag: '🇴🇲' },
+                            { code: '+971', flag: '🇦🇪' },
+                            { code: '+972', flag: '🇮🇱' },
+                            { code: '+973', flag: '🇧🇭' },
+                            { code: '+974', flag: '🇶🇦' },
+                            { code: '+977', flag: '🇳🇵' },
+                          ].map(({ code, flag }) => (
                             <button
                               key={code}
                               type="button"
@@ -2746,13 +2801,14 @@ export function PromoSection({
                                 updateField("whatsappCountryCode", code);
                                 setShowCountryCodeDropdown(false);
                               }}
-                              className={`w-full text-left px-3 py-1.5 text-xs rounded-md transition-colors ${
+                              className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors flex items-center gap-1.5 ${
                                 (config.promoCard.whatsappCountryCode || '+44') === code
                                   ? 'bg-primary/20 text-primary font-semibold'
                                   : 'text-on-surface hover:bg-primary/10 hover:text-primary'
                               }`}
                             >
-                              {code}
+                              <span className="text-base">{flag}</span>
+                              <span>{code}</span>
                             </button>
                           ))}
                         </div>
