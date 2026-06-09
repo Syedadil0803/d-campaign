@@ -85,26 +85,70 @@ export function $readActiveFormats(): ActiveFormats {
     }
   }
 
-  if (!$isRangeSelection(sel)) {
+  // A REAL (non-collapsed) text selection → read from that range.
+  if ($isRangeSelection(sel) && !sel.isCollapsed()) {
+    const fontWeight = $getSelectionStyleValueForProperty(sel, 'font-weight', '');
+    const fontStyle = $getSelectionStyleValueForProperty(sel, 'font-style', '');
+    const fontSize = $getSelectionStyleValueForProperty(sel, 'font-size', '');
+    const color = $getSelectionStyleValueForProperty(sel, 'color', '');
+
+    // Lexical's FORMAT_TEXT_COMMAND bits — honoured so imported/external text
+    // that uses <strong>/<em> instead of inline CSS still highlights.
+    const formatBold = sel.hasFormat('bold');
+    const formatItalic = sel.hasFormat('italic');
+
+    return {
+      bold: isBoldWeight(fontWeight) || formatBold,
+      italic: fontStyle === 'italic' || formatItalic,
+      size: SIZE_REM_TO_LABEL[fontSize] || (fontSize ? '' : 'md'),
+      color: color || '',
+    };
+  }
+
+  // Collapsed caret / element-anchored / no selection. A style action here is
+  // BOX-LEVEL (styles the whole timer), so reflect the whole-timer state.
+  // Reading at the caret is unreliable — it depends on caret position, and an
+  // element-anchored caret after the chip carries no style — which made
+  // bold/italic toggles and size highlights flaky.
+  return $readBoxFormats();
+}
+
+/**
+ * Aggregate the timer's style across ALL prefix/suffix text + every chip
+ * (whole-chip style). Used for the collapsed-caret / box-level scope so the
+ * toolbar reflects the whole timer, not whatever happens to be under the caret.
+ */
+export function $readBoxFormats(): ActiveFormats {
+  const root = $getRoot();
+  const styleSets: Record<string, string>[] = [];
+
+  $collectAllTextNodes(root).forEach((tn) => {
+    if (!tn.getTextContent().trim()) return;
+    styleSets.push(parseInlineStyle(tn.getStyle()));
+  });
+  root
+    .getChildren()
+    .flatMap((c) => ($isElementNode(c) ? c.getChildren() : [c]))
+    .filter($isTimerChipNode)
+    .forEach((chip) => styleSets.push((chip as TimerChipNode).readStyle(null)));
+
+  if (styleSets.length === 0) {
     return { bold: false, italic: false, size: 'md', color: '' };
   }
 
-  const fontWeight = $getSelectionStyleValueForProperty(sel, 'font-weight', '');
-  const fontStyle = $getSelectionStyleValueForProperty(sel, 'font-style', '');
-  const fontSize = $getSelectionStyleValueForProperty(sel, 'font-size', '');
-  const color = $getSelectionStyleValueForProperty(sel, 'color', '');
+  const allBold = styleSets.every((s) => isBoldWeight(s['font-weight']));
+  const allItalic = styleSets.every((s) => s['font-style'] === 'italic');
+  const sizes = new Set(styleSets.map((s) => s['font-size'] || ''));
+  const colors = new Set(styleSets.map((s) => s['color'] || ''));
 
-  // Lexical's FORMAT_TEXT_COMMAND bits — honoured so imported/external text
-  // that uses <strong>/<em> instead of inline CSS still highlights.
-  const formatBold = sel.hasFormat('bold');
-  const formatItalic = sel.hasFormat('italic');
+  let size = '';
+  if (sizes.size === 1) {
+    const only = [...sizes][0];
+    size = only ? SIZE_REM_TO_LABEL[only] || '' : 'md';
+  }
+  const color = colors.size === 1 ? [...colors][0] : '';
 
-  return {
-    bold: isBoldWeight(fontWeight) || formatBold,
-    italic: fontStyle === 'italic' || formatItalic,
-    size: SIZE_REM_TO_LABEL[fontSize] || (fontSize ? '' : 'md'),
-    color: color || '',
-  };
+  return { bold: allBold, italic: allItalic, size, color };
 }
 
 // ============================================================

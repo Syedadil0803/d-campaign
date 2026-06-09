@@ -1368,13 +1368,19 @@ export function PromoSection({
     return base;
   }
 
-  // Show the shared "field limit reached" warning (same popup as title etc.).
+  // Fires when the editor reverted an edit for exceeding one line. Shows the
+  // shared "field limit reached" warning AND re-syncs the toolbar to the
+  // actual (reverted) state — otherwise a rejected size/style (e.g. clicking
+  // XL when only LG fits) would stay highlighted even though it didn't apply.
   function warnTimerLimit() {
     if (styleWarningTimer.current) clearTimeout(styleWarningTimer.current);
     setStyleWarning(
       "This text exceeds the field limit — shorten it to fit one line",
     );
     styleWarningTimer.current = setTimeout(() => setStyleWarning(null), 3000);
+    // The plugin has already reverted the editor state by now; reflect it.
+    const fmts = lexicalTimerRef.current?.getActiveFormats();
+    if (fmts) setActiveFormats(fmts);
   }
 
   function handlePromoToolbarFormat(format: string) {

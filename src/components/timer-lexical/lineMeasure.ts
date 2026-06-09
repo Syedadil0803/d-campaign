@@ -49,6 +49,34 @@ export function wrapsAtWidth(el: HTMLElement, contentWidth: number): boolean {
   return result;
 }
 
+/** The content's single-line width in px (how much horizontal room it needs).
+ *  Collapses the editor to a shrink-to-fit inline-block with nowrap, so its box
+ *  hugs the actual content (NOT the line-box, which would span the full forced
+ *  width). Lets the line-cap catch ANY edit that grows the footprint — typing
+ *  OR sizing up — not just edits that add characters. */
+export function contentWidth(el: HTMLElement): number {
+  if (typeof document === 'undefined') return 0;
+  const s = el.style;
+  const prev = {
+    display: s.display,
+    width: s.width,
+    maxWidth: s.maxWidth,
+    whiteSpace: s.whiteSpace,
+  };
+  s.display = 'inline-block';
+  s.width = 'auto';
+  s.maxWidth = 'none';
+  s.whiteSpace = 'nowrap';
+  void el.offsetHeight;
+  const w = el.getBoundingClientRect().width;
+  s.display = prev.display;
+  s.width = prev.width;
+  s.maxWidth = prev.maxWidth;
+  s.whiteSpace = prev.whiteSpace;
+  void el.offsetHeight;
+  return w;
+}
+
 /** Card content widths (card width minus card + field chrome). The card
  *  stretches between 400 and 440; the editor's content area is ~56px narrower
  *  (card p-5 + field px-2). Matches PromoSection's MIRROR_MIN/MAX_WIDTH. */
