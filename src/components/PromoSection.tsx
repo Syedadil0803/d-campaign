@@ -245,6 +245,12 @@ export function PromoSection({
   const [currentField, setCurrentField] = useState<PromoField | null>(null);
   const [styleWarning, setStyleWarning] = useState<string | null>(null);
   const styleWarningTimer = useRef<NodeJS.Timeout | null>(null);
+  const [fieldInfoPopup, setFieldInfoPopup] = useState<'title' | 'subtitle' | 'description' | null>(null);
+  const [hiddenFieldInfos, setHiddenFieldInfos] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    const stored = localStorage.getItem('hidden-field-infos');
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  });
   const configRef = useRef(config);
   configRef.current = config;
   const currentFieldRef = useRef<PromoField | null>(currentField);
@@ -860,6 +866,9 @@ export function PromoSection({
     setShowPersistentScaffold(true);
     setCurrentField(field);
     activeEditorRef.current = ref.current;
+    if ((field === 'title' || field === 'subtitle' || field === 'description') && !hiddenFieldInfos.has(field)) {
+      setFieldInfoPopup(field);
+    }
     promoDeletingRef.current = false;
     setTimeout(() => {
       refreshPromoToolbarFormats(ref.current);
@@ -2665,6 +2674,16 @@ export function PromoSection({
               </button>
             </div>
 
+            {fieldInfoPopup === 'title' && (
+              <div className="mb-2 p-3 rounded-lg bg-surface border border-border shadow-md text-[12px] text-on-surface/80 leading-relaxed">
+                <p>Titles work best as a single line — marketing best practice. Adjust font size or shorten text to fit.</p>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => setFieldInfoPopup(null)} className="px-3 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-medium transition-colors">Got it</button>
+                  <button onClick={() => { setFieldInfoPopup(null); const next = new Set(hiddenFieldInfos); next.add('title'); setHiddenFieldInfos(next); localStorage.setItem('hidden-field-infos', JSON.stringify([...next])); }} className="px-3 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-medium transition-colors">Don&apos;t show again</button>
+                </div>
+              </div>
+            )}
+
             <div
               ref={titleRef}
               contentEditable
@@ -2714,6 +2733,17 @@ export function PromoSection({
                 <Palette className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            {fieldInfoPopup === 'subtitle' && (
+              <div className="mb-2 p-3 rounded-lg bg-surface border border-border shadow-md text-[12px] text-on-surface/80 leading-relaxed">
+                <p>Subtitles are optimised for 2 lines for better engagement. Adjust font size or styling to fit.</p>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => setFieldInfoPopup(null)} className="px-3 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-medium transition-colors">Got it</button>
+                  <button onClick={() => { setFieldInfoPopup(null); const next = new Set(hiddenFieldInfos); next.add('subtitle'); setHiddenFieldInfos(next); localStorage.setItem('hidden-field-infos', JSON.stringify([...next])); }} className="px-3 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-medium transition-colors">Don&apos;t show again</button>
+                </div>
+              </div>
+            )}
+
             <div
               ref={subtitleRef}
               contentEditable
@@ -2766,6 +2796,17 @@ export function PromoSection({
                 <Palette className="w-3.5 h-3.5" />
               </button>
             </div>
+
+            {fieldInfoPopup === 'description' && (
+              <div className="mb-2 p-3 rounded-lg bg-surface border border-border shadow-md text-[12px] text-on-surface/80 leading-relaxed">
+                <p>Descriptions are capped at 3 lines for readability. Adjust font size or styling to fit your message.</p>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => setFieldInfoPopup(null)} className="px-3 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-medium transition-colors">Got it</button>
+                  <button onClick={() => { setFieldInfoPopup(null); const next = new Set(hiddenFieldInfos); next.add('description'); setHiddenFieldInfos(next); localStorage.setItem('hidden-field-infos', JSON.stringify([...next])); }} className="px-3 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-medium transition-colors">Don&apos;t show again</button>
+                </div>
+              </div>
+            )}
+
             <div
               ref={descRef}
               contentEditable
