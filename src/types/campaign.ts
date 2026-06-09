@@ -33,6 +33,11 @@ export interface PromoCard {
   showButton: boolean;
   stoppedByUser?: boolean;
   timerText?: string;
+  /** Full Lexical editor state (JSON) for the timer — carries per-character
+   *  text styling AND the chip's per-cell styling, which the plain
+   *  `timerText` string can't express. Source of truth for the editor +
+   *  read-only preview render. */
+  timerStateJson?: string;
   style: {
     position: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
     background: GradientStyle;

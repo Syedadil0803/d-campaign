@@ -48,6 +48,8 @@ import {
   refreshTimerValueSpans,
   calculateTimeRemaining as calcTimerRemaining,
 } from "@/lib/timerUtils";
+import { LexicalTimerField, type LexicalTimerFieldHandle } from "@/components/timer-lexical/LexicalTimerField";
+import { TIMER_MIN_CONTENT_WIDTH } from "@/components/timer-lexical/lineMeasure";
 
 interface PromoSectionProps {
   config: CampaignConfig;
@@ -59,6 +61,38 @@ interface PromoSectionProps {
 }
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
+
+/**
+ * Split stored timer text into prefix/suffix plain-text parts for the panel
+ * inputs. Storage is `"prefix{timer}suffix"` (or a rendered chip span); we
+ * strip any markup so the panel never echoes inline styles back into the
+ * inputs.
+ */
+function splitTimerStorageText(stored: string): { prefix: string; suffix: string } {
+  if (!stored) return { prefix: '', suffix: '' };
+  const stripTags = (s: string) =>
+    s
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+  const TOKEN = '{timer}';
+  if (stored.includes(TOKEN)) {
+    const i = stored.indexOf(TOKEN);
+    return {
+      prefix: stripTags(stored.slice(0, i)),
+      suffix: stripTags(stored.slice(i + TOKEN.length)),
+    };
+  }
+  const chipMatch = stored.match(
+    /^([\s\S]*?)<span\b[^>]*\bdata-timer-fixed\b[\s\S]*?<\/span>([\s\S]*)$/,
+  );
+  if (chipMatch) {
+    return { prefix: stripTags(chipMatch[1]), suffix: stripTags(chipMatch[2]) };
+  }
+  return { prefix: stripTags(stored), suffix: '' };
+}
 const PROMO_EDITOR_DEFAULT_COLOR = "#ffffff";
 
 // Virtual Mirror: max lines per field
@@ -263,6 +297,13 @@ export function PromoSection({
   const lastValidHtmlRef = useRef<Record<string, string>>({ title: '', subtitle: '', description: '' });
   const buttonRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<HTMLDivElement>(null);
+  // Imperative handle on the Lexical timer editor used by the panel side.
+  // The legacy toolbar (handlePromoToolbarFormat/Color, refreshPromoToolbarFormats)
+  // routes timer-field actions through this ref instead of the old DOM helpers.
+  const lexicalTimerRef = useRef<LexicalTimerFieldHandle | null>(null);
+  // 1-line guard for the timer: the rendered editor wrapper (to measure) +
+  // the last state that fit on one line (to revert to). Mirrors the
+  // lastValidHtmlRef pattern used by the title/subtitle/description fields.
   const previewTitleRef = useRef<HTMLDivElement>(null);
   const previewSubtitleRef = useRef<HTMLDivElement>(null);
   const previewDescriptionRef = useRef<HTMLDivElement>(null);
@@ -997,81 +1038,12 @@ export function PromoSection({
     markChanged();
     refreshPromoToolbarFormats(el);
 
-    // Update dynamic card width
-    const fields = [
-      { html: nextPromoCard.title || '', field: 'title' as const },
-      { html: nextPromoCard.subtitle || '', field: 'subtitle' as const },
-      { html: nextPromoCard.description || '', field: 'description' as const },
-    ];
-    const newWidth = getRequiredCardWidth(fields);
+    // Update dynamic card width — across the text fields AND the timer.
+    const newWidth = computeCardWidth(nextPromoCard);
     setCardWidth(newWidth);
     if (newWidth !== nextPromoCard.cardWidth) {
       setConfig({ ...config, promoCard: { ...nextPromoCard, cardWidth: newWidth } });
     }
-  }
-
-  // Returns true (and blocks the event) if the keystroke would delete or
-  // overwrite the fixed, non-editable countdown chip. Keeps it undeletable.
-  function blocksFixedTimer(e: KeyboardEvent<HTMLDivElement>): boolean {
-    const el = e.currentTarget;
-    const chips = el.querySelectorAll("[data-timer-fixed]");
-    if (chips.length === 0) return false;
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return false;
-    const range = sel.getRangeAt(0);
-    const isDelete = e.key === "Backspace" || e.key === "Delete";
-    const isDestructive =
-      isDelete ||
-      e.key === "Enter" ||
-      (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey);
-
-    // A selection that touches the chip → any destructive key would wipe it.
-    if (!sel.isCollapsed) {
-      if (!isDestructive) return false;
-      for (const chip of Array.from(chips)) {
-        if (range.intersectsNode(chip)) {
-          e.preventDefault();
-          return true;
-        }
-      }
-      return false;
-    }
-
-    if (!isDelete) return false;
-
-    // Collapsed caret directly beside the chip → block the directional delete.
-    const node = range.startContainer;
-    const offset = range.startOffset;
-    const back = e.key === "Backspace";
-    let adjacent: Node | null = null;
-    if (node.nodeType === Node.TEXT_NODE) {
-      const len = node.textContent?.length ?? 0;
-      if (back && offset === 0) adjacent = node.previousSibling;
-      else if (!back && offset === len) adjacent = node.nextSibling;
-    } else {
-      adjacent = back
-        ? node.childNodes[offset - 1] ?? null
-        : node.childNodes[offset] ?? null;
-    }
-    if (
-      adjacent &&
-      adjacent.nodeType === Node.ELEMENT_NODE &&
-      (adjacent as Element).hasAttribute?.("data-timer-fixed")
-    ) {
-      e.preventDefault();
-      return true;
-    }
-    return false;
-  }
-
-  function onTimerEditorKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    if (blocksFixedTimer(e)) return;
-    onPromoEditorKeyDown(e);
-  }
-
-  function onTimerPreviewKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    if (blocksFixedTimer(e)) return;
-    onPromoPreviewKeyDown(e);
   }
 
   function onPromoPreviewKeyDown(e: KeyboardEvent<HTMLDivElement>) {
@@ -1221,6 +1193,14 @@ export function PromoSection({
   }
 
   function refreshPromoToolbarFormats(editor = getActivePromoEditor()) {
+    // Timer is now driven by the Lexical editor — read active formats from
+    // its imperative API instead of walking the legacy DOM. This applies
+    // whether the user is interacting with the panel or the preview side.
+    if (currentField === "timer") {
+      const fmts = lexicalTimerRef.current?.getActiveFormats();
+      if (fmts) setActiveFormats(fmts);
+      return;
+    }
     if (!editor) return;
     if (selectionIsInsideEditor(editor)) {
       detectFormats();
@@ -1371,188 +1351,45 @@ export function PromoSection({
     unwrapInlineTags(editor, "i,em");
   }
 
-  // The word/number spans inside the fixed block the selection touches.
-  function selectedTimerWordSpans(editor: HTMLDivElement): HTMLElement[] {
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return [];
-    const words = Array.from(
-      editor.querySelectorAll<HTMLElement>(
-        "[data-timer-fixed] [data-timer-val], [data-timer-fixed] [data-timer-word]",
-      ),
+  // Dynamic card width across the text fields AND the timer. The timer drives
+  // the 400→440 stretch too: if it wraps at the narrow card's content width
+  // (344) it needs the wide card. Measured on the live editor at a fixed
+  // width, so it's independent of the current card width (no race).
+  function computeCardWidth(promo: typeof config.promoCard): number {
+    const base = getRequiredCardWidth([
+      { html: promo.title || "", field: "title" },
+      { html: promo.subtitle || "", field: "subtitle" },
+      { html: promo.description || "", field: "description" },
+    ]);
+    if (base >= 440) return base;
+    if (lexicalTimerRef.current?.wrapsAtContentWidth(TIMER_MIN_CONTENT_WIDTH)) {
+      return 440;
+    }
+    return base;
+  }
+
+  // Show the shared "field limit reached" warning (same popup as title etc.).
+  function warnTimerLimit() {
+    if (styleWarningTimer.current) clearTimeout(styleWarningTimer.current);
+    setStyleWarning(
+      "This text exceeds the field limit — shorten it to fit one line",
     );
-    let targets = words.filter((w) => sel.containsNode(w, true));
-    // Whole-block selection: style every word in any touched block.
-    if (targets.length === 0) {
-      targets = Array.from(
-        editor.querySelectorAll<HTMLElement>("[data-timer-fixed]"),
-      )
-        .filter((c) => sel.containsNode(c, true))
-        .flatMap((c) =>
-          Array.from(
-            c.querySelectorAll<HTMLElement>("[data-timer-val], [data-timer-word]"),
-          ),
-        );
-    }
-    return targets;
-  }
-
-  // Wrap the plain prefix/suffix text inside the selection (outside the block)
-  // in styled spans — direct DOM, so the fixed block is never touched.
-  function styleSelectedTimerText(
-    editor: HTMLDivElement,
-    patch: Record<string, string>,
-  ): void {
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
-    const range = sel.getRangeAt(0);
-    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT, null);
-    const nodes: Text[] = [];
-    let tn: Text | null;
-    while ((tn = walker.nextNode() as Text | null)) {
-      if ((tn.parentElement as HTMLElement | null)?.closest("[data-timer-fixed]"))
-        continue;
-      if (range.intersectsNode(tn) && (tn.textContent || "").trim()) nodes.push(tn);
-    }
-    nodes.forEach((node) => {
-      const span = document.createElement("span");
-      Object.entries(patch).forEach(([k, v]) => {
-        if (v) span.style.setProperty(k, v);
-      });
-      node.parentNode?.insertBefore(span, node);
-      span.appendChild(node);
-    });
-  }
-
-  // Apply a style patch to the selected timer word-spans (direct DOM).
-  function styleSelectedTimerChips(
-    editor: HTMLDivElement,
-    patch: Record<string, string>,
-  ): void {
-    selectedTimerWordSpans(editor).forEach((el) => {
-      Object.entries(patch).forEach(([k, v]) => {
-        if (v === "") el.style.removeProperty(k);
-        else el.style.setProperty(k, v);
-      });
-    });
-  }
-
-  // The currently-active TIMER editor (panel or preview) — never another field.
-  function getActiveTimerEditor(): HTMLDivElement | null {
-    const a = activeEditorRef.current;
-    if (a === timerRef.current || a === previewTimerRef.current) return a;
-    return timerRef.current ?? previewTimerRef.current;
-  }
-
-  // Clicking the timer sometimes can't land a caret (it's a non-editable chip
-  // between tiny empty slots), so focus falls back to the previous field. Only
-  // then force the caret into the timer (at the end). If the click already
-  // landed the caret/selection ANYWHERE inside the timer (e.g. the user clicked
-  // at the start to type a prefix), respect it — don't yank it to the end.
-  function placeCaretInTimer(el: HTMLDivElement | null) {
-    if (!el) return;
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
-      return;
-    }
-    el.focus();
-    const target = el.querySelector("[data-timer-suffix]") ?? el;
-    const range = document.createRange();
-    range.selectNodeContents(target);
-    range.collapse(false);
-    const s = window.getSelection();
-    s?.removeAllRanges();
-    s?.addRange(range);
-  }
-
-  // Turn a toolbar format action into a CSS patch for the timer block.
-  function timerFormatPatch(format: string): Record<string, string> {
-    if (format.startsWith("size-")) {
-      const key = format.replace("size-", "");
-      return { "font-size": FONT_SIZE_MAP[key] || FONT_SIZE_MAP.md };
-    }
-    if (format === "bold") return { "font-weight": "bold" };
-    if (format === "italic") return { "font-style": "italic" };
-    return {};
-  }
-
-  // Style the whole timer selection (block words + prefix/suffix text) directly.
-  // Apply a style patch to EVERY part of the timer (all word/number spans +
-  // all prefix/suffix text). Used for box-level styling (no specific selection).
-  function styleWholeTimer(
-    editor: HTMLDivElement,
-    patch: Record<string, string>,
-  ): void {
-    const apply = (el: HTMLElement) =>
-      Object.entries(patch).forEach(([k, v]) => {
-        if (v === "") el.style.removeProperty(k);
-        else el.style.setProperty(k, v);
-      });
-    // Style the chip container(s) (so labels inherit) AND every word/number span
-    // (to override any prior per-word styling so box-level is uniform).
-    editor
-      .querySelectorAll<HTMLElement>(
-        "[data-timer-fixed], [data-timer-fixed] [data-timer-val], [data-timer-fixed] [data-timer-word]",
-      )
-      .forEach(apply);
-    // Wrap each prefix/suffix text node (outside the chip) in a styled span.
-    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT, null);
-    const nodes: Text[] = [];
-    let tn: Text | null;
-    while ((tn = walker.nextNode() as Text | null)) {
-      if ((tn.parentElement as HTMLElement | null)?.closest("[data-timer-fixed]"))
-        continue;
-      if ((tn.textContent || "").trim()) nodes.push(tn);
-    }
-    nodes.forEach((node) => {
-      const span = document.createElement("span");
-      Object.entries(patch).forEach(([k, v]) => {
-        if (v) span.style.setProperty(k, v);
-      });
-      node.parentNode?.insertBefore(span, node);
-      span.appendChild(node);
-    });
-  }
-
-  // Returns true when handled, so callers skip execCommand entirely.
-  function applyTimerSelectionStyle(
-    editor: HTMLDivElement,
-    patch: Record<string, string>,
-  ): boolean {
-    if (!Object.keys(patch).length) return false;
-    // Toolbar buttons (incl. color swatches) use mousedown+preventDefault, so the
-    // live selection is preserved — no need to restore a (possibly stale) saved
-    // range. Specific = a real selection inside this editor; otherwise box-level.
-    const sel = window.getSelection();
-    const specific =
-      !!sel &&
-      sel.rangeCount > 0 &&
-      !sel.isCollapsed &&
-      editor.contains(sel.anchorNode);
-
-    if (specific) {
-      // Style only what's selected.
-      styleSelectedTimerChips(editor, patch);
-      styleSelectedTimerText(editor, patch);
-    } else {
-      // No selection → box-level: style the whole timer (all content).
-      styleWholeTimer(editor, patch);
-    }
-
-    onFieldInput("timer");
-    setTimeout(() => refreshPromoToolbarFormats(editor), 0);
-    return true;
+    styleWarningTimer.current = setTimeout(() => setStyleWarning(null), 3000);
   }
 
   function handlePromoToolbarFormat(format: string) {
     if (!currentFieldRef.current) return;
+    // Timer is driven by the Lexical editor (no DOM editor element), so handle
+    // it BEFORE the getActivePromoEditor()/null guard — otherwise it returns
+    // early (there's no contenteditable div for the timer) and nothing applies.
+    if (currentFieldRef.current === "timer") {
+      const fmts = lexicalTimerRef.current?.applyFormat(format);
+      if (fmts) setActiveFormats(fmts);
+      return;
+    }
     const editor = getActivePromoEditor();
     if (!editor) return;
     pushPromoState();
-    if (currentFieldRef.current === "timer") {
-      const timerEl = getActiveTimerEditor();
-      if (timerEl) applyTimerSelectionStyle(timerEl, timerFormatPatch(format));
-      return;
-    }
     const field = currentFieldRef.current;
     const overflowFields: PromoField[] = ['title', 'subtitle', 'description'];
     const syncLastValid = () => {
@@ -1670,17 +1507,17 @@ export function PromoSection({
 
   function handlePromoToolbarColor(color: string) {
     if (!currentFieldRef.current) return;
+    // Timer: handle BEFORE the getActivePromoEditor()/null guard (no DOM
+    // editor element for the timer). Route through the Lexical imperative API;
+    // scope (cell / whole chip / text selection) is decided inside.
+    if (currentFieldRef.current === "timer") {
+      const fmts = lexicalTimerRef.current?.applyColor(color);
+      if (fmts) setActiveFormats(fmts);
+      return;
+    }
     const editor = getActivePromoEditor();
     if (!editor) return;
     pushPromoState();
-    // Timer: ALWAYS style via direct DOM, handled FIRST so execCommand (which
-    // clones the non-editable chip → duplicate) is never reached.
-    if (currentFieldRef.current === "timer") {
-      const timerEl = getActiveTimerEditor();
-      if (timerEl) applyTimerSelectionStyle(timerEl, { color });
-      setActiveFormats((prev) => ({ ...prev, color }));
-      return;
-    }
     if (selectionIsInsideEditor(editor)) {
       saveSelection();
       applyColor(color);
@@ -2918,68 +2755,45 @@ export function PromoSection({
             />
           </div>
 
-          {/* Timer Controls — rich text editor */}
+          {/* Timer Text — the editor lives HERE in the panel (consistent with
+              title / subtitle / description). Type the prefix/suffix, click
+              the countdown chip's cells to style them, and use the editor's
+              own toolbar for bold/italic/size/color. The preview card on the
+              right is a read-only render of the result. */}
           <div className={!config.promoCard.showTimer ? "opacity-50 pointer-events-none" : ""}>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5">
-                  <label className="block text-sm font-semibold text-on-surface">
-                    Timer Text
-                  </label>
-                  <div className="relative group">
-                    <div className="flex items-center justify-center w-4 h-4 rounded-full bg-on-surface-variant/25 text-[9px] font-bold text-on-surface-variant cursor-help select-none">
-                      i
-                    </div>
-                    <div className="absolute bottom-full left-0 mb-1.5 w-52 p-2 bg-gray-900 dark:bg-gray-700 text-white text-[11px] leading-relaxed rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
-                      Type text before/after the countdown. The countdown updates automatically and can&apos;t be edited. Select text in preview to style it.
-                      <div className="absolute top-full left-3 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-gray-900 dark:border-t-gray-700"></div>
-                    </div>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5">
+                <label className="block text-sm font-semibold text-on-surface">
+                  Timer Text
+                </label>
+                <div className="relative group">
+                  <div className="flex items-center justify-center w-4 h-4 rounded-full bg-on-surface-variant/25 text-[9px] font-bold text-on-surface-variant cursor-help select-none">
+                    i
+                  </div>
+                  <div className="absolute bottom-full left-0 mb-1.5 w-56 p-2 bg-gray-900 dark:bg-gray-700 text-white text-[11px] leading-relaxed rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+                    Type text before/after the countdown. The countdown can&apos;t be edited but can&apos;t be deleted. Select text to style it; click a number, word, or colon in the chip to style just that part.
+                    <div className="absolute top-full left-3 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-gray-900 dark:border-t-gray-700"></div>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    openFieldStylePopup("timer", timerRef);
-                  }}
-                  className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
-                  title="Open timer style"
-                  aria-label="Open timer style"
-                >
-                  <Palette className="w-3.5 h-3.5" />
-                </button>
               </div>
-              <div
-                ref={timerRef}
-                contentEditable
-                suppressContentEditableWarning
-                onInput={() => onFieldInput("timer")}
-                onFocus={() => onFieldFocus("timer", timerRef)}
-                onClick={() =>
-                  setTimeout(() => placeCaretInTimer(timerRef.current), 0)
-                }
-                onKeyDown={onTimerEditorKeyDown}
-                onMouseUp={() => refreshPromoToolbarFormats(timerRef.current)}
-                onKeyUp={() => refreshPromoToolbarFormats(timerRef.current)}
-                onPaste={(e) => {
+              <button
+                type="button"
+                onMouseDown={(e) => {
                   e.preventDefault();
-                  const text = e.clipboardData.getData('text/plain');
-                  document.execCommand('insertText', false, text);
+                  openFieldStylePopup("timer", timerRef);
                 }}
-                className={`rich-editor promo-standard-editor shadow-sm focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 block w-full sm:text-sm rounded-md px-2 border outline-none break-words min-h-[48px] transition-colors ${
-                  currentField === "timer"
-                    ? "border-primary/70"
-                    : "border-border"
-                }`}
-                style={{
-                  background: getBackgroundStyle(
-                    config.promoCard.style.background,
-                  ),
-                  whiteSpace: "pre-wrap",
-                  paddingTop: '12px',
-                  paddingBottom: '12px',
-                }}
-              />
-
+                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
+                title="Open timer style"
+                aria-label="Open timer style"
+              >
+                <Palette className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <p className="text-[11px] text-on-surface-variant/70 leading-relaxed">
+              ↪ Edit the timer in the preview card on the right: type the text
+              before/after the countdown, select text or click a number, word,
+              or colon in the countdown to style it.
+            </p>
           </div>
 
           <div className="!mt-8">
@@ -3545,33 +3359,23 @@ export function PromoSection({
                   )}
 
                   {showTimerInPreview && (
+                    /* The preview card IS the timer editor — you type, select,
+                       and style here (and see the result here). It renders
+                       inside the card's dateStyle (background / textColor /
+                       align); chrome='inline' keeps the editor from adding any
+                       wrapper styling that would change that look. */
                     <div
-                      ref={previewTimerRef}
-                      contentEditable
-                      suppressContentEditableWarning
-                      className={`mb-4 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === "timer" ? "ring-1 ring-primary/70" : ""}`}
+                      className={`mb-4 px-2 py-1 rounded break-words ${currentField === "timer" ? "ring-1 ring-primary/70" : ""}`}
                       onMouseDown={() => {
-                        activeEditorRef.current = previewTimerRef.current;
+                        if (currentField !== "timer") setCurrentField("timer");
                       }}
                       onClick={() => {
                         setShowCardBgPopup(false);
                         if (currentField !== "timer") setCurrentField("timer");
-                        activeEditorRef.current = previewTimerRef.current;
-                        setTimeout(() => {
-                          placeCaretInTimer(previewTimerRef.current);
-                          refreshPromoToolbarFormats(previewTimerRef.current);
-                        }, 0);
+                        // Clicking the wrapper padding should still drop the
+                        // caret into the editor so typing works anywhere.
+                        lexicalTimerRef.current?.focus();
                       }}
-                      onFocus={() => {
-                        activeEditorRef.current = previewTimerRef.current;
-                      }}
-                      onMouseUp={() => {
-                        refreshPromoToolbarFormats(previewTimerRef.current);
-                      }}
-                      onInput={() => onFieldInput("timer")}
-                      onKeyDown={onTimerPreviewKeyDown}
-                      onPaste={(e) => e.preventDefault()}
-                      onDrop={(e) => e.preventDefault()}
                       style={{
                         background: getBackgroundStyle(
                           getPreviewFieldBackground("timer"),
@@ -3580,15 +3384,52 @@ export function PromoSection({
                         textAlign:
                           config.promoCard.style.dateStyle.textAlign ||
                           "center",
-                        // No blinking caret (users shouldn't feel they can type
-                        // here), but selection highlight still works for styling.
-                        caretColor: "transparent",
-                        userSelect: "text",
-                        WebkitUserSelect: "text",
-                        cursor: "text",
-                        whiteSpace: "pre-wrap",
                       }}
-                    />
+                    >
+                      <LexicalTimerField
+                        ref={lexicalTimerRef}
+                        chrome="inline"
+                        timerText={config.promoCard.timerText ?? ''}
+                        initialStateJson={config.promoCard.timerStateJson}
+                        endDate={config.promoCard.endDate || ''}
+                        onFocus={() => {
+                          if (currentField !== "timer") setCurrentField("timer");
+                        }}
+                        onTargetChange={() => {
+                          setTimeout(() => {
+                            const fmts = lexicalTimerRef.current?.getActiveFormats();
+                            if (fmts) setActiveFormats(fmts);
+                          }, 0);
+                        }}
+                        onChange={(nextTimerText) => {
+                          if (nextTimerText === (config.promoCard.timerText ?? '')) return;
+                          setConfig({
+                            ...config,
+                            promoCard: { ...config.promoCard, timerText: nextTimerText },
+                          });
+                          markChanged();
+                        }}
+                        onStateJson={(json) => {
+                          if (json === (config.promoCard.timerStateJson ?? '')) return;
+                          // The timer can also drive the 400→440 stretch.
+                          const w = computeCardWidth(config.promoCard);
+                          setCardWidth(w);
+                          setConfig({
+                            ...config,
+                            promoCard: {
+                              ...config.promoCard,
+                              timerStateJson: json,
+                              cardWidth: w,
+                            },
+                          });
+                          markChanged();
+                        }}
+                        // 1-line limit is enforced inside the editor (plugin);
+                        // it reverts the overflowing edit and calls this so we
+                        // show the shared "field limit reached" warning.
+                        onLineOverflow={warnTimerLimit}
+                      />
+                    </div>
                   )}
 
                   {showButtonInPreview && (
@@ -3759,6 +3600,11 @@ export function PromoSection({
                             </div>
                           </div>
 
+                          {/* The app's own style bar drives every field,
+                              including the timer. For the timer it routes
+                              through the LexicalTimerField imperative handle,
+                              which is cell-aware (styles the targeted chip
+                              number/word/colon, or the text selection). */}
                           <RichTextToolbar
                             activeFormats={activeFormats}
                             onFormat={handlePromoToolbarFormat}
