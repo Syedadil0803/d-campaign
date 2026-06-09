@@ -32,9 +32,6 @@ interface RichTextToolbarProps {
   buttonFullWidth?: boolean;
   onButtonWidthChange?: (fullWidth: boolean) => void;
   compact?: boolean;
-  disabledSizes?: string[];
-  disabledBold?: boolean;
-  disabledItalic?: boolean;
 }
 
 export default function RichTextToolbar({
@@ -51,9 +48,6 @@ export default function RichTextToolbar({
   buttonFullWidth = false,
   onButtonWidthChange,
   compact = false,
-  disabledSizes = [],
-  disabledBold = false,
-  disabledItalic = false,
 }: RichTextToolbarProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
@@ -120,34 +114,28 @@ export default function RichTextToolbar({
 
         {/* Bold Button */}
         <button
-          disabled={disabledBold && !activeFormats.bold}
           onMouseDown={(e) => {
             e.preventDefault();
-            if (disabledBold && !activeFormats.bold) return;
             handleFormat('bold');
           }}
           className={`${baseBtnClass} font-bold ${
-            (disabledBold && !activeFormats.bold) ? 'opacity-30 cursor-not-allowed' :
             activeFormats.bold ? activeBtnClass : ''
           }`}
-          title={disabledBold && !activeFormats.bold ? 'Text too long for bold' : 'Bold'}
+          title="Bold"
         >
           B
         </button>
 
         {/* Italic Button */}
         <button
-          disabled={disabledItalic && !activeFormats.italic}
           onMouseDown={(e) => {
             e.preventDefault();
-            if (disabledItalic && !activeFormats.italic) return;
             handleFormat('italic');
           }}
           className={`${baseBtnClass} italic ${
-            (disabledItalic && !activeFormats.italic) ? 'opacity-30 cursor-not-allowed' :
             activeFormats.italic ? activeBtnClass : ''
           }`}
-          title={disabledItalic && !activeFormats.italic ? 'Text too long for italic' : 'Italic'}
+          title="Italic"
         >
           I
         </button>
@@ -157,26 +145,20 @@ export default function RichTextToolbar({
 
         {/* Size controls */}
         {!compact ? (
-          ['xs', 'sm', 'md', 'lg', 'xl', 'xxl'].map((size) => {
-            const isDisabled = disabledSizes.includes(size);
-            return (
-              <button
-                key={size}
-                disabled={isDisabled}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  if (!isDisabled) handleFormat(`size-${size}`);
-                }}
-                className={`${baseBtnClass} ${
-                  isDisabled ? 'opacity-30 cursor-not-allowed' :
-                  activeFormats.size === size ? activeBtnClass : ''
-                }`}
-                title={isDisabled ? 'Text too long for this size' : undefined}
-              >
+          ['xs', 'sm', 'md', 'lg', 'xl', 'xxl'].map((size) => (
+            <button
+              key={size}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                handleFormat(`size-${size}`);
+              }}
+              className={`${baseBtnClass} ${
+                activeFormats.size === size ? activeBtnClass : ''
+              }`}
+            >
               {size.toUpperCase()}
             </button>
-            );
-          })
+          ))
         ) : null}
 
         {extraActions}
@@ -211,27 +193,21 @@ export default function RichTextToolbar({
                   { value: 'lg', label: 'LG' },
                   { value: 'xl', label: 'XL' },
                   { value: 'xxl', label: '2XL' },
-                ].map((size) => {
-                  const isDisabled = disabledSizes.includes(size.value);
-                  return (
+                ].map((size) => (
                     <button
                       key={size.value}
-                      disabled={isDisabled}
                       onMouseDown={(e) => {
                         e.preventDefault();
-                        if (isDisabled) return;
                         handleFormat(`size-${size.value}`);
                         setShowSizeDropdown(false);
                       }}
                       className={`block w-full rounded px-2 py-1 text-left text-[11px] transition-colors ${
-                        isDisabled ? 'opacity-30 cursor-not-allowed' :
                         (activeFormats.size || 'md') === size.value ? 'text-primary' : 'text-on-surface'
-                      } ${!isDisabled ? 'hover:bg-surface-subtle' : ''}`}
+                      } hover:bg-surface-subtle`}
                     >
                       {size.label}
                     </button>
-                  );
-                })}
+                ))}
               </div>
             )}
           </div>

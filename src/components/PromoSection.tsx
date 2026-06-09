@@ -243,6 +243,8 @@ export function PromoSection({
   }, []);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [currentField, setCurrentField] = useState<PromoField | null>(null);
+  const [styleWarning, setStyleWarning] = useState<string | null>(null);
+  const styleWarningTimer = useRef<NodeJS.Timeout | null>(null);
   const configRef = useRef(config);
   configRef.current = config;
   const currentFieldRef = useRef<PromoField | null>(currentField);
@@ -347,6 +349,7 @@ export function PromoSection({
     new HistoryManager<PromoSnapshot>("Promo"),
   ).current;
   const restoringSnapshotRef = useRef(false);
+  const skipOverflowBlockRef = useRef(false);
   const promoDeletingRef = useRef(false);
   const promoAppliedCardBaselineRef = useRef<PromoSnapshot | null>(null);
   const promoPreAppliedCardRef = useRef<PromoSnapshot | null>(null);
@@ -934,9 +937,9 @@ export function PromoSection({
       if (el.innerHTML !== "") el.innerHTML = "";
     }
 
-    // Block typing if overflow
+    // Block typing if overflow (skip when format handler will handle it)
     const overflowFields: PromoField[] = ['title', 'subtitle', 'description'];
-    if (overflowFields.includes(field) && html && measureOverflow(html, field as 'title' | 'subtitle' | 'description')) {
+    if (!skipOverflowBlockRef.current && overflowFields.includes(field) && html && measureOverflow(html, field as 'title' | 'subtitle' | 'description')) {
       const lastValid = lastValidHtmlRef.current[field] || '';
       el.innerHTML = lastValid;
       const sel = window.getSelection();
@@ -949,7 +952,7 @@ export function PromoSection({
       }
       return;
     }
-    if (overflowFields.includes(field)) {
+    if (!skipOverflowBlockRef.current && overflowFields.includes(field)) {
       lastValidHtmlRef.current[field] = html;
     }
     const fieldMap = {
@@ -1534,16 +1537,48 @@ export function PromoSection({
         if (measureOverflow(newHtml, field as 'title' | 'subtitle' | 'description')) {
           const lastValid = lastValidHtmlRef.current[field] || '';
           editor.innerHTML = lastValid;
+          skipOverflowBlockRef.current = true;
           onFieldInput(field);
+          skipOverflowBlockRef.current = false;
+          if (styleWarningTimer.current) clearTimeout(styleWarningTimer.current);
+          setStyleWarning('This style exceeds the field limit — try a smaller size or shorter text');
+          styleWarningTimer.current = setTimeout(() => setStyleWarning(null), 3000);
           return;
         }
         lastValidHtmlRef.current[field] = newHtml;
       }
     };
     if (selectionIsInsideEditor(editor)) {
+      // Pre-check: would this format cause overflow?
+      if (overflowFields.includes(field)) {
+        const plainText = editor.textContent?.replace(/\u200B/g, '').trim() || '';
+        const sizeMap: Record<string, string> = {
+          xs: '0.75rem', sm: '0.875rem', md: '1rem',
+          lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem',
+        };
+        let testHtml = '';
+        if (format.startsWith('size-')) {
+          const size = format.replace('size-', '');
+          testHtml = `<span style="font-size:${sizeMap[size] || '1rem'}">${plainText}</span>`;
+        } else if (format === 'bold') {
+          const currentHtml = wrapBareTextWithFontSize(editor.innerHTML);
+          testHtml = `<b>${currentHtml}</b>`;
+        } else if (format === 'italic') {
+          const currentHtml = wrapBareTextWithFontSize(editor.innerHTML);
+          testHtml = `<i>${currentHtml}</i>`;
+        }
+        if (testHtml && measureOverflow(testHtml, field as 'title' | 'subtitle' | 'description')) {
+          if (styleWarningTimer.current) clearTimeout(styleWarningTimer.current);
+          setStyleWarning('This style exceeds the field limit — try a smaller size or shorter text');
+          styleWarningTimer.current = setTimeout(() => setStyleWarning(null), 3000);
+          return;
+        }
+      }
       saveSelection();
       formatText(format);
+      skipOverflowBlockRef.current = true;
       onFieldInput(currentFieldRef.current);
+      skipOverflowBlockRef.current = false;
       syncInactiveFieldEditor(
         currentFieldRef.current,
         wrapBareTextWithFontSize(editor.innerHTML),
@@ -1555,6 +1590,31 @@ export function PromoSection({
 
     const hasContent = editor.textContent?.replace(/\u200B/g, "").trim();
     if (hasContent) {
+      // Pre-check: would this format cause overflow?
+      if (overflowFields.includes(field)) {
+        const plainText = editor.textContent?.replace(/\u200B/g, '').trim() || '';
+        const sizeMap: Record<string, string> = {
+          xs: '0.75rem', sm: '0.875rem', md: '1rem',
+          lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem',
+        };
+        let testHtml = '';
+        if (format.startsWith('size-')) {
+          const size = format.replace('size-', '');
+          testHtml = `<span style="font-size:${sizeMap[size] || '1rem'}">${plainText}</span>`;
+        } else if (format === 'bold') {
+          const currentHtml = wrapBareTextWithFontSize(editor.innerHTML);
+          testHtml = `<b>${currentHtml}</b>`;
+        } else if (format === 'italic') {
+          const currentHtml = wrapBareTextWithFontSize(editor.innerHTML);
+          testHtml = `<i>${currentHtml}</i>`;
+        }
+        if (testHtml && measureOverflow(testHtml, field as 'title' | 'subtitle' | 'description')) {
+          if (styleWarningTimer.current) clearTimeout(styleWarningTimer.current);
+          setStyleWarning('This style exceeds the field limit — try a smaller size or shorter text');
+          styleWarningTimer.current = setTimeout(() => setStyleWarning(null), 3000);
+          return;
+        }
+      }
       if (format === "bold" || format === "italic") {
         const shouldEnable =
           format === "bold" ? !activeFormats.bold : !activeFormats.italic;
@@ -3656,22 +3716,23 @@ export function PromoSection({
                               updateField("buttonFullWidth", fullWidth)
                             }
                             compact={true}
-                            disabledSizes={
-                              (field === 'title' || field === 'subtitle' || field === 'description')
-                                ? getDisabledSizes(config.promoCard[field] || '', field)
-                                : []
-                            }
-                            disabledBold={
-                              (field === 'title' || field === 'subtitle' || field === 'description')
-                                ? wouldBoldOverflow(config.promoCard[field] || '', field)
-                                : false
-                            }
-                            disabledItalic={
-                              (field === 'title' || field === 'subtitle' || field === 'description')
-                                ? wouldItalicOverflow(config.promoCard[field] || '', field)
-                                : false
-                            }
                           />
+
+                          {styleWarning && (
+                            <>
+                              <div className="fixed inset-0 z-[99] bg-black/40" onClick={() => setStyleWarning(null)} />
+                              <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] bg-black/70 backdrop-blur-xl border border-white/15 rounded-2xl shadow-2xl px-8 py-6 w-[420px] text-center">
+                                <button
+                                  onClick={() => setStyleWarning(null)}
+                                  className="absolute top-3 right-4 text-white/50 hover:text-white text-lg"
+                                >
+                                  ✕
+                                </button>
+                                <p className="text-2xl mb-3">⚠️</p>
+                                <p className="text-sm text-on-surface font-medium leading-relaxed">{styleWarning}</p>
+                              </div>
+                            </>
+                          )}
 
                           <div className="mt-2 pt-2 border-t border-white/10">
                             {/* Change here to reflect color updates on the selected field preview. */}
