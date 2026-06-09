@@ -602,7 +602,7 @@ export function PromoSection({
       buttonUrl: "",
       showTimer: true,
       showButton: true,
-      timerText: "{timer}",
+      timerText: "Ends In {timer}",
       style: {
         ...baseStyle,
         background: {
