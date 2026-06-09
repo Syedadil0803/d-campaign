@@ -72,23 +72,25 @@ function getPlainTextLength(html: string): number {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim().length;
 }
 
+// Mirror widths: min (400px card - 56px padding) to max (440px card - 56px padding)
+const MIRROR_MIN_WIDTH = 344;
+const MIRROR_MAX_WIDTH = 384;
+
 /**
  * Virtual Mirror measurement.
- * Renders the HTML in a hidden 360px div, measures how many lines it takes,
- * and checks against the field's allowed max lines.
+ * Checks if html overflows at a given width against the field's max lines.
  */
-function measureOverflow(html: string, field: 'title' | 'subtitle' | 'description'): boolean {
+function measureOverflowAtWidth(html: string, field: 'title' | 'subtitle' | 'description', width: number): boolean {
   if (!html || typeof document === 'undefined') return false;
   const plainText = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim();
   if (!plainText) return false;
 
   const maxLines = FIELD_MAX_LINES[field] || 1;
 
-  // Render content with no wrapping to get single-line height
   const ghost = document.createElement('div');
   ghost.style.cssText = `
     position:absolute;visibility:hidden;pointer-events:none;
-    width:344px;padding:0;
+    width:${width}px;padding:0;
     font-family:inherit;line-height:1.5;
     word-break:break-word;overflow-wrap:break-word;
     white-space:nowrap;
@@ -97,13 +99,33 @@ function measureOverflow(html: string, field: 'title' | 'subtitle' | 'descriptio
   document.body.appendChild(ghost);
   const singleLineHeight = ghost.offsetHeight;
 
-  // Now allow wrapping and measure actual height
   ghost.style.whiteSpace = 'normal';
   const contentHeight = ghost.offsetHeight;
   document.body.removeChild(ghost);
 
   if (singleLineHeight === 0) return false;
   return contentHeight > singleLineHeight * maxLines;
+}
+
+/**
+ * Dynamic mirror: tries min width first, then max width.
+ * Returns true only if content overflows at max width (384px).
+ */
+function measureOverflow(html: string, field: 'title' | 'subtitle' | 'description'): boolean {
+  return measureOverflowAtWidth(html, field, MIRROR_MAX_WIDTH);
+}
+
+/**
+ * Returns the required card width (400–440) based on content across all fields.
+ */
+function getRequiredCardWidth(fields: { html: string; field: 'title' | 'subtitle' | 'description' }[]): number {
+  for (const { html, field } of fields) {
+    if (!html) continue;
+    if (measureOverflowAtWidth(html, field, MIRROR_MIN_WIDTH)) {
+      return 440;
+    }
+  }
+  return 400;
 }
 
 function getDisabledSizes(html: string, field: 'title' | 'subtitle' | 'description'): string[] {
@@ -248,6 +270,7 @@ export function PromoSection({
   const cardBgPopupBtnRef = useRef<HTMLButtonElement>(null);
   const cardBgPopupRef = useRef<HTMLDivElement>(null);
   const promoCardRef = useRef<HTMLDivElement>(null);
+  const [cardWidth, setCardWidth] = useState(config.promoCard.cardWidth || 400);
 
   const cardAngleWheelRef = useRef<HTMLDivElement>(null);
   const fieldAngleWheelRef = useRef<HTMLDivElement>(null);
@@ -635,6 +658,11 @@ export function PromoSection({
       subtitle: config.promoCard.subtitle || '',
       description: config.promoCard.description || '',
     };
+    setCardWidth(config.promoCard.cardWidth || getRequiredCardWidth([
+      { html: config.promoCard.title || '', field: 'title' },
+      { html: config.promoCard.subtitle || '', field: 'subtitle' },
+      { html: config.promoCard.description || '', field: 'description' },
+    ]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -941,6 +969,18 @@ export function PromoSection({
     syncResetPromoEditsButton(nextPromoCard);
     markChanged();
     refreshPromoToolbarFormats(el);
+
+    // Update dynamic card width
+    const fields = [
+      { html: nextPromoCard.title || '', field: 'title' as const },
+      { html: nextPromoCard.subtitle || '', field: 'subtitle' as const },
+      { html: nextPromoCard.description || '', field: 'description' as const },
+    ];
+    const newWidth = getRequiredCardWidth(fields);
+    setCardWidth(newWidth);
+    if (newWidth !== nextPromoCard.cardWidth) {
+      setConfig({ ...config, promoCard: { ...nextPromoCard, cardWidth: newWidth } });
+    }
   }
 
   // Returns true (and blocks the event) if the keystroke would delete or
@@ -3221,7 +3261,7 @@ export function PromoSection({
               {(
                 <div
                   ref={promoCardRef}
-                  className={`relative w-[400px] rounded-xl shadow-2xl p-5 transition-all duration-300 flex flex-col ${
+                  className={`relative rounded-xl shadow-2xl p-5 flex flex-col ${
                     config.promoCard.style.position === "bottom-right"
                       ? "justify-self-end self-end"
                       : config.promoCard.style.position === "bottom-left"
@@ -3231,6 +3271,8 @@ export function PromoSection({
                           : "justify-self-start self-start"
                   }`}
                   style={{
+                    width: `${cardWidth}px`,
+                    maxHeight: '360px',
                     background: getBackgroundStyle(
                       config.promoCard.style.background,
                     ),

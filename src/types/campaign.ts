@@ -26,6 +26,7 @@ export interface PromoCard {
   ctaType?: 'whatsapp' | 'link';
   whatsappNumber?: string;
   whatsappCountryCode?: string;
+  cardWidth?: number;
   startDate: string;
   endDate: string;
   showTimer: boolean;
