@@ -647,7 +647,16 @@ export function PromoSection({
   }, [config.promoCard]);
 
   // Populate editors from config on mount
+  const lastSyncedPromoRef = useRef<string | null>(null);
   useEffect(() => {
+    const sig = JSON.stringify({
+      t: config.promoCard.title,
+      s: config.promoCard.subtitle,
+      d: config.promoCard.description,
+      b: config.promoCard.buttonText,
+    });
+    if (sig === lastSyncedPromoRef.current) return;
+    lastSyncedPromoRef.current = sig;
     if (titleRef.current)
       titleRef.current.innerHTML = config.promoCard.title || "";
     if (subtitleRef.current)
@@ -667,7 +676,7 @@ export function PromoSection({
       { html: config.promoCard.description || '', field: 'description' },
     ]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [config.promoCard.title, config.promoCard.subtitle, config.promoCard.description, config.promoCard.buttonText, config.promoCard.cardWidth]);
 
   // Keep preview subtitle DOM in sync without re-rendering innerHTML every state change,
   // so text selection in preview is not reset.
@@ -968,6 +977,12 @@ export function PromoSection({
     setConfig({
       ...config,
       promoCard: nextPromoCard,
+    });
+    lastSyncedPromoRef.current = JSON.stringify({
+      t: nextPromoCard.title,
+      s: nextPromoCard.subtitle,
+      d: nextPromoCard.description,
+      b: nextPromoCard.buttonText,
     });
     syncResetPromoEditsButton(nextPromoCard);
     markChanged();
