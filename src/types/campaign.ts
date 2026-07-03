@@ -23,7 +23,7 @@ export interface PromoCard {
   buttonText: string;
   buttonUrl: string;
   buttonFullWidth?: boolean;
-  ctaType?: 'whatsapp' | 'link';
+  ctaType?: 'whatsapp' | 'link' | 'text';
   whatsappNumber?: string;
   whatsappCountryCode?: string;
   cardWidth?: number;

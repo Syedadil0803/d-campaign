@@ -339,13 +339,17 @@ export default function Home() {
     scope?: 'announcement' | 'promo',
   ) {
     try {
-      // Build whatsapp link into buttonUrl if ctaType is whatsapp
+      // Build the button destination from the CTA type
       const cfgToSend = { ...cfg };
       const pc = cfgToSend.promoCard;
-      if ((pc.ctaType || 'whatsapp') === 'whatsapp' && pc.whatsappNumber) {
+      const cta = pc.ctaType || 'whatsapp';
+      if (cta === 'whatsapp' && pc.whatsappNumber) {
         const code = (pc.whatsappCountryCode || '+44').replace('+', '');
         const num = pc.whatsappNumber.replace(/\D/g, '');
         cfgToSend.promoCard = { ...pc, buttonUrl: `https://wa.me/${code}${num}` };
+      } else if (cta === 'text') {
+        // Plain text CTA: styled button with no link
+        cfgToSend.promoCard = { ...pc, buttonUrl: '' };
       }
 
       const response = await fetch('/api/config', {
@@ -553,7 +557,9 @@ export default function Home() {
     if (pc.showButton) {
       const btnText = strip(pc.buttonText || '');
       const ctaType = pc.ctaType || 'whatsapp';
-      if (ctaType === 'whatsapp') {
+      if (ctaType === 'text') {
+        if (!btnText) warnings.push('Button text is empty');
+      } else if (ctaType === 'whatsapp') {
         const num = pc.whatsappNumber?.trim() || '';
         const code = pc.whatsappCountryCode || '+44';
         if (!btnText && !num) {

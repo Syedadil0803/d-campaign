@@ -2852,6 +2852,20 @@ export function PromoSection({
                   </svg>
                   Link
                 </button>
+                <button
+                  type="button"
+                  onClick={() => updateField("ctaType", "text")}
+                  className={`flex-1 h-9 rounded-md border text-xs font-semibold transition-colors inline-flex items-center justify-center gap-1.5 ${
+                    config.promoCard.ctaType === 'text'
+                      ? 'border-primary/80 bg-primary/10 text-primary'
+                      : 'border-border text-on-surface-variant hover:border-primary/70 hover:text-primary'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 7V4h16v3M9 20h6M12 4v16" />
+                  </svg>
+                  Text
+                </button>
               </div>
 
               {/* WhatsApp Input */}
@@ -2998,6 +3012,11 @@ export function PromoSection({
                   />
                   <p className="mt-1 text-[11px] text-on-surface-variant">Directions, mail, website — any URL</p>
                 </div>
+              )}
+
+              {/* Plain Text (no link) */}
+              {config.promoCard.ctaType === 'text' && (
+                <p className="text-[11px] text-on-surface-variant">The button is shown on the card but is not clickable (no link).</p>
               )}
 
               {/* Button Text */}
