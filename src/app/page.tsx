@@ -471,7 +471,11 @@ export default function Home() {
     saveDraft(config);
     setHasAnnouncementChanges(false);
     setReadyToPublishAnnouncement(true);
-    toast('Changes saved — please publish to go live');
+    toast(
+      config.announcementBar.active
+        ? 'Changes saved — please publish to go live'
+        : 'Changes saved — announcement is off',
+    );
     // Right after saving, ask whether to publish now (publish-later otherwise).
     setPublishConfirm({
       warnings: [],
@@ -481,7 +485,10 @@ export default function Home() {
   }
 
   async function handlePublishAnnouncement() {
-    await persistConfig(config, 'Changes are live on your website', 'announcement');
+    const successMsg = config.announcementBar.active
+      ? 'Changes are live on your website'
+      : 'Changes saved';
+    await persistConfig(config, successMsg, 'announcement');
     setReadyToPublishAnnouncement(false);
   }
 

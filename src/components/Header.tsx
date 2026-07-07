@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, Megaphone, Gift, LayoutGrid, Save, Upload, Sun, Moon, LogOut, Loader2 } from 'lucide-react';
+import { LayoutDashboard, Megaphone, Gift, LayoutGrid, Save, Upload, Sun, Moon, LogOut, Loader2, Check } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: 'dashboard' | 'announcement' | 'promo';
@@ -132,6 +132,12 @@ export function Header({
                   Unpublished changes
                 </div>
               )}
+              {state === 'published' && (
+                <div className="hidden items-center text-sm font-medium text-primary sm:flex">
+                  <Check className="mr-1.5 h-4 w-4" />
+                  All changes published
+                </div>
+              )}
 
               {/* Action button */}
               {state === 'unsaved' && (
@@ -157,6 +163,8 @@ export function Header({
               {state === 'published' && (
                 <button
                   disabled
+                  aria-label="No unpublished changes remain"
+                  title="No unpublished changes remain"
                   className="inline-flex items-center rounded-md border border-primary/20 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary shadow-sm cursor-default opacity-60"
                 >
                   <span>Published</span>
