@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Megaphone, MoreVertical, Sparkles, Undo2, Redo2 } from 'lucide-react';
+import { Megaphone, MoreVertical, Sparkles, Undo2, Redo2, Radio, Infinity as InfinityIcon, MoveLeft } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
@@ -102,6 +102,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   }
 
   // Popup state
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [showSchedulePopup, setShowSchedulePopup] = useState(false);
   const [showStartDateCalendar, setShowStartDateCalendar] = useState(false);
@@ -841,13 +842,26 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     updateBg(patch);
   }
 
-  function toggleActive() {
+  // Status chip is two-way like the promo: tap to go live, or tap to stop
+  // (behind a confirm). Both only flip local state + mark dirty — the change
+  // goes live through the normal Save → Publish flow.
+  function goLive() {
     setConfig({
       ...config,
-      announcementBar: { ...config.announcementBar, active: !config.announcementBar.active },
+      announcementBar: { ...config.announcementBar, active: true },
     });
     markChanged();
-    showToast(!config.announcementBar.active ? 'Announcement bar enabled' : 'Announcement bar disabled');
+    showToast('Announcement bar enabled');
+  }
+
+  function confirmStop() {
+    setShowStopConfirm(false);
+    setConfig({
+      ...config,
+      announcementBar: { ...config.announcementBar, active: false },
+    });
+    markChanged();
+    showToast('Announcement bar disabled');
   }
 
   function openChatGptWithPrompt() {
@@ -888,6 +902,36 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
   return (
     <section className="rounded-2xl border-border overflow-hidden">
       <Toast show={toast.show} message={toast.message} isError={toast.isError} />
+
+      {/* Stop Announcement Confirmation */}
+      {showStopConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" onClick={() => setShowStopConfirm(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <h2 className="text-base font-semibold">Stop this announcement?</h2>
+            <p className="mt-2 text-sm text-on-surface-variant">
+              This marks the announcement bar to be taken off your website. It goes live once you <strong>save and publish</strong> &mdash; and you can start it again anytime from the on-air chip.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowStopConfirm(false)}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmStop}
+                className="rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:bg-red-600"
+              >
+                Stop Announcement
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="px-4 py-2 border-border bg-surface/60 flex items-center justify-between">
         <div className="flex items-center">
@@ -898,8 +942,27 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={toggleActive} className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${config.announcementBar.active ? 'bg-primary' : 'bg-surface-subtle hover:bg-primary/20'}`}>
-            <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition duration-200 ${config.announcementBar.active ? 'translate-x-5' : 'translate-x-0'}`} />
+          <button
+            onClick={config.announcementBar.active ? () => setShowStopConfirm(true) : goLive}
+            aria-pressed={config.announcementBar.active}
+            title={config.announcementBar.active ? 'On air — tap to stop' : 'Tap to go live'}
+            className={`inline-flex flex-none items-center gap-2 rounded-full border px-4 py-[9px] text-[13px] font-medium cursor-pointer transition-colors duration-200 ${
+              config.announcementBar.active
+                ? 'border-transparent bg-primary/[0.13] text-primary hover:bg-primary/[0.18]'
+                : 'border-border bg-surface-elevated text-on-surface-variant hover:border-primary/50 hover:text-primary'
+            }`}
+          >
+            {config.announcementBar.active ? (
+              <>
+                <span className="eq-bars"><i /><i /><i /><i /></span>
+                On air · tap to stop
+              </>
+            ) : (
+              <>
+                <Radio className="w-4 h-4" />
+                Go on air
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -1294,7 +1357,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 }}
                   disabled={!newAnnouncementText.trim()}
                   className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-on-primary bg-primary hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed self-end">
-                  Add
+                  {selectedIndex !== null ? 'Update' : 'Add'}
                 </button>
               </div>
             </div>
@@ -1994,9 +2057,25 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                       });
                       markChanged();
                     }}
-                    className={`relative inline-flex flex-shrink-0 h-5 w-9 border-2 border-transparent rounded-full cursor-pointer transition-all duration-200 hover:shadow-sm hover:shadow-primary/20 ${config.announcementBar.loop !== false ? 'bg-primary' : 'bg-surface-subtle hover:bg-primary/20'}`}
+                    aria-pressed={config.announcementBar.loop !== false}
+                    title={config.announcementBar.loop !== false ? 'Continuous loop' : 'Single pass'}
+                    className={`inline-flex flex-none items-center gap-2 rounded-full border px-4 py-[9px] text-[13px] font-medium cursor-pointer transition-colors duration-200 ${
+                      config.announcementBar.loop !== false
+                        ? 'border-transparent bg-primary/[0.13] text-primary hover:bg-primary/[0.18]'
+                        : 'border-border bg-surface-elevated text-on-surface-variant hover:border-primary/50 hover:text-primary'
+                    }`}
                   >
-                    <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transform transition duration-200 ${config.announcementBar.loop !== false ? 'translate-x-4' : 'translate-x-0'}`} />
+                    {config.announcementBar.loop !== false ? (
+                      <>
+                        <InfinityIcon className="w-4 h-4 loop-spin" />
+                        Continuous
+                      </>
+                    ) : (
+                      <>
+                        <MoveLeft className="w-4 h-4" />
+                        Single pass
+                      </>
+                    )}
                   </button>
                 </div>
 

@@ -21,6 +21,7 @@ import {
   History,
   FilePlus2,
   Sparkles,
+  Power,
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
 import { getBackgroundStyle, stripHtml } from "@/lib/utils";
@@ -57,7 +58,6 @@ interface PromoSectionProps {
   markChanged: () => void;
   toast: (message: string, isError?: boolean) => void;
   onSelectedVersionChange?: (versionId: string | null) => void;
-  onStopCampaign: () => Promise<void>;
 }
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
@@ -265,7 +265,6 @@ export function PromoSection({
   markChanged,
   toast,
   onSelectedVersionChange,
-  onStopCampaign,
 }: PromoSectionProps) {
   const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
     const date = new Date();
@@ -1758,14 +1757,33 @@ export function PromoSection({
     return () => document.removeEventListener("keydown", handleKeyDown);
   });
 
-  // Campaign activation is date-driven (selecting a date activates it). The
-  // control in the UI is one-way: it can only STOP a running campaign.
+  // Campaign status is two-way from the chip: tap to stop a running campaign,
+  // or tap to go live when stopped. Going live clears the stoppedByUser lock
+  // (otherwise publish would refuse to re-activate it). Both only flip local
+  // state + mark the promo dirty — the change goes live through the normal
+  // Save → Publish flow, same as the announcement bar.
   function stopCampaign() {
     if (!config.promoCard.active) return;
     setShowStopConfirm(true);
   }
 
-  async function confirmStopCampaign() {
+  function startCampaign() {
+    if (config.promoCard.active) return;
+    pushPromoState();
+    const nextPromoCard = {
+      ...config.promoCard,
+      active: true,
+      stoppedByUser: false,
+    };
+    setConfig({
+      ...config,
+      promoCard: nextPromoCard,
+    });
+    syncResetPromoEditsButton(nextPromoCard);
+    markChanged();
+  }
+
+  function confirmStopCampaign() {
     setShowStopConfirm(false);
     pushPromoState();
     const nextPromoCard = {
@@ -1778,7 +1796,7 @@ export function PromoSection({
       promoCard: nextPromoCard,
     });
     syncResetPromoEditsButton(nextPromoCard);
-    await onStopCampaign();
+    markChanged();
   }
 
   function openChatGptWithPromoPrompt() {
@@ -2989,6 +3007,7 @@ export function PromoSection({
                     />
                   </div>
                   <p className="mt-1 text-[11px] text-on-surface-variant">Select country code and enter number</p>
+                  <p className="mt-1 text-[11px] text-on-surface-variant">The button is shown on the card and opens a WhatsApp chat when clicked.</p>
                 </div>
               )}
 
@@ -3011,6 +3030,7 @@ export function PromoSection({
                     className="block w-full rounded-md p-2 border h-[44px] outline-none text-sm transition-colors border-border bg-surface text-on-surface focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70"
                   />
                   <p className="mt-1 text-[11px] text-on-surface-variant">Directions, mail, website — any URL</p>
+                  <p className="mt-1 text-[11px] text-on-surface-variant">The button is shown on the card and opens this link when clicked.</p>
                 </div>
               )}
 
@@ -3150,55 +3170,38 @@ export function PromoSection({
                     <label className="block text-[10px] text-on-surface-variant mb-0.5">
                       Status
                     </label>
-                    {/* Segmented pills with a sliding thumb. One-way: only
-                        "Stopped" is actionable; activation is date-driven.
-                        Stopped = left, Active = right; thumb slides right when
-                        the campaign is active. */}
-                    <div className="relative flex w-[136px] items-center rounded-full border border-border bg-surface-subtle p-0.5 text-[11px] font-semibold">
-                      {/* sliding highlight */}
-                      <span
-                        aria-hidden
-                        className={`absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full shadow-sm will-change-transform transition-[transform,background-color] duration-300 ease-in-out ${
-                          config.promoCard.active ? "bg-primary" : "bg-surface"
-                        }`}
-                        style={{
-                          transform: config.promoCard.active
-                            ? "translateX(100%)"
-                            : "translateX(0)",
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={stopCampaign}
-                        disabled={!config.promoCard.active}
-                        title={
-                          config.promoCard.active
-                            ? "Stop the running campaign"
-                            : "Campaign is stopped"
-                        }
-                        className={`relative z-10 flex-1 rounded-full py-1 text-center transition-colors ${
-                          !config.promoCard.active
-                            ? "text-on-surface cursor-default"
-                            : "text-on-surface-variant hover:text-on-surface cursor-pointer"
-                        }`}
-                      >
-                        {config.promoCard.active ? "Stop" : "Stopped"}
-                      </button>
-                      <span
-                        title={
-                          config.promoCard.active
-                            ? "Campaign is on air"
-                            : "Select a start/end date to activate the campaign"
-                        }
-                        className={`relative z-10 flex-1 rounded-full py-1 text-center transition-colors ${
-                          config.promoCard.active
-                            ? "text-on-primary"
-                            : "text-on-surface-variant/20"
-                        }`}
-                      >
-                        On Air
-                      </span>
-                    </div>
+                    {/* Status chip — whole pill flips with state, two-way:
+                        tap to stop a live campaign, or tap to go live when
+                        stopped (which clears the stoppedByUser lock). */}
+                    <button
+                      type="button"
+                      onClick={
+                        config.promoCard.active ? stopCampaign : startCampaign
+                      }
+                      aria-pressed={config.promoCard.active}
+                      title={
+                        config.promoCard.active
+                          ? "Stop the running campaign"
+                          : "Go live now"
+                      }
+                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold cursor-pointer transition-colors duration-200 ${
+                        config.promoCard.active
+                          ? "border-transparent bg-primary/[0.13] text-primary hover:bg-primary/[0.18]"
+                          : "border-border bg-surface-subtle text-on-surface-variant hover:border-primary/50 hover:text-primary"
+                      }`}
+                    >
+                      {config.promoCard.active ? (
+                        <>
+                          <span className="live-dot" />
+                          On air · tap to stop
+                        </>
+                      ) : (
+                        <>
+                          <Power className="h-3.5 w-3.5" />
+                          Stopped · tap to go live
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -4058,7 +4061,7 @@ export function PromoSection({
           <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
             <h2 className="text-base font-semibold">Stop this campaign?</h2>
             <p className="mt-2 text-sm text-on-surface-variant">
-              Your promo card will be removed from the website. Whenever you&apos;re ready to launch again, just set up a new card and hit publish &mdash; easy as that.
+              This marks the promo card to be taken off your website. It goes live once you <strong>save and publish</strong> &mdash; and you can start it again anytime from the status chip.
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button

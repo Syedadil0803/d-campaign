@@ -596,17 +596,6 @@ export default function Home() {
     setPublishConfirm({ warnings: [], onConfirm: handlePublishAnnouncement });
   }
 
-  async function handleStopCampaign() {
-    // Directly publish the stopped state to backend
-    const stoppedConfig = {
-      ...configRef.current,
-      promoCard: { ...configRef.current.promoCard, active: false, stoppedByUser: true },
-    };
-    await persistConfig(stoppedConfig, 'Campaign stopped — taken off your website', 'promo');
-    setHasPromoChanges(false);
-    setReadyToPublishPromo(false);
-  }
-
   async function handleSave() {
     let cfgToSave = config;
 
@@ -766,7 +755,6 @@ export default function Home() {
                 markChanged={markPromoChanged}
                 toast={toast}
                 onSelectedVersionChange={setSelectedPromoVersionId}
-                onStopCampaign={handleStopCampaign}
               />
             )}
           </div>
