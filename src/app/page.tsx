@@ -525,10 +525,27 @@ export default function Home() {
       promoCard: { ...prev.promoCard, active: true, stoppedByUser: false },
     };
     setConfig(turnedOn);
+    // "Same campaign" only if the content matches what's currently published
+    // (compare everything except the on/off status flags).
+    const contentSignature = (pc: CampaignConfig['promoCard']) => {
+      const { active, stoppedByUser, ...content } = pc;
+      return JSON.stringify(content);
+    };
+    let contentUnchanged = false;
+    if (publishedConfigRef.current) {
+      try {
+        const publishedPromo = (JSON.parse(publishedConfigRef.current) as CampaignConfig).promoCard;
+        contentUnchanged = contentSignature(publishedPromo) === contentSignature(prev.promoCard);
+      } catch {
+        contentUnchanged = false;
+      }
+    }
     setPublishConfirm({
       warnings: [],
       title: 'Go live?',
-      message: 'You have turned on the same campaign — do you want to go live?',
+      message: contentUnchanged
+        ? 'You have turned on the same campaign — do you want to go live?'
+        : 'Do you want to publish this campaign and go live?',
       confirmLabel: 'Publish',
       cancelLabel: 'Cancel',
       onConfirm: async () => {
