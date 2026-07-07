@@ -58,6 +58,7 @@ interface PromoSectionProps {
   markChanged: () => void;
   toast: (message: string, isError?: boolean) => void;
   onSelectedVersionChange?: (versionId: string | null) => void;
+  onStartCampaign: () => void;
 }
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
@@ -265,6 +266,7 @@ export function PromoSection({
   markChanged,
   toast,
   onSelectedVersionChange,
+  onStartCampaign,
 }: PromoSectionProps) {
   const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
     const date = new Date();
@@ -1769,18 +1771,8 @@ export function PromoSection({
 
   function startCampaign() {
     if (config.promoCard.active) return;
-    pushPromoState();
-    const nextPromoCard = {
-      ...config.promoCard,
-      active: true,
-      stoppedByUser: false,
-    };
-    setConfig({
-      ...config,
-      promoCard: nextPromoCard,
-    });
-    syncResetPromoEditsButton(nextPromoCard);
-    markChanged();
+    // Turning back on asks whether to go live (page owns the popup + publish).
+    onStartCampaign();
   }
 
   function confirmStopCampaign() {

@@ -52,7 +52,9 @@ export function Header({
 
   async function onSave() {
     setSaving(true);
-    await new Promise(r => setTimeout(r, 1000));
+    // Brief acknowledgment only — the actual save is instant (local draft).
+    // Kept at 500ms to match the publish loader for a consistent feel.
+    await new Promise(r => setTimeout(r, 500));
     if (activeTab === 'announcement') handleSaveAnnouncement();
     else handleSavePromo();
     setSaving(false);

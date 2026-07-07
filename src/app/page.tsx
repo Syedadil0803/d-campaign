@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import { CampaignConfig, defaultConfig } from '@/types/campaign';
 import { normalizeLegacyTimerTokens, TIMER_FIXED_TOKEN } from '@/lib/timerUtils';
 import { Header } from '@/components/Header';
@@ -181,8 +181,19 @@ export default function Home() {
   const [publishConfirm, setPublishConfirm] = useState<{
     warnings: string[];
     onConfirm: () => Promise<void> | void;
+    title?: string;
+    message?: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    // When true, confirm runs onConfirm as-is (e.g. to open a follow-up popup)
+    // WITHOUT the "Publishing…" state — avoids a flicker when chaining popups.
+    deferPublish?: boolean;
+    // Runs when the popup is dismissed (Cancel / backdrop) — e.g. to revert a
+    // provisional state change.
+    onCancel?: () => void;
   } | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [draftBanner, setDraftBanner] = useState<{ date: string } | null>(null);
   const mainScrollRef = useRef<HTMLElement>(null);
@@ -449,11 +460,24 @@ export default function Home() {
     }
   }
 
+  const ANNOUNCEMENT_PUBLISH_PROMPT = {
+    title: 'Changes saved',
+    message: 'Do you want to publish them to your website now?',
+    confirmLabel: 'Publish now',
+    cancelLabel: 'Not yet',
+  };
+
   async function handleSaveAnnouncement() {
     saveDraft(config);
     setHasAnnouncementChanges(false);
     setReadyToPublishAnnouncement(true);
-    toast('Changes saved locally');
+    toast('Changes saved — please publish to go live');
+    // Right after saving, ask whether to publish now (publish-later otherwise).
+    setPublishConfirm({
+      warnings: [],
+      onConfirm: handlePublishAnnouncement,
+      ...ANNOUNCEMENT_PUBLISH_PROMPT,
+    });
   }
 
   async function handlePublishAnnouncement() {
@@ -465,19 +489,68 @@ export default function Home() {
     saveDraft(config);
     setHasPromoChanges(false);
     setReadyToPublishPromo(true);
-    toast('Changes saved locally');
+    toast(
+      config.promoCard.active
+        ? 'Changes saved — please publish to go live'
+        : 'Changes saved — campaign is off',
+    );
+    // Step 1 popup: simple "publish now?" prompt (no Heads-up here). "Publish
+    // now" defers to the validation Heads-up popup (Step 2) rather than
+    // publishing directly; "Not yet" leaves it saved as Unpublished changes.
+    setPublishConfirm({
+      warnings: [],
+      onConfirm: promoPublishFromSavePrompt,
+      deferPublish: true,
+      title: 'Changes saved',
+      message: 'Do you want to publish them to your website now?',
+      confirmLabel: 'Publish now',
+      cancelLabel: 'Not yet',
+    });
+  }
+
+  // Turning a stopped promo back on from the status chip: flip it on
+  // provisionally and ask whether to go live. Publish → live; Cancel → revert
+  // to the previous (stopped) state.
+  function requestPromoGoLive() {
+    const prev = configRef.current;
+    const turnedOn = {
+      ...prev,
+      promoCard: { ...prev.promoCard, active: true, stoppedByUser: false },
+    };
+    setConfig(turnedOn);
+    setPublishConfirm({
+      warnings: [],
+      title: 'Go live?',
+      message: 'You have turned on the same campaign — do you want to go live?',
+      confirmLabel: 'Publish',
+      cancelLabel: 'Cancel',
+      onConfirm: async () => {
+        await persistConfig(turnedOn, 'Campaign is live on your website', 'promo');
+        setReadyToPublishPromo(false);
+      },
+      onCancel: () => setConfig(prev),
+    });
+  }
+
+  // Step 1 "Publish now" → if validation has anything to report, open the
+  // Heads-up validator popup (Step 2); otherwise publish straight away.
+  async function promoPublishFromSavePrompt() {
+    const warnings = validatePromo();
+    if (warnings.length > 0) {
+      handlePublishPromoWithValidation();
+      return;
+    }
+    setIsPublishing(true);
+    await handlePublishPromo();
+    await new Promise(r => setTimeout(r, 500));
+    setIsPublishing(false);
   }
 
   async function handlePublishPromo() {
-    let cfgToSave = { ...config };
+    const cfgToSave = { ...config };
 
-    // Activate on publish only if not intentionally stopped
-    const pc = cfgToSave.promoCard;
-    if (!pc.active && !pc.stoppedByUser) {
-      cfgToSave = { ...cfgToSave, promoCard: { ...pc, active: true } };
-      setConfig(cfgToSave);
-    }
-
+    // The status chip is the single source of truth for live/off — Publish just
+    // syncs the current state to the website (no implicit activation).
     const successMsg = cfgToSave.promoCard.active
       ? 'Campaign is live on your website'
       : 'Changes saved';
@@ -534,7 +607,11 @@ export default function Home() {
     });
 
     // 2. Schedule
-    if (!pc.startDate || !pc.endDate) {
+    // Publish syncs the current state, so an off card stays off — the "will go
+    // live / scheduled" wording only applies when the status is On air.
+    if (!pc.active) {
+      warnings.push("Campaign is off — it won't appear on your website until you set the status to On air");
+    } else if (!pc.startDate || !pc.endDate) {
       warnings.push('Start date or end date is not set');
     } else {
       const today = new Date().toISOString().split('T')[0];
@@ -588,12 +665,22 @@ export default function Home() {
 
   function handlePublishPromoWithValidation() {
     const warnings = validatePromo();
-    setPublishConfirm({ warnings, onConfirm: handlePublishPromo });
+    setPublishConfirm({
+      warnings,
+      onConfirm: handlePublishPromo,
+      message: config.promoCard.active
+        ? undefined
+        : "Your changes will be saved, but the campaign is off — it won't appear on your website until you set the status to On air.",
+    });
   }
 
   function handlePublishAnnouncementWithValidation() {
-    // Simple confirmation for announcement
-    setPublishConfirm({ warnings: [], onConfirm: handlePublishAnnouncement });
+    // Same confirmation popup as the post-save prompt (Step 3).
+    setPublishConfirm({
+      warnings: [],
+      onConfirm: handlePublishAnnouncement,
+      ...ANNOUNCEMENT_PUBLISH_PROMPT,
+    });
   }
 
   async function handleSave() {
@@ -755,6 +842,7 @@ export default function Home() {
                 markChanged={markPromoChanged}
                 toast={toast}
                 onSelectedVersionChange={setSelectedPromoVersionId}
+                onStartCampaign={requestPromoGoLive}
               />
             )}
           </div>
@@ -914,11 +1002,11 @@ export default function Home() {
       {/* Publish Confirmation */}
       {publishConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0" onClick={() => setPublishConfirm(null)} />
+          <div className="absolute inset-0" onClick={() => { if (isConfirming) return; publishConfirm.onCancel?.(); setPublishConfirm(null); }} />
           <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
-            <h2 className="text-base font-semibold">Publish to website?</h2>
+            <h2 className="text-base font-semibold">{publishConfirm.title ?? 'Publish to website?'}</h2>
             <p className="mt-2 text-sm text-on-surface-variant">
-              These changes will go live on your website immediately.
+              {publishConfirm.message ?? 'These changes will go live on your website immediately.'}
             </p>
             {publishConfirm.warnings.length > 0 && (
               <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
@@ -936,24 +1024,38 @@ export default function Home() {
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setPublishConfirm(null)}
-                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+                disabled={isConfirming}
+                onClick={() => { publishConfirm.onCancel?.(); setPublishConfirm(null); }}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary disabled:opacity-50"
               >
-                Cancel
+                {publishConfirm.cancelLabel ?? 'Cancel'}
               </button>
               <button
                 type="button"
+                disabled={isConfirming}
                 onClick={async () => {
                   const onConfirm = publishConfirm.onConfirm;
-                  setPublishConfirm(null);
+                  const defer = publishConfirm.deferPublish;
+                  if (defer) {
+                    // Chaining to a follow-up popup — don't show "Publishing…".
+                    setPublishConfirm(null);
+                    await onConfirm();
+                    return;
+                  }
+                  // Keep the popup open with a loader on this button until the
+                  // publish finishes, then close it.
+                  setIsConfirming(true);
                   setIsPublishing(true);
                   await onConfirm();
-                  await new Promise(r => setTimeout(r, 1000));
+                  await new Promise(r => setTimeout(r, 500));
+                  setIsConfirming(false);
                   setIsPublishing(false);
+                  setPublishConfirm(null);
                 }}
-                className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+                className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:opacity-80"
               >
-                Publish Now
+                {isConfirming && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isConfirming ? 'Publishing…' : (publishConfirm.confirmLabel ?? 'Publish Now')}
               </button>
             </div>
           </div>
