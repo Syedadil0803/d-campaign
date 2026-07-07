@@ -3,22 +3,32 @@ import { campaignService } from '@/services/campaignService';
 import { CampaignConfig } from '@/types/campaign';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
-// R2 S3-compatible client (EU jurisdiction bucket)
-const r2Client = new S3Client({
-  region: 'auto',
-  endpoint: `https://${process.env.R2_ACCOUNT_ID}.eu.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
-  },
-});
+// This route talks to the DB + R2 at request time — never prerender it.
+export const dynamic = 'force-dynamic';
 
 const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || 'devlinproject';
 const R2_CONFIG_KEY = 'campaign-config.json';
 
+// Lazily create the R2 client on first use (not at module load), so `next build`
+// doesn't need the R2 env vars.
+let _r2Client: S3Client | null = null;
+function getR2Client(): S3Client {
+  if (!_r2Client) {
+    _r2Client = new S3Client({
+      region: 'auto',
+      endpoint: `https://${process.env.R2_ACCOUNT_ID}.eu.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+      },
+    });
+  }
+  return _r2Client;
+}
+
 async function syncToR2(config: CampaignConfig): Promise<void> {
   try {
-    await r2Client.send(
+    await getR2Client().send(
       new PutObjectCommand({
         Bucket: R2_BUCKET_NAME,
         Key: R2_CONFIG_KEY,

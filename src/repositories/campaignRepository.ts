@@ -1,4 +1,4 @@
-import { db } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { campaignConfig } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
 import { CampaignConfig } from '@/types/campaign';
@@ -6,7 +6,7 @@ import { CampaignConfig } from '@/types/campaign';
 export const campaignRepository = {
   async getConfig(): Promise<CampaignConfig | null> {
     try {
-      const result = await db.select().from(campaignConfig).where(eq(campaignConfig.id, 'default')).limit(1);
+      const result = await getDb().select().from(campaignConfig).where(eq(campaignConfig.id, 'default')).limit(1);
       
       if (result.length === 0) {
         return null;
@@ -28,7 +28,7 @@ export const campaignRepository = {
 
   async saveConfig(config: CampaignConfig): Promise<boolean> {
     try {
-      await db
+      await getDb()
         .insert(campaignConfig)
         .values({
           id: 'default',
