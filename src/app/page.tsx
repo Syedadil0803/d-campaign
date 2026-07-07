@@ -528,7 +528,9 @@ export default function Home() {
     // "Same campaign" only if the content matches what's currently published
     // (compare everything except the on/off status flags).
     const contentSignature = (pc: CampaignConfig['promoCard']) => {
-      const { active, stoppedByUser, ...content } = pc;
+      const content: Record<string, unknown> = { ...pc };
+      delete content.active;
+      delete content.stoppedByUser;
       return JSON.stringify(content);
     };
     let contentUnchanged = false;
