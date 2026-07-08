@@ -54,7 +54,10 @@ import { TIMER_MIN_CONTENT_WIDTH } from "@/components/timer-lexical/lineMeasure"
 
 interface PromoSectionProps {
   config: CampaignConfig;
-  setConfig: (config: CampaignConfig) => void;
+  // Accepts a value OR a functional updater (React useState setter). The
+  // functional form matters where two setConfig calls fire in one batch (timer
+  // onChange + onStateJson) and must merge instead of clobber via a stale closure.
+  setConfig: (config: CampaignConfig | ((prev: CampaignConfig) => CampaignConfig)) => void;
   markChanged: () => void;
   toast: (message: string, isError?: boolean) => void;
   onSelectedVersionChange?: (versionId: string | null) => void;
@@ -131,11 +134,19 @@ function measureOverflowAtWidth(html: string, field: 'title' | 'subtitle' | 'des
   ghost.style.cssText = `
     position:absolute;visibility:hidden;pointer-events:none;
     width:${width}px;padding:0;
-    font-family:inherit;line-height:1.5;
+    font-family:inherit;line-height:1.5;letter-spacing:normal;
     word-break:break-word;overflow-wrap:break-word;
     white-space:nowrap;
   `;
   ghost.innerHTML = html;
+  // Letter-spacing is not a supported concept and the live preview strips it
+  // (.promo-live-preview reset). Old configs still carry inline letter-spacing,
+  // which would make this ghost measure WIDER than the text actually renders —
+  // reading the field as "full" with visible room left. Neutralize it so the
+  // check matches what the user sees.
+  ghost.querySelectorAll('*').forEach((el) => {
+    (el as HTMLElement).style.letterSpacing = 'normal';
+  });
   document.body.appendChild(ghost);
   const singleLineHeight = ghost.offsetHeight;
 
@@ -3222,7 +3233,7 @@ export function PromoSection({
               {(
                 <div
                   ref={promoCardRef}
-                  className={`relative rounded-xl shadow-2xl p-5 flex flex-col ${
+                  className={`promo-live-preview relative rounded-xl shadow-2xl p-5 flex flex-col ${
                     config.promoCard.style.position === "bottom-right"
                       ? "justify-self-end self-end"
                       : config.promoCard.style.position === "bottom-left"
@@ -3233,7 +3244,15 @@ export function PromoSection({
                   }`}
                   style={{
                     width: `${cardWidth}px`,
-                    maxHeight: '360px',
+                    // No max-height: the live widget card grows to fit its content
+                    // (it's position:fixed on the site), so capping it here clipped
+                    // the preview and forced a scroll that never happens on the site.
+                    // Render the preview in the SAME system font the widget uses
+                    // so line-wrapping is identical (WYSIWYG). The app's Geist is
+                    // a different, wider cut than the widget could reliably load,
+                    // which made text wrap differently between tool and site.
+                    fontFamily:
+                      '-apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
                     background: getBackgroundStyle(
                       config.promoCard.style.background,
                     ),
@@ -3433,26 +3452,34 @@ export function PromoSection({
                           }, 0);
                         }}
                         onChange={(nextTimerText) => {
-                          if (nextTimerText === (config.promoCard.timerText ?? '')) return;
-                          setConfig({
-                            ...config,
-                            promoCard: { ...config.promoCard, timerText: nextTimerText },
-                          });
+                          // Functional update: this fires in the SAME batch as
+                          // onStateJson below. Spreading a stale closure `config`
+                          // in both makes the second setConfig clobber the first
+                          // (that desynced timerText from timerStateJson — stale
+                          // suffixes like "on a" survived in timerText only).
+                          setConfig((prev) =>
+                            nextTimerText === (prev.promoCard.timerText ?? '')
+                              ? prev
+                              : { ...prev, promoCard: { ...prev.promoCard, timerText: nextTimerText } },
+                          );
                           markChanged();
                         }}
                         onStateJson={(json) => {
-                          if (json === (config.promoCard.timerStateJson ?? '')) return;
                           // The timer can also drive the 400→440 stretch.
                           const w = computeCardWidth(config.promoCard);
                           setCardWidth(w);
-                          setConfig({
-                            ...config,
-                            promoCard: {
-                              ...config.promoCard,
-                              timerStateJson: json,
-                              cardWidth: w,
-                            },
-                          });
+                          // Functional update so this merges onto the latest state
+                          // (incl. the timerText just set by onChange) instead of
+                          // overwriting it from a stale closure — keeps timerText
+                          // and timerStateJson in sync.
+                          setConfig((prev) =>
+                            json === (prev.promoCard.timerStateJson ?? '')
+                              ? prev
+                              : {
+                                  ...prev,
+                                  promoCard: { ...prev.promoCard, timerStateJson: json, cardWidth: w },
+                                },
+                          );
                           markChanged();
                         }}
                         // 1-line limit is enforced inside the editor (plugin);
@@ -4269,6 +4296,13 @@ export function PromoSection({
         </div>
       )}
       <style jsx global>{`
+        /* Letter-spacing is not a supported styling concept (no control for it).
+           A few sample templates hard-coded it; neutralize it in the live preview
+           so the tool renders plain — matching the widget, which also drops it. */
+        .promo-live-preview,
+        .promo-live-preview * {
+          letter-spacing: normal !important;
+        }
         .promo-standard-editor,
         .promo-standard-editor * {
           color: rgb(var(--on-surface)) !important;

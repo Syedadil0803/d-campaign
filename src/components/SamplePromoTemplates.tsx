@@ -61,7 +61,7 @@ const sampleTemplates = [
     name: 'Festival Spotlight',
     promoCard: {
       active: false,
-      title: '<strong>Weekend Carpet Festival</strong> <span style="font-size: 0.8rem; letter-spacing:0.08em;">LIMITED DROP</span>',
+      title: '<strong>Weekend Carpet Festival</strong> <span style="font-size: 0.8rem;">LIMITED DROP</span>',
       subtitle: '<span style="font-size: 0.85rem;">Flat</span> <span style="font-size: 1.35rem;"><strong>35% OFF</strong></span> + Free Delivery',
       description: 'Give your room a full glow-up with premium carpets. Apply <strong>COZY35</strong> before this drop disappears.',
       buttonText: 'Reveal My Offer',
@@ -301,7 +301,7 @@ const sampleTemplates = [
     name: 'Autumn Sale',
     promoCard: {
       active: false,
-      title: '<strong>Autumn Harvest Sale</strong> <span style="font-size:0.8rem; letter-spacing:0.08em;">FALL EDIT</span>',
+      title: '<strong>Autumn Harvest Sale</strong> <span style="font-size:0.8rem;">FALL EDIT</span>',
       subtitle: '<span style="font-size:0.85rem;">Up to</span> <span style="font-size:1.35rem;"><strong>40% OFF</strong></span> warm-tone rugs',
       description: 'Wrap your home in the colors of the season — rust, amber, and deep berry weaves crafted for cozy autumn evenings.',
       buttonText: 'Shop Autumn Edit',
@@ -349,7 +349,7 @@ const sampleTemplates = [
     name: 'Home Makeover',
     promoCard: {
       active: false,
-      title: '<span style="font-size:0.75rem; letter-spacing:0.25em;">THE</span> <strong style="font-size:1.6rem;">MAKEOVER</strong> <span style="font-size:0.75rem; letter-spacing:0.25em;">EVENT</span>',
+      title: '<span style="font-size:0.75rem;">THE</span> <strong style="font-size:1.6rem;">MAKEOVER</strong> <span style="font-size:0.75rem;">EVENT</span>',
       subtitle: 'Redesign every room — <strong>floor up</strong>. Curated looks, styled for you.',
       description: 'From statement rugs to layered runners, our stylists picked the pieces that transform a space in a single weekend.',
       buttonText: 'Start My Makeover →',
@@ -397,7 +397,7 @@ const sampleTemplates = [
     name: 'Easter Sale',
     promoCard: {
       active: false,
-     title: '<strong style="font-size:1.25rem;">Easter Bloom Sale</strong> <span style="font-size:0.7rem; letter-spacing:0.15em;">🐣 SPRING DROP</span>',
+     title: '<strong style="font-size:1.25rem;">Easter Bloom Sale</strong> <span style="font-size:0.7rem;">🐣 SPRING DROP</span>',
       subtitle: '<span style="font-size:0.85rem;">Hop in for</span> <span style="font-size:1.4rem;"><strong>30% OFF</strong></span> <span style="font-size:0.85rem;">+ a free runner</span>',
       description: 'Pastel weaves, fresh florals, and feather-soft textures to wake up your home for the season of new beginnings.',
       buttonText: 'Unwrap the Offer 🥚',
@@ -445,7 +445,7 @@ const sampleTemplates = [
     name: 'Christmas Sale',
     promoCard: {
       active: false,
-      title: '<span style="font-size:0.75rem; letter-spacing:0.2em;">❄ THE</span> <strong style="font-size:1.6rem;">CHRISTMAS</strong> <span style="font-size:0.9rem;">Sale</span>',
+      title: '<span style="font-size:0.75rem;">❄ THE</span> <strong style="font-size:1.6rem;">CHRISTMAS</strong> <span style="font-size:0.9rem;">Sale</span>',
       subtitle: '<span style="font-size:1.3rem;"><strong>Up to 50% OFF</strong></span> <span style="font-size:0.8rem;">+ gift-wrapped delivery</span>',
       description: 'Dress your home for the holidays with plush, warm-toned rugs that turn every room into a cozy celebration.',
       buttonText: '🎁 Claim Holiday Deal',
@@ -493,7 +493,7 @@ const sampleTemplates = [
     name: 'New Year Sale',
     promoCard: {
       active: false,
-      title: '<span style="font-size:2rem;"><strong>2026</strong></span> <span style="font-size:0.8rem; letter-spacing:0.25em;">NEW YEAR SALE</span>',
+      title: '<span style="font-size:2rem;"><strong>2026</strong></span> <span style="font-size:0.8rem;">NEW YEAR SALE</span>',
       subtitle: '<span style="font-size:0.85rem;">Pop into savings —</span> <span style="font-size:1.35rem;"><strong>up to 60% OFF</strong></span>',
       description: 'Ring in the new year with a fresh floor. Clearance pricing on our best-selling weaves while stocks last.',
       buttonText: 'Toast to the Deal 🥂',
@@ -541,7 +541,7 @@ const sampleTemplates = [
     name: 'Summer Offers',
     promoCard: {
       active: false,
-     title: '<strong style="font-size:1.25rem;">Summer Splash Sale</strong> <span style="font-size:0.7rem; letter-spacing:0.15em;">☀ HOT DEALS</span>',
+     title: '<strong style="font-size:1.25rem;">Summer Splash Sale</strong> <span style="font-size:0.7rem;">☀ HOT DEALS</span>',
       subtitle: '<span style="font-size:1.4rem;"><strong>Buy 2 Get 1 Free</strong></span> <span style="font-size:0.8rem;">on all summer weaves</span>',
       description: 'Lighten up every room with breezy, easy-clean rugs in vibrant sun-soaked shades — built for barefoot season.',
       buttonText: 'Dive Into Savings 🌊',
