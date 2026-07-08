@@ -734,6 +734,19 @@ export function PromoSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.promoCard.title, config.promoCard.subtitle, config.promoCard.description, config.promoCard.buttonText, config.promoCard.cardWidth]);
 
+  // The preview renders at the local `cardWidth`, but only `config.promoCard.cardWidth`
+  // gets persisted and published to R2 (and read by the live widget). Those can drift:
+  // the width is recomputed into local state on load / text edits / timer changes, yet
+  // it's only written back to config on some of those paths. Mirror the displayed width
+  // into config here so publishing always saves the number the user actually sees — and
+  // the site matches the tool. No-op (stable) once they already agree.
+  useEffect(() => {
+    if (cardWidth && cardWidth !== config.promoCard.cardWidth) {
+      setConfig({ ...config, promoCard: { ...config.promoCard, cardWidth } });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardWidth]);
+
   // Keep preview subtitle DOM in sync without re-rendering innerHTML every state change,
   // so text selection in preview is not reset.
   useEffect(() => {
