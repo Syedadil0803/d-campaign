@@ -487,8 +487,10 @@ export default function Home() {
       ...config,
       announcementBar: { ...config.announcementBar, active: true },
     };
-    setConfig(next);
+    // Flip the chip to On Air only AFTER the publish finishes — so it appears
+    // when the "Publishing…" loader completes, not at the start.
     await persistConfig(next, 'Changes are live on your website', 'announcement');
+    setConfig(next);
     setReadyToPublishAnnouncement(false);
   }
 
@@ -579,23 +581,28 @@ export default function Home() {
       ...config,
       promoCard: { ...config.promoCard, active: true, stoppedByUser: false },
     };
-    setConfig(cfgToSave);
     const successMsg = 'Campaign is live on your website';
 
     const variantStatus = await getPromoVariantSaveStatus(cfgToSave);
     if (variantStatus === 'pending') {
+      // Variant decision dialog handles the actual publish next.
+      setConfig(cfgToSave);
       setPendingVariantSave({ config: cfgToSave, versions: await listVersions() });
       return;
     }
 
+    // Flip the chip to On Air only AFTER the publish finishes — so it appears
+    // when the "Publishing…" loader completes, not at the start.
     if (variantStatus === 'ready') {
       await savePromoVariant(cfgToSave);
       await persistConfig(cfgToSave, successMsg, 'promo');
+      setConfig(cfgToSave);
       setReadyToPublishPromo(false);
       return;
     }
 
     await persistConfig(cfgToSave, successMsg, 'promo');
+    setConfig(cfgToSave);
     setReadyToPublishPromo(false);
   }
 

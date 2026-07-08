@@ -286,7 +286,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   const SCROLL_SPEED_PX_PER_SEC = 60; // constant visual speed regardless of content length
 
   useEffect(() => {
-    if (!scrollContainerRef.current || !config.announcementBar.active) return;
+    // Preview loops in both states — don't gate the marquee calc on active.
+    if (!scrollContainerRef.current) return;
     const container = scrollContainerRef.current;
     const containerWidth = container.clientWidth;
     if (containerWidth <= 0) return;
@@ -1017,7 +1018,10 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
         <div className="py-4 border-border rounded-md">
           <h4 className="text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] mb-4">Preview</h4>
           <div className="w-full bg-surface-elevated border-border rounded overflow-hidden">
-            {config.announcementBar.active && visibleAnnouncements.length > 0 && (
+            {/* Preview always shows the content (with looping) whenever there
+                are visible announcements — even when the campaign is stopped.
+                On/off only affects the live site, not this preview. */}
+            {visibleAnnouncements.length > 0 && (
               <div ref={scrollContainerRef} className="h-10 text-sm font-medium overflow-hidden flex items-center group"
                 style={{
                   background: getBackgroundStyle(previewBg),
@@ -1051,13 +1055,17 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                 </div>
               </div>
             )}
-            {!(config.announcementBar.active && visibleAnnouncements.length > 0) && (
-              <div className="h-12 bg-surface-elevated flex items-center justify-between px-4 border-b border-border">
-                <div className="w-24 h-4 bg-surface-subtle rounded" />
-                <div className="flex space-x-2">
-                  <div className="w-12 h-4 bg-surface-subtle rounded" />
-                  <div className="w-12 h-4 bg-surface-subtle rounded" />
-                </div>
+            {visibleAnnouncements.length === 0 && (
+              // No announcements yet — show the configured background so the
+              // admin can preview/tune the bar's styling before adding text.
+              <div
+                className="h-10 flex items-center justify-center text-sm font-medium"
+                style={{
+                  background: getBackgroundStyle(previewBg),
+                  color: config.announcementBar.style.textColor,
+                }}
+              >
+                <span className="opacity-60">Your announcement will appear here</span>
               </div>
             )}
           </div>
