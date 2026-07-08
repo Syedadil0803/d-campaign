@@ -2405,8 +2405,8 @@ export function PromoSection({
           {/* Header + Toggle */}
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <div className="p-2 bg-pink-100 rounded-lg mr-3">
-                <Gift className="w-4 h-4 text-pink-600" />
+              <div className="p-1 bg-primary/15 rounded-lg mr-3 border border-primary/60">
+                <Gift className="w-4 h-4 text-primary" />
               </div>
               <div>
                 <h3 className="text-[1.75rem] leading-9 font-bold text-on-surface">
@@ -2489,7 +2489,7 @@ export function PromoSection({
           </div>
 
           <div className="!mt-8">
-            <h4 className="text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">
+            <h4 className="text-2xl font-semibold leading-8 text-on-surface">
               Content
             </h4>
             <p className="mt-2 text-sm text-on-surface-variant">
@@ -2684,7 +2684,7 @@ export function PromoSection({
           </div>
 
           <div className="!mt-8">
-            <h4 className="text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">
+            <h4 className="text-2xl font-semibold leading-8 text-on-surface">
               Schedule
             </h4>
             <p className="mt-2 text-sm text-on-surface-variant">
@@ -2802,7 +2802,7 @@ export function PromoSection({
           </div>
 
           <div className="!mt-8">
-            <h4 className="text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">
+            <h4 className="text-2xl font-semibold leading-8 text-on-surface">
               Call To Action
             </h4>
             <p className="mt-2 text-sm text-on-surface-variant">

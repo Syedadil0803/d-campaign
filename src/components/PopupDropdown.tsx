@@ -23,6 +23,10 @@ interface PopupDropdownProps {
   menuPosition: { top: number; left: number; width: number } | null;
   arrowDirection?: 'down' | 'right';
   compact?: boolean;
+  // Optional overrides so the trigger can line up with neighbouring fields
+  // (e.g. match a color-picker's label style and height).
+  labelClassName?: string;
+  buttonExtraClassName?: string;
 }
 
 export function PopupDropdown({
@@ -39,6 +43,8 @@ export function PopupDropdown({
   menuPosition,
   arrowDirection = 'down',
   compact = false,
+  labelClassName,
+  buttonExtraClassName,
 }: PopupDropdownProps) {
   const selectedLabel = options.find((option) => option.value === value)?.label ?? value;
   const popupWidth = menuPosition?.width ?? 260;
@@ -97,7 +103,7 @@ export function PopupDropdown({
 
   return (
     <div>
-      <label className={compact ? 'block text-[10px] text-on-surface-variant mb-0.5' : 'block text-xs text-on-surface-variant mb-1'}>{label}</label>
+      <label className={labelClassName ?? (compact ? 'block text-[10px] text-on-surface-variant mb-0.5' : 'block text-xs text-on-surface-variant mb-1')}>{label}</label>
       <button
         ref={buttonRef}
         type="button"
@@ -105,9 +111,9 @@ export function PopupDropdown({
           e.preventDefault();
           onOpen();
         }}
-        className={compact
+        className={`${compact
           ? 'flex h-9 w-full items-center justify-between gap-2 rounded-md border border-white/10 bg-black/10 px-2 py-1 text-left text-xs text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10'
-          : 'flex w-full items-center justify-between gap-2 rounded-md border border-white/10 bg-black/10 p-2 text-left text-sm text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10'}
+          : 'flex w-full items-center justify-between gap-2 rounded-md border border-white/10 bg-black/10 p-2 text-left text-sm text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10'}${buttonExtraClassName ? ' ' + buttonExtraClassName : ''}`}
       >
         <span className="truncate">{selectedLabel}</span>
         <svg

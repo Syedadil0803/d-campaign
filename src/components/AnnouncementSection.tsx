@@ -1920,6 +1920,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                     <div>
                       <PopupDropdown
                         label="Direction"
+                        labelClassName="block text-sm font-semibold text-on-surface mb-2"
+                        buttonExtraClassName="h-11"
                         value={bg.direction || 'to right'}
                         options={[
                           { value: 'to right', label: 'To Right →' },
