@@ -471,11 +471,7 @@ export default function Home() {
     saveDraft(config);
     setHasAnnouncementChanges(false);
     setReadyToPublishAnnouncement(true);
-    toast(
-      config.announcementBar.active
-        ? 'Changes saved — please publish to go live'
-        : 'Changes saved — announcement is off',
-    );
+    toast('Changes saved — please publish to go live');
     // Right after saving, ask whether to publish now (publish-later otherwise).
     setPublishConfirm({
       warnings: [],
@@ -484,11 +480,37 @@ export default function Home() {
     });
   }
 
+  // Publishing content turns the campaign On Air (BR: "On Air starts the moment
+  // you click Publish"). New/edited content always goes live on publish.
   async function handlePublishAnnouncement() {
-    const successMsg = config.announcementBar.active
-      ? 'Changes are live on your website'
-      : 'Changes saved';
-    await persistConfig(config, successMsg, 'announcement');
+    const next = {
+      ...config,
+      announcementBar: { ...config.announcementBar, active: true },
+    };
+    setConfig(next);
+    await persistConfig(next, 'Changes are live on your website', 'announcement');
+    setReadyToPublishAnnouncement(false);
+  }
+
+  // Immediate status changes from the on-air chip — no Save → Publish. Stopping
+  // takes the campaign off now; "Go on air" reactivates the same content now.
+  async function stopAnnouncementNow() {
+    const next = {
+      ...configRef.current,
+      announcementBar: { ...configRef.current.announcementBar, active: false },
+    };
+    setConfig(next);
+    await persistConfig(next, 'Campaign switched off — no longer on your website', 'announcement');
+    setReadyToPublishAnnouncement(false);
+  }
+
+  async function goOnAirAnnouncementNow() {
+    const next = {
+      ...configRef.current,
+      announcementBar: { ...configRef.current.announcementBar, active: true },
+    };
+    setConfig(next);
+    await persistConfig(next, 'Campaign is live on your website', 'announcement');
     setReadyToPublishAnnouncement(false);
   }
 
@@ -496,11 +518,7 @@ export default function Home() {
     saveDraft(config);
     setHasPromoChanges(false);
     setReadyToPublishPromo(true);
-    toast(
-      config.promoCard.active
-        ? 'Changes saved — please publish to go live'
-        : 'Changes saved — campaign is off',
-    );
+    toast('Changes saved — please publish to go live');
     // Step 1 popup: simple "publish now?" prompt (no Heads-up here). "Publish
     // now" defers to the validation Heads-up popup (Step 2) rather than
     // publishing directly; "Not yet" leaves it saved as Unpublished changes.
@@ -518,44 +536,26 @@ export default function Home() {
   // Turning a stopped promo back on from the status chip: flip it on
   // provisionally and ask whether to go live. Publish → live; Cancel → revert
   // to the previous (stopped) state.
-  function requestPromoGoLive() {
-    const prev = configRef.current;
-    const turnedOn = {
-      ...prev,
-      promoCard: { ...prev.promoCard, active: true, stoppedByUser: false },
+  // Immediate status changes from the promo status chip — no Save → Publish.
+  // Stopping takes the card off now; "Go on air" reactivates the same content.
+  async function stopPromoNow() {
+    const next = {
+      ...configRef.current,
+      promoCard: { ...configRef.current.promoCard, active: false, stoppedByUser: true },
     };
-    setConfig(turnedOn);
-    // "Same campaign" only if the content matches what's currently published
-    // (compare everything except the on/off status flags).
-    const contentSignature = (pc: CampaignConfig['promoCard']) => {
-      const content: Record<string, unknown> = { ...pc };
-      delete content.active;
-      delete content.stoppedByUser;
-      return JSON.stringify(content);
+    setConfig(next);
+    await persistConfig(next, 'Campaign switched off — no longer on your website', 'promo');
+    setReadyToPublishPromo(false);
+  }
+
+  async function goOnAirPromoNow() {
+    const next = {
+      ...configRef.current,
+      promoCard: { ...configRef.current.promoCard, active: true, stoppedByUser: false },
     };
-    let contentUnchanged = false;
-    if (publishedConfigRef.current) {
-      try {
-        const publishedPromo = (JSON.parse(publishedConfigRef.current) as CampaignConfig).promoCard;
-        contentUnchanged = contentSignature(publishedPromo) === contentSignature(prev.promoCard);
-      } catch {
-        contentUnchanged = false;
-      }
-    }
-    setPublishConfirm({
-      warnings: [],
-      title: 'Go live?',
-      message: contentUnchanged
-        ? 'You have turned on the same campaign — do you want to go live?'
-        : 'Do you want to publish this campaign and go live?',
-      confirmLabel: 'Publish',
-      cancelLabel: 'Cancel',
-      onConfirm: async () => {
-        await persistConfig(turnedOn, 'Campaign is live on your website', 'promo');
-        setReadyToPublishPromo(false);
-      },
-      onCancel: () => setConfig(prev),
-    });
+    setConfig(next);
+    await persistConfig(next, 'Campaign is live on your website', 'promo');
+    setReadyToPublishPromo(false);
   }
 
   // Step 1 "Publish now" → if validation has anything to report, open the
@@ -573,13 +573,14 @@ export default function Home() {
   }
 
   async function handlePublishPromo() {
-    const cfgToSave = { ...config };
-
-    // The status chip is the single source of truth for live/off — Publish just
-    // syncs the current state to the website (no implicit activation).
-    const successMsg = cfgToSave.promoCard.active
-      ? 'Campaign is live on your website'
-      : 'Changes saved';
+    // Publishing content turns the campaign On Air ("On Air starts the moment
+    // you click Publish"). Off is reached via the Stop chip, not by publishing.
+    const cfgToSave = {
+      ...config,
+      promoCard: { ...config.promoCard, active: true, stoppedByUser: false },
+    };
+    setConfig(cfgToSave);
+    const successMsg = 'Campaign is live on your website';
 
     const variantStatus = await getPromoVariantSaveStatus(cfgToSave);
     if (variantStatus === 'pending') {
@@ -632,12 +633,8 @@ export default function Home() {
       }
     });
 
-    // 2. Schedule
-    // Publish syncs the current state, so an off card stays off — the "will go
-    // live / scheduled" wording only applies when the status is On air.
-    if (!pc.active) {
-      warnings.push("Campaign is off — it won't appear on your website until you set the status to On air");
-    } else if (!pc.startDate || !pc.endDate) {
+    // 2. Schedule — publishing turns the card On Air, so it will run.
+    if (!pc.startDate || !pc.endDate) {
       warnings.push('Start date or end date is not set');
     } else {
       const today = new Date().toISOString().split('T')[0];
@@ -691,13 +688,7 @@ export default function Home() {
 
   function handlePublishPromoWithValidation() {
     const warnings = validatePromo();
-    setPublishConfirm({
-      warnings,
-      onConfirm: handlePublishPromo,
-      message: config.promoCard.active
-        ? undefined
-        : "Your changes will be saved, but the campaign is off — it won't appear on your website until you set the status to On air.",
-    });
+    setPublishConfirm({ warnings, onConfirm: handlePublishPromo });
   }
 
   function handlePublishAnnouncementWithValidation() {
@@ -822,6 +813,43 @@ export default function Home() {
 
   const selectedPendingVariant = getSelectedPendingVariant();
 
+  // "Go on air" is a one-click reactivation, allowed only when the announcement
+  // is off AND its content matches what's currently published (same content,
+  // not new/edited). Otherwise the user must Save → Publish.
+  const announcementCanReactivate = (() => {
+    if (config.announcementBar.active) return false;
+    if (!publishedConfigRef.current) return false;
+    try {
+      const pub = JSON.parse(publishedConfigRef.current) as CampaignConfig;
+      const sig = (ab: CampaignConfig['announcementBar']) => {
+        const clone: Record<string, unknown> = { ...ab };
+        delete clone.active;
+        return JSON.stringify(clone);
+      };
+      return sig(config.announcementBar) === sig(pub.announcementBar);
+    } catch {
+      return false;
+    }
+  })();
+
+  // Same rule for the promo card (ignore active + stoppedByUser status flags).
+  const promoCanReactivate = (() => {
+    if (config.promoCard.active) return false;
+    if (!publishedConfigRef.current) return false;
+    try {
+      const pub = JSON.parse(publishedConfigRef.current) as CampaignConfig;
+      const sig = (pc: CampaignConfig['promoCard']) => {
+        const clone: Record<string, unknown> = { ...pc };
+        delete clone.active;
+        delete clone.stoppedByUser;
+        return JSON.stringify(clone);
+      };
+      return sig(config.promoCard) === sig(pub.promoCard);
+    } catch {
+      return false;
+    }
+  })();
+
   return (
     <div className="campaign-page-bg flex h-screen text-on-surface">
       <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -858,6 +886,9 @@ export default function Home() {
                 config={config}
                 setConfig={setConfig}
                 markChanged={markAnnouncementChanged}
+                canReactivate={announcementCanReactivate}
+                onStop={stopAnnouncementNow}
+                onGoOnAir={goOnAirAnnouncementNow}
               />
             )}
 
@@ -868,7 +899,9 @@ export default function Home() {
                 markChanged={markPromoChanged}
                 toast={toast}
                 onSelectedVersionChange={setSelectedPromoVersionId}
-                onStartCampaign={requestPromoGoLive}
+                canReactivate={promoCanReactivate}
+                onStop={stopPromoNow}
+                onGoOnAir={goOnAirPromoNow}
               />
             )}
           </div>

@@ -58,7 +58,12 @@ interface PromoSectionProps {
   markChanged: () => void;
   toast: (message: string, isError?: boolean) => void;
   onSelectedVersionChange?: (versionId: string | null) => void;
-  onStartCampaign: () => void;
+  // "Go on air" is a one-click reactivation, only when the current content
+  // matches what's published (same content, not new/edited).
+  canReactivate: boolean;
+  // Immediate on/off (no Save → Publish) — the page persists the status change.
+  onStop: () => void;
+  onGoOnAir: () => void;
 }
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
@@ -266,7 +271,9 @@ export function PromoSection({
   markChanged,
   toast,
   onSelectedVersionChange,
-  onStartCampaign,
+  canReactivate,
+  onStop,
+  onGoOnAir,
 }: PromoSectionProps) {
   const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
     const date = new Date();
@@ -337,6 +344,7 @@ export function PromoSection({
   const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const [showGoOnAirConfirm, setShowGoOnAirConfirm] = useState(false);
 
   // Saved promo-card versions (local-only for now; see lib/promoVersions).
   const [versions, setVersions] = useState<PromoVersion[]>([]);
@@ -1759,36 +1767,17 @@ export function PromoSection({
     return () => document.removeEventListener("keydown", handleKeyDown);
   });
 
-  // Campaign status is two-way from the chip: tap to stop a running campaign,
-  // or tap to go live when stopped. Going live clears the stoppedByUser lock
-  // (otherwise publish would refuse to re-activate it). Both only flip local
-  // state + mark the promo dirty — the change goes live through the normal
-  // Save → Publish flow, same as the announcement bar.
-  function stopCampaign() {
-    if (!config.promoCard.active) return;
-    setShowStopConfirm(true);
-  }
-
-  function startCampaign() {
-    if (config.promoCard.active) return;
-    // Turning back on asks whether to go live (page owns the popup + publish).
-    onStartCampaign();
-  }
-
+  // Status is immediate (no Save → Publish): stopping takes the campaign off,
+  // and "Go on air" reactivates the SAME already-published content. The page
+  // owns the actual persistence.
   function confirmStopCampaign() {
     setShowStopConfirm(false);
-    pushPromoState();
-    const nextPromoCard = {
-      ...config.promoCard,
-      active: false,
-      stoppedByUser: true,
-    };
-    setConfig({
-      ...config,
-      promoCard: nextPromoCard,
-    });
-    syncResetPromoEditsButton(nextPromoCard);
-    markChanged();
+    onStop();
+  }
+
+  function confirmGoOnAir() {
+    setShowGoOnAirConfirm(false);
+    onGoOnAir();
   }
 
   function openChatGptWithPromoPrompt() {
@@ -3162,24 +3151,33 @@ export function PromoSection({
                     <label className="block text-[10px] text-on-surface-variant mb-0.5">
                       Status
                     </label>
-                    {/* Status chip — whole pill flips with state, two-way:
-                        tap to stop a live campaign, or tap to go live when
-                        stopped (which clears the stoppedByUser lock). */}
+                    {/* Status chip — 3 states: On air (tap to stop) / Go on air
+                        enabled (same content, one click) / Go on air disabled
+                        (new or edited content → must Save & Publish). */}
                     <button
                       type="button"
                       onClick={
-                        config.promoCard.active ? stopCampaign : startCampaign
+                        config.promoCard.active
+                          ? () => setShowStopConfirm(true)
+                          : canReactivate
+                          ? () => setShowGoOnAirConfirm(true)
+                          : undefined
                       }
+                      disabled={!config.promoCard.active && !canReactivate}
                       aria-pressed={config.promoCard.active}
                       title={
                         config.promoCard.active
-                          ? "Stop the running campaign"
-                          : "Go live now"
+                          ? "On air — tap to stop"
+                          : canReactivate
+                          ? "Reactivate the same content — go on air now"
+                          : "You have unpublished changes — Save & Publish to go live"
                       }
-                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold cursor-pointer transition-colors duration-200 ${
+                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors duration-200 ${
                         config.promoCard.active
-                          ? "border-transparent bg-primary/[0.13] text-primary hover:bg-primary/[0.18]"
-                          : "border-border bg-surface-subtle text-on-surface-variant hover:border-primary/50 hover:text-primary"
+                          ? "border-transparent bg-primary/[0.13] text-primary hover:bg-primary/[0.18] cursor-pointer"
+                          : canReactivate
+                          ? "border-border bg-surface-subtle text-on-surface-variant hover:border-primary/50 hover:text-primary cursor-pointer"
+                          : "border-border bg-surface-subtle text-on-surface-variant/40 cursor-not-allowed"
                       }`}
                     >
                       {config.promoCard.active ? (
@@ -3190,7 +3188,7 @@ export function PromoSection({
                       ) : (
                         <>
                           <Power className="h-3.5 w-3.5" />
-                          Stopped · tap to go live
+                          Go on air
                         </>
                       )}
                     </button>
@@ -4046,14 +4044,17 @@ export function PromoSection({
         </div>
       </div>
 
-      {/* Stop Campaign Confirmation */}
+      {/* Stop Campaign Confirmation — immediate (no save/publish needed) */}
       {showStopConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0" onClick={() => setShowStopConfirm(false)} />
           <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
-            <h2 className="text-base font-semibold">Stop this campaign?</h2>
+            <h2 className="text-base font-semibold">Switch off this campaign?</h2>
             <p className="mt-2 text-sm text-on-surface-variant">
-              This marks the promo card to be taken off your website. It goes live once you <strong>save and publish</strong> &mdash; and you can start it again anytime from the status chip.
+              If you switch off the campaign, the entire campaign stops displaying on your website. Are you sure you want to do it?
+            </p>
+            <p className="mt-2 text-xs text-on-surface-variant/80">
+              You can switch it back on anytime with <strong>Go on air</strong> — as long as the content hasn&apos;t changed. New content needs Save &amp; Publish.
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -4061,14 +4062,43 @@ export function PromoSection({
                 onClick={() => setShowStopConfirm(false)}
                 className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
               >
-                Cancel
+                No
               </button>
               <button
                 type="button"
                 onClick={confirmStopCampaign}
                 className="rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:bg-red-600"
               >
-                Stop Campaign
+                Yes, switch off
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Go On Air Confirmation — reactivate the same published content */}
+      {showGoOnAirConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" onClick={() => setShowGoOnAirConfirm(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <h2 className="text-base font-semibold">Go on air?</h2>
+            <p className="mt-2 text-sm text-on-surface-variant">
+              This puts the same campaign back on your website right away — no need to save or publish again.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowGoOnAirConfirm(false)}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={confirmGoOnAir}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+              >
+                Yes, go on air
               </button>
             </div>
           </div>

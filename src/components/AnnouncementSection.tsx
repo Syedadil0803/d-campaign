@@ -17,6 +17,12 @@ interface AnnouncementSectionProps {
   config: CampaignConfig;
   setConfig: (config: CampaignConfig) => void;
   markChanged: () => void;
+  // "Go on air" is a one-click reactivation, only allowed when the current
+  // content matches what's already published (same content, not new/edited).
+  canReactivate: boolean;
+  // Immediate on/off (no Save → Publish) — the page persists the status change.
+  onStop: () => void;
+  onGoOnAir: () => void;
 }
 
 function getThemeOnSurfaceHex(): string {
@@ -28,7 +34,7 @@ function getThemeOnSurfaceHex(): string {
   return rgbToHex(`rgb(${r}, ${g}, ${b})`);
 }
 
-export function AnnouncementSection({ config, setConfig, markChanged }: AnnouncementSectionProps) {
+export function AnnouncementSection({ config, setConfig, markChanged, canReactivate, onStop, onGoOnAir }: AnnouncementSectionProps) {
   const [newAnnouncementText, setNewAnnouncementText] = useState('');
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
@@ -103,6 +109,7 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
 
   // Popup state
   const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const [showGoOnAirConfirm, setShowGoOnAirConfirm] = useState(false);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [showSchedulePopup, setShowSchedulePopup] = useState(false);
   const [showStartDateCalendar, setShowStartDateCalendar] = useState(false);
@@ -842,26 +849,17 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     updateBg(patch);
   }
 
-  // Status chip is two-way like the promo: tap to go live, or tap to stop
-  // (behind a confirm). Both only flip local state + mark dirty — the change
-  // goes live through the normal Save → Publish flow.
-  function goLive() {
-    setConfig({
-      ...config,
-      announcementBar: { ...config.announcementBar, active: true },
-    });
-    markChanged();
-    showToast('Announcement bar enabled');
-  }
-
+  // Status is immediate (no Save → Publish): stopping takes the campaign off,
+  // and "Go on air" reactivates the SAME already-published content. The page
+  // owns the actual persistence.
   function confirmStop() {
     setShowStopConfirm(false);
-    setConfig({
-      ...config,
-      announcementBar: { ...config.announcementBar, active: false },
-    });
-    markChanged();
-    showToast('Announcement bar disabled');
+    onStop();
+  }
+
+  function confirmGoOnAir() {
+    setShowGoOnAirConfirm(false);
+    onGoOnAir();
   }
 
   function openChatGptWithPrompt() {
@@ -903,14 +901,17 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
     <section className="rounded-2xl border-border overflow-hidden">
       <Toast show={toast.show} message={toast.message} isError={toast.isError} />
 
-      {/* Stop Announcement Confirmation */}
+      {/* Stop Announcement Confirmation — immediate (no save/publish needed) */}
       {showStopConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0" onClick={() => setShowStopConfirm(false)} />
           <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
-            <h2 className="text-base font-semibold">Stop this announcement?</h2>
+            <h2 className="text-base font-semibold">Switch off this campaign?</h2>
             <p className="mt-2 text-sm text-on-surface-variant">
-              This marks the announcement bar to be taken off your website. It goes live once you <strong>save and publish</strong> &mdash; and you can start it again anytime from the on-air chip.
+              If you switch off the campaign, the entire campaign stops displaying on your website. Are you sure you want to do it?
+            </p>
+            <p className="mt-2 text-xs text-on-surface-variant/80">
+              You can switch it back on anytime with <strong>Go on air</strong> — as long as the content hasn&apos;t changed. New content needs Save &amp; Publish.
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -918,14 +919,43 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
                 onClick={() => setShowStopConfirm(false)}
                 className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
               >
-                Cancel
+                No
               </button>
               <button
                 type="button"
                 onClick={confirmStop}
                 className="rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:bg-red-600"
               >
-                Stop Announcement
+                Yes, switch off
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Go On Air Confirmation — reactivate the same published content */}
+      {showGoOnAirConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" onClick={() => setShowGoOnAirConfirm(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <h2 className="text-base font-semibold">Go on air?</h2>
+            <p className="mt-2 text-sm text-on-surface-variant">
+              This puts the same campaign back on your website right away — no need to save or publish again.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowGoOnAirConfirm(false)}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={confirmGoOnAir}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+              >
+                Yes, go on air
               </button>
             </div>
           </div>
@@ -943,13 +973,28 @@ export function AnnouncementSection({ config, setConfig, markChanged }: Announce
         </div>
         <div className="flex items-center gap-1">
           <button
-            onClick={config.announcementBar.active ? () => setShowStopConfirm(true) : goLive}
-            aria-pressed={config.announcementBar.active}
-            title={config.announcementBar.active ? 'On air — tap to stop' : 'Tap to go live'}
-            className={`inline-flex flex-none items-center gap-2 rounded-full border px-4 py-[9px] text-[13px] font-medium cursor-pointer transition-colors duration-200 ${
+            onClick={
               config.announcementBar.active
-                ? 'border-transparent bg-primary/[0.13] text-primary hover:bg-primary/[0.18]'
-                : 'border-border bg-surface-elevated text-on-surface-variant hover:border-primary/50 hover:text-primary'
+                ? () => setShowStopConfirm(true)
+                : canReactivate
+                ? () => setShowGoOnAirConfirm(true)
+                : undefined
+            }
+            disabled={!config.announcementBar.active && !canReactivate}
+            aria-pressed={config.announcementBar.active}
+            title={
+              config.announcementBar.active
+                ? 'On air — tap to stop'
+                : canReactivate
+                ? 'Reactivate the same content — go on air now'
+                : 'You have unpublished changes — Save & Publish to go live'
+            }
+            className={`inline-flex flex-none items-center gap-2 rounded-full border px-4 py-[9px] text-[13px] font-medium transition-colors duration-200 ${
+              config.announcementBar.active
+                ? 'border-transparent bg-primary/[0.13] text-primary hover:bg-primary/[0.18] cursor-pointer'
+                : canReactivate
+                ? 'border-border bg-surface-elevated text-on-surface-variant hover:border-primary/50 hover:text-primary cursor-pointer'
+                : 'border-border bg-surface-elevated text-on-surface-variant/40 cursor-not-allowed'
             }`}
           >
             {config.announcementBar.active ? (
