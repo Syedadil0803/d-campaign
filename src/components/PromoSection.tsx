@@ -339,6 +339,50 @@ export function PromoSection({
   const cardBgPopupRef = useRef<HTMLDivElement>(null);
   const promoCardRef = useRef<HTMLDivElement>(null);
   const [cardWidth, setCardWidth] = useState(config.promoCard.cardWidth || 400);
+  // Auto-fit: scale the preview card down so a tall card (or a short/zoomed
+  // window) always shows the FULL card in the frame — never clipped or scrolled.
+  const [previewZoom, setPreviewZoom] = useState(1);
+  const previewZoomRef = useRef(1);
+  useEffect(() => { previewZoomRef.current = previewZoom; }, [previewZoom]);
+  useEffect(() => {
+    const card = promoCardRef.current;
+    const frame = card?.closest('.campaign-card-surface') as HTMLElement | null;
+    if (!card || !frame) return;
+    let raf = 0;
+    const measure = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const applied = previewZoomRef.current || 1;
+        // getBoundingClientRect reflects the applied zoom; divide it out to get
+        // the card's natural (un-zoomed) height.
+        const natural = card.getBoundingClientRect().height / applied;
+        const avail = frame.clientHeight - 40; // frame padding (p-5 = 20px each)
+        let z = 1;
+        if (avail > 0 && natural > avail) z = Math.max(0.5, avail / natural);
+        z = Math.round(z * 1000) / 1000;
+        setPreviewZoom((prev) => (Math.abs(prev - z) > 0.005 ? z : prev));
+      });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(frame);
+    // Observe an ancestor too so a window/zoom change that resizes the layout
+    // (but not the frame's own box synchronously) still triggers a re-fit.
+    const outer = frame.parentElement;
+    if (outer) ro.observe(outer);
+    window.addEventListener('resize', measure);
+    // visualViewport fires on browser zoom (Cmd +/-), which a plain resize
+    // listener can miss — this is the case that left the card overflowing.
+    const vv = window.visualViewport;
+    if (vv) vv.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+      if (vv) vv.removeEventListener('resize', measure);
+      cancelAnimationFrame(raf);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.promoCard, cardWidth]);
 
   const cardAngleWheelRef = useRef<HTMLDivElement>(null);
   const fieldAngleWheelRef = useRef<HTMLDivElement>(null);
@@ -3244,6 +3288,10 @@ export function PromoSection({
                   }`}
                   style={{
                     width: `${cardWidth}px`,
+                    // Auto-fit: scale the whole card down (layout included, via
+                    // `zoom`) when it's taller than the frame, so the full card is
+                    // always visible — no clip, no scroll — at any window/zoom.
+                    zoom: previewZoom,
                     // No max-height: the live widget card grows to fit its content
                     // (it's position:fixed on the site), so capping it here clipped
                     // the preview and forced a scroll that never happens on the site.
