@@ -2465,8 +2465,8 @@ export function PromoSection({
   return (
     <>
       <div
-        className="flex gap-4 overflow-hidden"
-        style={{ height: "calc(100vh - 120px)" }}
+        className="sticky top-0 flex gap-4 overflow-hidden"
+        style={{ height: "calc(100dvh - 120px)", maxHeight: "calc(100dvh - 120px)" }}
       >
         {/* Left: All editables — 30% width, scrollable */}
         <div className="campaign-custom-scrollbar w-[30%] min-h-0 shrink-0 overflow-y-auto overflow-x-hidden pr-4 space-y-5">
