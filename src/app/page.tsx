@@ -619,19 +619,24 @@ export default function Home() {
 
     // 1b. DOM overflow check (pixel-perfect mirror)
     const fieldMaxLines: Record<string, number> = { title: 1, subtitle: 2, description: 3 };
+    // Measure at the card's ACTUAL content width (the card auto-widens 400→440),
+    // not a fixed narrow width, and neutralize letter-spacing (the live preview
+    // strips it). Otherwise this warns "may overflow" for text that actually fits.
+    const contentWidth = (pc.cardWidth || 400) - 56; // card padding (40) + field padding (16)
     (['title', 'subtitle', 'description'] as const).forEach((field) => {
       const html = pc[field];
       if (!strip(html || '')) return;
       const ghost = document.createElement('div');
       ghost.style.cssText = `
         position:absolute;visibility:hidden;pointer-events:none;
-        width:344px;padding:0;font-family:inherit;line-height:1.5;
+        width:${contentWidth}px;padding:0;font-family:inherit;line-height:24px;letter-spacing:normal;
         word-break:break-word;overflow-wrap:break-word;
       `;
       ghost.innerHTML = '<span style="font-size:1rem">&nbsp;</span>';
       document.body.appendChild(ghost);
       const singleLineHeight = ghost.offsetHeight;
       ghost.innerHTML = html;
+      ghost.querySelectorAll('*').forEach((el) => { (el as HTMLElement).style.letterSpacing = 'normal'; });
       const contentHeight = ghost.offsetHeight;
       document.body.removeChild(ghost);
       const maxHeight = singleLineHeight * fieldMaxLines[field] + (singleLineHeight * 0.5);
