@@ -162,7 +162,12 @@ export function TimerEditor({
         <RichTextPlugin
           contentEditable={
             <ContentEditable
-              className="outline-none whitespace-pre-wrap break-words"
+              // nowrap: the timer is a single-line field (the widget renders it
+              // nowrap too). Without this the preview wraps a long countdown +
+              // prefix/suffix onto 2 lines while the live site keeps it on one.
+              // `!` forces it: Lexical sets white-space:pre-wrap inline, which
+              // otherwise beats a plain Tailwind class.
+              className="outline-none !whitespace-nowrap break-words"
               aria-label="Timer field"
             />
           }
