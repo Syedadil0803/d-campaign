@@ -173,6 +173,9 @@ export default function Home() {
   const [pendingVariantSave, setPendingVariantSave] = useState<{
     config: CampaignConfig;
     versions: PromoVersion[];
+    // Whether this dialog was opened from a plain Save or from Publish — Publish
+    // must finish going live after the variant is stored, not just save.
+    mode: 'save' | 'publish';
   } | null>(null);
   const [selectedPromoVersionId, setSelectedPromoVersionId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
@@ -387,21 +390,32 @@ export default function Home() {
 
   async function savePendingVariantAndClose() {
     if (!pendingVariantSave) return;
-    const cfg = pendingVariantSave.config;
+    const { config: cfg, mode } = pendingVariantSave;
     setPendingVariantSave(null);
     await savePromoVariant(cfg, true);
-    await persistConfig(cfg, 'Settings saved and promo variant saved');
+    if (mode === 'publish') {
+      // cfg already has active:true — finish going live, don't re-prompt to publish.
+      await persistConfig(cfg, 'Campaign is live on your website', 'promo');
+      setReadyToPublishPromo(false);
+    } else {
+      await persistConfig(cfg, 'Settings saved and promo variant saved');
+    }
   }
 
   async function updateExistingVariantAndClose(versionId: string) {
     if (!pendingVariantSave) return;
-    const cfg = pendingVariantSave.config;
-    const version = pendingVariantSave.versions.find((item) => item.id === versionId);
+    const { config: cfg, mode, versions } = pendingVariantSave;
+    const version = versions.find((item) => item.id === versionId);
     setPendingVariantSave(null);
     await updateVersion(versionId, cfg.promoCard, version?.label);
     setSelectedPromoVersionId(versionId);
     savedPromoSignatureRef.current = getPromoSignature(cfg);
-    await persistConfig(cfg, 'Settings saved and promo variant updated');
+    if (mode === 'publish') {
+      await persistConfig(cfg, 'Campaign is live on your website', 'promo');
+      setReadyToPublishPromo(false);
+    } else {
+      await persistConfig(cfg, 'Settings saved and promo variant updated');
+    }
   }
 
   function cancelPendingVariantSave() {
@@ -587,7 +601,7 @@ export default function Home() {
     if (variantStatus === 'pending') {
       // Variant decision dialog handles the actual publish next.
       setConfig(cfgToSave);
-      setPendingVariantSave({ config: cfgToSave, versions: await listVersions() });
+      setPendingVariantSave({ config: cfgToSave, versions: await listVersions(), mode: 'publish' });
       return;
     }
 
@@ -717,7 +731,7 @@ export default function Home() {
 
     const variantStatus = await getPromoVariantSaveStatus(cfgToSave);
     if (variantStatus === 'pending') {
-      setPendingVariantSave({ config: cfgToSave, versions: await listVersions() });
+      setPendingVariantSave({ config: cfgToSave, versions: await listVersions(), mode: 'save' });
       return;
     }
 
