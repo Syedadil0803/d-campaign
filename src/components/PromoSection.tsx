@@ -3124,7 +3124,7 @@ export function PromoSection({
                     const text = e.clipboardData.getData('text/plain');
                     document.execCommand('insertText', false, text);
                   }}
-                  className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border h-[44px] outline-none break-words transition-colors ${
+                  className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-none overflow-y-auto outline-none break-words transition-colors ${
                     currentField === "button"
                       ? "border-primary/70"
                       : "border-border"
