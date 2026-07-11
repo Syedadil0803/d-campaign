@@ -37,14 +37,22 @@ export function wrapsAtWidth(el: HTMLElement, contentWidth: number): boolean {
   if (typeof document === 'undefined' || contentWidth <= 0) return false;
   const prevWidth = el.style.width;
   const prevBox = el.style.boxSizing;
+  const prevWS = el.style.getPropertyValue('white-space');
+  const prevWSPrio = el.style.getPropertyPriority('white-space');
   el.style.boxSizing = 'content-box';
   el.style.width = `${contentWidth}px`;
+  // The editor renders nowrap (one-line display), but to DETECT overflow we must
+  // let it wrap here — otherwise it never shows a 2nd line and the cap can never
+  // fire. `!important` beats the editor's nowrap class; restored right after.
+  el.style.setProperty('white-space', 'normal', 'important');
   // Force layout at the new width before measuring.
   void el.offsetHeight;
   const result = isMultiline(el);
   // Restore.
   el.style.width = prevWidth;
   el.style.boxSizing = prevBox;
+  if (prevWS) el.style.setProperty('white-space', prevWS, prevWSPrio);
+  else el.style.removeProperty('white-space');
   void el.offsetHeight;
   return result;
 }

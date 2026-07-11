@@ -11,17 +11,23 @@
 import { useEffect } from 'react';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import {
+  $getRoot,
   $getSelection,
   $isRangeSelection,
   $isNodeSelection,
+  $isTextNode,
+  $nodesOfType,
+  $createParagraphNode,
+  $createTextNode,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
   CUT_COMMAND,
   CONTROLLED_TEXT_INSERTION_COMMAND,
   COMMAND_PRIORITY_HIGH,
+  TextNode,
   type LexicalNode,
 } from 'lexical';
-import { TimerChipNode, $isTimerChipNode } from './TimerChipNode';
+import { TimerChipNode, $isTimerChipNode, $createTimerChipNode } from './TimerChipNode';
 
 /** Does the selection currently include the chip (as a selected node)? */
 function $selectionHasChip(): boolean {
@@ -129,6 +135,126 @@ export function ChipGuardPlugin(): null {
         },
         COMMAND_PRIORITY_HIGH,
       ),
+    );
+
+    // Trailing caret slot — when the chip ends the paragraph, keep a
+    // zero-width-space text node after it. Its job is native click
+    // HIT-TESTING: the chip is user-select:none, so a click past its right
+    // edge would otherwise get remapped to the nearest selectable text (the
+    // PREFIX — the wrong side); the slot gives that click real text to land
+    // in on the correct side. (Caret PAINTING next to the chip is handled
+    // separately by CaretAfterChipPlugin, which draws its own caret.) The
+    // slot never leaks: serialization prunes it (LexicalTimerField
+    // pruneCaretSlot / serializeStorageHtml) and the line-cap ignores it.
+    // Lexical runs a newly-registered transform on already-existing nodes of
+    // the type, so the initially-seeded state gets its slot from this same
+    // registration — no separate mount pass needed.
+    offs.push(
+      editor.registerNodeTransform(TimerChipNode, (chip) => {
+        if (chip.getNextSibling() === null) {
+          const slot = $createTextNode('\u200B');
+          // Inherit the visually-adjacent run's styling (the text before the
+          // chip): typing at the end extends the slot node, so an unstyled
+          // slot would silently reset the user's color/bold/size mid-line.
+          const prev = chip.getPreviousSibling();
+          if ($isTextNode(prev)) {
+            slot.setStyle(prev.getStyle());
+            slot.setFormat(prev.getFormat());
+          }
+          chip.insertAfter(slot);
+        }
+      }),
+    );
+
+    // Continuous slot-style mirror — the slot must ALWAYS carry the styling
+    // of the run before the chip, not just at creation: a selection-restyle
+    // of the prefix ($patchStyleText) never touches the slot, and keyboard
+    // entry into the slot (ArrowRight/End — no click, so focus() never runs)
+    // makes Lexical sync the typing style FROM the stale slot. Mirroring here
+    // fires whenever the prefix run dirties. Terminates: updating the slot
+    // dirties only the slot, whose next sibling is not a chip.
+    offs.push(
+      editor.registerNodeTransform(TextNode, (tn) => {
+        const next = tn.getNextSibling();
+        if (!$isTimerChipNode(next)) return;
+        const slot = next.getNextSibling();
+        if (
+          $isTextNode(slot) &&
+          /^\u200B+$/.test(slot.getTextContent()) &&
+          (slot.getStyle() !== tn.getStyle() ||
+            slot.getFormat() !== tn.getFormat())
+        ) {
+          slot.setStyle(tn.getStyle());
+          slot.setFormat(tn.getFormat());
+        }
+      }),
+    );
+
+    // Self-heal backstop — the countdown must NEVER be permanently removable.
+    // The key-command guards above cover the normal caret cases, but if ANY edit
+    // path still slips a deletion through (odd caret position, IME, drag, a
+    // browser quirk), re-insert the chip immediately so it can't be lost. We
+    // track the live endDate AND style model so the rebuilt chip keeps counting
+    // down with its styling intact, and tag the heal so this listener (and the
+    // one-line cap) ignore it. Undo/redo ('historic') is exempt: healing an
+    // undone state would create a fresh history entry every Cmd+Z — an undo
+    // treadmill — and the chip guards make a chip-less committed state
+    // unreachable by normal edits anyway.
+    const lastEndDate = { current: '' };
+    const lastModel = { current: {} as ReturnType<TimerChipNode['getModel']> };
+    let healing = false;
+    editor.getEditorState().read(() => {
+      const chips = $nodesOfType(TimerChipNode);
+      if (chips.length) {
+        lastEndDate.current = chips[0].getEndDate();
+        lastModel.current = chips[0].getModel();
+      }
+    });
+    offs.push(
+      editor.registerUpdateListener(({ editorState, tags }) => {
+        if (healing || tags.has('timer-chip-heal') || tags.has('historic')) {
+          return;
+        }
+        let present = false;
+        editorState.read(() => {
+          const chips = $nodesOfType(TimerChipNode);
+          if (chips.length) {
+            present = true;
+            lastEndDate.current = chips[0].getEndDate();
+            lastModel.current = chips[0].getModel();
+          }
+        });
+        if (present) return;
+        // Chip vanished — put it back at the caret so typing continues in place.
+        // The latch MUST come back down even if the heal throws (e.g. a stale
+        // selection whose anchor was removed by the same edit): a stuck latch
+        // would disable self-healing for the editor's whole lifetime.
+        healing = true;
+        try {
+          editor.update(
+            () => {
+              const chip = $createTimerChipNode(
+                lastEndDate.current || '',
+                lastModel.current,
+              );
+              const sel = $getSelection();
+              if ($isRangeSelection(sel)) {
+                sel.insertNodes([chip]);
+              } else {
+                let para = $getRoot().getFirstChild() as LexicalNode | null;
+                if (!para || !('append' in para)) {
+                  para = $createParagraphNode();
+                  $getRoot().append(para);
+                }
+                (para as unknown as { append: (n: LexicalNode) => void }).append(chip);
+              }
+            },
+            { tag: 'timer-chip-heal', discrete: true },
+          );
+        } finally {
+          healing = false;
+        }
+      }),
     );
 
     return () => offs.forEach((u) => u());

@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useCallback,
+  useMemo,
   type RefObject,
   type Dispatch,
   type SetStateAction,
@@ -50,7 +51,10 @@ import {
   calculateTimeRemaining as calcTimerRemaining,
 } from "@/lib/timerUtils";
 import { LexicalTimerField, type LexicalTimerFieldHandle } from "@/components/timer-lexical/LexicalTimerField";
-import { TIMER_MIN_CONTENT_WIDTH } from "@/components/timer-lexical/lineMeasure";
+import {
+  TIMER_MIN_CONTENT_WIDTH,
+  TIMER_MAX_CONTENT_WIDTH,
+} from "@/components/timer-lexical/lineMeasure";
 
 interface PromoSectionProps {
   config: CampaignConfig;
@@ -1445,20 +1449,64 @@ export function PromoSection({
     return base;
   }
 
+  // Show the transient style-warning toast (single owner of its lifecycle).
+  function showStyleWarning(message: string) {
+    if (styleWarningTimer.current) clearTimeout(styleWarningTimer.current);
+    setStyleWarning(message);
+    styleWarningTimer.current = setTimeout(() => setStyleWarning(null), 3000);
+  }
+
   // Fires when the editor reverted an edit for exceeding one line. Shows the
   // shared "field limit reached" warning AND re-syncs the toolbar to the
   // actual (reverted) state — otherwise a rejected size/style (e.g. clicking
   // XL when only LG fits) would stay highlighted even though it didn't apply.
   function warnTimerLimit() {
-    if (styleWarningTimer.current) clearTimeout(styleWarningTimer.current);
-    setStyleWarning(
+    showStyleWarning(
       "This text exceeds the field limit — shorten it to fit one line",
     );
-    styleWarningTimer.current = setTimeout(() => setStyleWarning(null), 3000);
     // The plugin has already reverted the editor state by now; reflect it.
     const fmts = lexicalTimerRef.current?.getActiveFormats();
     if (fmts) setActiveFormats(fmts);
   }
+
+  // True when the timer — measured with its CURRENT countdown — can't fit one
+  // line at the widest card. Drives the persistent "Field limit reached" note
+  // (like the title's). NOTE: the rendered countdown WIDENS at rollovers
+  // ("2 days : 1 hours : 0 mins" → "1 days : 23 hours : 59 mins"), so the
+  // memo must also key on the countdown's current digits — they change at
+  // most once a minute, so the ghost-measure (a forced layout) runs per
+  // digit-change/edit, never per second. buildTimerDisplayHtml keeps the
+  // user's style spans so this measures what the card actually renders.
+  const timerRemaining = calcTimerRemaining(config.promoCard.endDate || '');
+  const timerLimitReached = useMemo(() => {
+    if (typeof document === 'undefined') return false;
+    if (!config.promoCard.showTimer) return false;
+    const tmpl = config.promoCard.timerText || '';
+    // Ignore an empty timer (no prefix/suffix around the countdown token).
+    const hasPrefixSuffix =
+      tmpl
+        .replace(/<[^>]*>/g, '')
+        .replace(/\{timer\}/gi, '')
+        .replace(/&nbsp;|​/g, '')
+        .trim().length > 0;
+    if (!hasPrefixSuffix) return false;
+    const ghost = document.createElement('div');
+    ghost.style.cssText =
+      'position:absolute;visibility:hidden;white-space:pre;font-size:16px;line-height:24px;letter-spacing:normal;' +
+      'font-family:-apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;';
+    ghost.innerHTML = buildTimerDisplayHtml(tmpl, timerRemaining);
+    document.body.appendChild(ghost);
+    const textW = ghost.getBoundingClientRect().width;
+    document.body.removeChild(ghost);
+    return textW > TIMER_MAX_CONTENT_WIDTH;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    config.promoCard.showTimer,
+    config.promoCard.timerText,
+    timerRemaining.days,
+    timerRemaining.hours,
+    timerRemaining.minutes,
+  ]);
 
   function handlePromoToolbarFormat(format: string) {
     if (!currentFieldRef.current) return;
@@ -1484,9 +1532,7 @@ export function PromoSection({
           skipOverflowBlockRef.current = true;
           onFieldInput(field);
           skipOverflowBlockRef.current = false;
-          if (styleWarningTimer.current) clearTimeout(styleWarningTimer.current);
-          setStyleWarning('This style exceeds the field limit — try a smaller size or shorter text');
-          styleWarningTimer.current = setTimeout(() => setStyleWarning(null), 3000);
+          showStyleWarning('This style exceeds the field limit — try a smaller size or shorter text');
           return;
         }
         lastValidHtmlRef.current[field] = newHtml;
@@ -1512,9 +1558,7 @@ export function PromoSection({
           testHtml = `<i>${currentHtml}</i>`;
         }
         if (testHtml && measureOverflow(testHtml, field as 'title' | 'subtitle' | 'description')) {
-          if (styleWarningTimer.current) clearTimeout(styleWarningTimer.current);
-          setStyleWarning('This style exceeds the field limit — try a smaller size or shorter text');
-          styleWarningTimer.current = setTimeout(() => setStyleWarning(null), 3000);
+          showStyleWarning('This style exceeds the field limit — try a smaller size or shorter text');
           return;
         }
       }
@@ -1553,9 +1597,7 @@ export function PromoSection({
           testHtml = `<i>${currentHtml}</i>`;
         }
         if (testHtml && measureOverflow(testHtml, field as 'title' | 'subtitle' | 'description')) {
-          if (styleWarningTimer.current) clearTimeout(styleWarningTimer.current);
-          setStyleWarning('This style exceeds the field limit — try a smaller size or shorter text');
-          styleWarningTimer.current = setTimeout(() => setStyleWarning(null), 3000);
+          showStyleWarning('This style exceeds the field limit — try a smaller size or shorter text');
           return;
         }
       }
@@ -2621,7 +2663,7 @@ export function PromoSection({
               if (!html) return null;
               const testHtml = html + 'x';
               return measureOverflow(testHtml, 'title') ? (
-                <p className="mt-1.5 text-[11px] text-on-surface-variant/70 animate-pulse">⚠️ Field limit reached</p>
+                <p className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 animate-pulse">⚠️ Field limit reached</p>
               ) : null;
             })()}
           </div>
@@ -2683,7 +2725,7 @@ export function PromoSection({
               if (!html) return null;
               const testHtml = html + 'x';
               return measureOverflow(testHtml, 'subtitle') ? (
-                <p className="mt-1.5 text-[11px] text-on-surface-variant/70 animate-pulse">⚠️ Field limit reached</p>
+                <p className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 animate-pulse">⚠️ Field limit reached</p>
               ) : null;
             })()}
           </div>
@@ -2746,7 +2788,7 @@ export function PromoSection({
               if (!html) return null;
               const testHtml = html + 'x';
               return measureOverflow(testHtml, 'description') ? (
-                <p className="mt-1.5 text-[11px] text-on-surface-variant/70 animate-pulse">⚠️ Field limit reached</p>
+                <p className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 animate-pulse">⚠️ Field limit reached</p>
               ) : null;
             })()}
           </div>
@@ -2843,9 +2885,9 @@ export function PromoSection({
                   <div className="flex items-center justify-center w-4 h-4 rounded-full bg-on-surface-variant/25 text-[9px] font-bold text-on-surface-variant cursor-help select-none">
                     i
                   </div>
-                  <div className="absolute bottom-full left-0 mb-1.5 w-56 p-2 bg-gray-900 dark:bg-gray-700 text-white text-[11px] leading-relaxed rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
+                  <div className="absolute bottom-full left-0 mb-1.5 w-56 p-2 bg-surface-elevated border border-border text-on-surface text-[11px] leading-relaxed rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
                     Type text before/after the countdown. The countdown can&apos;t be edited but can&apos;t be deleted. Select text to style it; click a number, word, or colon in the chip to style just that part.
-                    <div className="absolute top-full left-3 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+                    <div className="absolute top-full left-3 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-surface-elevated"></div>
                   </div>
                 </div>
               </div>
@@ -2867,6 +2909,11 @@ export function PromoSection({
               before/after the countdown, select text or click a number, word,
               or colon in the countdown to style it.
             </p>
+            {timerLimitReached && (
+              <p className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 animate-pulse">
+                ⚠️ Field limit reached — shorten the timer text so it fits one line
+              </p>
+            )}
           </div>
 
           <div className="!mt-8">
@@ -3467,12 +3514,30 @@ export function PromoSection({
                       onMouseDown={() => {
                         if (currentField !== "timer") setCurrentField("timer");
                       }}
-                      onClick={() => {
+                      onClick={(e) => {
                         setShowCardBgPopup(false);
                         if (currentField !== "timer") setCurrentField("timer");
-                        // Clicking the wrapper padding should still drop the
-                        // caret into the editor so typing works anywhere.
-                        lexicalTimerRef.current?.focus();
+                        // Clicking ON the countdown targets a chip cell for
+                        // styling (its own mousedown sets the target) — placing
+                        // a caret here would fire a text SELECTION_CHANGE that
+                        // clears that just-set target. Only place the caret for
+                        // clicks OUTSIDE the countdown; pass the click X so a
+                        // click beside it lands on the correct side.
+                        const onChip = (e.target as HTMLElement).closest?.(
+                          "[data-timer-chip]",
+                        );
+                        if (!onChip) {
+                          lexicalTimerRef.current?.focus(e.clientX);
+                        } else if (
+                          document.activeElement instanceof HTMLElement &&
+                          document.activeElement !== document.body
+                        ) {
+                          // The chip's mousedown preventDefault()s, so the
+                          // browser never moves DOM focus — without this,
+                          // keystrokes after a chip click keep going to the
+                          // PREVIOUSLY focused field (e.g. the Title).
+                          document.activeElement.blur();
+                        }
                       }}
                       style={{
                         background: getBackgroundStyle(
@@ -3728,11 +3793,14 @@ export function PromoSection({
 
                           {styleWarning && (
                             <>
-                              <div className="fixed inset-0 z-[99] bg-black/40" onClick={() => setStyleWarning(null)} />
-                              <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] bg-black/70 backdrop-blur-xl border border-white/15 rounded-2xl shadow-2xl px-8 py-6 w-[420px] text-center">
+                              {/* No backdrop: an invisible full-screen layer
+                                  silently eats the user's next click (the
+                                  same bug the welcome-back banner had). The
+                                  warning auto-dismisses in 3s and has ✕. */}
+                              <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] bg-surface-elevated/85 backdrop-blur-sm border border-border text-on-surface rounded-2xl shadow-2xl px-8 py-6 w-[420px] text-center">
                                 <button
                                   onClick={() => setStyleWarning(null)}
-                                  className="absolute top-3 right-4 text-white/50 hover:text-white text-lg"
+                                  className="absolute top-3 right-4 text-on-surface-variant hover:text-on-surface text-lg"
                                 >
                                   ✕
                                 </button>

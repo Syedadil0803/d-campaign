@@ -202,6 +202,24 @@ export function $applyTimerStyle(patch: StylePatch): void {
     .flatMap((c) => ($isElementNode(c) ? c.getChildren() : [c]))
     .filter($isTimerChipNode)
     .forEach((chip) => (chip as TimerChipNode).setWholeStyle(patch));
+  // The nodes are painted, but the CARET's own typing style still holds the
+  // pre-patch value — Lexical forks the next typed characters into a NEW
+  // (unstyled) text node whenever selection.style ≠ the node's style. Sync
+  // the collapsed caret to its node so typing continues the applied style.
+  $syncCollapsedCaretStyle();
+}
+
+/** Align a collapsed caret's "next typing" style/format with the text node it
+ *  sits in, so newly typed characters extend that node instead of forking an
+ *  unstyled sibling. No-op for non-collapsed / non-text selections. */
+function $syncCollapsedCaretStyle(): void {
+  const sel = $getSelection();
+  if (!$isRangeSelection(sel) || !sel.isCollapsed()) return;
+  const node = sel.anchor.getNode();
+  if ($isTextNode(node)) {
+    sel.style = node.getStyle();
+    sel.format = node.getFormat();
+  }
 }
 
 // ============================================================

@@ -1049,11 +1049,25 @@ export default function Home() {
         </div>
       )}
 
-      {/* Welcome Back — Unpublished Draft Popup */}
+      {/* Welcome Back — Unpublished Draft Popup. pointer-events-none on the
+          full-screen container: it's an informational banner, and an invisible
+          full-screen layer here was silently swallowing every click on the
+          page (e.g. clicks into the promo timer never focused it → no caret).
+          Only the dialog itself accepts pointer events. */}
       {draftBanner && activeTab === 'promo' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0" />
-          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="pointer-events-auto relative w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            {/* Dismiss without deciding: keep working on the draft. The two
+                action buttons are commitments (discard / publish); the ✕ is
+                the "not now" the banner otherwise lacked. */}
+            <button
+              type="button"
+              onClick={() => setDraftBanner(null)}
+              aria-label="Dismiss"
+              className="absolute top-3 right-4 text-on-surface-variant transition-colors hover:text-on-surface"
+            >
+              ✕
+            </button>
             <p className="text-base font-semibold">
               <span className="mr-1.5">💡</span>Welcome back
             </p>

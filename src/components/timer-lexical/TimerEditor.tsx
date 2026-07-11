@@ -28,6 +28,7 @@ import {
 import { TimerChipNode, $createTimerChipNode } from './TimerChipNode';
 import { ChipGuardPlugin } from './ChipGuardPlugin';
 import { SingleLinePlugin } from './SingleLinePlugin';
+import { CaretAfterChipPlugin } from './CaretAfterChipPlugin';
 import { TimerToolbar } from './TimerToolbar';
 import {
   TimerChipTargetProvider,
@@ -162,12 +163,14 @@ export function TimerEditor({
         <RichTextPlugin
           contentEditable={
             <ContentEditable
-              // nowrap: the timer is a single-line field (the widget renders it
-              // nowrap too). Without this the preview wraps a long countdown +
-              // prefix/suffix onto 2 lines while the live site keeps it on one.
-              // `!` forces it: Lexical sets white-space:pre-wrap inline, which
-              // otherwise beats a plain Tailwind class.
-              className="outline-none !whitespace-nowrap break-words"
+              // pre (NOT nowrap): the timer is a single-line field (the widget
+              // renders it nowrap too), but nowrap COLLAPSES a trailing typed
+              // space to zero width — the caret wouldn't move when the user
+              // types a space at the end. `pre` keeps the one-line behavior
+              // AND preserves space widths (matching Lexical's own pre-wrap
+              // whitespace handling). `!` forces it over Lexical's inline
+              // white-space:pre-wrap.
+              className="outline-none !whitespace-pre break-words"
               aria-label="Timer field"
             />
           }
@@ -184,6 +187,8 @@ export function TimerEditor({
         {/* 1-line limit: reverts edits that grow the timer onto a 2nd line
             (deletions always allowed), and signals the host to warn. */}
         <SingleLinePlugin onOverflow={onLineOverflow} />
+        {/* Draws the caret Chromium won't paint (after a trailing chip). */}
+        <CaretAfterChipPlugin />
         {/* Captures the underlying editor on mount so the host can drive
             imperative updates (endDate sync, format commands) before any
             user edit has happened. */}

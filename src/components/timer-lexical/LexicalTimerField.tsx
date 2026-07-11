@@ -20,6 +20,8 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import {
   $getRoot,
   $getNodeByKey,
+  $getSelection,
+  $isRangeSelection,
   $isTextNode,
   $isElementNode,
   $createTextNode,
@@ -28,6 +30,7 @@ import {
   $nodesOfType,
   type EditorState,
   type LexicalEditor,
+  type TextNode,
 } from 'lexical';
 import { TimerEditor } from './TimerEditor';
 import { $isTimerChipNode, TimerChipNode } from './TimerChipNode';
@@ -90,11 +93,35 @@ export interface LexicalTimerFieldHandle {
    *  Used by PromoSection to decide whether the timer needs the card
    *  stretched (wraps at the narrow card but fits at the wide one). */
   wrapsAtContentWidth(width: number): boolean;
-  /** Focus the editor (used when the user clicks the surrounding chrome). */
-  focus(): void;
+  /** Focus the editor (used when the user clicks the surrounding chrome).
+   *  Pass the click's clientX so a click next to the chip lands the caret on
+   *  the correct side of the countdown. */
+  focus(clientX?: number): void;
 }
 
 const TIMER_TOKEN = '{timer}';
+
+/** Minimal shape of a serialized Lexical node for pruning. */
+interface PrunableNode {
+  type?: string;
+  text?: string;
+  children?: PrunableNode[];
+}
+
+/** Remove the ZWSP caret-slot from a serialized editor state, in place.
+ *  Strips ​ from text nodes and drops nodes that become empty — so the
+ *  slot (editor presentation chrome) never leaks into stored timerStateJson. */
+function pruneCaretSlot(node: PrunableNode): void {
+  if (!Array.isArray(node.children)) return;
+  node.children = node.children.filter((child) => {
+    if (child.type === 'text' && typeof child.text === 'string') {
+      child.text = child.text.replace(/\u200B/g, '');
+      if (child.text === '') return false;
+    }
+    return true;
+  });
+  node.children.forEach(pruneCaretSlot);
+}
 
 // ============================================================
 // Component
@@ -183,7 +210,7 @@ export const LexicalTimerField = forwardRef<
         });
         return out;
       },
-      focus() {
+      focus(clientX?: number) {
         const ed = editorRef.current;
         if (!ed) return;
         // If the click ALREADY landed a caret inside the editor (e.g. the user
@@ -193,33 +220,148 @@ export const LexicalTimerField = forwardRef<
         // no text to anchor to).
         const root = ed.getRootElement();
         const domSel = typeof window !== 'undefined' ? window.getSelection() : null;
+        const anchor =
+          domSel && domSel.rangeCount > 0 ? domSel.anchorNode : null;
+        // A NON-collapsed selection is a deliberate drag (e.g. selecting
+        // across the countdown to style the whole line) — never reposition
+        // it, or the selection collapses on mouseup and toolbar styling
+        // targets nothing.
         if (
-          root &&
           domSel &&
-          domSel.rangeCount > 0 &&
-          root.contains(domSel.anchorNode)
+          !domSel.isCollapsed &&
+          anchor &&
+          root &&
+          root.contains(anchor)
         ) {
           ed.focus();
           return;
         }
-        // Position the caret OUTSIDE the chip before focusing — at the
-        // paragraph-element offset right after the last child. Without this,
-        // Lexical's default focus() puts the caret at the END of the
-        // document (which recurses into the chip's last text descendant —
-        // " mins" — and lands the caret INSIDE the chip).
+        // Is the click's anchor INSIDE the chip's own (non-editable) text?
+        // Clicking on/near the countdown ("… 34 mins") lands the browser caret
+        // in the chip's " mins" span — a text node, but one the caret can't
+        // usefully sit in. Detect that so we DON'T respect it below.
+        const anchorEl: HTMLElement | null =
+          anchor && anchor.nodeType === 3
+            ? anchor.parentElement
+            : (anchor as HTMLElement | null);
+        const insideChip = !!(
+          anchorEl &&
+          root &&
+          root.contains(anchorEl) &&
+          anchorEl.closest('[data-timer-chip]')
+        );
+        // Which side of the chip did the click fall on? The browser's own
+        // hit-test is UNTRUSTWORTHY around the chip: the countdown is
+        // user-select:none, so a click past its right edge gets remapped to
+        // the nearest selectable text — the PREFIX, on the wrong side. (That
+        // was the bug: click at the end → caret silently lands at the start.)
+        // The pointer X vs the chip's box is the ground truth for intent.
+        const chipEl = root
+          ? (root.querySelector('[data-timer-chip]') as HTMLElement | null)
+          : null;
+        const haveX = typeof clientX === 'number' && !!chipEl;
+        let clickedStart = false;
+        if (haveX && chipEl) {
+          const r = chipEl.getBoundingClientRect();
+          clickedStart = (clientX as number) < r.left + r.width / 2;
+        }
+        // Which side of the chip did the browser's caret land on?
+        let anchorAfterChip = false;
+        let anchorBeforeChip = false;
+        if (chipEl && anchor && root && root.contains(anchor)) {
+          const rel = chipEl.compareDocumentPosition(anchor);
+          anchorAfterChip = !!(rel & Node.DOCUMENT_POSITION_FOLLOWING);
+          anchorBeforeChip = !!(rel & Node.DOCUMENT_POSITION_PRECEDING);
+        }
+        // Clicked one side but the caret landed on the other → the hit-test
+        // lied; do NOT respect it.
+        const sideMismatch =
+          haveX &&
+          ((clickedStart && anchorAfterChip) ||
+            (!clickedStart && anchorBeforeChip));
+        // Respect the click's caret ONLY if it landed inside a real TEXT node
+        // that is NOT part of the chip AND agrees with the clicked side — that
+        // renders a usable, visible caret exactly where the user aimed.
+        const inText = !!(
+          root &&
+          anchor &&
+          root.contains(anchor) &&
+          anchor.nodeType === 3 &&
+          !insideChip &&
+          !sideMismatch
+        );
+        if (inText) {
+          ed.focus();
+          return;
+        }
+        // A chip with no text node beside it can't show a caret. Insert a text
+        // node on the clicked side and select it. A LEADING caret renders fine
+        // in an empty node (the chip follows it), but a TRAILING empty node
+        // after an inline decorator gets NO rendered caret — so it needs a
+        // zero-width space to give the caret a real position. The ZWSP is
+        // stripped on serialize, so it never reaches storage.
         ed.update(() => {
-          const root = $getRoot();
-          const para = root.getLastChild();
+          const rootN = $getRoot();
+          const para = rootN.getLastChild();
           if (!para || !$isElementNode(para)) return;
-          const childrenSize = para.getChildrenSize();
-          const sel = $createRangeSelection();
-          // Element-level anchor at offset === childrenSize positions the
-          // caret AFTER the last child (the chip), at the paragraph level,
-          // not recursing into any descendant. Typing here creates a new
-          // text node as a sibling of the chip — exactly what we want.
-          sel.anchor.set(para.getKey(), childrenSize, 'element');
-          sel.focus.set(para.getKey(), childrenSize, 'element');
-          $setSelection(sel);
+          const first = para.getFirstChild();
+          const last = para.getLastChild();
+          // After parking the caret, carry the landing run's styling into the
+          // selection's "next typing" state \u2014 a programmatic select() resets
+          // it to default, which made typing after a styled run (or in the
+          // unstyled ZWSP slot) silently drop the user's color/bold/size.
+          const syncTypingStyle = (node: TextNode) => {
+            let src: unknown = node;
+            // The slot itself carries no user styling \u2014 inherit from the run
+            // before the chip (the text the caret is visually attached to),
+            // and refresh the slot so keyboard entry inherits too.
+            if (/^\u200B+$/.test(node.getTextContent())) {
+              let prev = node.getPreviousSibling();
+              if ($isTimerChipNode(prev)) prev = prev.getPreviousSibling();
+              if ($isTextNode(prev)) {
+                src = prev;
+                node.setStyle(prev.getStyle());
+                node.setFormat(prev.getFormat());
+              }
+            }
+            const s = $getSelection();
+            if ($isRangeSelection(s) && $isTextNode(src as never)) {
+              s.style = (src as TextNode).getStyle();
+              s.format = (src as TextNode).getFormat();
+            }
+          };
+          if (clickedStart && first && $isTimerChipNode(first)) {
+            // No prefix: bracket the chip with an empty head node, inheriting
+            // the styling of the run AFTER the chip (the text the new prefix
+            // will visually join) so typing here doesn't reset to default.
+            const head = $createTextNode('');
+            const after = first.getNextSibling();
+            if ($isTextNode(after)) {
+              head.setStyle(after.getStyle());
+              head.setFormat(after.getFormat());
+            }
+            first.insertBefore(head);
+            head.select();
+          } else if (clickedStart && first && $isTextNode(first)) {
+            first.select(0, 0);
+            syncTypingStyle(first);
+          } else if (last && $isTextNode(last)) {
+            // ChipGuardPlugin maintains a zero-width-space slot after a
+            // trailing chip, so the end is always REAL text \u2014 land the caret
+            // at its end, where the browser can actually paint it. (The slot
+            // is guaranteed by the chip transform, so no create-fallback is
+            // needed here; the element-level branch below covers any truly
+            // empty paragraph.)
+            const len = last.getTextContentSize();
+            last.select(len, len);
+            syncTypingStyle(last);
+          } else {
+            const childrenSize = para.getChildrenSize();
+            const sel = $createRangeSelection();
+            sel.anchor.set(para.getKey(), childrenSize, 'element');
+            sel.focus.set(para.getKey(), childrenSize, 'element');
+            $setSelection(sel);
+          }
         });
         ed.focus();
       },
@@ -229,8 +371,17 @@ export const LexicalTimerField = forwardRef<
 
   const handleChange = (state: EditorState, editor: LexicalEditor) => {
     editorRef.current = editor;
-    // Full-fidelity state JSON (carries text + chip cell styles).
-    if (onStateJson) onStateJson(JSON.stringify(state.toJSON()));
+    // Full-fidelity state JSON (carries text + chip cell styles). The ZWSP
+    // caret slot ChipGuardPlugin maintains is presentation chrome and must
+    // NOT reach storage: if it did, merely opening the editor would emit a
+    // stateJson that differs from the saved one → phantom "unsaved changes",
+    // draft banners, and duplicate saved variants. Strip it; the guard
+    // re-creates it when the state is seeded back in.
+    if (onStateJson) {
+      const json = state.toJSON();
+      pruneCaretSlot(json.root as unknown as PrunableNode);
+      onStateJson(JSON.stringify(json));
+    }
     state.read(() => {
       const html = serializeStorageHtml();
       // Suppress the redundant legacy-string onChange when nothing relevant
@@ -280,7 +431,13 @@ export const LexicalTimerField = forwardRef<
             return;
           }
           if ($isTextNode(c as never)) {
-            const t = (c as { getTextContent: () => string }).getTextContent();
+            // Strip the ZWSP caret slot — parseStorageHtml never produces it,
+            // so leaving it in would make this equality check always FAIL for
+            // a trailing chip and the "no-op" echo below would destructively
+            // rebuild the text (dropping the user's styling) on every sync.
+            const t = (c as { getTextContent: () => string })
+              .getTextContent()
+              .replace(/\u200B/g, '');
             if (seen) curSuffix += t;
             else curPrefix += t;
           }
@@ -464,7 +621,12 @@ function serializeStorageHtml(): string {
           getTextContent: () => string;
           getStyle: () => string;
         };
-        const text = escapeHtml(tn.getTextContent());
+        // Strip zero-width spaces — these are only used transiently to give the
+        // caret a place to sit next to the chip (see focus()); they must never
+        // reach storage.
+        const raw = tn.getTextContent().replace(/\u200B/g, "");
+        if (!raw) return;
+        const text = escapeHtml(raw);
         const style = tn.getStyle();
         // Emit a styled span so the preview's buildTimerDisplayHtml can
         // render the user's prefix/suffix styling. Plain text without
