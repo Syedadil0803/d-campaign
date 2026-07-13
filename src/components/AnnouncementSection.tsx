@@ -2,8 +2,8 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Megaphone, MoreVertical, Sparkles, Undo2, Redo2, Radio, Infinity as InfinityIcon, MoveLeft } from 'lucide-react';
-import { CampaignConfig } from '@/types/campaign';
+import { Megaphone, MoreVertical, Sparkles, Undo2, Redo2, Radio, Infinity as InfinityIcon, MoveLeft, Trash2 } from 'lucide-react';
+import { CampaignConfig, defaultConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { wrapBareTextWithFontSize, rgbToHex, FONT_SIZE_LABEL_MAP } from '@/lib/richTextUtils';
@@ -110,6 +110,10 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   // Popup state
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [showGoOnAirConfirm, setShowGoOnAirConfirm] = useState(false);
+  // Overflow (•••) menu + its "Start fresh" full-reset confirmation.
+  const [showResetMenu, setShowResetMenu] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const resetMenuRef = useRef<HTMLDivElement>(null);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [showSchedulePopup, setShowSchedulePopup] = useState(false);
   const [showStartDateCalendar, setShowStartDateCalendar] = useState(false);
@@ -535,6 +539,67 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     markChanged();
     showToast('Announcement deleted', false);
   }
+
+  // Clears the whole message list in one click. Undoable via the list-undo
+  // stack (the Undo button sits right beside this one), and only touches the
+  // draft — nothing goes live until Publish.
+  function clearAnnouncements() {
+    if (config.announcementBar.announcements.length === 0) return;
+    pushListUndo();
+    setConfig({
+      ...config,
+      announcementBar: {
+        ...config.announcementBar,
+        announcements: [],
+      },
+    });
+    clearSelection();
+    markChanged();
+    showToast('All announcements cleared', false);
+  }
+
+  // "Start fresh" — a full reset of the announcement draft back to defaults:
+  // clears every message AND resets colors/size/loop/timing. It resets more
+  // than what's on screen and isn't recoverable via Undo, so it's confirm-gated
+  // and history is wiped to avoid a confusing half-undo. Draft only — the live
+  // site is untouched until Save & Publish.
+  function startFresh() {
+    setConfig({
+      ...config,
+      announcementBar: {
+        ...config.announcementBar,
+        announcements: [],
+        // Start fresh defaults the loop to single (not continuous).
+        loop: false,
+        startDate: '',
+        endDate: '',
+        // Deep clone so the draft never shares references with the defaults.
+        style: JSON.parse(JSON.stringify(defaultConfig.announcementBar.style)),
+        // `active` is deliberately left as-is — live status is Go on air / Stop.
+      },
+    });
+    clearSelection();
+    // Clean slate → drop undo/redo history (list + editor).
+    listUndoStack.current = [];
+    listRedoStack.current = [];
+    setCanUndoList(false);
+    setCanRedoList(false);
+    commitHistory();
+    markChanged();
+    showToast('Started fresh — messages and styling reset to defaults');
+  }
+
+  // Close the ••• menu on any outside click.
+  useEffect(() => {
+    if (!showResetMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (resetMenuRef.current && !resetMenuRef.current.contains(e.target as Node)) {
+        setShowResetMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [showResetMenu]);
 
   function reorderAnnouncements(fromIndex: number, toIndex: number) {
     pushListUndo();
@@ -963,6 +1028,38 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
         </div>
       )}
 
+      {/* Start Fresh Confirmation — full reset of the announcement draft */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" onClick={() => setShowResetConfirm(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <h2 className="text-base font-semibold">Start fresh?</h2>
+            <p className="mt-2 text-sm text-on-surface-variant">
+              This clears all announcement messages and resets the colors, text size, loop, and timing back to their defaults.
+            </p>
+            <p className="mt-2 text-xs text-on-surface-variant/80">
+              Only your draft changes — nothing on your live site changes until you Save &amp; Publish. This can&apos;t be recovered with Undo.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(false)}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowResetConfirm(false); startFresh(); }}
+                className="rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:bg-red-600"
+              >
+                Yes, start fresh
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="px-4 py-2 border-border bg-surface/60 flex items-center justify-between">
         <div className="flex items-center">
@@ -1010,6 +1107,35 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
               </>
             )}
           </button>
+          <div ref={resetMenuRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowResetMenu((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={showResetMenu}
+              title="More actions"
+              className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-full border border-border bg-surface-elevated text-on-surface-variant transition-colors hover:border-primary/50 hover:text-primary"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+            {showResetMenu && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-lg border border-border bg-surface-elevated shadow-lg"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  title="Reset all messages and styling to defaults"
+                  onClick={() => { setShowResetMenu(false); setShowResetConfirm(true); }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-red-500 transition-colors hover:bg-red-500/10"
+                >
+                  <Trash2 className="w-4 h-4 flex-none" />
+                  Start fresh
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -2008,6 +2134,16 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                     title="Redo list action"
                   >
                     <Redo2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={clearAnnouncements}
+                    disabled={config.announcementBar.announcements.length === 0}
+                    className="ml-1 flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-on-surface-variant hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Remove all messages (Undo to restore)"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Clear
                   </button>
                 </div>
               </div>

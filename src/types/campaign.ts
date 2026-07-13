@@ -104,13 +104,16 @@ export const defaultConfig: CampaignConfig = {
     endDate: '',
     style: {
       background: {
-        type: 'linear',
-        startColor: '#648496',
-        endColor: '#335970',
+        type: 'solid',
+        // Warm cream — a soft ivory bar with gentle warmth and subtle presence,
+        // readable on both light and dark surroundings.
+        startColor: '#fdf6e3',
+        endColor: '#fdf6e3',
         direction: 'to right',
         midpoint: 50,
       },
-      textColor: '#ffffff',
+      // Warm amber-brown text, readable on the cream background.
+      textColor: '#7c5e10',
     },
   },
   promoCard: {
