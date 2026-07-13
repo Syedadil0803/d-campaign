@@ -388,17 +388,26 @@ export default function Home() {
     }
   }
 
+  // The variant popup closes on click and the publish continues in the
+  // background — so in publish mode we light up the header Publish button's
+  // loader (isPublishing) until the persist finishes, exactly like a direct
+  // publish. Otherwise the publish would run with no in-progress feedback.
   async function savePendingVariantAndClose() {
     if (!pendingVariantSave) return;
     const { config: cfg, mode } = pendingVariantSave;
     setPendingVariantSave(null);
-    await savePromoVariant(cfg, true);
-    if (mode === 'publish') {
-      // cfg already has active:true — finish going live, don't re-prompt to publish.
-      await persistConfig(cfg, 'Campaign is live on your website', 'promo');
-      setReadyToPublishPromo(false);
-    } else {
-      await persistConfig(cfg, 'Settings saved and promo variant saved');
+    if (mode === 'publish') setIsPublishing(true);
+    try {
+      await savePromoVariant(cfg, true);
+      if (mode === 'publish') {
+        // cfg already has active:true — finish going live, don't re-prompt to publish.
+        await persistConfig(cfg, 'Campaign is live on your website', 'promo');
+        setReadyToPublishPromo(false);
+      } else {
+        await persistConfig(cfg, 'Settings saved and promo variant saved');
+      }
+    } finally {
+      if (mode === 'publish') setIsPublishing(false);
     }
   }
 
@@ -407,14 +416,19 @@ export default function Home() {
     const { config: cfg, mode, versions } = pendingVariantSave;
     const version = versions.find((item) => item.id === versionId);
     setPendingVariantSave(null);
-    await updateVersion(versionId, cfg.promoCard, version?.label);
-    setSelectedPromoVersionId(versionId);
-    savedPromoSignatureRef.current = getPromoSignature(cfg);
-    if (mode === 'publish') {
-      await persistConfig(cfg, 'Campaign is live on your website', 'promo');
-      setReadyToPublishPromo(false);
-    } else {
-      await persistConfig(cfg, 'Settings saved and promo variant updated');
+    if (mode === 'publish') setIsPublishing(true);
+    try {
+      await updateVersion(versionId, cfg.promoCard, version?.label);
+      setSelectedPromoVersionId(versionId);
+      savedPromoSignatureRef.current = getPromoSignature(cfg);
+      if (mode === 'publish') {
+        await persistConfig(cfg, 'Campaign is live on your website', 'promo');
+        setReadyToPublishPromo(false);
+      } else {
+        await persistConfig(cfg, 'Settings saved and promo variant updated');
+      }
+    } finally {
+      if (mode === 'publish') setIsPublishing(false);
     }
   }
 
@@ -503,7 +517,7 @@ export default function Home() {
     };
     // Flip the chip to On Air only AFTER the publish finishes — so it appears
     // when the "Publishing…" loader completes, not at the start.
-    await persistConfig(next, 'Changes are live on your website', 'announcement');
+    await persistConfig(next, 'Campaign is live on your website', 'announcement');
     setConfig(next);
     setReadyToPublishAnnouncement(false);
   }
