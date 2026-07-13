@@ -2,10 +2,17 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Megaphone, MoreVertical, Sparkles, Undo2, Redo2, Radio, Infinity as InfinityIcon, MoveLeft, Trash2 } from 'lucide-react';
+import { Megaphone, MoreVertical, Sparkles, Undo2, Redo2, Radio, Infinity as InfinityIcon, MoveLeft, Trash2, BookOpen, X } from 'lucide-react';
 import { CampaignConfig, defaultConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
+import { useSpellCheck } from '@/hooks/useSpellCheck';
+import { SpellCheckOverlay } from './SpellCheckOverlay';
+import {
+  getPersonalDictionary,
+  addToPersonalDictionary,
+  removeFromPersonalDictionary,
+} from '@/lib/spellcheck/engine';
 import { wrapBareTextWithFontSize, rgbToHex, FONT_SIZE_LABEL_MAP } from '@/lib/richTextUtils';
 import RichTextToolbar from './RichTextToolbar';
 import { Toast } from './Toast';
@@ -114,6 +121,10 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   const [showResetMenu, setShowResetMenu] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const resetMenuRef = useRef<HTMLDivElement>(null);
+  // Spelling dictionary manager (view / add / remove personal words).
+  const [showDictionary, setShowDictionary] = useState(false);
+  const [dictWords, setDictWords] = useState<string[]>([]);
+  const [newDictWord, setNewDictWord] = useState('');
   const [showLinkPopup, setShowLinkPopup] = useState(false);
   const [showSchedulePopup, setShowSchedulePopup] = useState(false);
   const [showStartDateCalendar, setShowStartDateCalendar] = useState(false);
@@ -157,6 +168,10 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     saveSelection,
     getNormalizedHTML,
   } = useRichTextEditor(richEditorRef, { defaultColor: editorDefaultColor });
+
+  // Live spelling + grammar check (custom squiggles) on the message editor.
+  const { issues: editorIssues, rescan: rescanSpelling } =
+    useSpellCheck(richEditorRef, true);
 
   // Editor history (undo/redo)
   const {
@@ -540,9 +555,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     showToast('Announcement deleted', false);
   }
 
-  // Clears the whole message list in one click. Undoable via the list-undo
-  // stack (the Undo button sits right beside this one), and only touches the
-  // draft — nothing goes live until Publish.
+  // Empties the message list; undoable via the list-undo stack.
   function clearAnnouncements() {
     if (config.announcementBar.announcements.length === 0) return;
     pushListUndo();
@@ -558,28 +571,22 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     showToast('All announcements cleared', false);
   }
 
-  // "Start fresh" — a full reset of the announcement draft back to defaults:
-  // clears every message AND resets colors/size/loop/timing. It resets more
-  // than what's on screen and isn't recoverable via Undo, so it's confirm-gated
-  // and history is wiped to avoid a confusing half-undo. Draft only — the live
-  // site is untouched until Save & Publish.
+  // Full reset of the draft to defaults (messages + styling). Confirm-gated and
+  // not undoable, so history is wiped to avoid a confusing partial undo. `active`
+  // is left alone — live status is owned by Go on air / Stop.
   function startFresh() {
     setConfig({
       ...config,
       announcementBar: {
         ...config.announcementBar,
         announcements: [],
-        // Start fresh defaults the loop to single (not continuous).
         loop: false,
         startDate: '',
         endDate: '',
-        // Deep clone so the draft never shares references with the defaults.
         style: JSON.parse(JSON.stringify(defaultConfig.announcementBar.style)),
-        // `active` is deliberately left as-is — live status is Go on air / Stop.
       },
     });
     clearSelection();
-    // Clean slate → drop undo/redo history (list + editor).
     listUndoStack.current = [];
     listRedoStack.current = [];
     setCanUndoList(false);
@@ -587,6 +594,28 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     commitHistory();
     markChanged();
     showToast('Started fresh — messages and styling reset to defaults');
+  }
+
+  function openDictionary() {
+    setShowResetMenu(false);
+    setDictWords(getPersonalDictionary());
+    setNewDictWord('');
+    setShowDictionary(true);
+  }
+
+  function addDictWord() {
+    const w = newDictWord.trim();
+    if (!w) return;
+    addToPersonalDictionary(w);
+    setDictWords(getPersonalDictionary());
+    setNewDictWord('');
+    rescanSpelling();
+  }
+
+  function removeDictWord(word: string) {
+    removeFromPersonalDictionary(word);
+    setDictWords(getPersonalDictionary());
+    rescanSpelling();
   }
 
   // Close the ••• menu on any outside click.
@@ -1060,6 +1089,86 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
         </div>
       )}
 
+      {/* Spelling dictionary manager */}
+      {showDictionary && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" onClick={() => setShowDictionary(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold">Spelling dictionary</h2>
+                <p className="mt-1 text-sm text-on-surface-variant">
+                  Words here are treated as correct everywhere and never underlined — handy for brand names.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDictionary(false)}
+                aria-label="Close spelling dictionary"
+                className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <input
+                value={newDictWord}
+                onChange={(e) => setNewDictWord(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDictWord(); } }}
+                placeholder="Add a word…"
+                className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none transition-colors focus:border-primary/80 focus:ring-1 focus:ring-primary/40"
+              />
+              <button
+                type="button"
+                onClick={addDictWord}
+                disabled={!newDictWord.trim()}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:opacity-50"
+              >
+                Add
+              </button>
+            </div>
+
+            <div className="mt-4 max-h-60 overflow-y-auto">
+              {dictWords.length === 0 ? (
+                <p className="text-sm text-on-surface-variant">
+                  No words yet. Add one above, or click “Add to dictionary” on an underlined word.
+                </p>
+              ) : (
+                <ul className="flex flex-wrap gap-2">
+                  {dictWords.map((w) => (
+                    <li
+                      key={w}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-sm"
+                    >
+                      <span>{w}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeDictWord(w)}
+                        aria-label={`Remove ${w}`}
+                        className="text-on-surface-variant transition-colors hover:text-red-500"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDictionary(false)}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="px-4 py-2 border-border bg-surface/60 flex items-center justify-between">
         <div className="flex items-center">
@@ -1121,8 +1230,19 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
             {showResetMenu && (
               <div
                 role="menu"
-                className="absolute right-0 top-full z-30 mt-1 w-44 overflow-hidden rounded-lg border border-border bg-surface-elevated shadow-lg"
+                className="absolute right-0 top-full z-30 mt-1 w-48 overflow-hidden rounded-lg border border-border bg-surface-elevated shadow-lg"
               >
+                <button
+                  type="button"
+                  role="menuitem"
+                  title="View and manage words you've added to the spell-checker"
+                  onClick={openDictionary}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-on-surface transition-colors hover:bg-primary/10 hover:text-primary"
+                >
+                  <BookOpen className="w-4 h-4 flex-none" />
+                  Spelling dictionary
+                </button>
+                <div className="border-t border-border" />
                 <button
                   type="button"
                   role="menuitem"
@@ -1337,6 +1457,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-on-surface-variant mb-2">Enter text below</p>
                   <div ref={richEditorRef} contentEditable suppressContentEditableWarning
+                    spellCheck={false}
                     onInput={onRichTextInput}
                     onPaste={(e) => {
                       e.preventDefault();
@@ -1529,6 +1650,12 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                     }}
                     className={`rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[360px] resize-y break-words transition-colors focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 border-border`}
                     style={{ background: getBackgroundStyle(previewBg), wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%', caretColor: 'auto' }} />
+                  <SpellCheckOverlay
+                    editorRef={richEditorRef}
+                    issues={editorIssues}
+                    enabled={true}
+                    onAfterChange={rescanSpelling}
+                  />
                 </div>
                 <button onMouseDown={(e) => {
                   e.preventDefault();
