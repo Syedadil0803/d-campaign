@@ -22,10 +22,11 @@ import {
   History,
   FilePlus2,
   Sparkles,
+  ClipboardPaste,
   Power,
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
-import { getBackgroundStyle, stripHtml } from "@/lib/utils";
+import { getBackgroundStyle } from "@/lib/utils";
 import { HistoryManager } from "@/lib/historyManager";
 import { SamplePromoTemplates } from "./SamplePromoTemplates";
 import { useRichTextEditor } from "@/hooks/useRichTextEditor";
@@ -39,6 +40,7 @@ import RichTextToolbar from "./RichTextToolbar";
 import { PopupDropdown } from "./PopupDropdown";
 import { PromoMiniPreview } from "./PromoMiniPreview";
 import { SpellCheck } from "./SpellCheck";
+import { parseAiPromo, applyAiPromo, AI_PROMO_SCHEMA_PROMPT } from "@/lib/promoImport";
 import {
   listVersions,
   deleteVersion,
@@ -405,6 +407,10 @@ export function PromoSection({
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [showGoOnAirConfirm, setShowGoOnAirConfirm] = useState(false);
+  // Paste-from-AI import: modal open, textarea contents, and last parse error.
+  const [showAiPaste, setShowAiPaste] = useState(false);
+  const [aiPasteText, setAiPasteText] = useState('');
+  const [aiPasteError, setAiPasteError] = useState('');
 
   // Saved promo-card versions (local-only for now; see lib/promoVersions).
   const [versions, setVersions] = useState<PromoVersion[]>([]);
@@ -1892,32 +1898,32 @@ export function PromoSection({
   }
 
   function openChatGptWithPromoPrompt() {
-    const title = stripHtml(config.promoCard.title || "").trim();
-    const subtitle = stripHtml(config.promoCard.subtitle || "").trim();
-    const description = stripHtml(config.promoCard.description || "").trim();
-    const buttonText = stripHtml(config.promoCard.buttonText || "").trim();
-    const timerText = stripHtml(config.promoCard.timerText || "").trim();
-
-    const existingCopy = [
-      title && `Title: ${title}`,
-      subtitle && `Subtitle: ${subtitle}`,
-      description && `Description: ${description}`,
-      buttonText && `Button: ${buttonText}`,
-      timerText && `Timer: ${timerText}`,
-    ].filter(Boolean);
-
+    // Always start fresh — never seed the current card's copy, so the AI designs
+    // from the interview, not from what's already there.
     const prompt = [
-      "Write 3 polished promo card variants for a website floating offer widget.",
-      "Keep each variant concise, conversion-focused, and friendly.",
-      "For each variant include: title, subtitle, short description, timer text, and CTA button text.",
-      "Avoid long sentences. Make the CTA action-oriented.",
-      existingCopy.length
-        ? `Use this existing copy as context:\n${existingCopy.join("\n")}`
-        : "Base it on a general ecommerce promotion.",
+      "I'm building a promo card for a website floating offer widget.",
+      AI_PROMO_SCHEMA_PROMPT,
+      "",
+      "When you give me the final JSON, I'll paste it straight back into my tool.",
     ].join("\n");
 
-    const url = `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+    // The prompt is long; passing it in the URL trips ChatGPT's request-size
+    // limit (HTTP 431). Copy it to the clipboard and open a blank chat instead.
+    const open = () => window.open("https://chatgpt.com/", "_blank", "noopener,noreferrer");
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(prompt).then(
+        () => {
+          toast("Prompt copied — paste it into ChatGPT (Cmd/Ctrl+V) to start.");
+          open();
+        },
+        () => {
+          toast("Couldn't copy the prompt automatically — please try again.", true);
+          open();
+        },
+      );
+    } else {
+      open();
+    }
   }
 
   function updateField(field: keyof PromoCard, value: any) {
@@ -1933,6 +1939,27 @@ export function PromoSection({
     });
     syncResetPromoEditsButton(nextPromoCard);
     markChanged();
+  }
+
+  function applyAiPaste() {
+    const result = parseAiPromo(aiPasteText);
+    if (!result.ok) {
+      setAiPasteError(result.error);
+      return;
+    }
+    pushPromoState();
+    const nextPromoCard = applyAiPromo(config.promoCard, result.data);
+    setConfig({ ...config, promoCard: nextPromoCard });
+    syncResetPromoEditsButton(nextPromoCard);
+    markChanged();
+    setShowAiPaste(false);
+    setAiPasteText('');
+    setAiPasteError('');
+    const n = result.fields.length;
+    const summary =
+      `Applied ${n} field${n === 1 ? '' : 's'} from AI` +
+      (result.skipped.length ? ` · skipped ${result.skipped.length} (${result.skipped.join(', ')})` : '');
+    toast(summary);
   }
 
   function getPopupPositionStyle(
@@ -2545,6 +2572,20 @@ export function PromoSection({
                 aria-label="Open ChatGPT with a promo copy prompt"
               >
                 <Sparkles className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setAiPasteText('');
+                  setAiPasteError('');
+                  setShowAiPaste(true);
+                }}
+                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
+                title="Paste an AI-generated promo (JSON) to fill the card"
+                aria-label="Paste an AI-generated promo"
+              >
+                <ClipboardPaste className="w-3.5 h-3.5" />
               </button>
               <button
                 onMouseDown={(e) => e.preventDefault()}
@@ -4266,6 +4307,70 @@ export function PromoSection({
               >
                 Yes, go on air
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Paste-from-AI import */}
+      {showAiPaste && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" onClick={() => setShowAiPaste(false)} />
+          <div className="relative z-10 w-full max-w-lg rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold">Paste from AI</h2>
+                <p className="mt-1 text-sm text-on-surface-variant">
+                  Use the <Sparkles className="inline h-3.5 w-3.5 -mt-0.5" /> button to chat with AI, then
+                  paste the JSON it gives you here to fill the card.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAiPaste(false)}
+                aria-label="Close"
+                className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <textarea
+              value={aiPasteText}
+              onChange={(e) => {
+                setAiPasteText(e.target.value);
+                if (aiPasteError) setAiPasteError('');
+              }}
+              spellCheck={false}
+              placeholder='Paste the JSON here, e.g. {"title": "Summer Sale", "buttonText": "Shop now", ...}'
+              className="mt-4 h-40 w-full resize-none rounded-md border border-border bg-surface px-3 py-2 font-mono text-xs outline-none transition-colors focus:border-primary/80 focus:ring-1 focus:ring-primary/40"
+            />
+
+            {aiPasteError && (
+              <p className="mt-2 text-xs font-medium text-red-500">{aiPasteError}</p>
+            )}
+
+            <div className="mt-4 flex items-center justify-between gap-2">
+              <span className="text-[11px] text-on-surface-variant/80">
+                Only the fields the AI provides are changed — nothing else is touched.
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAiPaste(false)}
+                  className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={applyAiPaste}
+                  disabled={!aiPasteText.trim()}
+                  className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:opacity-50"
+                >
+                  Apply to card
+                </button>
+              </div>
             </div>
           </div>
         </div>
