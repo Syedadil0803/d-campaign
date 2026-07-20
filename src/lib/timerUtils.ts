@@ -503,7 +503,11 @@ export function buildTimerDisplayHtml(storedHtml: string, timerValue: TimerValue
   // Wrap the text before/after the (first) block into editable slot spans so
   // each side can show its own ":empty" placeholder. Slots are stripped on save.
   const firstChip = root.querySelector('[data-timer-fixed]');
-  if (firstChip) {
+  // Only wrap prefix/suffix when the chip is a direct child of root. If the
+  // {timer} token sat inside another element (e.g. bold/colored copy), the chip
+  // is nested — insertBefore(root, …) would throw, so skip the slot wrapping and
+  // just render the chip where it is.
+  if (firstChip && firstChip.parentNode === root) {
     const prefix = doc.createElement('span');
     prefix.setAttribute('data-timer-prefix', '');
     while (root.firstChild && root.firstChild !== firstChip) {

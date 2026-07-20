@@ -157,6 +157,14 @@ function sanitizeNode(node: Element): void {
   });
 }
 
+// The timer feeds buildTimerDisplayHtml, which needs the {timer} token as bare
+// text (nested inside HTML it would crash), so the timer copy is plain text only.
+function plainText(v: unknown): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const s = v.replace(/<[^>]*>/g, '').trim();
+  return s ? s.slice(0, COPY_MAX) : undefined;
+}
+
 function sanitizeCopy(v: unknown): string | undefined {
   if (typeof v !== 'string') return undefined;
   const raw = v.trim();
@@ -252,7 +260,7 @@ export function parseAiPromo(raw: string): ParseResult {
   take('subtitle', sanitizeCopy(obj.subtitle));
   take('description', sanitizeCopy(obj.description));
   take('buttonText', sanitizeCopy(obj.buttonText));
-  take('timerText', sanitizeCopy(obj.timerText));
+  take('timerText', plainText(obj.timerText));
 
   if (typeof obj.showTimer === 'boolean') take('showTimer', obj.showTimer);
   if (typeof obj.showButton === 'boolean') take('showButton', obj.showButton);
