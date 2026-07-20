@@ -209,7 +209,22 @@ export default function Home() {
   const publishedConfigRef = useRef<string | null>(null);
 
   function getConfigSignature(cfg: CampaignConfig) {
-    return JSON.stringify(cfg);
+    // `active` / `stoppedByUser` are live on/off flags managed by Go-on-air /
+    // Stop, not content. Exclude them so the Save/dirty check reflects real
+    // content changes only — e.g. re-applying an already-live variant (which
+    // flips active) must not read as "unsaved changes". Mirrors the reactivate
+    // comparison below.
+    const strip = (o: Record<string, unknown>) => {
+      const clone = { ...o };
+      delete clone.active;
+      delete clone.stoppedByUser;
+      return clone;
+    };
+    return JSON.stringify({
+      ...cfg,
+      announcementBar: strip(cfg.announcementBar as unknown as Record<string, unknown>),
+      promoCard: strip(cfg.promoCard as unknown as Record<string, unknown>),
+    });
   }
 
   function hasChangesSinceDraft() {
