@@ -23,6 +23,7 @@ import {
   FilePlus2,
   Sparkles,
   ClipboardPaste,
+  Copy,
   Power,
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
@@ -1897,33 +1898,47 @@ export function PromoSection({
     onGoOnAir();
   }
 
-  function openChatGptWithPromoPrompt() {
-    // Always start fresh — never seed the current card's copy, so the AI designs
-    // from the interview, not from what's already there.
-    const prompt = [
+  // The full brief we hand to any AI (ChatGPT or another tool the user prefers).
+  function promoAiInstructions() {
+    return [
       "I'm building a promo card for a website floating offer widget.",
       AI_PROMO_SCHEMA_PROMPT,
       "",
       "When you give me the final JSON, I'll paste it straight back into my tool.",
     ].join("\n");
+  }
 
-    // The prompt is long; passing it in the URL trips ChatGPT's request-size
-    // limit (HTTP 431). Copy it to the clipboard and open a blank chat instead.
-    const open = () => window.open("https://chatgpt.com/", "_blank", "noopener,noreferrer");
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(prompt).then(
-        () => {
-          toast("Prompt copied — paste it into ChatGPT (Cmd/Ctrl+V) to start.");
-          open();
-        },
-        () => {
-          toast("Couldn't copy the prompt automatically — please try again.", true);
-          open();
-        },
-      );
-    } else {
-      open();
+  function copyPromoPrompt() {
+    if (!navigator.clipboard?.writeText) {
+      toast("Copying isn't available in this browser.", true);
+      return;
     }
+    navigator.clipboard.writeText(promoAiInstructions()).then(
+      () => toast("Prompt copied — paste it into any AI tool you like."),
+      () => toast("Couldn't copy the prompt — please try again.", true),
+    );
+  }
+
+  function openChatGptWithPromoPrompt() {
+    // Hybrid so it works on the free tier (no custom GPT): a SHORT priming
+    // message opens via the URL (the full prompt would overflow it → HTTP 431),
+    // and the full instructions are copied to the clipboard for the user to
+    // paste when ChatGPT asks. The priming is shown as the user's first message,
+    // so it reads naturally; the paste cue lives in the toast.
+    const priming =
+      "I'd like your help designing a promo card for my website. I have a detailed " +
+      "brief ready to share — please ask me for it, then follow it exactly to guide " +
+      "me through the design step by step.";
+    const fullInstructions = promoAiInstructions();
+
+    const url = `https://chatgpt.com/?q=${encodeURIComponent(priming)}`;
+    // Open synchronously within the click — window.open() deferred into a
+    // promise callback is treated as non-user-initiated and gets popup-blocked.
+    window.open(url, "_blank", "noopener,noreferrer");
+    navigator.clipboard?.writeText(fullInstructions)?.then(
+      () => toast("Instructions copied — ChatGPT will ask you to paste them (Cmd/Ctrl+V)."),
+      () => toast("Couldn't copy automatically — use “Copy prompt” in the paste box.", true),
+    );
   }
 
   function updateField(field: keyof PromoCard, value: any) {
@@ -2568,8 +2583,8 @@ export function PromoSection({
                   openChatGptWithPromoPrompt();
                 }}
                 className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
-                title="Open ChatGPT with a promo copy prompt"
-                aria-label="Open ChatGPT with a promo copy prompt"
+                title="Design this promo with AI"
+                aria-label="Design this promo with AI"
               >
                 <Sparkles className="w-3.5 h-3.5" />
               </button>
@@ -4321,8 +4336,9 @@ export function PromoSection({
               <div>
                 <h2 className="text-base font-semibold">Paste from AI</h2>
                 <p className="mt-1 text-sm text-on-surface-variant">
-                  Use the <Sparkles className="inline h-3.5 w-3.5 -mt-0.5" /> button to chat with AI, then
-                  paste the JSON it gives you here to fill the card.
+                  Chat with AI using the <Sparkles className="inline h-3.5 w-3.5 -mt-0.5" /> button
+                  (or <span className="font-medium">Copy prompt</span> for any AI tool), then paste
+                  the JSON it gives you here.
                 </p>
               </div>
               <button
@@ -4350,15 +4366,24 @@ export function PromoSection({
               <p className="mt-2 text-xs font-medium text-red-500">{aiPasteError}</p>
             )}
 
-            <div className="mt-4 flex items-center justify-between gap-2">
-              <span className="text-[11px] text-on-surface-variant/80">
-                Only the fields the AI provides are changed — nothing else is touched.
-              </span>
-              <div className="flex gap-2">
+            <p className="mt-3 text-[11px] text-on-surface-variant/80">
+              Only the fields the AI provides are changed — nothing else is touched.
+            </p>
+
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={copyPromoPrompt}
+                className="inline-flex flex-none items-center gap-1.5 whitespace-nowrap rounded-md border border-white/10 bg-transparent px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy prompt
+              </button>
+              <div className="flex flex-none gap-2">
                 <button
                   type="button"
                   onClick={() => setShowAiPaste(false)}
-                  className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+                  className="whitespace-nowrap rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
                 >
                   Cancel
                 </button>
@@ -4366,7 +4391,7 @@ export function PromoSection({
                   type="button"
                   onClick={applyAiPaste}
                   disabled={!aiPasteText.trim()}
-                  className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:opacity-50"
+                  className="whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:opacity-50"
                 >
                   Apply to card
                 </button>
