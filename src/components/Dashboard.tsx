@@ -328,20 +328,23 @@ export function Dashboard({
             <span className={statusPill(promo.active)}>{promo.active ? 'Live' : 'Off'}</span>
           </div>
 
-          {/* hero time-left — the headline number for the promo */}
-          {endMs && (
-            <div className="mb-4 flex items-baseline gap-2">
-              <span
-                className={`text-3xl font-bold tracking-tight tabular-nums ${
-                  promo.active && !ended ? 'text-on-surface' : 'text-on-surface-variant'
-                }`}
-              >
-                {ended ? 'Ended' : remainingLabel}
-              </span>
-              {!ended && <span className="text-sm text-on-surface-variant">left</span>}
-              {!promo.active && !ended && <span className="text-sm text-on-surface-variant">· not running</span>}
-            </div>
-          )}
+          {/* hero time-left — headline; fixed-height row so the gray preview box
+              lines up with the announcement card's box */}
+          <div className="mb-4 flex min-h-[80px] flex-col justify-start gap-1">
+            {endMs && (
+              <div className="flex items-baseline gap-2">
+                <span
+                  className={`text-3xl font-bold tracking-tight tabular-nums ${
+                    promo.active && !ended ? 'text-on-surface' : 'text-on-surface-variant'
+                  }`}
+                >
+                  {ended ? 'Ended' : remainingLabel}
+                </span>
+                {!ended && <span className="text-sm text-on-surface-variant">left</span>}
+                {!promo.active && !ended && <span className="text-sm text-on-surface-variant">· not running</span>}
+              </div>
+            )}
+          </div>
 
           {/* recessed preview stage — hover to reveal View, click to open the popup */}
           <div className="group relative">
@@ -446,34 +449,9 @@ export function Dashboard({
             <span className={statusPill(ann.active)}>{ann.active ? 'On air' : 'Off'}</span>
           </div>
 
-          {/* recessed preview stage — hover to reveal View, click to open the popup */}
-          <div className="group relative">
-            <button
-              type="button"
-              onClick={() => setShowAnnPreview(true)}
-              aria-label="View announcement bar preview"
-              className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl bg-black/0 text-transparent opacity-0 transition-all duration-200 group-hover:bg-black/45 group-hover:text-white group-hover:opacity-100 focus-visible:bg-black/45 focus-visible:text-white focus-visible:opacity-100"
-            >
-              <Eye className="h-5 w-5" />
-              <span className="text-sm font-semibold">View</span>
-            </button>
-            <div className="flex h-32 items-center overflow-hidden rounded-xl border border-border bg-surface-subtle p-3 shadow-inner">
-              <div
-                className="w-full overflow-hidden rounded-md"
-                style={{ background: getBackgroundStyle(ann.style.background) }}
-              >
-                <div
-                  className="truncate px-3 py-2 text-center text-sm font-medium"
-                  style={{ color: ann.style.textColor }}
-                >
-                  {stripHtml(ann.announcements[0]?.text) || 'Your announcement shows here'}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* meta */}
-          <div className="mt-4 space-y-2.5">
+          {/* meta — moved above the box (same fixed height as the promo hero) so both
+              cards' gray preview boxes line up at the same level */}
+          <div className="mb-4 flex min-h-[80px] flex-col justify-start gap-2">
             <div className="flex items-center gap-2 text-sm text-on-surface-variant">
               <Megaphone className="h-4 w-4 shrink-0" />
               <span>
@@ -498,6 +476,32 @@ export function Dashboard({
                 <span>Continuous loop</span>
               </div>
             )}
+          </div>
+
+          {/* recessed preview stage — hover to reveal View, click to open the popup */}
+          <div className="group relative">
+            <button
+              type="button"
+              onClick={() => setShowAnnPreview(true)}
+              aria-label="View announcement bar preview"
+              className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl bg-black/0 text-transparent opacity-0 transition-all duration-200 group-hover:bg-black/45 group-hover:text-white group-hover:opacity-100 focus-visible:bg-black/45 focus-visible:text-white focus-visible:opacity-100"
+            >
+              <Eye className="h-5 w-5" />
+              <span className="text-sm font-semibold">View</span>
+            </button>
+            <div className="flex h-32 items-center overflow-hidden rounded-xl border border-border bg-surface-subtle p-3 shadow-inner">
+              <div
+                className="w-full overflow-hidden rounded-md"
+                style={{ background: getBackgroundStyle(ann.style.background) }}
+              >
+                <div
+                  className="truncate px-3 py-2 text-center text-sm font-medium"
+                  style={{ color: ann.style.textColor }}
+                >
+                  {stripHtml(ann.announcements[0]?.text) || 'Your announcement shows here'}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* actions — View · Edit · lifecycle (View + Edit both open the Announcement tab) */}
