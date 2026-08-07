@@ -40,7 +40,6 @@ import {
 import RichTextToolbar from "./RichTextToolbar";
 import { PopupDropdown } from "./PopupDropdown";
 import { PromoMiniPreview } from "./PromoMiniPreview";
-import { SpellCheck } from "./SpellCheck";
 import { parseAiPromo, applyAiPromo, AI_PROMO_SCHEMA_PROMPT } from "@/lib/promoImport";
 import {
   listVersions,
@@ -2549,11 +2548,6 @@ export function PromoSection({
 
   return (
     <>
-      {/* Live spelling + grammar check on the promo text fields. */}
-      <SpellCheck editorRef={titleRef} />
-      <SpellCheck editorRef={subtitleRef} />
-      <SpellCheck editorRef={descRef} />
-      <SpellCheck editorRef={buttonRef} />
       <div
         className="sticky top-0 flex gap-4 overflow-hidden"
         style={{ height: "calc(100dvh - 120px)", maxHeight: "calc(100dvh - 120px)" }}
@@ -2701,7 +2695,7 @@ export function PromoSection({
             <div
               ref={titleRef}
               contentEditable
-              spellCheck={false}
+              spellCheck={true}
               data-placeholder="Enter text here"
               suppressContentEditableWarning
               onInput={() => onFieldInput("title")}
@@ -2762,7 +2756,7 @@ export function PromoSection({
             <div
               ref={subtitleRef}
               contentEditable
-              spellCheck={false}
+              spellCheck={true}
               data-placeholder="Enter text here"
               suppressContentEditableWarning
               onInput={() => onFieldInput("subtitle")}
@@ -2826,7 +2820,7 @@ export function PromoSection({
             <div
               ref={descRef}
               contentEditable
-              spellCheck={false}
+              spellCheck={true}
               suppressContentEditableWarning
               data-placeholder="Enter text here"
               onInput={() => onFieldInput("description")}
@@ -3222,7 +3216,7 @@ export function PromoSection({
                 <div
                   ref={buttonRef}
                   contentEditable
-                  spellCheck={false}
+                  spellCheck={true}
                   suppressContentEditableWarning
                   data-placeholder="Enter text here"
                   onInput={() => onFieldInput("button")}
