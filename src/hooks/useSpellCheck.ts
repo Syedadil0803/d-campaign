@@ -1,39 +1,24 @@
-// Lints a contentEditable's text with Harper and returns the issues (with char
-// offsets into textContent) for an overlay to draw — never touching the editor
-// DOM itself. Debounced on input; results feed SpellCheckOverlay.
+// Lints a contentEditable's text with our in-house spell checker and returns the
+// issues (with char offsets into textContent) for an overlay to draw — never
+// touching the editor DOM itself. Debounced on input; results feed
+// SpellCheckOverlay.
 
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import { proofread, preloadProofreader, type Issue } from '@/lib/spellcheck/harper';
 import { proofreadLocal, preloadLocal } from '@/lib/spellcheck/localSpellcheck';
+import type { Issue } from '@/lib/spellcheck/types';
 
-export type { Issue } from '@/lib/spellcheck/harper';
-
-// Which engine runs the check:
-//   'harper' (default) — the Harper WASM library (spelling + grammar + suggestions)
-//   'local'            — our in-house Step 1 (spelling detection + underline only)
-// Chosen by NEXT_PUBLIC_SPELLCHECK_ENGINE at build time, overridable at runtime
-// with localStorage['campaign-spellcheck-engine'] = 'local' | 'harper' (no restart).
-type Engine = 'harper' | 'local';
-
-function resolveEngine(): Engine {
-  if (typeof window !== 'undefined') {
-    const ls = window.localStorage.getItem('campaign-spellcheck-engine');
-    if (ls === 'local' || ls === 'harper') return ls;
-  }
-  return process.env.NEXT_PUBLIC_SPELLCHECK_ENGINE === 'local' ? 'local' : 'harper';
-}
+export type { Issue } from '@/lib/spellcheck/types';
 
 export function useSpellCheck(
   ref: RefObject<HTMLElement | null>,
   enabled: boolean,
 ): { issues: Issue[]; rescan: () => void } {
   const [issues, setIssues] = useState<Issue[]>([]);
-  // Drop out-of-order async lint results.
+  // Drop out-of-order async results.
   const runIdRef = useRef(0);
-  const engineRef = useRef<Engine>('harper');
 
   const scan = useCallback(() => {
     const el = ref.current;
@@ -43,25 +28,22 @@ export function useSpellCheck(
     }
     const text = el.textContent ?? '';
     const runId = ++runIdRef.current;
-    const check = engineRef.current === 'local' ? proofreadLocal : proofread;
-    check(text)
+    proofreadLocal(text)
       .then((result) => {
         if (runId === runIdRef.current) setIssues(result);
       })
       .catch(() => {
-        // engine failed to load — no squiggles, fail silently
+        // dictionary failed to load — no squiggles, fail silently
       });
   }, [ref, enabled]);
 
-  // Warm the engine on mount so it's ready before the first keystroke.
+  // Warm the dictionary on mount so it's ready before the first keystroke.
   useEffect(() => {
     if (!enabled) {
       setIssues([]);
       return;
     }
-    engineRef.current = resolveEngine();
-    if (engineRef.current === 'local') preloadLocal();
-    else preloadProofreader();
+    preloadLocal();
     scan();
   }, [enabled, scan]);
 

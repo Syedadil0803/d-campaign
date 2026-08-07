@@ -7,7 +7,7 @@
 // This is the backup path discussed in docs/spellcheck-and-autocorrect-research.md.
 
 import { isInPersonalDictionary } from './engine';
-import type { Issue } from './harper';
+import type { Issue } from './types';
 
 const DICT_URL = '/dictionaries/en.txt';
 

@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { RefObject } from 'react';
-import { isSpellingKind, type Issue, type Suggestion } from '@/lib/spellcheck/harper';
+import { isSpellingKind, type Issue, type Suggestion } from '@/lib/spellcheck/types';
 
 function wave(colorHex: string): string {
   const c = colorHex.replace('#', '%23');
