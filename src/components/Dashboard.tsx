@@ -8,15 +8,12 @@ import {
   Radio,
   CircleStop,
   Pencil,
-  Clock,
   Repeat,
   Upload,
   Check,
   AlertTriangle,
   Eye,
   X,
-  MousePointerClick,
-  Timer,
 } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { stripHtml, getBackgroundStyle } from '@/lib/utils';
@@ -187,15 +184,6 @@ export function Dashboard({
         : 'bg-surface-subtle text-on-surface-variant'
     }`;
 
-  // What the promo actually does — surfaced as at-a-glance metrics on the card.
-  const promoCtaLabel = !promo.showButton
-    ? 'No button'
-    : promo.ctaType === 'whatsapp'
-      ? 'WhatsApp button'
-      : promo.ctaType === 'link'
-        ? 'Link button'
-        : 'Text button';
-
   const liveCount = (promo.active ? 1 : 0) + (ann.active ? 1 : 0);
   const liveLabel =
     liveCount === 0 ? 'Nothing live right now' : liveCount === 2 ? 'Both channels live' : '1 of 2 channels live';
@@ -339,11 +327,11 @@ export function Dashboard({
             <span className={statusPill(promo.active)}>{promo.active ? 'Live' : 'Off'}</span>
           </div>
 
-          {/* hero time-left + what the promo does; fixed-height so the gray preview
-              box lines up with the announcement card's box */}
-          <div className="mb-4 flex min-h-[88px] flex-col justify-start gap-2">
+          {/* hero time-left — headline; fixed-height row so the gray preview box
+              lines up with the announcement card's box */}
+          <div className="mb-4 flex min-h-[44px] items-baseline gap-2">
             {endMs && (
-              <div className="flex items-baseline gap-2">
+              <>
                 <span
                   className={`text-3xl font-bold tracking-tight tabular-nums ${
                     promo.active && !ended ? 'text-on-surface' : 'text-on-surface-variant'
@@ -353,18 +341,8 @@ export function Dashboard({
                 </span>
                 {!ended && <span className="text-sm text-on-surface-variant">left</span>}
                 {!promo.active && !ended && <span className="text-sm text-on-surface-variant">· not running</span>}
-              </div>
+              </>
             )}
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2 text-sm text-on-surface-variant">
-                <MousePointerClick className="h-4 w-4 shrink-0" />
-                <span>{promoCtaLabel}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-on-surface-variant">
-                <Timer className="h-4 w-4 shrink-0" />
-                <span>{promo.showTimer ? 'Countdown timer on' : 'No countdown timer'}</span>
-              </div>
-            </div>
           </div>
 
           {/* recessed preview stage — hover to reveal View, click to open the popup */}
@@ -416,7 +394,7 @@ export function Dashboard({
               <div className="h-2 w-full overflow-hidden rounded-full bg-surface-subtle">
                 <div
                   className="h-full rounded-full bg-primary transition-all"
-                  style={{ width: `${promo.active ? progressPct : 0}%` }}
+                  style={{ width: `${Math.max(progressPct, 2)}%`, opacity: promo.active ? 1 : 0.5 }}
                 />
               </div>
               <div className="flex items-center justify-between text-xs font-medium tabular-nums text-on-surface-variant">
@@ -470,33 +448,14 @@ export function Dashboard({
             <span className={statusPill(ann.active)}>{ann.active ? 'On air' : 'Off'}</span>
           </div>
 
-          {/* meta — moved above the box (same fixed height as the promo hero) so both
-              cards' gray preview boxes line up at the same level */}
-          <div className="mb-4 flex min-h-[88px] flex-col justify-start gap-2">
+          {/* messages summary — one line so it lines up with the promo hero */}
+          <div className="mb-4 flex min-h-[44px] items-center">
             <div className="flex items-center gap-2 text-sm text-on-surface-variant">
               <Megaphone className="h-4 w-4 shrink-0" />
               <span>
-                {annCount} message{annCount === 1 ? '' : 's'} {ann.active ? 'showing now' : 'ready'}
+                {annCount} message{annCount === 1 ? '' : 's'} {ann.active ? 'showing now' : 'ready to show'}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-sm text-on-surface-variant">
-              <Clock className="h-4 w-4 shrink-0" />
-              <span>{ann.active ? 'On air on your site' : 'Hidden — not showing on your site'}</span>
-            </div>
-            {scheduledMsgs > 0 && (
-              <div className="flex items-center gap-2 text-sm text-on-surface-variant">
-                <Calendar className="h-4 w-4 shrink-0" />
-                <span>
-                  {scheduledMsgs} of {annCount} message{annCount === 1 ? '' : 's'} scheduled
-                </span>
-              </div>
-            )}
-            {ann.loop && (
-              <div className="flex items-center gap-2 text-sm text-on-surface-variant">
-                <Repeat className="h-4 w-4 shrink-0" />
-                <span>Continuous loop</span>
-              </div>
-            )}
           </div>
 
           {/* recessed preview stage — hover to reveal View, click to open the popup */}
@@ -523,6 +482,24 @@ export function Dashboard({
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* details below the box */}
+          <div className="mt-4 space-y-2.5">
+            {annCount > 0 && (
+              <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+                <Calendar className="h-4 w-4 shrink-0" />
+                <span>
+                  {scheduledMsgs} of {annCount} message{annCount === 1 ? '' : 's'} scheduled
+                </span>
+              </div>
+            )}
+            {ann.loop && (
+              <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+                <Repeat className="h-4 w-4 shrink-0" />
+                <span>Continuous loop</span>
+              </div>
+            )}
           </div>
 
           {/* actions — View · Edit · lifecycle (View + Edit both open the Announcement tab) */}
@@ -613,6 +590,50 @@ export function Dashboard({
                 </button>
               </div>
               <AnnouncementBarPreview bar={ann} />
+
+              {/* message list + per-message schedule, with a note teaching how schedules work */}
+              <div className="max-h-[45vh] overflow-y-auto border-t border-border bg-surface-elevated p-4">
+                <p className={`mb-3 ${MICRO} text-on-surface-variant`}>Messages &amp; schedule</p>
+                <ul className="space-y-2">
+                  {ann.announcements.map((a, i) => {
+                    const isScheduled = !!(a.startDate || a.endDate);
+                    return (
+                      <li
+                        key={i}
+                        className="flex items-start gap-3 rounded-lg border border-border bg-background p-3"
+                      >
+                        <span className="mt-0.5 text-xs font-semibold tabular-nums text-on-surface-variant">
+                          {i + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div
+                            className="truncate text-sm text-on-surface"
+                            dangerouslySetInnerHTML={{ __html: a.text }}
+                          />
+                          <div className="mt-1 text-xs">
+                            {isScheduled ? (
+                              <span className="inline-flex items-center gap-1.5 text-on-surface-variant">
+                                <Calendar className="h-3.5 w-3.5 shrink-0" />
+                                Scheduled {a.startDate ? fmtDate(a.startDate) : '—'} → {a.endDate ? fmtDate(a.endDate) : '—'}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                                <Repeat className="h-3.5 w-3.5 shrink-0" />
+                                Always on while the bar is live
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="mt-3 text-xs text-on-surface-variant">
+                  A message with <strong className="font-semibold text-on-surface">no schedule</strong> stays live the
+                  whole time the bar is on. A <strong className="font-semibold text-on-surface">scheduled</strong>{' '}
+                  message only appears within its dates.
+                </p>
+              </div>
             </div>
           </div>
         </div>
