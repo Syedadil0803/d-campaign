@@ -931,9 +931,18 @@ export default function Home() {
             activeTab === 'promo' || activeTab === 'announcement' ? 'campaign-custom-scrollbar' : ''
           }`}
         >
-          <div className={`max-w-[1840px] mx-auto ${activeTab === 'promo' ? '' : 'space-y-8 pb-12'}`}>
+          <div className={`max-w-[1840px] mx-auto ${activeTab === 'promo' || activeTab === 'dashboard' ? '' : 'space-y-8 pb-12'}`}>
             {activeTab === 'dashboard' && (
-              <Dashboard config={config} setActiveTab={handleTabSwitch} />
+              <Dashboard
+                config={config}
+                setActiveTab={handleTabSwitch}
+                onStopPromo={stopPromoNow}
+                onGoOnAirPromo={goOnAirPromoNow}
+                onStopAnnouncement={stopAnnouncementNow}
+                onGoOnAirAnnouncement={goOnAirAnnouncementNow}
+                promoUnpublished={hasPromoChanges || readyToPublishPromo}
+                announcementUnpublished={hasAnnouncementChanges || readyToPublishAnnouncement}
+              />
             )}
 
             {activeTab === 'announcement' && (
