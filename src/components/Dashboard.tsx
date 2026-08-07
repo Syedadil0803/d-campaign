@@ -19,6 +19,7 @@ import {
 import { CampaignConfig } from '@/types/campaign';
 import { stripHtml, getBackgroundStyle } from '@/lib/utils';
 import { PromoMiniPreview } from './PromoMiniPreview';
+import { AnnouncementBarPreview } from './AnnouncementBarPreview';
 
 interface DashboardProps {
   config: CampaignConfig;
@@ -96,6 +97,7 @@ export function Dashboard({
   // The popup is sized to match the promo card; we track the card's size with a
   // ResizeObserver so the value is always current when the popup opens.
   const [showPromoPreview, setShowPromoPreview] = useState(false);
+  const [showAnnPreview, setShowAnnPreview] = useState(false);
   const [cardSize, setCardSize] = useState<{ width: number; height: number } | null>(null);
   const promoCardRef = useRef<HTMLDivElement>(null);
 
@@ -444,17 +446,28 @@ export function Dashboard({
             <span className={statusPill(ann.active)}>{ann.active ? 'On air' : 'Off'}</span>
           </div>
 
-          {/* recessed preview stage */}
-          <div className="flex h-32 items-center overflow-hidden rounded-xl border border-border bg-surface-subtle p-3 shadow-inner">
-            <div
-              className="w-full overflow-hidden rounded-md"
-              style={{ background: getBackgroundStyle(ann.style.background) }}
+          {/* recessed preview stage — hover to reveal View, click to open the popup */}
+          <div className="group relative">
+            <button
+              type="button"
+              onClick={() => setShowAnnPreview(true)}
+              aria-label="View announcement bar preview"
+              className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl bg-black/0 text-transparent opacity-0 transition-all duration-200 group-hover:bg-black/45 group-hover:text-white group-hover:opacity-100 focus-visible:bg-black/45 focus-visible:text-white focus-visible:opacity-100"
             >
+              <Eye className="h-5 w-5" />
+              <span className="text-sm font-semibold">View</span>
+            </button>
+            <div className="flex h-32 items-center overflow-hidden rounded-xl border border-border bg-surface-subtle p-3 shadow-inner">
               <div
-                className="truncate px-3 py-2 text-center text-sm font-medium"
-                style={{ color: ann.style.textColor }}
+                className="w-full overflow-hidden rounded-md"
+                style={{ background: getBackgroundStyle(ann.style.background) }}
               >
-                {stripHtml(ann.announcements[0]?.text) || 'Your announcement shows here'}
+                <div
+                  className="truncate px-3 py-2 text-center text-sm font-medium"
+                  style={{ color: ann.style.textColor }}
+                >
+                  {stripHtml(ann.announcements[0]?.text) || 'Your announcement shows here'}
+                </div>
               </div>
             </div>
           </div>
@@ -546,6 +559,38 @@ export function Dashboard({
                 <PromoMiniPreview promoCard={promo} />
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Announcement bar preview popup — full-width, animated replica of the live bar
+          (same styles, all messages, speed and loop as the Announcement tab) */}
+      {showAnnPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAnnPreview(false)} />
+          <div className="relative z-10 flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border campaign-card-surface p-4 shadow-2xl">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-on-surface">Announcement bar preview</h2>
+                <p className={`mt-0.5 ${MICRO} text-on-surface-variant`}>
+                  {annCount} message{annCount === 1 ? '' : 's'} · {ann.loop === false ? 'No loop' : 'Continuous loop'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAnnPreview(false)}
+                aria-label="Close preview"
+                className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-subtle hover:text-on-surface"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="overflow-hidden rounded-lg border border-border">
+              <AnnouncementBarPreview bar={ann} />
+            </div>
+            <p className="mt-2 text-xs text-on-surface-variant">
+              Live preview — scrolls at the real speed. Hover the bar to pause.
+            </p>
           </div>
         </div>
       )}
