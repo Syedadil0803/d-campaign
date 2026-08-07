@@ -14,6 +14,8 @@ import {
   AlertTriangle,
   Eye,
   X,
+  ChevronRight,
+  Infinity as InfinityIcon,
 } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { stripHtml, getBackgroundStyle } from '@/lib/utils';
@@ -97,6 +99,7 @@ export function Dashboard({
   // ResizeObserver so the value is always current when the popup opens.
   const [showPromoPreview, setShowPromoPreview] = useState(false);
   const [showAnnPreview, setShowAnnPreview] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
   const [cardSize, setCardSize] = useState<{ width: number; height: number } | null>(null);
   const promoCardRef = useRef<HTMLDivElement>(null);
 
@@ -289,6 +292,7 @@ export function Dashboard({
             </span>
             {issues.map((c, i) => (
               <span key={i} className="inline-flex items-center gap-2 text-sm text-on-surface">
+                <span aria-hidden className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500/80 dark:bg-amber-400/80" />
                 {c.text}
                 {c.action && (
                   <button
@@ -348,14 +352,14 @@ export function Dashboard({
           {/* recessed preview stage — hover to reveal View, click to open the popup */}
           <div className="group relative">
             {promoViewOverlay}
-            <div className="flex h-32 items-center justify-center overflow-hidden rounded-xl border border-border bg-surface-subtle p-3 shadow-inner">
+            <div className="flex h-28 items-center justify-center overflow-hidden rounded-xl border border-border bg-surface-subtle p-3 shadow-inner">
               <div
                 className="w-full max-w-[220px] rounded-lg p-2 shadow-md"
                 style={{ background: getBackgroundStyle(promo.style.background) }}
               >
                 <div className="flex flex-col gap-1">
                   <div
-                    className="line-clamp-1 rounded px-2 py-1 text-center text-xs font-semibold"
+                    className="line-clamp-1 rounded px-2 py-0.5 text-center text-xs font-semibold"
                     style={{
                       background: getBackgroundStyle(promo.style.titleStyle.background),
                       color: promo.style.titleStyle.textColor,
@@ -364,7 +368,7 @@ export function Dashboard({
                     {stripHtml(promo.title) || 'Promo title'}
                   </div>
                   <div
-                    className="line-clamp-1 rounded px-2 py-1 text-[11px] leading-snug"
+                    className="line-clamp-1 rounded px-2 py-0.5 text-[11px] leading-snug"
                     style={{
                       background: getBackgroundStyle(promo.style.descriptionStyle.background),
                       color: promo.style.descriptionStyle.textColor,
@@ -374,7 +378,7 @@ export function Dashboard({
                   </div>
                   {promo.showButton && (
                     <div
-                      className="line-clamp-1 rounded px-2 py-1 text-center text-[11px] font-semibold"
+                      className="line-clamp-1 rounded px-2 py-0.5 text-center text-[11px] font-semibold"
                       style={{
                         background: getBackgroundStyle(promo.style.buttonStyle.background),
                         color: promo.style.buttonStyle.textColor,
@@ -407,7 +411,7 @@ export function Dashboard({
           )}
 
           {/* actions — View · Edit · lifecycle (View + Edit both open the Promo tab) */}
-          <div className="mt-auto flex gap-2 pt-5">
+          <div className="mt-auto flex gap-2 pt-4">
             <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('promo')}>
               <Eye className="h-4 w-4" />
               View
@@ -469,7 +473,7 @@ export function Dashboard({
               <Eye className="h-5 w-5" />
               <span className="text-sm font-semibold">View</span>
             </button>
-            <div className="flex h-32 items-center overflow-hidden rounded-xl border border-border bg-surface-subtle p-3 shadow-inner">
+            <div className="flex h-28 items-center overflow-hidden rounded-xl border border-border bg-surface-subtle p-3 shadow-inner">
               <div
                 className="w-full overflow-hidden rounded-md"
                 style={{ background: getBackgroundStyle(ann.style.background) }}
@@ -487,12 +491,24 @@ export function Dashboard({
           {/* details below the box */}
           <div className="mt-4 space-y-2.5">
             {annCount > 0 && (
-              <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+              <button
+                type="button"
+                onClick={() => setShowSchedule(true)}
+                className="group flex w-full items-center gap-2 text-left text-sm text-on-surface-variant transition-colors hover:text-primary"
+              >
                 <Calendar className="h-4 w-4 shrink-0" />
                 <span>
-                  {scheduledMsgs} of {annCount} message{annCount === 1 ? '' : 's'} scheduled
+                  <span
+                    className={`font-semibold tabular-nums ${
+                      scheduledMsgs > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-on-surface'
+                    }`}
+                  >
+                    {scheduledMsgs}
+                  </span>{' '}
+                  of {annCount} message{annCount === 1 ? '' : 's'} scheduled
                 </span>
-              </div>
+                <ChevronRight className="-ml-1 h-4 w-4 shrink-0 opacity-50 transition-transform group-hover:translate-x-0.5 group-hover:opacity-100" />
+              </button>
             )}
             {ann.loop && (
               <div className="flex items-center gap-2 text-sm text-on-surface-variant">
@@ -503,7 +519,7 @@ export function Dashboard({
           </div>
 
           {/* actions — View · Edit · lifecycle (View + Edit both open the Announcement tab) */}
-          <div className="mt-auto flex gap-2 pt-5">
+          <div className="mt-auto flex gap-2 pt-4">
             <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('announcement')}>
               <Eye className="h-4 w-4" />
               View
@@ -565,9 +581,8 @@ export function Dashboard({
         </div>
       )}
 
-      {/* Announcement bar preview popup — matches the Announcement tab: the bar spans
-          the page content width (max-w-[1840px] with the same 24px side padding),
-          not edge-to-edge. Animated replica: real styles, all messages, loop, speed. */}
+      {/* Announcement bar preview popup — same width as the Announcement tab's preview
+          (page content width). Animated replica: real styles, all messages, speed, loop. */}
       {showAnnPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAnnPreview(false)} />
@@ -590,49 +605,79 @@ export function Dashboard({
                 </button>
               </div>
               <AnnouncementBarPreview bar={ann} />
+            </div>
+          </div>
+        </div>
+      )}
 
-              {/* message list + per-message schedule, with a note teaching how schedules work */}
-              <div className="max-h-[45vh] overflow-y-auto border-t border-border bg-surface-elevated p-4">
-                <p className={`mb-3 ${MICRO} text-on-surface-variant`}>Messages &amp; schedule</p>
-                <ul className="space-y-2">
-                  {ann.announcements.map((a, i) => {
-                    const isScheduled = !!(a.startDate || a.endDate);
-                    return (
-                      <li
-                        key={i}
-                        className="flex items-start gap-3 rounded-lg border border-border bg-background p-3"
-                      >
-                        <span className="mt-0.5 text-xs font-semibold tabular-nums text-on-surface-variant">
-                          {i + 1}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div
-                            className="truncate text-sm text-on-surface"
-                            dangerouslySetInnerHTML={{ __html: a.text }}
-                          />
-                          <div className="mt-1 text-xs">
-                            {isScheduled ? (
-                              <span className="inline-flex items-center gap-1.5 text-on-surface-variant">
-                                <Calendar className="h-3.5 w-3.5 shrink-0" />
-                                Scheduled {a.startDate ? fmtDate(a.startDate) : '—'} → {a.endDate ? fmtDate(a.endDate) : '—'}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
-                                <Repeat className="h-3.5 w-3.5 shrink-0" />
-                                Always on while the bar is live
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-                <p className="mt-3 text-xs text-on-surface-variant">
-                  A message with <strong className="font-semibold text-on-surface">no schedule</strong> stays live the
-                  whole time the bar is on. A <strong className="font-semibold text-on-surface">scheduled</strong>{' '}
-                  message only appears within its dates.
+      {/* Message schedule popup — opened from the "X of N messages scheduled" line */}
+      {showSchedule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowSchedule(false)} />
+          <div className="relative z-10 flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border campaign-card-surface shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <div>
+                <h2 className="text-base font-semibold text-on-surface">Message schedule</h2>
+                <p className={`mt-0.5 ${MICRO} text-on-surface-variant`}>
+                  {scheduledMsgs} of {annCount} scheduled
                 </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSchedule(false)}
+                aria-label="Close schedule"
+                className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-subtle hover:text-on-surface"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <ul className="space-y-2.5">
+                {ann.announcements.map((a, i) => {
+                  const isScheduled = !!(a.startDate || a.endDate);
+                  return (
+                    <li
+                      key={i}
+                      className="flex items-start gap-3 rounded-xl border border-border bg-background p-3"
+                    >
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-subtle text-xs font-semibold tabular-nums text-on-surface-variant">
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-on-surface">
+                          {stripHtml(a.text)}
+                        </div>
+                        <div className="mt-1.5">
+                          {isScheduled ? (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-subtle px-2.5 py-1 text-xs font-medium text-on-surface-variant">
+                              <Calendar className="h-3.5 w-3.5 shrink-0" />
+                              {a.startDate ? fmtDate(a.startDate) : '—'} → {a.endDate ? fmtDate(a.endDate) : '—'}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100/70 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                              <InfinityIcon className="h-3.5 w-3.5 shrink-0" />
+                              Always on
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+            <div className="shrink-0 space-y-1.5 border-t border-border p-4 text-xs leading-relaxed text-on-surface-variant">
+              <div className="flex items-start gap-2">
+                <InfinityIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-300" />
+                <span>
+                  <strong className="font-medium text-on-surface">Always on</strong> — stays live the whole time the bar is on.
+                </span>
+              </div>
+              <div className="flex items-start gap-2">
+                <Calendar className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  <strong className="font-medium text-on-surface">Scheduled</strong> — only appears within its dates.
+                </span>
               </div>
             </div>
           </div>
