@@ -563,30 +563,32 @@ export function Dashboard({
         </div>
       )}
 
-      {/* Announcement bar preview popup — full-bleed, edge-to-edge, exactly how the
-          bar appears sitewide. Animated replica: real styles, all messages, loop, speed. */}
+      {/* Announcement bar preview popup — matches the Announcement tab: the bar spans
+          the page content width (max-w-[1840px] with the same 24px side padding),
+          not edge-to-edge. Animated replica: real styles, all messages, loop, speed. */}
       {showAnnPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAnnPreview(false)} />
-          <div className="relative z-10 w-full shadow-2xl">
-            <div className="flex items-center justify-between gap-3 border-b border-border bg-surface-elevated px-4 py-2.5">
-              <div>
-                <h2 className="text-sm font-semibold text-on-surface">Announcement bar preview</h2>
-                <p className={`mt-0.5 ${MICRO} text-on-surface-variant`}>
-                  {annCount} message{annCount === 1 ? '' : 's'} · {ann.loop === false ? 'No loop' : 'Continuous loop'} · hover to pause
-                </p>
+          <div className="relative z-10 mx-auto w-full max-w-[1840px] px-6">
+            <div className="overflow-hidden rounded-xl border border-border shadow-2xl">
+              <div className="flex items-center justify-between gap-3 border-b border-border bg-surface-elevated px-4 py-2.5">
+                <div>
+                  <h2 className="text-sm font-semibold text-on-surface">Announcement bar preview</h2>
+                  <p className={`mt-0.5 ${MICRO} text-on-surface-variant`}>
+                    {annCount} message{annCount === 1 ? '' : 's'} · {ann.loop === false ? 'No loop' : 'Continuous loop'} · hover to pause
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAnnPreview(false)}
+                  aria-label="Close preview"
+                  className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-subtle hover:text-on-surface"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowAnnPreview(false)}
-                aria-label="Close preview"
-                className="rounded-lg p-1.5 text-on-surface-variant transition-colors hover:bg-surface-subtle hover:text-on-surface"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <AnnouncementBarPreview bar={ann} />
             </div>
-            {/* the bar itself spans the full width, edge to edge — like the real sitewide banner */}
-            <AnnouncementBarPreview bar={ann} />
           </div>
         </div>
       )}
