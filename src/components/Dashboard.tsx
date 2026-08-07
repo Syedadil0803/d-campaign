@@ -15,6 +15,8 @@ import {
   AlertTriangle,
   Eye,
   X,
+  MousePointerClick,
+  Timer,
 } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { stripHtml, getBackgroundStyle } from '@/lib/utils';
@@ -185,6 +187,15 @@ export function Dashboard({
         : 'bg-surface-subtle text-on-surface-variant'
     }`;
 
+  // What the promo actually does — surfaced as at-a-glance metrics on the card.
+  const promoCtaLabel = !promo.showButton
+    ? 'No button'
+    : promo.ctaType === 'whatsapp'
+      ? 'WhatsApp button'
+      : promo.ctaType === 'link'
+        ? 'Link button'
+        : 'Text button';
+
   const liveCount = (promo.active ? 1 : 0) + (ann.active ? 1 : 0);
   const liveLabel =
     liveCount === 0 ? 'Nothing live right now' : liveCount === 2 ? 'Both channels live' : '1 of 2 channels live';
@@ -328,9 +339,9 @@ export function Dashboard({
             <span className={statusPill(promo.active)}>{promo.active ? 'Live' : 'Off'}</span>
           </div>
 
-          {/* hero time-left — headline; fixed-height row so the gray preview box
-              lines up with the announcement card's box */}
-          <div className="mb-4 flex min-h-[80px] flex-col justify-start gap-1">
+          {/* hero time-left + what the promo does; fixed-height so the gray preview
+              box lines up with the announcement card's box */}
+          <div className="mb-4 flex min-h-[88px] flex-col justify-start gap-2">
             {endMs && (
               <div className="flex items-baseline gap-2">
                 <span
@@ -344,6 +355,16 @@ export function Dashboard({
                 {!promo.active && !ended && <span className="text-sm text-on-surface-variant">· not running</span>}
               </div>
             )}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+                <MousePointerClick className="h-4 w-4 shrink-0" />
+                <span>{promoCtaLabel}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+                <Timer className="h-4 w-4 shrink-0" />
+                <span>{promo.showTimer ? 'Countdown timer on' : 'No countdown timer'}</span>
+              </div>
+            </div>
           </div>
 
           {/* recessed preview stage — hover to reveal View, click to open the popup */}
@@ -451,7 +472,7 @@ export function Dashboard({
 
           {/* meta — moved above the box (same fixed height as the promo hero) so both
               cards' gray preview boxes line up at the same level */}
-          <div className="mb-4 flex min-h-[80px] flex-col justify-start gap-2">
+          <div className="mb-4 flex min-h-[88px] flex-col justify-start gap-2">
             <div className="flex items-center gap-2 text-sm text-on-surface-variant">
               <Megaphone className="h-4 w-4 shrink-0" />
               <span>
