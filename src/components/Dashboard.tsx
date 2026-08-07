@@ -563,17 +563,17 @@ export function Dashboard({
         </div>
       )}
 
-      {/* Announcement bar preview popup — full-width, animated replica of the live bar
-          (same styles, all messages, speed and loop as the Announcement tab) */}
+      {/* Announcement bar preview popup — full-bleed, edge-to-edge, exactly how the
+          bar appears sitewide. Animated replica: real styles, all messages, loop, speed. */}
       {showAnnPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAnnPreview(false)} />
-          <div className="relative z-10 flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border campaign-card-surface p-4 shadow-2xl">
-            <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="relative z-10 w-full shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-border bg-surface-elevated px-4 py-2.5">
               <div>
-                <h2 className="text-base font-semibold text-on-surface">Announcement bar preview</h2>
+                <h2 className="text-sm font-semibold text-on-surface">Announcement bar preview</h2>
                 <p className={`mt-0.5 ${MICRO} text-on-surface-variant`}>
-                  {annCount} message{annCount === 1 ? '' : 's'} · {ann.loop === false ? 'No loop' : 'Continuous loop'}
+                  {annCount} message{annCount === 1 ? '' : 's'} · {ann.loop === false ? 'No loop' : 'Continuous loop'} · hover to pause
                 </p>
               </div>
               <button
@@ -585,12 +585,8 @@ export function Dashboard({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="overflow-hidden rounded-lg border border-border">
-              <AnnouncementBarPreview bar={ann} />
-            </div>
-            <p className="mt-2 text-xs text-on-surface-variant">
-              Live preview — scrolls at the real speed. Hover the bar to pause.
-            </p>
+            {/* the bar itself spans the full width, edge to edge — like the real sitewide banner */}
+            <AnnouncementBarPreview bar={ann} />
           </div>
         </div>
       )}
