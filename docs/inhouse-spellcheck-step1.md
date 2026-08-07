@@ -1,138 +1,112 @@
-# In-house Spell-check — Step 1 (Detect + Underline)
+# In-house Spell-check — Step 1 (Detect & Underline)
 
-**Status:** live and the only spell-check engine in the app. Harper (`harper.js`) has been removed. This document describes exactly what we built, how it works, and what it does and doesn't do.
-
----
-
-## 1. What this is (in one line)
-
-A **dictionary-based spelling detector** that finds misspelled words and draws a red underline under them — written entirely in-house, with **no third-party library, no browser-native checker, and no network** beyond fetching our own word-list file.
-
-It is **detection only**. It tells the user *a word is wrong* (Step 1). It does **not** suggest corrections (that is Step 2, not built).
+**In short:** we built our own spell-checker that quietly underlines misspelled words as someone types. It's completely ours — no outside library, no browser tricks, and nothing sent over the internet. For now it *points out* mistakes; it doesn't yet suggest the correct word (that's a planned later step).
 
 ---
 
-## 2. Dependencies — what we rely on
+## Why we built it
 
-| Concern | What we use |
+We used to rely on an outside library (Harper) to check spelling. Keeping that *and* our own approach meant doing the same job twice, so we removed the outside library and kept one simple checker that we fully own.
+
+The benefit is control: nothing outside our hands can break it, slow it down, change its behaviour, or disappear on us. It runs entirely inside the app.
+
+---
+
+## What it depends on — almost nothing
+
+| Question | Answer |
 |---|---|
-| Spell-check library | **None.** No `harper.js`, no npm spell-check package. |
-| Browser's native `spellcheck` | **Not used** (inconsistent across browsers, can't read/style it). |
-| Network / cloud | **None.** The one fetch is our own static file in `public/`. |
-| AI / LLM | **None.** Pure dictionary lookup. |
+| Any spell-check library? | **No** — nothing third-party. |
+| The browser's built-in checker? | **No** — it's inconsistent and we can't control how it looks. |
+| Internet or cloud? | **No** — it works fully offline. |
+| Any AI? | **No** — it's a straightforward dictionary check. |
 
-The only "data dependency" is a word list we generate and ship ourselves (below).
-
----
-
-## 3. The pieces (files)
-
-| File | Role |
-|---|---|
-| `public/dictionaries/en.txt` | The bundled English word list (the dictionary). |
-| `src/lib/spellcheck/localSpellcheck.ts` | The detector — loads the dictionary, tokenizes text, flags unknown words. |
-| `src/lib/spellcheck/engine.ts` | The **personal dictionary** (user-added words, stored in `localStorage`). |
-| `src/lib/spellcheck/types.ts` | Shared `Issue` / `Suggestion` types + `isSpellingKind`. |
-| `src/hooks/useSpellCheck.ts` | Debounces input, runs the detector, returns issues to the UI. |
-| `src/components/SpellCheckOverlay.tsx` | Draws the red underline; no popup when there are no suggestions. |
+The only thing it needs is a list of correctly-spelled English words, which we ship inside the app ourselves.
 
 ---
 
-## 4. The dictionary
+## How it works, in plain terms
 
-- **File:** `public/dictionaries/en.txt` — one lowercase word per line, ~**234,000 words**, ~2.4 MB.
-- **Source:** the classic Unix English word list (`/usr/share/dict/words`, the "web2" list) — lowercased and de-duplicated — **plus a supplement** we added for words that old list misses: common **contractions** (`don't`, `it's`, `you're`…), **possessive/marketing/modern** terms (`email`, `checkout`, `whatsapp`, `promo`, `loyalty`, `cashback`, `faq`…), and a few region-common words (`encash`, `upto`).
-- **Loaded lazily and once:** on first use we `fetch('/dictionaries/en.txt')`, split it into lines, and build a `Set<string>` for O(1) lookups. The set is cached for the rest of the session (and pre-warmed when an editor mounts, so it's ready before the first keystroke).
+Think of it as a proofreader with a dictionary in hand:
 
-> Because it's a static file we own, there's no runtime dependency on anyone else — the dictionary ships with the app.
+1. As someone types and pauses, it takes what they've written.
+2. It reads it one word at a time.
+3. For each word it asks a simple question: *"Is this in my dictionary?"* It's sensible about the tricky cases — it understands contractions (*don't*), possessives (*John's*) and hyphenated words (*gift-wrap*), and it ignores numbers, very short words, and short all-caps abbreviations like *FAQ* or *CTA*.
+4. Any word it doesn't recognise gets a red wavy underline — placed exactly under that word, without ever disturbing the text.
 
----
-
-## 5. How detection works (the algorithm)
-
-For a given piece of text, `proofreadLocal(text)` does this:
-
-1. **Tokenize into words**, capturing each word's character offset. The regex keeps internal apostrophes and hyphens together so `don't`, `o'clock`, and `e-commerce` stay whole:
-   ```
-   /[A-Za-z]+(?:['’-][A-Za-z]+)*/g
-   ```
-   Because it only matches letters, **numbers and symbols are never flagged** (`999`, `5%`, `24/7` are ignored).
-
-2. **For each word, decide if it's "known":**
-   - Normalize it (lowercase; curly `’` → straight `'`).
-   - It's known if it's **in the dictionary**, OR
-   - it's a **possessive** whose base is known (`john's` → `john`), OR
-   - it's a **hyphenated compound** whose every part is known (`gift-wrap` → `gift` + `wrap`).
-
-3. **Skip things that shouldn't be flagged:**
-   - words shorter than **3 letters**,
-   - short **all-caps acronyms** (≤ 4 chars like `FAQ`, `USD`, `CTA`),
-   - words in the user's **personal dictionary**.
-
-4. **Everything left is a misspelling.** We emit an `Issue` for it:
-   ```ts
-   {
-     start, end,               // exact character span of the word
-     kind: 'Spelling',
-     problem: <the word>,      // used to re-locate it as the user edits
-     message: '“word” may be misspelled',
-     suggestions: [],          // Step 1 → always empty
-   }
-   ```
-
-That `Issue` shape is the same contract the overlay already understood, which is why detection dropped straight in.
+That's the whole loop: **type → pause → check against our word list → underline anything unknown.**
 
 ---
 
-## 6. The journey of one keystroke (real example: "Wintar")
+## A real example
 
-A user editing an announcement types **"Wintar Sale is live"** (misspelling *Winter*):
+Someone types **"Wintar Sale is live"** (misspelling *Winter*):
 
-1. **The user types.** The text is in a `contentEditable`; each keystroke fires an `input` event that `useSpellCheck` listens for.
-2. **Debounce ~400 ms.** The hook waits until the user pauses, then runs once (not on every letter).
-3. **The application runs the in-house detector.** It reads the field's text and calls `proofreadLocal("Wintar Sale is live")`. A run-id guards against an older, slower run overwriting a newer one.
-4. **The detector flags "Wintar".** `wintar` isn't in the dictionary → one `Issue` at characters 0–6, `kind: 'Spelling'`, `suggestions: []`. `Sale`, `is`, `live` are all known → ignored.
-5. **The overlay underlines it.** `SpellCheckOverlay` paints a red squiggle exactly under "Wintar" — without ever touching the editor's own text.
-6. **Clicking does nothing.** Because the issue has no suggestions, the overlay opens **no popup** — the word is simply underlined.
-7. **If the dictionary fails to load, nothing breaks.** No underlines appear and the editor keeps working normally.
+- **Wintar** isn't in the dictionary → it gets a red underline.
+- **Sale**, **is**, **live** are all recognised → left alone.
+- Numbers like *999* or *5%* are never touched.
 
-**In one line:** *user types → app pauses → in-house detector checks against our word list → misspelled word gets a red underline. That's it.*
+Fix the spelling to "Winter" and the underline disappears.
 
 ---
 
-## 7. Where it runs
+## The dictionary — its "memory"
 
-The same shared hook powers every editor, so detection is active in:
+- It's a plain list of about **234,000 English words**, shipped inside the app.
+- We built it from the standard English word list that comes with the computer, then **added the everyday words that older list tends to miss** — contractions (*don't*, *it's*), and modern and marketing words (*email*, *checkout*, *promo*, *whatsapp*, *loyalty*, *cashback*, *FAQ*…).
+- It loads once, quietly, the first time an editor opens — so it's ready before the first keystroke.
+- Because it's our own file that ships with the app, we don't depend on anyone else for it.
 
-- **Announcement editor** — the rich message field.
+---
+
+## Where it's active
+
+The same checker powers every text field it's needed in:
+
+- **Announcement editor** — the message field.
 - **Promo Card editor** — Title, Subtitle, Description, and Button text.
 
-One hook, five fields — no per-field wiring.
+---
+
+## The personal dictionary
+
+If someone marks a word as correct — a brand name, a product name — it's remembered on their device and never flagged again. This lets each person quietly silence the odd false alarm for good.
 
 ---
 
-## 8. The personal dictionary
+## What it deliberately doesn't do (yet)
 
-Words the user marks as correct (brand names, product names) are stored in `localStorage` (`campaign-spellcheck-dictionary`) via `engine.ts`. `proofreadLocal` skips any word found there, so a user can silence false positives permanently on their machine.
-
----
-
-## 9. What it does NOT do (by design)
-
-- **No suggestions** ("did you mean Winter?") — that's **Step 2**. Clicking an underlined word intentionally shows nothing.
-- **No grammar / word-choice / punctuation checks** — spelling only.
+- **No suggestions.** It underlines the mistake but doesn't yet offer the right word, so clicking an underlined word does nothing on purpose. Offering corrections is the planned **Step 2**.
+- **No grammar or punctuation checks** — spelling only.
 - **English only.**
 
 ---
 
-## 10. Known limitations & how to fix them
+## Honest limitations
 
-- **Occasional false positives.** The base word list is comprehensive but old; a valid-but-uncommon or very new word may get underlined. Fix: add it to the **supplement** in `public/dictionaries/en.txt`, or the user adds it to their **personal dictionary**.
-- **Some inflections may be missed** (rare plural/verb forms not in the list). Same fix as above.
-- **Asset size (~2.4 MB).** Fine for now (fetched once, lazily). If we want it lighter later: trim rare entries, or serve it gzipped/compressed.
+- **The occasional false alarm.** Now and then it may underline a valid but unusual or very new word. Two easy fixes: add the word to the shipped list, or let the user add it to their personal dictionary.
+- **File size.** The word list is about 2.4 MB. That's fine today — it loads once — and can be trimmed later if we ever want it lighter.
 
 ---
 
-## 11. If we later want suggestions (Step 2)
+## If we add suggestions later (Step 2)
 
-Fill the currently-empty `suggestions` array: take the misspelled word, find the closest dictionary words by **edit distance** (Levenshtein / a BK-tree / SymSpell), rank by similarity (and optionally word frequency), and return the top few. The overlay's click-popup already renders a suggestions list and will light up automatically once the array is non-empty — no overlay changes needed.
+We'd take the misspelled word, find the closest real words in our own list, and show them when someone clicks the underline. The little suggestions menu is already built — it will simply start appearing once we have corrections to offer. No third party needed for that either.
+
+---
+
+<details>
+<summary><strong>Under the hood (for developers)</strong></summary>
+
+| File | Role |
+|---|---|
+| `public/dictionaries/en.txt` | The bundled word list (~234k lowercase words: system `web2` list + our supplement). |
+| `src/lib/spellcheck/localSpellcheck.ts` | Loads the list once, scans the text, returns the flagged words. |
+| `src/lib/spellcheck/engine.ts` | The personal dictionary (kept in `localStorage`). |
+| `src/lib/spellcheck/types.ts` | Shared `Issue` / `Suggestion` types. |
+| `src/hooks/useSpellCheck.ts` | Waits ~400 ms after typing, runs the check, hands results to the UI. |
+| `src/components/SpellCheckOverlay.tsx` | Draws the underline; shows no popup when there are no suggestions. |
+
+Each flagged word is returned as an `Issue` with its exact character position, `kind: 'Spelling'`, and an empty `suggestions` list (Step 1 has no suggestions). If a load ever fails, the check silently returns nothing and the editor keeps working. Suggestions would be added by filling that `suggestions` list using edit-distance matching (e.g. Levenshtein / SymSpell) against the same word list.
+
+</details>
