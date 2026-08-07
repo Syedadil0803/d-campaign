@@ -144,6 +144,8 @@ export function SpellCheckOverlay({
         ),
       );
       if (!hit) return;
+      // Highlight-only issues (no suggestions) don't open a popup — just underline.
+      if (hit.issue.suggestions.length === 0) return;
       const anchor = hit.rects[0];
       setPopup({ issue: hit.issue, x: anchor.left, y: anchor.bottom + 4 });
     };
