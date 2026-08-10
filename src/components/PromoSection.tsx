@@ -395,6 +395,13 @@ export function PromoSection({
   const fieldAngleWheelRef = useRef<HTMLDivElement>(null);
   const startDatePickerRef = useRef<HTMLDivElement>(null);
   const endDatePickerRef = useRef<HTMLDivElement>(null);
+  // Consent before a card-replacing action (Start Fresh / apply Variant / apply Template).
+  const [cardActionConfirm, setCardActionConfirm] = useState<{
+    title: string;
+    body: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const [showCardPositionDropdown, setShowCardPositionDropdown] =
     useState(false);
@@ -2129,6 +2136,21 @@ export function PromoSection({
     toast(`Template applied: ${templateName}`);
   }
 
+  // Ask for consent before a replacing action — but only when there's actually
+  // content to lose (no point confirming on a blank card). Undo still works after.
+  function confirmCardReplace(
+    action: () => void,
+    opts: { title: string; body: string; confirmLabel: string },
+  ) {
+    const pc = configRef.current.promoCard;
+    const hasContent = !!(pc.title || pc.subtitle || pc.description || pc.buttonText);
+    if (!hasContent) {
+      action();
+      return;
+    }
+    setCardActionConfirm({ ...opts, onConfirm: action });
+  }
+
   function formatDateLabel(value: string): string {
     if (!value) return "Select date";
     const date = new Date(`${value}T00:00:00`);
@@ -2630,7 +2652,13 @@ export function PromoSection({
           <div className="!mt-6 flex items-center gap-2">
             <button
               type="button"
-              onClick={startFreshPromoCard}
+              onClick={() =>
+                confirmCardReplace(startFreshPromoCard, {
+                  title: 'Start a fresh card?',
+                  body: 'This clears the current card and starts from blank. Your current promo will be replaced.',
+                  confirmLabel: 'Start fresh',
+                })
+              }
               className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-border px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="Start from a blank promo card"
             >
@@ -2642,7 +2670,7 @@ export function PromoSection({
               className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-border px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="Saved variants of this promo card"
             >
-              <History className="h-4 w-4" /> Variants
+              <History className="h-4 w-4" /> My Saved
             </button>
             <button
               type="button"
@@ -2653,6 +2681,37 @@ export function PromoSection({
               <LayoutTemplate className="h-4 w-4" /> Template Hub
             </button>
           </div>
+
+          {/* Consent before a card-replacing action */}
+          {cardActionConfirm && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/20" onClick={() => setCardActionConfirm(null)} />
+              <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+                <h2 className="text-base font-semibold">{cardActionConfirm.title}</h2>
+                <p className="mt-2 text-sm text-on-surface-variant">{cardActionConfirm.body}</p>
+                <div className="mt-5 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCardActionConfirm(null)}
+                    className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const fn = cardActionConfirm.onConfirm;
+                      setCardActionConfirm(null);
+                      fn();
+                    }}
+                    className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+                  >
+                    {cardActionConfirm.confirmLabel}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="!mt-8">
             <h4 className="text-2xl font-semibold leading-8 text-on-surface">
@@ -2918,6 +2977,43 @@ export function PromoSection({
               })}
             </div>
           </div>
+
+          {/* schedule guidance — copy adapts to the chosen start/end dates */}
+          {(() => {
+            const s = config.promoCard.startDate;
+            const e = config.promoCard.endDate;
+            const todayISO = toISODate(new Date());
+            if (s && e && s > e) {
+              return (
+                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                  Your start date is after the end date — please check your End date.
+                </p>
+              );
+            }
+            if (e && e < todayISO) {
+              return (
+                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                  The end date is in the past — this promo won&apos;t show. Update the End date.
+                </p>
+              );
+            }
+            if (s && e) {
+              const days = Math.max(
+                1,
+                Math.round((Date.parse(`${e}T00:00:00`) - Date.parse(`${s}T00:00:00`)) / 86_400_000) + 1,
+              );
+              const future = s > todayISO;
+              return (
+                <p className="text-xs text-on-surface-variant">
+                  {future ? 'Scheduled to run' : 'Runs'} {formatDateLabel(s)} → {formatDateLabel(e)} · {days} day
+                  {days === 1 ? '' : 's'}.
+                </p>
+              );
+            }
+            if (s) return <p className="text-xs text-on-surface-variant">Starts {formatDateLabel(s)}.</p>;
+            if (e) return <p className="text-xs text-on-surface-variant">Ends {formatDateLabel(e)}.</p>;
+            return null;
+          })()}
 
           <div className="flex items-center justify-between">
             <label className="text-sm font-semibold text-on-surface">
@@ -4421,8 +4517,12 @@ export function PromoSection({
             <div className="campaign-custom-scrollbar overflow-y-auto p-6">
               <SamplePromoTemplates
                 onApplyTemplate={(template, name) => {
-                  applyTemplate(template, name);
                   setShowTemplatesPopup(false);
+                  confirmCardReplace(() => applyTemplate(template, name), {
+                    title: 'Apply this template?',
+                    body: 'This replaces the current card with the template. Your current promo will be replaced.',
+                    confirmLabel: 'Apply template',
+                  });
                 }}
               />
             </div>
@@ -4468,7 +4568,14 @@ export function PromoSection({
                     return (
                       <div
                         key={version.id}
-                        onClick={() => applyVersion(version)}
+                        onClick={() => {
+                          setShowVersionsPopup(false);
+                          confirmCardReplace(() => applyVersion(version), {
+                            title: 'Apply this variant?',
+                            body: 'This replaces the current card with the saved variant. Your current promo will be replaced.',
+                            confirmLabel: 'Apply variant',
+                          });
+                        }}
                         className="group relative rounded-xl border border-gray-200 hover:border-primary hover:ring-1 hover:ring-primary bg-white p-3 shadow-sm transition-colors hover:shadow-lg cursor-pointer dark:border-gray-700 dark:bg-gray-900"
                       >
                         <div className="mb-2 flex items-center justify-between gap-2">

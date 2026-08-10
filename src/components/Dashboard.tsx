@@ -453,11 +453,27 @@ export function Dashboard({
           </div>
 
           {/* messages summary — big count headline, matching the promo hero's size/weight */}
-          <div className="mb-4 flex min-h-[44px] items-baseline gap-2">
+          <div className="mb-4 flex min-h-[44px] flex-wrap items-baseline gap-x-2 gap-y-1">
             <span className="text-3xl font-bold tracking-tight tabular-nums text-on-surface">{annCount}</span>
             <span className="text-sm text-on-surface-variant">
               message{annCount === 1 ? '' : 's'} {ann.active ? 'showing now' : 'ready to show'}
             </span>
+            {annCount > 0 && (
+              <>
+                <span className="text-sm text-on-surface-variant/40">·</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScheduleFilter('all');
+                    setShowSchedule(true);
+                  }}
+                  className="group inline-flex items-center gap-0.5 text-sm font-medium text-primary transition-colors hover:opacity-80"
+                >
+                  View schedule breakdown
+                  <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                </button>
+              </>
+            )}
           </div>
 
           {/* recessed preview stage — hover to reveal View, click to open the popup */}
@@ -486,17 +502,10 @@ export function Dashboard({
             </div>
           </div>
 
-          {/* details below the box — scheduled / unscheduled; each opens the filtered schedule */}
+          {/* details below the box — read-only scheduled / unscheduled summary */}
           {annCount > 0 && (
             <div className="mt-4 space-y-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setScheduleFilter('scheduled');
-                  setShowSchedule(true);
-                }}
-                className="group flex w-full items-center gap-2 text-left text-sm text-on-surface-variant transition-colors hover:text-primary"
-              >
+              <div className="flex items-center gap-2 text-sm text-on-surface-variant">
                 <Calendar className="h-4 w-4 shrink-0" />
                 <span>
                   <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
@@ -504,23 +513,14 @@ export function Dashboard({
                   </span>{' '}
                   scheduled
                 </span>
-                <ChevronRight className="-ml-1 h-4 w-4 shrink-0 opacity-50 transition-transform group-hover:translate-x-0.5 group-hover:opacity-100" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setScheduleFilter('unscheduled');
-                  setShowSchedule(true);
-                }}
-                className="group flex w-full items-center gap-2 text-left text-sm text-on-surface-variant transition-colors hover:text-primary"
-              >
+              </div>
+              <div className="flex items-center gap-2 text-sm text-on-surface-variant">
                 <InfinityIcon className="h-4 w-4 shrink-0" />
                 <span>
                   <span className="font-semibold tabular-nums text-on-surface">{annCount - scheduledMsgs}</span>{' '}
                   unscheduled
                 </span>
-                <ChevronRight className="-ml-1 h-4 w-4 shrink-0 opacity-50 transition-transform group-hover:translate-x-0.5 group-hover:opacity-100" />
-              </button>
+              </div>
             </div>
           )}
 

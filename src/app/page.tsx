@@ -316,6 +316,8 @@ export default function Home() {
 
   // View vs Edit mode for the editors. Dashboard "View" opens read-only; "Edit" opens editable.
   const [editorMode, setEditorMode] = useState<'view' | 'edit'>('edit');
+  // Consent before discarding a draft (destructive).
+  const [confirmDiscardDraft, setConfirmDiscardDraft] = useState(false);
 
   // Wrap setActiveTab to prompt save-as-draft when switching tabs with unsaved edits since the last draft
   const handleTabSwitch = useCallback(
@@ -512,9 +514,9 @@ export default function Home() {
 
   const ANNOUNCEMENT_PUBLISH_PROMPT = {
     title: 'Changes saved',
-    message: 'Do you want to publish them to your website now?',
+    message: 'How do you want to proceed?',
     confirmLabel: 'Publish now',
-    cancelLabel: 'Not yet',
+    cancelLabel: 'Save as draft',
   };
 
   async function handleSaveAnnouncement() {
@@ -579,9 +581,9 @@ export default function Home() {
       onConfirm: promoPublishFromSavePrompt,
       deferPublish: true,
       title: 'Changes saved',
-      message: 'Do you want to publish them to your website now?',
+      message: 'How do you want to proceed?',
       confirmLabel: 'Publish now',
-      cancelLabel: 'Not yet',
+      cancelLabel: 'Save as draft',
     });
   }
 
@@ -1138,7 +1140,7 @@ export default function Home() {
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={discardDraft}
+                onClick={() => setConfirmDiscardDraft(true)}
                 className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
               >
                 Discard Draft
@@ -1212,6 +1214,39 @@ export default function Home() {
               >
                 {isConfirming && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 {isConfirming ? 'Publishing…' : (publishConfirm.confirmLabel ?? 'Publish Now')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Discard Draft consent — deleting a draft is destructive, so confirm first */}
+      {confirmDiscardDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" onClick={() => setConfirmDiscardDraft(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <h2 className="text-base font-semibold">Discard draft?</h2>
+            <p className="mt-2 text-sm text-on-surface-variant">
+              Your draft will be deleted and you&apos;ll start fresh from what&apos;s currently published. This
+              can&apos;t be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDiscardDraft(false)}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                Keep editing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmDiscardDraft(false);
+                  discardDraft();
+                }}
+                className="rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95"
+              >
+                Discard draft
               </button>
             </div>
           </div>
