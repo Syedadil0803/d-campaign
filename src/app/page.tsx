@@ -319,6 +319,27 @@ export default function Home() {
   // Consent before discarding a draft (destructive).
   const [confirmDiscardDraft, setConfirmDiscardDraft] = useState(false);
 
+  // Invalid promo schedule = both dates set and start is after end. Blocks
+  // Save/Publish (disabled CTA); the ping triggers PromoSection's scroll+flash
+  // fallback if a save is somehow still attempted.
+  const promoDateRangeInvalid = (() => {
+    const s = config.promoCard.startDate;
+    const e = config.promoCard.endDate;
+    return !!(s && e && s > e);
+  })();
+  const [promoDateErrorPing, setPromoDateErrorPing] = useState(0);
+  // Returns true (and fires the fallback guard) when a promo save/publish must
+  // be blocked because the date range is invalid.
+  function blockPromoSaveIfInvalidRange(): boolean {
+    const s = configRef.current.promoCard.startDate;
+    const e = configRef.current.promoCard.endDate;
+    if (s && e && s > e) {
+      setPromoDateErrorPing((n) => n + 1);
+      return true;
+    }
+    return false;
+  }
+
   // Wrap setActiveTab to prompt save-as-draft when switching tabs with unsaved edits since the last draft
   const handleTabSwitch = useCallback(
     (tab: 'dashboard' | 'announcement' | 'promo', mode: 'view' | 'edit' = 'edit') => {
@@ -569,6 +590,9 @@ export default function Home() {
   }
 
   async function handleSavePromo() {
+    // Fallback guard — the Save CTA is disabled while the range is invalid, but
+    // guard here too (Enter key / stale enabled state): scroll + flash, no save.
+    if (blockPromoSaveIfInvalidRange()) return;
     saveDraft(config);
     setHasPromoChanges(false);
     setReadyToPublishPromo(true);
@@ -751,6 +775,7 @@ export default function Home() {
   }
 
   function handlePublishPromoWithValidation() {
+    if (blockPromoSaveIfInvalidRange()) return;
     const warnings = validatePromo();
     setPublishConfirm({ warnings, onConfirm: handlePublishPromo });
   }
@@ -926,6 +951,7 @@ export default function Home() {
           hasPromoChanges={hasPromoChanges}
           readyToPublishAnnouncement={readyToPublishAnnouncement}
           readyToPublishPromo={readyToPublishPromo}
+          promoDateInvalid={promoDateRangeInvalid}
           isPublishing={isPublishing}
           isDarkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode}
@@ -986,6 +1012,7 @@ export default function Home() {
                   canReactivate={promoCanReactivate}
                   onStop={stopPromoNow}
                   onGoOnAir={goOnAirPromoNow}
+                  dateErrorPing={promoDateErrorPing}
                 />
               </div>
             )}

@@ -10,6 +10,7 @@ interface HeaderProps {
   hasPromoChanges: boolean;
   readyToPublishAnnouncement: boolean;
   readyToPublishPromo: boolean;
+  promoDateInvalid: boolean;
   isPublishing: boolean;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
@@ -29,6 +30,7 @@ export function Header({
   hasPromoChanges,
   readyToPublishAnnouncement,
   readyToPublishPromo,
+  promoDateInvalid,
   isPublishing,
   isDarkMode,
   toggleDarkMode,
@@ -53,6 +55,10 @@ export function Header({
     currentReadyToPublish ? 'ready' :
     currentHasChanges ? 'unsaved' :
     'published';
+
+  // Block Save/Publish while the promo schedule range is invalid (start > end).
+  const blockForDateRange = activeTab === 'promo' && promoDateInvalid;
+  const dateRangeTooltip = 'Fix invalid date range to save.';
 
   async function onSave() {
     setSaving(true);
@@ -163,8 +169,9 @@ export function Header({
               {state === 'unsaved' && (
                 <button
                   onClick={onSave}
-                  disabled={saving}
-                  className="inline-flex items-center rounded-md border border-primary/40 bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-all hover:opacity-95 disabled:opacity-70"
+                  disabled={saving || blockForDateRange}
+                  title={blockForDateRange ? dateRangeTooltip : undefined}
+                  className="inline-flex items-center rounded-md border border-primary/40 bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-all hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                   <span>{saving ? 'Saving...' : 'Save'}</span>
@@ -173,8 +180,9 @@ export function Header({
               {state === 'ready' && (
                 <button
                   onClick={onPublish}
-                  disabled={isPublishing}
-                  className="inline-flex items-center rounded-md border border-primary/40 bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-all hover:opacity-95 disabled:opacity-70"
+                  disabled={isPublishing || blockForDateRange}
+                  title={blockForDateRange ? dateRangeTooltip : undefined}
+                  className="inline-flex items-center rounded-md border border-primary/40 bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-all hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isPublishing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
                   <span>{isPublishing ? 'Publishing...' : 'Publish'}</span>

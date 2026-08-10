@@ -139,6 +139,9 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   const schedulePopupRef = useRef<HTMLDivElement>(null);
   const startDateCalendarRef = useRef<HTMLDivElement>(null);
   const endDateCalendarRef = useRef<HTMLDivElement>(null);
+  // Always-current invalid flag for close handlers registered with [] deps
+  // (the Escape listener) that would otherwise read a stale value.
+  const scheduleRangeInvalidRef = useRef(false);
   const actionMenuRef = useRef<HTMLDivElement>(null);
   const backgroundTypeBtnRef = useRef<HTMLButtonElement>(null);
   const backgroundTypeMenuRef = useRef<HTMLDivElement>(null);
@@ -415,6 +418,9 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
       }
       if (
         showSchedulePopup &&
+        // Don't close on outside-click while the range is invalid — the user
+        // must fix it or press Clear (mirrors the blocked Done button).
+        !(selectedStartDate && selectedEndDate && selectedStartDate > selectedEndDate) &&
         schedulePopupRef.current && !schedulePopupRef.current.contains(target) &&
         scheduleBtnRef.current && !scheduleBtnRef.current.contains(target)
       ) {
@@ -441,7 +447,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     };
     document.addEventListener('mousedown', handleMouseDown);
     return () => document.removeEventListener('mousedown', handleMouseDown);
-  }, [showLinkPopup, showSchedulePopup, showBackgroundTypeDropdown, showDirectionDropdown, actionMenuIndex]);
+  }, [showLinkPopup, showSchedulePopup, showBackgroundTypeDropdown, showDirectionDropdown, actionMenuIndex, selectedStartDate, selectedEndDate]);
 
   function formatDateLabel(value: string): string {
     if (!value) return 'Select date';
@@ -676,7 +682,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setShowLinkPopup(false);
-        setShowSchedulePopup(false);
+        // Keep the schedule popup open while its date range is invalid.
+        if (!scheduleRangeInvalidRef.current) setShowSchedulePopup(false);
       }
     };
 
@@ -938,6 +945,16 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   const previewBg = previewDirection ? { ...bg, direction: previewDirection } : bg;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
+  // Invalid schedule for the message being edited = both dates set and start is
+  // after end. Mirrors the Promo schedule: calendars don't gray out the other
+  // field; instead we show an inline error and block the popup's Done action.
+  const scheduleRangeInvalid = !!(
+    selectedStartDate &&
+    selectedEndDate &&
+    selectedStartDate > selectedEndDate
+  );
+  scheduleRangeInvalidRef.current = scheduleRangeInvalid;
 
   const isAnnouncementInWindow = (startDate?: string, endDate?: string) => {
     if (!startDate && !endDate) return true;
@@ -1294,6 +1311,9 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                             onMouseDown={(e) => {
                               e.preventDefault();
                               if (!newAnnouncementText.trim()) return;
+                              // Don't let the toggle close the popup while its
+                              // date range is invalid — fix it or press Clear.
+                              if (showSchedulePopup && scheduleRangeInvalid) return;
                               setShowSchedulePopup(!showSchedulePopup);
                               setShowLinkPopup(false);
                             }}
@@ -1665,9 +1685,10 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                 style={{ position: 'absolute', top: schedulePos.top, left: schedulePos.left, zIndex: 9999 }}
                 className="bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 w-[260px]">
                 <button
-                  onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); closePopupAndFocusEditor(); }}
+                  onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); if (scheduleRangeInvalid) return; closePopupAndFocusEditor(); }}
                   aria-label="Close"
-                  className="absolute top-0 right-2 text-on-surface-variant hover:text-on-surface p-1 rounded text-xl"
+                  title={scheduleRangeInvalid ? 'Fix invalid date range to close.' : undefined}
+                  className={`absolute top-0 right-2 p-1 rounded text-xl ${scheduleRangeInvalid ? 'text-on-surface-variant/40 cursor-not-allowed' : 'text-on-surface-variant hover:text-on-surface'}`}
                 >
                   ×
                 </button>
@@ -1742,10 +1763,10 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                               const inMonth = day.getMonth() === startDateView.getMonth();
                               const isSelected = selectedStartDate === iso;
                               const isToday = iso === toISODate(new Date());
-                              // Start can't be in the past, nor after the end date.
-                              const disabled =
-                                iso < toISODate(new Date()) ||
-                                (!!selectedEndDate && iso > selectedEndDate);
+                              // Start can't be in the past. It is NOT capped by
+                              // the end date — an invalid range surfaces as an
+                              // inline error below, not a blocked day.
+                              const disabled = iso < toISODate(new Date());
                               return (
                                 <button
                                   key={`start-${iso}`}
@@ -1798,7 +1819,9 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                           setShowEndDateCalendar((prev) => !prev);
                           setShowStartDateCalendar(false);
                         }}
-                        className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/10 p-1.5 text-sm text-on-surface backdrop-blur-md"
+                        className={`flex w-full items-center justify-between rounded-xl border bg-black/10 p-1.5 text-sm text-on-surface backdrop-blur-md ${
+                          scheduleRangeInvalid ? 'border-red-500 dark:border-red-400' : 'border-white/10'
+                        }`}
                       >
                         <span className={selectedEndDate ? 'text-on-surface' : 'text-on-surface-variant'}>
                           {formatDateLabel(selectedEndDate)}
@@ -1853,12 +1876,10 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                               const inMonth = day.getMonth() === endDateView.getMonth();
                               const isSelected = selectedEndDate === iso;
                               const isToday = iso === toISODate(new Date());
-                              // End can't be before the start date (or today if start unset).
-                              const endMin =
-                                selectedStartDate && selectedStartDate > toISODate(new Date())
-                                  ? selectedStartDate
-                                  : toISODate(new Date());
-                              const disabled = iso < endMin;
+                              // End can't be in the past. It is NOT capped by
+                              // the start date — an end-before-start range shows
+                              // the inline error below instead of blocking days.
+                              const disabled = iso < toISODate(new Date());
                               return (
                                 <button
                                   key={`end-${iso}`}
@@ -1897,6 +1918,11 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                       )}
                     </div>
                   </div>
+                  {scheduleRangeInvalid && (
+                    <p className="text-[11px] font-medium text-red-600 dark:text-red-400">
+                      End date must be on or after the start date.
+                    </p>
+                  )}
                   <p className="text-[10px] text-on-surface-variant">Leave empty to always show when bar is active.</p>
                 </div>
                 <div className="flex justify-between items-center mt-2">
@@ -1921,9 +1947,12 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                   <button
                     onMouseDown={(e) => {
                       e.preventDefault();
+                      if (scheduleRangeInvalid) return;
                       closePopupAndFocusEditor();
                     }}
-                    className="ml-auto text-xs bg-primary text-on-primary px-3 py-1 rounded hover:opacity-95"
+                    disabled={scheduleRangeInvalid}
+                    title={scheduleRangeInvalid ? 'Fix invalid date range to save.' : undefined}
+                    className="ml-auto text-xs bg-primary text-on-primary px-3 py-1 rounded hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Done
                   </button>

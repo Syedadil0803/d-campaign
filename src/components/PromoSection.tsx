@@ -74,6 +74,9 @@ interface PromoSectionProps {
   // Immediate on/off (no Save → Publish) — the page persists the status change.
   onStop: () => void;
   onGoOnAir: () => void;
+  // Bumped by the page when the user attempts to save/publish while the date
+  // range is invalid — triggers the scroll-to + flash fallback guard.
+  dateErrorPing?: number;
 }
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
@@ -292,6 +295,7 @@ export function PromoSection({
   canReactivate,
   onStop,
   onGoOnAir,
+  dateErrorPing,
 }: PromoSectionProps) {
   const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
     const date = new Date();
@@ -395,6 +399,10 @@ export function PromoSection({
   const fieldAngleWheelRef = useRef<HTMLDivElement>(null);
   const startDatePickerRef = useRef<HTMLDivElement>(null);
   const endDatePickerRef = useRef<HTMLDivElement>(null);
+  // End Date field wrapper — the fallback guard scrolls here and flashes its
+  // inline error if the user tries to save with an invalid range.
+  const endDateFieldRef = useRef<HTMLDivElement>(null);
+  const [dateErrorFlash, setDateErrorFlash] = useState(false);
   // Consent before a card-replacing action (Start Fresh / apply Variant / apply Template).
   const [cardActionConfirm, setCardActionConfirm] = useState<{
     title: string;
@@ -916,7 +924,7 @@ export function PromoSection({
 
   useEffect(() => {
     const nextStart = config.promoCard.startDate || getISODateWithOffset(0);
-    const nextEnd = config.promoCard.endDate || getISODateWithOffset(1);
+    const nextEnd = config.promoCard.endDate || getISODateWithOffset(3);
     if (config.promoCard.startDate && config.promoCard.endDate) return;
     setConfig({
       ...config,
@@ -1482,6 +1490,24 @@ export function PromoSection({
     const fmts = lexicalTimerRef.current?.getActiveFormats();
     if (fmts) setActiveFormats(fmts);
   }
+
+  // Invalid schedule = both dates set and start is after end. Drives the
+  // in-field error, the red End Date border, and the disabled Save/Publish CTA.
+  const promoDateRangeInvalid = (() => {
+    const s = config.promoCard.startDate;
+    const e = config.promoCard.endDate;
+    return !!(s && e && s > e);
+  })();
+
+  // Fallback guard: when the page reports a blocked save/publish attempt, scroll
+  // the End Date field into view and flash its inline error (no toast).
+  useEffect(() => {
+    if (!dateErrorPing) return;
+    endDateFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setDateErrorFlash(true);
+    const t = setTimeout(() => setDateErrorFlash(false), 1200);
+    return () => clearTimeout(t);
+  }, [dateErrorPing]);
 
   // True when the timer — measured with its CURRENT countdown — can't fit one
   // line at the widest card. Drives the persistent "Field limit reached" note
@@ -2195,7 +2221,7 @@ export function PromoSection({
     setOpen: (open: boolean) => void;
     onSelect: (value: string) => void;
     minDate?: string;
-    maxDate?: string;
+    invalid?: boolean;
   }) {
     const {
       mode,
@@ -2206,16 +2232,15 @@ export function PromoSection({
       setOpen,
       onSelect,
       minDate,
-      maxDate,
+      invalid,
     } = params;
     const days = buildMonthDays(viewDate);
     const month = viewDate.getMonth();
     const selected = value;
     const today = toISODate(new Date());
-    // A day is out of range if before minDate or after maxDate (ISO strings
-    // compare correctly as YYYY-MM-DD).
-    const isOutOfRange = (iso: string) =>
-      (minDate && iso < minDate) || (maxDate && iso > maxDate);
+    // A day is out of range if before minDate (past dates). Cross-field limits
+    // are NOT applied here — an invalid range surfaces as an inline error.
+    const isOutOfRange = (iso: string) => Boolean(minDate && iso < minDate);
     const todayDisabled = Boolean(isOutOfRange(today));
     return (
       <div
@@ -2228,7 +2253,11 @@ export function PromoSection({
             e.preventDefault();
             setOpen(!open);
           }}
-          className="flex h-11 w-full items-center justify-between rounded-md border border-border bg-surface px-3 text-sm text-on-surface transition-colors hover:border-primary/70"
+          className={`flex h-11 w-full items-center justify-between rounded-md border bg-surface px-3 text-sm text-on-surface transition-colors hover:border-primary/70 ${
+            invalid
+              ? "border-red-500 dark:border-red-400"
+              : "border-border"
+          }`}
         >
           <span
             className={selected ? "text-on-surface" : "text-on-surface-variant"}
@@ -2913,10 +2942,22 @@ export function PromoSection({
 
           <div className="!mt-8">
             <h4 className="text-2xl font-semibold leading-8 text-on-surface">
-              Schedule
+              Campaign Schedule &amp; Timing
             </h4>
-            <p className="mt-2 text-sm text-on-surface-variant">
-              Control when the promo card is active.
+          </div>
+
+          {/* Sub-section 1 — the system action: when the campaign auto-runs. */}
+          <div className="!mt-6">
+            <div className="flex items-center gap-2">
+              <h5 className="text-base font-semibold text-on-surface">
+                Campaign Duration
+              </h5>
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                Required
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-on-surface-variant">
+              Set when this campaign will automatically start running and stop running.
             </p>
           </div>
 
@@ -2932,8 +2973,10 @@ export function PromoSection({
                 setViewDate: setStartDateView,
                 open: showStartDatePicker,
                 setOpen: setShowStartDatePicker,
+                // Any future date is selectable — the End picker is NOT used to
+                // gray out Start days. An invalid range is surfaced as an
+                // inline error, not by blocking the picker.
                 minDate: toISODate(new Date()),
-                maxDate: config.promoCard.endDate || undefined,
                 onSelect: (nextValue) => {
                   pushPromoState();
                   const nextPromoCard = {
@@ -2947,7 +2990,7 @@ export function PromoSection({
                 },
               })}
             </div>
-            <div>
+            <div ref={endDateFieldRef}>
               <label className="block text-sm font-semibold text-on-surface mb-2">
                 End Date
               </label>
@@ -2958,11 +3001,10 @@ export function PromoSection({
                 setViewDate: setEndDateView,
                 open: showEndDatePicker,
                 setOpen: setShowEndDatePicker,
-                minDate:
-                  config.promoCard.startDate &&
-                  config.promoCard.startDate > toISODate(new Date())
-                    ? config.promoCard.startDate
-                    : toISODate(new Date()),
+                // Any future date is selectable; an end before start is caught
+                // by the inline error below, not blocked in the picker.
+                minDate: toISODate(new Date()),
+                invalid: promoDateRangeInvalid,
                 onSelect: (nextValue) => {
                   pushPromoState();
                   const nextPromoCard = {
@@ -2975,50 +3017,34 @@ export function PromoSection({
                   markChanged();
                 },
               })}
+              {promoDateRangeInvalid && (
+                <p
+                  className={`mt-1.5 text-xs font-medium text-red-600 dark:text-red-400 ${
+                    dateErrorFlash ? "animate-pulse" : ""
+                  }`}
+                >
+                  End date must be on or after the start date.
+                </p>
+              )}
             </div>
           </div>
 
-          {/* schedule guidance — copy adapts to the chosen start/end dates */}
-          {(() => {
-            const s = config.promoCard.startDate;
-            const e = config.promoCard.endDate;
-            const todayISO = toISODate(new Date());
-            if (s && e && s > e) {
-              return (
-                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                  Your start date is after the end date — please check your End date.
-                </p>
-              );
-            }
-            if (e && e < todayISO) {
-              return (
-                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                  The end date is in the past — this promo won&apos;t show. Update the End date.
-                </p>
-              );
-            }
-            if (s && e) {
-              const days = Math.max(
-                1,
-                Math.round((Date.parse(`${e}T00:00:00`) - Date.parse(`${s}T00:00:00`)) / 86_400_000) + 1,
-              );
-              const future = s > todayISO;
-              return (
-                <p className="text-xs text-on-surface-variant">
-                  {future ? 'Scheduled to run' : 'Runs'} {formatDateLabel(s)} → {formatDateLabel(e)} · {days} day
-                  {days === 1 ? '' : 's'}.
-                </p>
-              );
-            }
-            if (s) return <p className="text-xs text-on-surface-variant">Starts {formatDateLabel(s)}.</p>;
-            if (e) return <p className="text-xs text-on-surface-variant">Ends {formatDateLabel(e)}.</p>;
-            return null;
-          })()}
-
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold text-on-surface">
-              Countdown Timer
-            </label>
+          {/* Sub-section 2 — the optional visual feature: a countdown clock.
+              Divider + pt-8 matches the app's section-divider convention. */}
+          <div className="!mt-8 flex items-center justify-between gap-4 border-t border-border pt-8">
+            <div>
+              <div className="flex items-center gap-2">
+                <h5 className="text-base font-semibold text-on-surface">
+                  Countdown Timer Display
+                </h5>
+                <span className="rounded-full bg-on-surface-variant/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">
+                  Optional
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-on-surface-variant">
+                Show a dynamic countdown clock on the promo card to create urgency.
+              </p>
+            </div>
             <SegmentedToggle
               value={config.promoCard.showTimer}
               onChange={(v) => updateField("showTimer", v)}
@@ -3030,10 +3056,14 @@ export function PromoSection({
               the countdown chip's cells to style them, and use the editor's
               own toolbar for bold/italic/size/color. The preview card on the
               right is a read-only render of the result. */}
-          <div className={!config.promoCard.showTimer ? "opacity-50 pointer-events-none" : ""}>
+          <div
+            className={`ml-1 border-l-2 border-border pl-4 ${
+              !config.promoCard.showTimer ? "opacity-50 pointer-events-none" : ""
+            }`}
+          >
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-1.5">
-                <label className="block text-sm font-semibold text-on-surface">
+                <label className="block text-sm font-medium text-on-surface-variant">
                   Timer Text
                 </label>
                 <div className="relative group">
