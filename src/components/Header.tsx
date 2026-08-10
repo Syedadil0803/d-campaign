@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { LayoutDashboard, Megaphone, Gift, LayoutGrid, Save, Upload, Sun, Moon, LogOut, Loader2, Check } from 'lucide-react';
+import { LayoutDashboard, Megaphone, Gift, LayoutGrid, Save, Upload, Sun, Moon, LogOut, Loader2, Check, Eye, Pencil } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: 'dashboard' | 'announcement' | 'promo';
   setActiveTab: (tab: 'dashboard' | 'announcement' | 'promo') => void;
+  editorMode: 'view' | 'edit';
+  onEnterEdit: () => void;
   hasAnnouncementChanges: boolean;
   hasPromoChanges: boolean;
   readyToPublishAnnouncement: boolean;
@@ -21,6 +23,8 @@ interface HeaderProps {
 export function Header({
   activeTab,
   setActiveTab,
+  editorMode,
+  onEnterEdit,
   hasAnnouncementChanges,
   hasPromoChanges,
   readyToPublishAnnouncement,
@@ -117,7 +121,23 @@ export function Header({
             {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
 
-          {activeTab !== 'dashboard' && (
+          {activeTab !== 'dashboard' && editorMode === 'view' && (
+            <>
+              <div className="hidden items-center text-sm font-medium text-on-surface-variant sm:flex">
+                <Eye className="mr-1.5 h-4 w-4" />
+                Viewing
+              </div>
+              <button
+                onClick={onEnterEdit}
+                className="inline-flex items-center rounded-md border border-primary/40 bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-all hover:opacity-95"
+              >
+                <Pencil className="w-4 h-4 mr-2" />
+                <span>Edit</span>
+              </button>
+            </>
+          )}
+
+          {activeTab !== 'dashboard' && editorMode === 'edit' && (
             <>
               {/* Status badge */}
               {state === 'unsaved' && (

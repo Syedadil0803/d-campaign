@@ -314,15 +314,22 @@ export default function Home() {
     mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab]);
 
+  // View vs Edit mode for the editors. Dashboard "View" opens read-only; "Edit" opens editable.
+  const [editorMode, setEditorMode] = useState<'view' | 'edit'>('edit');
+
   // Wrap setActiveTab to prompt save-as-draft when switching tabs with unsaved edits since the last draft
-  const handleTabSwitch = useCallback((tab: 'dashboard' | 'announcement' | 'promo') => {
-    if (tab === activeTab) return;
-    if (hasChangesSinceDraft()) {
-      saveDraft(configRef.current);
-      toast('Draft saved');
-    }
-    setActiveTab(tab);
-  }, [activeTab]);
+  const handleTabSwitch = useCallback(
+    (tab: 'dashboard' | 'announcement' | 'promo', mode: 'view' | 'edit' = 'edit') => {
+      if (tab === activeTab) return;
+      if (hasChangesSinceDraft()) {
+        saveDraft(configRef.current);
+        toast('Draft saved');
+      }
+      setEditorMode(mode);
+      setActiveTab(tab);
+    },
+    [activeTab],
+  );
 
   function saveDraft(
     cfg: CampaignConfig,
@@ -911,6 +918,8 @@ export default function Home() {
         <Header
           activeTab={activeTab}
           setActiveTab={handleTabSwitch}
+          editorMode={editorMode}
+          onEnterEdit={() => setEditorMode('edit')}
           hasAnnouncementChanges={hasAnnouncementChanges}
           hasPromoChanges={hasPromoChanges}
           readyToPublishAnnouncement={readyToPublishAnnouncement}
@@ -946,27 +955,37 @@ export default function Home() {
             )}
 
             {activeTab === 'announcement' && (
-              <AnnouncementSection
-                config={config}
-                setConfig={setConfig}
-                markChanged={markAnnouncementChanged}
-                canReactivate={announcementCanReactivate}
-                onStop={stopAnnouncementNow}
-                onGoOnAir={goOnAirAnnouncementNow}
-              />
+              <div
+                className={editorMode === 'view' ? 'pointer-events-none select-none opacity-70' : ''}
+                aria-hidden={editorMode === 'view'}
+              >
+                <AnnouncementSection
+                  config={config}
+                  setConfig={setConfig}
+                  markChanged={markAnnouncementChanged}
+                  canReactivate={announcementCanReactivate}
+                  onStop={stopAnnouncementNow}
+                  onGoOnAir={goOnAirAnnouncementNow}
+                />
+              </div>
             )}
 
             {activeTab === 'promo' && (
-              <PromoSection
-                config={config}
-                setConfig={setConfig}
-                markChanged={markPromoChanged}
-                toast={toast}
-                onSelectedVersionChange={setSelectedPromoVersionId}
-                canReactivate={promoCanReactivate}
-                onStop={stopPromoNow}
-                onGoOnAir={goOnAirPromoNow}
-              />
+              <div
+                className={editorMode === 'view' ? 'pointer-events-none select-none opacity-70' : ''}
+                aria-hidden={editorMode === 'view'}
+              >
+                <PromoSection
+                  config={config}
+                  setConfig={setConfig}
+                  markChanged={markPromoChanged}
+                  toast={toast}
+                  onSelectedVersionChange={setSelectedPromoVersionId}
+                  canReactivate={promoCanReactivate}
+                  onStop={stopPromoNow}
+                  onGoOnAir={goOnAirPromoNow}
+                />
+              </div>
             )}
           </div>
         </main>

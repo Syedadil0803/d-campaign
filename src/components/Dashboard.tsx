@@ -8,7 +8,6 @@ import {
   Radio,
   CircleStop,
   Pencil,
-  Repeat,
   Upload,
   Check,
   AlertTriangle,
@@ -24,7 +23,7 @@ import { AnnouncementBarPreview } from './AnnouncementBarPreview';
 
 interface DashboardProps {
   config: CampaignConfig;
-  setActiveTab: (tab: 'dashboard' | 'announcement' | 'promo') => void;
+  setActiveTab: (tab: 'dashboard' | 'announcement' | 'promo', mode?: 'view' | 'edit') => void;
   onStopPromo?: () => void;
   onGoOnAirPromo?: () => void;
   onStopAnnouncement?: () => void;
@@ -100,6 +99,7 @@ export function Dashboard({
   const [showPromoPreview, setShowPromoPreview] = useState(false);
   const [showAnnPreview, setShowAnnPreview] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleFilter, setScheduleFilter] = useState<'all' | 'scheduled' | 'unscheduled'>('all');
   const [cardSize, setCardSize] = useState<{ width: number; height: number } | null>(null);
   const promoCardRef = useRef<HTMLDivElement>(null);
 
@@ -189,7 +189,7 @@ export function Dashboard({
 
   const liveCount = (promo.active ? 1 : 0) + (ann.active ? 1 : 0);
   const liveLabel =
-    liveCount === 0 ? 'Nothing live right now' : liveCount === 2 ? 'Both channels live' : '1 of 2 channels live';
+    liveCount === 0 ? 'Nothing on air right now' : liveCount === 2 ? 'Both channels on air' : '1 of 2 channels on air';
   const issues = checks.filter((c) => !c.ok);
 
   const PENDING_COPY = {
@@ -328,7 +328,7 @@ export function Dashboard({
                 <p className={`${MICRO} text-on-surface-variant`}>Floating widget</p>
               </div>
             </div>
-            <span className={statusPill(promo.active)}>{promo.active ? 'Live' : 'Off'}</span>
+            <span className={statusPill(promo.active)}>{promo.active ? 'On air' : 'Off'}</span>
           </div>
 
           {/* hero time-left — headline; fixed-height row so the gray preview box
@@ -412,11 +412,11 @@ export function Dashboard({
 
           {/* actions — View · Edit · lifecycle (View + Edit both open the Promo tab) */}
           <div className="mt-auto flex gap-2 pt-4">
-            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('promo')}>
+            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('promo', 'view')}>
               <Eye className="h-4 w-4" />
               View
             </button>
-            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('promo')}>
+            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('promo', 'edit')}>
               <Pencil className="h-4 w-4" />
               Edit
             </button>
@@ -452,14 +452,12 @@ export function Dashboard({
             <span className={statusPill(ann.active)}>{ann.active ? 'On air' : 'Off'}</span>
           </div>
 
-          {/* messages summary — one line so it lines up with the promo hero */}
-          <div className="mb-4 flex min-h-[44px] items-center">
-            <div className="flex items-center gap-2 text-sm text-on-surface-variant">
-              <Megaphone className="h-4 w-4 shrink-0" />
-              <span>
-                {annCount} message{annCount === 1 ? '' : 's'} {ann.active ? 'showing now' : 'ready to show'}
-              </span>
-            </div>
+          {/* messages summary — big count headline, matching the promo hero's size/weight */}
+          <div className="mb-4 flex min-h-[44px] items-baseline gap-2">
+            <span className="text-3xl font-bold tracking-tight tabular-nums text-on-surface">{annCount}</span>
+            <span className="text-sm text-on-surface-variant">
+              message{annCount === 1 ? '' : 's'} {ann.active ? 'showing now' : 'ready to show'}
+            </span>
           </div>
 
           {/* recessed preview stage — hover to reveal View, click to open the popup */}
@@ -488,43 +486,51 @@ export function Dashboard({
             </div>
           </div>
 
-          {/* details below the box */}
-          <div className="mt-4 space-y-2.5">
-            {annCount > 0 && (
+          {/* details below the box — scheduled / unscheduled; each opens the filtered schedule */}
+          {annCount > 0 && (
+            <div className="mt-4 space-y-2.5">
               <button
                 type="button"
-                onClick={() => setShowSchedule(true)}
+                onClick={() => {
+                  setScheduleFilter('scheduled');
+                  setShowSchedule(true);
+                }}
                 className="group flex w-full items-center gap-2 text-left text-sm text-on-surface-variant transition-colors hover:text-primary"
               >
                 <Calendar className="h-4 w-4 shrink-0" />
                 <span>
-                  <span
-                    className={`font-semibold tabular-nums ${
-                      scheduledMsgs > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-on-surface'
-                    }`}
-                  >
+                  <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
                     {scheduledMsgs}
                   </span>{' '}
-                  of {annCount} message{annCount === 1 ? '' : 's'} scheduled
+                  scheduled
                 </span>
                 <ChevronRight className="-ml-1 h-4 w-4 shrink-0 opacity-50 transition-transform group-hover:translate-x-0.5 group-hover:opacity-100" />
               </button>
-            )}
-            {ann.loop && (
-              <div className="flex items-center gap-2 text-sm text-on-surface-variant">
-                <Repeat className="h-4 w-4 shrink-0" />
-                <span>Continuous loop</span>
-              </div>
-            )}
-          </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setScheduleFilter('unscheduled');
+                  setShowSchedule(true);
+                }}
+                className="group flex w-full items-center gap-2 text-left text-sm text-on-surface-variant transition-colors hover:text-primary"
+              >
+                <InfinityIcon className="h-4 w-4 shrink-0" />
+                <span>
+                  <span className="font-semibold tabular-nums text-on-surface">{annCount - scheduledMsgs}</span>{' '}
+                  unscheduled
+                </span>
+                <ChevronRight className="-ml-1 h-4 w-4 shrink-0 opacity-50 transition-transform group-hover:translate-x-0.5 group-hover:opacity-100" />
+              </button>
+            </div>
+          )}
 
           {/* actions — View · Edit · lifecycle (View + Edit both open the Announcement tab) */}
           <div className="mt-auto flex gap-2 pt-4">
-            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('announcement')}>
+            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('announcement', 'view')}>
               <Eye className="h-4 w-4" />
               View
             </button>
-            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('announcement')}>
+            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('announcement', 'edit')}>
               <Pencil className="h-4 w-4" />
               Edit
             </button>
@@ -619,7 +625,7 @@ export function Dashboard({
               <div>
                 <h2 className="text-base font-semibold text-on-surface">Message schedule</h2>
                 <p className={`mt-0.5 ${MICRO} text-on-surface-variant`}>
-                  {scheduledMsgs} of {annCount} scheduled
+                  {annCount} message{annCount === 1 ? '' : 's'} · {scheduledMsgs} scheduled · {annCount - scheduledMsgs} unscheduled
                 </p>
               </div>
               <button
@@ -631,52 +637,88 @@ export function Dashboard({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              <ul className="space-y-2.5">
-                {ann.announcements.map((a, i) => {
-                  const isScheduled = !!(a.startDate || a.endDate);
+
+            {/* filter tabs — clicking a stat on the card opens this pre-filtered */}
+            <div className="flex shrink-0 gap-1 border-b border-border px-3 py-2">
+              {(
+                [
+                  { key: 'all', label: `All ${annCount}` },
+                  { key: 'scheduled', label: `Scheduled ${scheduledMsgs}` },
+                  { key: 'unscheduled', label: `Unscheduled ${annCount - scheduledMsgs}` },
+                ] as const
+              ).map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setScheduleFilter(t.key)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    scheduleFilter === t.key
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-on-surface-variant hover:bg-surface-subtle'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="max-h-[300px] overflow-y-auto p-4">
+              {(() => {
+                const rows = ann.announcements
+                  .map((a, i) => ({ a, i, scheduled: !!(a.startDate || a.endDate) }))
+                  .filter((r) => scheduleFilter === 'all' || (scheduleFilter === 'scheduled') === r.scheduled);
+                if (rows.length === 0) {
                   return (
-                    <li
-                      key={i}
-                      className="flex items-start gap-3 rounded-xl border border-border bg-background p-3"
-                    >
-                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-subtle text-xs font-semibold tabular-nums text-on-surface-variant">
-                        {i + 1}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-on-surface">
-                          {stripHtml(a.text)}
-                        </div>
-                        <div className="mt-1.5">
-                          {isScheduled ? (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-subtle px-2.5 py-1 text-xs font-medium text-on-surface-variant">
-                              <Calendar className="h-3.5 w-3.5 shrink-0" />
-                              {a.startDate ? fmtDate(a.startDate) : '—'} → {a.endDate ? fmtDate(a.endDate) : '—'}
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100/70 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                              <InfinityIcon className="h-3.5 w-3.5 shrink-0" />
-                              Always on
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </li>
+                    <p className="py-6 text-center text-sm text-on-surface-variant">
+                      No {scheduleFilter} messages.
+                    </p>
                   );
-                })}
-              </ul>
+                }
+                return (
+                  <ul className="space-y-2.5">
+                    {rows.map(({ a, scheduled }, idx) => (
+                      <li
+                        key={idx}
+                        className="flex items-start gap-3 rounded-xl border border-border bg-background p-3"
+                      >
+                        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-subtle text-xs font-semibold tabular-nums text-on-surface-variant">
+                          {idx + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-on-surface">
+                            {stripHtml(a.text)}
+                          </div>
+                          <div className="mt-1.5">
+                            {scheduled ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-subtle px-2.5 py-1 text-xs font-medium text-on-surface-variant">
+                                <Calendar className="h-3.5 w-3.5 shrink-0" />
+                                {a.startDate ? fmtDate(a.startDate) : '—'} → {a.endDate ? fmtDate(a.endDate) : '—'}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100/70 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                                <InfinityIcon className="h-3.5 w-3.5 shrink-0" />
+                                Always on
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                );
+              })()}
             </div>
             <div className="shrink-0 space-y-1.5 border-t border-border p-4 text-xs leading-relaxed text-on-surface-variant">
               <div className="flex items-start gap-2">
                 <InfinityIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-300" />
                 <span>
-                  <strong className="font-medium text-on-surface">Always on</strong> — stays live the whole time the bar is on.
+                  <strong className="font-medium text-on-surface">Always on</strong> — shows whenever the announcement bar is active (no dates set).
                 </span>
               </div>
               <div className="flex items-start gap-2">
                 <Calendar className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <span>
-                  <strong className="font-medium text-on-surface">Scheduled</strong> — only appears within its dates.
+                  <strong className="font-medium text-on-surface">Scheduled</strong> — shows only within its start and end dates.
                 </span>
               </div>
             </div>
