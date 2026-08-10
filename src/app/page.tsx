@@ -535,7 +535,7 @@ export default function Home() {
 
   const ANNOUNCEMENT_PUBLISH_PROMPT = {
     title: 'Changes saved',
-    message: 'How do you want to proceed?',
+    message: 'Publish these changes to your website now, or keep them as a draft?',
     confirmLabel: 'Publish now',
     cancelLabel: 'Save as draft',
   };
@@ -605,7 +605,7 @@ export default function Home() {
       onConfirm: promoPublishFromSavePrompt,
       deferPublish: true,
       title: 'Changes saved',
-      message: 'How do you want to proceed?',
+      message: 'Publish these changes to your website now, or keep them as a draft?',
       confirmLabel: 'Publish now',
       cancelLabel: 'Save as draft',
     });
