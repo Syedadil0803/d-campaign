@@ -135,17 +135,17 @@ export const defaultConfig: CampaignConfig = {
       position: 'bottom-right',
       background: {
         type: 'linear',
-        startColor: '#ffffff',
-        endColor: '#ffffff',
+        startColor: '#2c8da0',
+        endColor: '#4d9a52',
         direction: 'to right',
         midpoint: 50,
       },
-      textColor: '#111827',
+      textColor: '#ffffff',
       titleStyle: {
         background: {
           type: 'solid',
-          startColor: '#111827',
-          endColor: '#111827',
+          startColor: '#1f7a8c',
+          endColor: '#1f7a8c',
           midpoint: 50,
         },
         textColor: '#ffffff',
@@ -154,8 +154,8 @@ export const defaultConfig: CampaignConfig = {
       subheadingStyle: {
         background: {
           type: 'solid',
-          startColor: '#374151',
-          endColor: '#374151',
+          startColor: '#2c8da0',
+          endColor: '#2c8da0',
           midpoint: 50,
         },
         textColor: '#ffffff',
@@ -164,8 +164,8 @@ export const defaultConfig: CampaignConfig = {
       descriptionStyle: {
         background: {
           type: 'solid',
-          startColor: '#374151',
-          endColor: '#374151',
+          startColor: '#4d9a52',
+          endColor: '#4d9a52',
           midpoint: 50,
         },
         textColor: '#ffffff',
@@ -174,18 +174,18 @@ export const defaultConfig: CampaignConfig = {
       dateStyle: {
         background: {
           type: 'solid',
-          startColor: '#6b7280',
-          endColor: '#6b7280',
+          startColor: '#aed136',
+          endColor: '#aed136',
           midpoint: 50,
         },
-        textColor: '#ffffff',
+        textColor: '#1f2937',
         textAlign: 'center',
       },
       buttonStyle: {
         background: {
           type: 'solid',
-          startColor: '#6366f1',
-          endColor: '#6366f1',
+          startColor: '#3f8f47',
+          endColor: '#3f8f47',
           midpoint: 50,
         },
         textColor: '#ffffff',

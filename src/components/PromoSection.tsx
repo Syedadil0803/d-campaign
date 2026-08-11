@@ -77,9 +77,85 @@ interface PromoSectionProps {
   // Bumped by the page when the user attempts to save/publish while the date
   // range is invalid — triggers the scroll-to + flash fallback guard.
   dateErrorPing?: number;
+  // True when there are unsaved edits or a saved-but-unpublished draft. Drives
+  // whether card-replacing actions (Start Fresh / Variant / Template) ask for
+  // consent — we only warn when there's pending work that would be lost.
+  hasUnsavedChanges: boolean;
 }
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
+
+// Dialling codes for the WhatsApp CTA. `flag` is an emoji (renders on
+// macOS/iOS/Android; on Windows/some browsers it falls back to letters), so we
+// always show `name` too — the reliable, cross-browser identifier.
+const COUNTRY_CODES: { code: string; flag: string; name: string }[] = [
+  { code: '+1', flag: '🇺🇸', name: 'United States' },
+  { code: '+7', flag: '🇷🇺', name: 'Russia' },
+  { code: '+20', flag: '🇪🇬', name: 'Egypt' },
+  { code: '+27', flag: '🇿🇦', name: 'South Africa' },
+  { code: '+30', flag: '🇬🇷', name: 'Greece' },
+  { code: '+31', flag: '🇳🇱', name: 'Netherlands' },
+  { code: '+32', flag: '🇧🇪', name: 'Belgium' },
+  { code: '+33', flag: '🇫🇷', name: 'France' },
+  { code: '+34', flag: '🇪🇸', name: 'Spain' },
+  { code: '+36', flag: '🇭🇺', name: 'Hungary' },
+  { code: '+39', flag: '🇮🇹', name: 'Italy' },
+  { code: '+40', flag: '🇷🇴', name: 'Romania' },
+  { code: '+41', flag: '🇨🇭', name: 'Switzerland' },
+  { code: '+43', flag: '🇦🇹', name: 'Austria' },
+  { code: '+44', flag: '🇬🇧', name: 'United Kingdom' },
+  { code: '+45', flag: '🇩🇰', name: 'Denmark' },
+  { code: '+46', flag: '🇸🇪', name: 'Sweden' },
+  { code: '+47', flag: '🇳🇴', name: 'Norway' },
+  { code: '+48', flag: '🇵🇱', name: 'Poland' },
+  { code: '+49', flag: '🇩🇪', name: 'Germany' },
+  { code: '+51', flag: '🇵🇪', name: 'Peru' },
+  { code: '+52', flag: '🇲🇽', name: 'Mexico' },
+  { code: '+54', flag: '🇦🇷', name: 'Argentina' },
+  { code: '+55', flag: '🇧🇷', name: 'Brazil' },
+  { code: '+56', flag: '🇨🇱', name: 'Chile' },
+  { code: '+57', flag: '🇨🇴', name: 'Colombia' },
+  { code: '+58', flag: '🇻🇪', name: 'Venezuela' },
+  { code: '+60', flag: '🇲🇾', name: 'Malaysia' },
+  { code: '+61', flag: '🇦🇺', name: 'Australia' },
+  { code: '+62', flag: '🇮🇩', name: 'Indonesia' },
+  { code: '+63', flag: '🇵🇭', name: 'Philippines' },
+  { code: '+64', flag: '🇳🇿', name: 'New Zealand' },
+  { code: '+65', flag: '🇸🇬', name: 'Singapore' },
+  { code: '+66', flag: '🇹🇭', name: 'Thailand' },
+  { code: '+81', flag: '🇯🇵', name: 'Japan' },
+  { code: '+82', flag: '🇰🇷', name: 'South Korea' },
+  { code: '+84', flag: '🇻🇳', name: 'Vietnam' },
+  { code: '+86', flag: '🇨🇳', name: 'China' },
+  { code: '+90', flag: '🇹🇷', name: 'Turkey' },
+  { code: '+91', flag: '🇮🇳', name: 'India' },
+  { code: '+92', flag: '🇵🇰', name: 'Pakistan' },
+  { code: '+93', flag: '🇦🇫', name: 'Afghanistan' },
+  { code: '+94', flag: '🇱🇰', name: 'Sri Lanka' },
+  { code: '+95', flag: '🇲🇲', name: 'Myanmar' },
+  { code: '+98', flag: '🇮🇷', name: 'Iran' },
+  { code: '+212', flag: '🇲🇦', name: 'Morocco' },
+  { code: '+213', flag: '🇩🇿', name: 'Algeria' },
+  { code: '+234', flag: '🇳🇬', name: 'Nigeria' },
+  { code: '+254', flag: '🇰🇪', name: 'Kenya' },
+  { code: '+351', flag: '🇵🇹', name: 'Portugal' },
+  { code: '+353', flag: '🇮🇪', name: 'Ireland' },
+  { code: '+358', flag: '🇫🇮', name: 'Finland' },
+  { code: '+380', flag: '🇺🇦', name: 'Ukraine' },
+  { code: '+852', flag: '🇭🇰', name: 'Hong Kong' },
+  { code: '+880', flag: '🇧🇩', name: 'Bangladesh' },
+  { code: '+886', flag: '🇹🇼', name: 'Taiwan' },
+  { code: '+961', flag: '🇱🇧', name: 'Lebanon' },
+  { code: '+962', flag: '🇯🇴', name: 'Jordan' },
+  { code: '+965', flag: '🇰🇼', name: 'Kuwait' },
+  { code: '+966', flag: '🇸🇦', name: 'Saudi Arabia' },
+  { code: '+968', flag: '🇴🇲', name: 'Oman' },
+  { code: '+971', flag: '🇦🇪', name: 'UAE' },
+  { code: '+972', flag: '🇮🇱', name: 'Israel' },
+  { code: '+973', flag: '🇧🇭', name: 'Bahrain' },
+  { code: '+974', flag: '🇶🇦', name: 'Qatar' },
+  { code: '+977', flag: '🇳🇵', name: 'Nepal' },
+];
 
 /**
  * Split stored timer text into prefix/suffix plain-text parts for the panel
@@ -296,6 +372,7 @@ export function PromoSection({
   onStop,
   onGoOnAir,
   dateErrorPing,
+  hasUnsavedChanges,
 }: PromoSectionProps) {
   const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
     const date = new Date();
@@ -681,7 +758,8 @@ export function PromoSection({
   }
 
   function getFreshPromoCard(): PromoCard {
-    const baseStyle = clonePromoCard(defaultConfig.promoCard).style;
+    // Inherits the green/blue style from defaultConfig (single source of truth
+    // for the default look) — only the empty text fields differ from default.
     return {
       ...clonePromoCard(defaultConfig.promoCard),
       active: false,
@@ -693,73 +771,28 @@ export function PromoSection({
       showTimer: true,
       showButton: true,
       timerText: "Ends In {timer}",
-      style: {
-        ...baseStyle,
-        background: {
-          type: "linear",
-          startColor: "#2c8da0",
-          endColor: "#4d9a52",
-          direction: "to right",
-          midpoint: 50,
-        },
-        textColor: "#ffffff",
-        titleStyle: {
-          ...baseStyle.titleStyle,
-          background: {
-            type: "solid",
-            startColor: "#1f7a8c",
-            endColor: "#1f7a8c",
-            midpoint: 50,
-          },
-          textColor: "#ffffff",
-        },
-        subheadingStyle: {
-          ...baseStyle.subheadingStyle,
-          background: {
-            type: "solid",
-            startColor: "#2c8da0",
-            endColor: "#2c8da0",
-            midpoint: 50,
-          },
-          textColor: "#ffffff",
-        },
-        descriptionStyle: {
-          ...baseStyle.descriptionStyle,
-          background: {
-            type: "solid",
-            startColor: "#4d9a52",
-            endColor: "#4d9a52",
-            midpoint: 50,
-          },
-          textColor: "#ffffff",
-        },
-        dateStyle: {
-          ...baseStyle.dateStyle,
-          background: {
-            type: "solid",
-            startColor: "#aed136",
-            endColor: "#aed136",
-            midpoint: 50,
-          },
-          textColor: "#1f2937",
-        },
-        buttonStyle: {
-          ...baseStyle.buttonStyle,
-          background: {
-            type: "solid",
-            startColor: "#3f8f47",
-            endColor: "#3f8f47",
-            midpoint: 50,
-          },
-          textColor: "#ffffff",
-        },
-      },
     };
   }
 
   function startFreshPromoCard() {
     const previousSnapshot = getPromoSnapshot();
     const freshCard = withDefaultDates(getFreshPromoCard());
+    // If the card is already fresh, do nothing — no toast, no "unsaved changes"
+    // flip. "Already fresh" = no visible text in any field AND the style matches
+    // the fresh style. We deliberately ignore dates, live flags, and the exact
+    // timerText serialization (which can drift across re-renders) so a repeated
+    // Start Fresh on a blank card is reliably a no-op.
+    const cur = configRef.current.promoCard;
+    const curIsBlank =
+      !hasVisibleContent(cur.title) &&
+      !hasVisibleContent(cur.subtitle) &&
+      !hasVisibleContent(cur.description) &&
+      !hasVisibleContent(cur.buttonText);
+    const styleMatchesFresh =
+      JSON.stringify(cur.style) === JSON.stringify(freshCard.style);
+    if (curIsBlank && styleMatchesFresh) {
+      return;
+    }
     // Mark as a fresh card: leaving it later, undo should land on its edited state.
     isFreshCardRef.current = true;
     promoAppliedRedoRef.current = null;
@@ -2169,8 +2202,16 @@ export function PromoSection({
     opts: { title: string; body: string; confirmLabel: string },
   ) {
     const pc = configRef.current.promoCard;
-    const hasContent = !!(pc.title || pc.subtitle || pc.description || pc.buttonText);
-    if (!hasContent) {
+    const hasContent =
+      hasVisibleContent(pc.title) ||
+      hasVisibleContent(pc.subtitle) ||
+      hasVisibleContent(pc.description) ||
+      hasVisibleContent(pc.buttonText);
+    // Warn only when there's actual content that isn't safely published — real
+    // work the action would discard. A blank/fresh card (even if the dirty flag
+    // is set, e.g. right after a previous Start Fresh) or a fully-published card
+    // with nothing pending is replaced silently.
+    if (!(hasContent && hasUnsavedChanges)) {
       action();
       return;
     }
@@ -2684,7 +2725,7 @@ export function PromoSection({
               onClick={() =>
                 confirmCardReplace(startFreshPromoCard, {
                   title: 'Start a fresh card?',
-                  body: 'This clears the current card and starts from blank. Your current promo will be replaced.',
+                  body: "This clears the card you're editing and starts from blank. It won't change what's live on your website until you publish — and you can still undo (Ctrl+Z).",
                   confirmLabel: 'Start fresh',
                 })
               }
@@ -3178,85 +3219,32 @@ export function PromoSection({
                       <button
                         type="button"
                         onClick={() => setShowCountryCodeDropdown(!showCountryCodeDropdown)}
-                        className="h-full px-3 text-sm border-r border-border text-on-surface flex items-center gap-1 hover:bg-surface-subtle transition-colors"
+                        className="h-full pl-3 pr-2 border-r border-border text-on-surface flex items-center gap-1.5 hover:bg-surface-subtle transition-colors"
                       >
-                        <span className="text-on-surface">
-                          {config.promoCard.whatsappCountryCode || '+44'}
-                        </span>
-                        <svg className={`h-3 w-3 text-on-surface-variant transition-transform ${showCountryCodeDropdown ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                        {(() => {
+                          const selectedCode = config.promoCard.whatsappCountryCode || '+44';
+                          const selected = COUNTRY_CODES.find((c) => c.code === selectedCode);
+                          return (
+                            <>
+                              <span className="text-base leading-none">{selected?.flag}</span>
+                              <span className="text-[15px] font-semibold text-on-surface tabular-nums">
+                                {selectedCode}
+                              </span>
+                              {selected?.name && (
+                                <span className="max-w-[104px] truncate text-xs text-on-surface-variant">
+                                  {selected.name}
+                                </span>
+                              )}
+                            </>
+                          );
+                        })()}
+                        <svg className={`h-3 w-3 shrink-0 text-on-surface-variant transition-transform ${showCountryCodeDropdown ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       </button>
                       {showCountryCodeDropdown && (
-                        <div className="absolute bottom-full left-full ml-1 mb-0 z-50 w-[100px] max-h-[200px] overflow-y-auto rounded-xl bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-1 campaign-custom-scrollbar">
-                          {[
-                            { code: '+1', flag: '🇺🇸' },
-                            { code: '+7', flag: '🇷🇺' },
-                            { code: '+20', flag: '🇪🇬' },
-                            { code: '+27', flag: '🇿🇦' },
-                            { code: '+30', flag: '🇬🇷' },
-                            { code: '+31', flag: '🇳🇱' },
-                            { code: '+32', flag: '🇧🇪' },
-                            { code: '+33', flag: '🇫🇷' },
-                            { code: '+34', flag: '🇪🇸' },
-                            { code: '+36', flag: '🇭🇺' },
-                            { code: '+39', flag: '🇮🇹' },
-                            { code: '+40', flag: '🇷🇴' },
-                            { code: '+41', flag: '🇨🇭' },
-                            { code: '+43', flag: '🇦🇹' },
-                            { code: '+44', flag: '🇬🇧' },
-                            { code: '+45', flag: '🇩🇰' },
-                            { code: '+46', flag: '🇸🇪' },
-                            { code: '+47', flag: '🇳🇴' },
-                            { code: '+48', flag: '🇵🇱' },
-                            { code: '+49', flag: '🇩🇪' },
-                            { code: '+51', flag: '🇵🇪' },
-                            { code: '+52', flag: '🇲🇽' },
-                            { code: '+54', flag: '🇦🇷' },
-                            { code: '+55', flag: '🇧🇷' },
-                            { code: '+56', flag: '🇨🇱' },
-                            { code: '+57', flag: '🇨🇴' },
-                            { code: '+58', flag: '🇻🇪' },
-                            { code: '+60', flag: '🇲🇾' },
-                            { code: '+61', flag: '🇦🇺' },
-                            { code: '+62', flag: '🇮🇩' },
-                            { code: '+63', flag: '🇵🇭' },
-                            { code: '+64', flag: '🇳🇿' },
-                            { code: '+65', flag: '🇸🇬' },
-                            { code: '+66', flag: '🇹🇭' },
-                            { code: '+81', flag: '🇯🇵' },
-                            { code: '+82', flag: '🇰🇷' },
-                            { code: '+84', flag: '🇻🇳' },
-                            { code: '+86', flag: '🇨🇳' },
-                            { code: '+90', flag: '🇹🇷' },
-                            { code: '+91', flag: '🇮🇳' },
-                            { code: '+92', flag: '🇵🇰' },
-                            { code: '+93', flag: '🇦🇫' },
-                            { code: '+94', flag: '🇱🇰' },
-                            { code: '+95', flag: '🇲🇲' },
-                            { code: '+98', flag: '🇮🇷' },
-                            { code: '+212', flag: '🇲🇦' },
-                            { code: '+213', flag: '🇩🇿' },
-                            { code: '+234', flag: '🇳🇬' },
-                            { code: '+254', flag: '🇰🇪' },
-                            { code: '+351', flag: '🇵🇹' },
-                            { code: '+353', flag: '🇮🇪' },
-                            { code: '+358', flag: '🇫🇮' },
-                            { code: '+380', flag: '🇺🇦' },
-                            { code: '+852', flag: '🇭🇰' },
-                            { code: '+880', flag: '🇧🇩' },
-                            { code: '+886', flag: '🇹🇼' },
-                            { code: '+961', flag: '🇱🇧' },
-                            { code: '+962', flag: '🇯🇴' },
-                            { code: '+965', flag: '🇰🇼' },
-                            { code: '+966', flag: '🇸🇦' },
-                            { code: '+968', flag: '🇴🇲' },
-                            { code: '+971', flag: '🇦🇪' },
-                            { code: '+972', flag: '🇮🇱' },
-                            { code: '+973', flag: '🇧🇭' },
-                            { code: '+974', flag: '🇶🇦' },
-                            { code: '+977', flag: '🇳🇵' },
-                          ].map(({ code, flag }) => (
+                        <div className="absolute bottom-full left-0 mb-1 z-50 w-[240px] max-h-[240px] overflow-y-auto rounded-xl bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-1 campaign-custom-scrollbar">
+                          {COUNTRY_CODES.map(({ code, flag, name }) => (
                             <button
                               key={code}
                               type="button"
@@ -3270,8 +3258,9 @@ export function PromoSection({
                                   : 'text-on-surface hover:bg-primary/10 hover:text-primary'
                               }`}
                             >
-                              <span className="text-base">{flag}</span>
-                              <span>{code}</span>
+                              <span className="text-base leading-none shrink-0">{flag}</span>
+                              <span className="flex-1 truncate">{name}</span>
+                              <span className="shrink-0 tabular-nums text-on-surface-variant">{code}</span>
                             </button>
                           ))}
                         </div>
@@ -4550,7 +4539,7 @@ export function PromoSection({
                   setShowTemplatesPopup(false);
                   confirmCardReplace(() => applyTemplate(template, name), {
                     title: 'Apply this template?',
-                    body: 'This replaces the current card with the template. Your current promo will be replaced.',
+                    body: "This replaces the card you're editing with this template. It won't change what's live on your website until you publish — and you can still undo (Ctrl+Z).",
                     confirmLabel: 'Apply template',
                   });
                 }}
@@ -4602,7 +4591,7 @@ export function PromoSection({
                           setShowVersionsPopup(false);
                           confirmCardReplace(() => applyVersion(version), {
                             title: 'Apply this variant?',
-                            body: 'This replaces the current card with the saved variant. Your current promo will be replaced.',
+                            body: "This replaces the card you're editing with this saved variant. It won't change what's live on your website until you publish — and you can still undo (Ctrl+Z).",
                             confirmLabel: 'Apply variant',
                           });
                         }}

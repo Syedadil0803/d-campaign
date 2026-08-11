@@ -87,7 +87,7 @@ function migrateButtonStyle(promoCard: any): CampaignConfig['promoCard'] {
       style: {
         ...promoCard.style,
         buttonStyle: {
-          background: { type: 'solid', startColor: '#6366f1', endColor: '#6366f1' },
+          background: { type: 'solid', startColor: '#3f8f47', endColor: '#3f8f47' },
           textColor: '#ffffff',
           textAlign: 'center'
         }
@@ -159,7 +159,11 @@ function migrateConfig(config: any, version: string): CampaignConfig {
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'announcement' | 'promo'>('dashboard');
+  // `config` is the editing/draft state (what the editors show). `publishedConfig`
+  // is what's actually LIVE on the website — the Dashboard renders this so it
+  // never shows unpublished draft content as if it were live.
   const [config, setConfig] = useState<CampaignConfig>(defaultConfig);
+  const [publishedConfig, setPublishedConfig] = useState<CampaignConfig>(defaultConfig);
   const [hasAnnouncementChanges, setHasAnnouncementChanges] = useState(false);
   const [hasPromoChanges, setHasPromoChanges] = useState(false);
   const [readyToPublishAnnouncement, setReadyToPublishAnnouncement] = useState(false);
@@ -204,9 +208,17 @@ export default function Home() {
   configRef.current = config;
   const hasChangesRef = useRef(hasChanges);
   hasChangesRef.current = hasChanges;
+  // Any pending draft work (unsaved edits OR a saved-but-unpublished draft) —
+  // a live on-air toggle must preserve this, not discard it.
+  const pendingDraft = hasChanges || readyToPublishPromo || readyToPublishAnnouncement;
+  const pendingDraftRef = useRef(pendingDraft);
+  pendingDraftRef.current = pendingDraft;
   const draftSignatureRef = useRef<string | null>(null);
   const savedPromoSignatureRef = useRef<string | null>(null);
   const publishedConfigRef = useRef<string | null>(null);
+  // The published config object (not just its signature) — lets draft checks
+  // compare the announcement against what's live.
+  const publishedConfigObjRef = useRef<CampaignConfig | null>(null);
 
   function getConfigSignature(cfg: CampaignConfig) {
     // `active` / `stoppedByUser` are live on/off flags managed by Go-on-air /
@@ -344,8 +356,7 @@ export default function Home() {
   const handleTabSwitch = useCallback(
     (tab: 'dashboard' | 'announcement' | 'promo', mode: 'view' | 'edit' = 'edit') => {
       if (tab === activeTab) return;
-      if (hasChangesSinceDraft()) {
-        saveDraft(configRef.current);
+      if (hasChangesSinceDraft() && saveDraft(configRef.current)) {
         toast('Draft saved');
       }
       setEditorMode(mode);
@@ -354,15 +365,65 @@ export default function Home() {
     [activeTab],
   );
 
+  // A draft is only worth persisting/restoring when it carries real content —
+  // visible text in a promo field or an announcement message. A blank card
+  // (e.g. right after Start Fresh, which sets the dirty flag but has no text)
+  // differs from published only by defaults (dates/style), which isn't work
+  // worth a "You have an unpublished draft" banner.
+  function htmlHasVisibleText(html: string | undefined): boolean {
+    if (!html) return false;
+    return html
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
+      .trim().length > 0;
+  }
+  function promoHasVisibleContent(pc: CampaignConfig['promoCard']): boolean {
+    return (
+      htmlHasVisibleText(pc.title) ||
+      htmlHasVisibleText(pc.subtitle) ||
+      htmlHasVisibleText(pc.description) ||
+      htmlHasVisibleText(pc.buttonText)
+    );
+  }
+  // Announcement signature (live on/off excluded) — to tell a real announcement
+  // edit apart from the default messages.
+  function announcementSignature(cfg: CampaignConfig): string {
+    const ann = { ...(cfg.announcementBar as unknown as Record<string, unknown>) };
+    delete ann.active;
+    return JSON.stringify(ann);
+  }
+  // Authoritative: is a draft worth restoring (→ show the banner)? Yes only if
+  // the promo has authored text, OR the announcement actually differs from
+  // what's published. A blank promo (Start Fresh) with unchanged announcements
+  // is NOT restorable work, even though the announcement carries its messages.
+  function draftHasRestorableWork(
+    draft: CampaignConfig,
+    published: CampaignConfig | null,
+  ): boolean {
+    if (promoHasVisibleContent(draft.promoCard)) return true;
+    if (!published) return false;
+    return announcementSignature(draft) !== announcementSignature(published);
+  }
+
+  // Persist the draft only if it carries restorable work — real promo text or a
+  // changed announcement. A fresh/blank promo (even one that replaced a full
+  // published card) is trivially recreatable, so it's not worth a draft.
+  // Returns whether a draft was actually written.
   function saveDraft(
     cfg: CampaignConfig,
     options: { markHandled?: boolean } = {},
-  ) {
+  ): boolean {
+    if (!draftHasRestorableWork(cfg, publishedConfigObjRef.current)) {
+      clearDraft();
+      return false;
+    }
     localStorage.setItem('campaign-draft', JSON.stringify(cfg));
     localStorage.setItem('campaign-draft-date', new Date().toISOString());
     if (options.markHandled !== false) {
       draftSignatureRef.current = getConfigSignature(cfg);
     }
+    return true;
   }
 
   function clearDraft() {
@@ -382,8 +443,7 @@ export default function Home() {
   }
 
   function saveDraftAndContinue() {
-    saveDraft(configRef.current);
-    toast('Draft saved');
+    if (saveDraft(configRef.current)) toast('Draft saved');
     completePendingDraftAction();
   }
 
@@ -396,6 +456,7 @@ export default function Home() {
     cfg: CampaignConfig,
     successMessage = 'Settings saved successfully',
     scope?: 'announcement' | 'promo',
+    options: { preserveDraft?: boolean } = {},
   ) {
     try {
       // Build the button destination from the CTA type
@@ -418,11 +479,18 @@ export default function Home() {
       });
 
       if (response.ok) {
-        if (scope === 'announcement') setHasAnnouncementChanges(false);
-        else if (scope === 'promo') setHasPromoChanges(false);
-        else { setHasAnnouncementChanges(false); setHasPromoChanges(false); }
+        // Whatever we just persisted IS the live site now — the Dashboard reads this.
+        setPublishedConfig(cfg);
         publishedConfigRef.current = getConfigSignature(cfg);
-        clearDraft();
+        publishedConfigObjRef.current = cfg;
+        // A live on-air toggle (preserveDraft) must not clear the pending draft
+        // or reset the "unpublished changes" flags — only a real publish does.
+        if (!options.preserveDraft) {
+          if (scope === 'announcement') setHasAnnouncementChanges(false);
+          else if (scope === 'promo') setHasPromoChanges(false);
+          else { setHasAnnouncementChanges(false); setHasPromoChanges(false); }
+          clearDraft();
+        }
         toast(successMessage);
       } else {
         toast('Failed to save settings', true);
@@ -502,13 +570,21 @@ export default function Home() {
         const data = await response.json();
         publishedCfg = migrateConfig(data, data.version);
         publishedConfigRef.current = getConfigSignature(publishedCfg);
+        publishedConfigObjRef.current = publishedCfg;
+        // Dashboard always mirrors the live/published config, even when a draft
+        // is restored into the editors below.
+        setPublishedConfig(publishedCfg);
       }
 
       if (draft) {
         const parsed = JSON.parse(draft) as CampaignConfig;
         const migrated = migrateConfig(parsed, parsed.version);
-        // Only show banner if draft differs from published
-        if (publishedCfg && getConfigSignature(migrated) !== getConfigSignature(publishedCfg)) {
+        // A draft with no restorable work (e.g. a blank promo from Start Fresh,
+        // announcements unchanged) isn't worth a banner — discard it silently.
+        if (!draftHasRestorableWork(migrated, publishedCfg)) {
+          clearDraft();
+        } else if (publishedCfg && getConfigSignature(migrated) !== getConfigSignature(publishedCfg)) {
+          // Only show banner if the draft has content AND differs from published
           setConfig(migrated);
           draftSignatureRef.current = getConfigSignature(migrated);
           savedPromoSignatureRef.current = getPromoSignature(migrated);
@@ -518,9 +594,10 @@ export default function Home() {
           setReadyToPublishPromo(true);
           setDraftBanner({ date: draftDate || new Date().toISOString() });
           return;
+        } else {
+          // Draft matches published — discard it silently
+          clearDraft();
         }
-        // Draft matches published — discard it silently
-        clearDraft();
       }
 
       if (publishedCfg) {
@@ -567,26 +644,46 @@ export default function Home() {
     setReadyToPublishAnnouncement(false);
   }
 
-  // Immediate status changes from the on-air chip — no Save → Publish. Stopping
-  // takes the campaign off now; "Go on air" reactivates the same content now.
+  // Immediate live on/off from the status chip / Dashboard — no Save → Publish.
+  // Toggles ONLY the active flag on the PUBLISHED content (never pushes an
+  // unpublished draft live) and preserves any pending draft. `active` is
+  // excluded from the dirty signature, so mirroring it into the editing config
+  // doesn't create phantom "unsaved changes".
+  async function setLiveActive(scope: 'promo' | 'announcement', active: boolean) {
+    const pending = pendingDraftRef.current;
+    // Make sure the current draft is on disk before we touch the live config,
+    // so preserveDraft has something to keep.
+    if (pending) saveDraft(configRef.current);
+    const base = publishedConfigObjRef.current ?? configRef.current;
+    const next: CampaignConfig =
+      scope === 'promo'
+        ? { ...base, promoCard: { ...base.promoCard, active, stoppedByUser: !active } }
+        : { ...base, announcementBar: { ...base.announcementBar, active } };
+    setConfig((c) =>
+      scope === 'promo'
+        ? { ...c, promoCard: { ...c.promoCard, active, stoppedByUser: !active } }
+        : { ...c, announcementBar: { ...c.announcementBar, active } },
+    );
+    // Optimistically reflect the live status on the Dashboard right away;
+    // persistConfig re-confirms it on a successful write.
+    setPublishedConfig(next);
+    publishedConfigObjRef.current = next;
+    await persistConfig(
+      next,
+      active
+        ? 'Campaign is live on your website'
+        : 'Campaign switched off — no longer on your website',
+      scope,
+      { preserveDraft: pending },
+    );
+  }
+
   async function stopAnnouncementNow() {
-    const next = {
-      ...configRef.current,
-      announcementBar: { ...configRef.current.announcementBar, active: false },
-    };
-    setConfig(next);
-    await persistConfig(next, 'Campaign switched off — no longer on your website', 'announcement');
-    setReadyToPublishAnnouncement(false);
+    await setLiveActive('announcement', false);
   }
 
   async function goOnAirAnnouncementNow() {
-    const next = {
-      ...configRef.current,
-      announcementBar: { ...configRef.current.announcementBar, active: true },
-    };
-    setConfig(next);
-    await persistConfig(next, 'Campaign is live on your website', 'announcement');
-    setReadyToPublishAnnouncement(false);
+    await setLiveActive('announcement', true);
   }
 
   async function handleSavePromo() {
@@ -617,23 +714,11 @@ export default function Home() {
   // Immediate status changes from the promo status chip — no Save → Publish.
   // Stopping takes the card off now; "Go on air" reactivates the same content.
   async function stopPromoNow() {
-    const next = {
-      ...configRef.current,
-      promoCard: { ...configRef.current.promoCard, active: false, stoppedByUser: true },
-    };
-    setConfig(next);
-    await persistConfig(next, 'Campaign switched off — no longer on your website', 'promo');
-    setReadyToPublishPromo(false);
+    await setLiveActive('promo', false);
   }
 
   async function goOnAirPromoNow() {
-    const next = {
-      ...configRef.current,
-      promoCard: { ...configRef.current.promoCard, active: true, stoppedByUser: false },
-    };
-    setConfig(next);
-    await persistConfig(next, 'Campaign is live on your website', 'promo');
-    setReadyToPublishPromo(false);
+    await setLiveActive('promo', true);
   }
 
   // Step 1 "Publish now" → if validation has anything to report, open the
@@ -857,6 +942,7 @@ export default function Home() {
         draftSignatureRef.current = getConfigSignature(migrated);
         savedPromoSignatureRef.current = getPromoSignature(migrated);
         publishedConfigRef.current = getConfigSignature(migrated);
+        publishedConfigObjRef.current = migrated;
       }
     } catch (e) {
       console.error('Failed to reload config:', e);
@@ -971,7 +1057,7 @@ export default function Home() {
           <div className={`max-w-[1840px] mx-auto ${activeTab === 'promo' || activeTab === 'dashboard' ? '' : 'space-y-8 pb-12'}`}>
             {activeTab === 'dashboard' && (
               <Dashboard
-                config={config}
+                config={publishedConfig}
                 setActiveTab={handleTabSwitch}
                 onStopPromo={stopPromoNow}
                 onGoOnAirPromo={goOnAirPromoNow}
@@ -1013,6 +1099,7 @@ export default function Home() {
                   onStop={stopPromoNow}
                   onGoOnAir={goOnAirPromoNow}
                   dateErrorPing={promoDateErrorPing}
+                  hasUnsavedChanges={hasPromoChanges || readyToPublishPromo}
                 />
               </div>
             )}
