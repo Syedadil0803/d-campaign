@@ -410,6 +410,10 @@ export default function Home() {
   // changed announcement. A fresh/blank promo (even one that replaced a full
   // published card) is trivially recreatable, so it's not worth a draft.
   // Returns whether a draft was actually written.
+  // The draft lives in the DB via /api/draft. The DB write is fired without
+  // awaiting (with keepalive so it survives page unload); the decision — save
+  // vs skip, and the returned boolean the callers use for the toast — stays
+  // synchronous so call sites don't change.
   function saveDraft(
     cfg: CampaignConfig,
     options: { markHandled?: boolean } = {},
@@ -418,8 +422,12 @@ export default function Home() {
       clearDraft();
       return false;
     }
-    localStorage.setItem('campaign-draft', JSON.stringify(cfg));
-    localStorage.setItem('campaign-draft-date', new Date().toISOString());
+    fetch('/api/draft', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cfg),
+      keepalive: true,
+    }).catch(() => {});
     if (options.markHandled !== false) {
       draftSignatureRef.current = getConfigSignature(cfg);
     }
@@ -427,8 +435,7 @@ export default function Home() {
   }
 
   function clearDraft() {
-    localStorage.removeItem('campaign-draft');
-    localStorage.removeItem('campaign-draft-date');
+    fetch('/api/draft', { method: 'DELETE', keepalive: true }).catch(() => {});
     draftSignatureRef.current = null;
   }
 
@@ -560,11 +567,11 @@ export default function Home() {
 
   async function loadConfig() {
     try {
-      const draft = localStorage.getItem('campaign-draft');
-      const draftDate = localStorage.getItem('campaign-draft-date');
-
-      // Always fetch the published config from API
-      const response = await fetch('/api/config');
+      // Always fetch the published config + the saved draft from the DB.
+      const [response, draftResponse] = await Promise.all([
+        fetch('/api/config'),
+        fetch('/api/draft'),
+      ]);
       let publishedCfg: CampaignConfig | null = null;
       if (response.ok) {
         const data = await response.json();
@@ -576,9 +583,14 @@ export default function Home() {
         setPublishedConfig(publishedCfg);
       }
 
+      let draft: CampaignConfig | null = null;
+      if (draftResponse.ok) {
+        const draftData = await draftResponse.json();
+        draft = (draftData?.draft as CampaignConfig | null) ?? null;
+      }
+
       if (draft) {
-        const parsed = JSON.parse(draft) as CampaignConfig;
-        const migrated = migrateConfig(parsed, parsed.version);
+        const migrated = migrateConfig(draft, draft.version);
         // A draft with no restorable work (e.g. a blank promo from Start Fresh,
         // announcements unchanged) isn't worth a banner — discard it silently.
         if (!draftHasRestorableWork(migrated, publishedCfg)) {
@@ -592,7 +604,7 @@ export default function Home() {
           setHasPromoChanges(true);
           setReadyToPublishAnnouncement(true);
           setReadyToPublishPromo(true);
-          setDraftBanner({ date: draftDate || new Date().toISOString() });
+          setDraftBanner({ date: migrated.lastUpdated || new Date().toISOString() });
           return;
         } else {
           // Draft matches published — discard it silently
@@ -1100,6 +1112,8 @@ export default function Home() {
                   onGoOnAir={goOnAirPromoNow}
                   dateErrorPing={promoDateErrorPing}
                   hasUnsavedChanges={hasPromoChanges || readyToPublishPromo}
+                  activeTab={activeTab}
+                  setActiveTab={handleTabSwitch}
                 />
               </div>
             )}

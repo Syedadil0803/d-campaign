@@ -9,5 +9,7 @@ export const campaignConfig = campaignSchema.table('campaign_config', {
   version: text('version').notNull().default('1.0'),
   announcementBar: jsonb('announcement_bar').notNull(),
   promoCard: jsonb('promo_card').notNull(),
+  // Up to MAX_VERSIONS saved promo-card variants ("My Saved"), as a JSON array.
+  variants: jsonb('variants'),
   lastUpdated: timestamp('last_updated').notNull().defaultNow(),
 });

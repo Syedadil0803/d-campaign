@@ -13,19 +13,24 @@ function summarize(config: CampaignConfig): string {
   return `version=${config.version} annActive=${ann?.active} annCount=${annCount} promoActive=${promo?.active} lastUpdated=${config.lastUpdated}`;
 }
 
+// The live/published config is stored under id='default'; the single saved
+// draft (scratchpad) is stored under id='draft' in the same table.
+const DEFAULT_ID = 'default';
+const DRAFT_ID = 'draft';
+
 export const campaignRepository = {
-  async getConfig(): Promise<CampaignConfig | null> {
+  async getConfig(id: string = DEFAULT_ID): Promise<CampaignConfig | null> {
     const start = Date.now();
     try {
-      const result = await getDb().select().from(campaignConfig).where(eq(campaignConfig.id, 'default')).limit(1);
+      const result = await getDb().select().from(campaignConfig).where(eq(campaignConfig.id, id)).limit(1);
 
       if (result.length === 0) {
-        console.log(`[DB] getConfig id=default -> NO ROW (${Date.now() - start}ms)`);
+        console.log(`[DB] getConfig id=${id} -> NO ROW (${Date.now() - start}ms)`);
         return null;
       }
 
       const row = result[0];
-      console.log(`[DB] getConfig id=default -> OK version=${row.version} (${Date.now() - start}ms)`);
+      console.log(`[DB] getConfig id=${id} -> OK version=${row.version} (${Date.now() - start}ms)`);
 
       return {
         version: row.version,
@@ -34,19 +39,19 @@ export const campaignRepository = {
         lastUpdated: row.lastUpdated.toISOString(),
       };
     } catch (error) {
-      console.error(`[DB] getConfig id=default -> FAILED (${Date.now() - start}ms):`, error);
+      console.error(`[DB] getConfig id=${id} -> FAILED (${Date.now() - start}ms):`, error);
       return null;
     }
   },
 
-  async saveConfig(config: CampaignConfig): Promise<boolean> {
+  async saveConfig(config: CampaignConfig, id: string = DEFAULT_ID): Promise<boolean> {
     const start = Date.now();
-    console.log(`[DB] saveConfig id=default UPSERT ${summarize(config)}`);
+    console.log(`[DB] saveConfig id=${id} UPSERT ${summarize(config)}`);
     try {
       await getDb()
         .insert(campaignConfig)
         .values({
-          id: 'default',
+          id,
           version: config.version,
           announcementBar: config.announcementBar as any,
           promoCard: config.promoCard as any,
@@ -62,10 +67,65 @@ export const campaignRepository = {
           },
         });
 
-      console.log(`[DB] saveConfig id=default -> OK (${Date.now() - start}ms)`);
+      console.log(`[DB] saveConfig id=${id} -> OK (${Date.now() - start}ms)`);
       return true;
     } catch (error) {
-      console.error(`[DB] saveConfig id=default -> FAILED ${summarize(config)} (${Date.now() - start}ms):`, error);
+      console.error(`[DB] saveConfig id=${id} -> FAILED ${summarize(config)} (${Date.now() - start}ms):`, error);
+      return false;
+    }
+  },
+
+  // ── Draft (single scratchpad, id='draft') ────────────────────────────────
+  getDraft(): Promise<CampaignConfig | null> {
+    return this.getConfig(DRAFT_ID);
+  },
+
+  saveDraft(config: CampaignConfig): Promise<boolean> {
+    return this.saveConfig(config, DRAFT_ID);
+  },
+
+  async deleteDraft(): Promise<boolean> {
+    const start = Date.now();
+    try {
+      await getDb().delete(campaignConfig).where(eq(campaignConfig.id, DRAFT_ID));
+      console.log(`[DB] deleteDraft -> OK (${Date.now() - start}ms)`);
+      return true;
+    } catch (error) {
+      console.error(`[DB] deleteDraft -> FAILED (${Date.now() - start}ms):`, error);
+      return false;
+    }
+  },
+
+  // ── Variants ("My Saved") — stored as a JSON array on the default row ─────
+  async getVariants(): Promise<unknown[]> {
+    const start = Date.now();
+    try {
+      const result = await getDb()
+        .select({ variants: campaignConfig.variants })
+        .from(campaignConfig)
+        .where(eq(campaignConfig.id, DEFAULT_ID))
+        .limit(1);
+      const v = result[0]?.variants;
+      const list = Array.isArray(v) ? v : [];
+      console.log(`[DB] getVariants -> OK count=${list.length} (${Date.now() - start}ms)`);
+      return list;
+    } catch (error) {
+      console.error(`[DB] getVariants -> FAILED (${Date.now() - start}ms):`, error);
+      return [];
+    }
+  },
+
+  async saveVariants(variants: unknown[]): Promise<boolean> {
+    const start = Date.now();
+    try {
+      await getDb()
+        .update(campaignConfig)
+        .set({ variants: variants as any })
+        .where(eq(campaignConfig.id, DEFAULT_ID));
+      console.log(`[DB] saveVariants -> OK count=${variants.length} (${Date.now() - start}ms)`);
+      return true;
+    } catch (error) {
+      console.error(`[DB] saveVariants -> FAILED (${Date.now() - start}ms):`, error);
       return false;
     }
   },

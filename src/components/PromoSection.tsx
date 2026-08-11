@@ -21,6 +21,7 @@ import {
   LayoutTemplate,
   History,
   FilePlus2,
+  FileText,
   Sparkles,
   ClipboardPaste,
   Copy,
@@ -81,6 +82,13 @@ interface PromoSectionProps {
   // whether card-replacing actions (Start Fresh / Variant / Template) ask for
   // consent — we only warn when there's pending work that would be lost.
   hasUnsavedChanges: boolean;
+  // Which top-level tab is active, and how to switch — used by the tab strip
+  // above the preview.
+  activeTab?: 'dashboard' | 'announcement' | 'promo';
+  setActiveTab?: (
+    tab: 'dashboard' | 'announcement' | 'promo',
+    mode?: 'view' | 'edit',
+  ) => void;
 }
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
@@ -373,6 +381,8 @@ export function PromoSection({
   onGoOnAir,
   dateErrorPing,
   hasUnsavedChanges,
+  activeTab,
+  setActiveTab,
 }: PromoSectionProps) {
   const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
     const date = new Date();
@@ -497,6 +507,9 @@ export function PromoSection({
   // Action popups launched from the buttons under the Promo Card heading.
   const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
+  const [showDraftPopup, setShowDraftPopup] = useState(false);
+  const [draftPopupCard, setDraftPopupCard] = useState<PromoCard | null>(null);
+  const [draftPopupLoading, setDraftPopupLoading] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [showGoOnAirConfirm, setShowGoOnAirConfirm] = useState(false);
   // Paste-from-AI import: modal open, textarea contents, and last parse error.
@@ -2171,6 +2184,39 @@ export function PromoSection({
     toast(`Variant applied: ${version.label}`);
   }
 
+  // Fetch the single saved draft from the DB and open the My Draft popup. We
+  // only need its promo card for the preview.
+  async function openDraftPopup() {
+    setShowDraftPopup(true);
+    setDraftPopupLoading(true);
+    setDraftPopupCard(null);
+    try {
+      const res = await fetch('/api/draft');
+      const data = res.ok ? await res.json() : null;
+      setDraftPopupCard((data?.draft?.promoCard as PromoCard | undefined) ?? null);
+    } catch {
+      setDraftPopupCard(null);
+    } finally {
+      setDraftPopupLoading(false);
+    }
+  }
+
+  // Load the saved draft's promo card back into the editor.
+  function restoreDraftPromoCard(card: PromoCard) {
+    const previousSnapshot = getPromoSnapshot();
+    isFreshCardRef.current = false;
+    promoAppliedRedoRef.current = null;
+    promoHistory.clear();
+    const restored = clonePromoCard(card);
+    setConfig({ ...configRef.current, promoCard: restored });
+    syncEditorsFromConfig(restored);
+    markChanged();
+    setPromoAppliedCardBaseline(restored, previousSnapshot);
+    setSelectedVersionId(null);
+    onSelectedVersionChange?.(null);
+    toast('Draft restored');
+  }
+
   function applyTemplate(template: PromoCard, templateName: string) {
     // Leaving a fresh card → undo lands on its EDITED state (getPromoSnapshot).
     // Leaving a template/variant → undo lands on its CLEAN baseline.
@@ -2718,39 +2764,8 @@ export function PromoSection({
             </div>
           </div>
 
-          {/* Quick actions: browse versions, or start from a sample */}
-          <div className="!mt-6 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() =>
-                confirmCardReplace(startFreshPromoCard, {
-                  title: 'Start a fresh card?',
-                  body: "This clears the card you're editing and starts from blank. It won't change what's live on your website until you publish — and you can still undo (Ctrl+Z).",
-                  confirmLabel: 'Start fresh',
-                })
-              }
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-border px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
-              title="Start from a blank promo card"
-            >
-              <FilePlus2 className="h-4 w-4" /> Start Fresh
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowVersionsPopup(true)}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-border px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
-              title="Saved variants of this promo card"
-            >
-              <History className="h-4 w-4" /> My Saved
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowTemplatesPopup(true)}
-              className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-border px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
-              title="Start from a ready-made sample template"
-            >
-              <LayoutTemplate className="h-4 w-4" /> Template Hub
-            </button>
-          </div>
+          {/* Quick actions (Clear Canvas / My Published / Template Hub) now live
+              in the action-tab strip above the Website Content Area preview. */}
 
           {/* Consent before a card-replacing action */}
           {cardActionConfirm && (
@@ -3365,7 +3380,7 @@ export function PromoSection({
         </div>
 
         {/* Right: Preview — 70% width, fixed */}
-        <div className="flex-1 min-h-0 h-full pr-2 flex flex-col gap-4 overflow-x-hidden">
+        <div className="flex-1 min-h-0 h-full pr-2 flex flex-col gap-3 overflow-x-hidden">
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -3373,7 +3388,7 @@ export function PromoSection({
                   Preview
                 </h4>
                 <p className="mt-2 text-sm text-on-surface-variant">
-                  Live card rendering with editable field styles.
+                  See your promo card update as you edit — click any field to restyle it.
                 </p>
               </div>
               <div className="flex flex-col items-end gap-1">
@@ -3486,6 +3501,49 @@ export function PromoSection({
                 </div>
               </div>
             </div>
+          </div>
+          {/* Action tabs — sit between the preview header and the Website
+              Content Area, left-aligned. Fixed height so the preview below
+              shrinks to keep the column scroll-free. */}
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                confirmCardReplace(startFreshPromoCard, {
+                  title: 'Start a fresh card?',
+                  body: "This clears the card you're editing and starts from blank. It won't change what's live on your website until you publish.",
+                  confirmLabel: 'Start fresh',
+                })
+              }
+              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              title="Start from a blank promo card"
+            >
+              <FilePlus2 className="h-4 w-4" /> Clear Canvas
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowVersionsPopup(true)}
+              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              title="Saved variants of this promo card"
+            >
+              <History className="h-4 w-4" /> My Published
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowTemplatesPopup(true)}
+              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              title="Start from a ready-made sample template"
+            >
+              <LayoutTemplate className="h-4 w-4" /> Template Hub
+            </button>
+            <button
+              type="button"
+              onClick={openDraftPopup}
+              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              title="View your saved draft"
+            >
+              <FileText className="h-4 w-4" /> Draft
+            </button>
           </div>
           <div className="campaign-card-surface rounded-lg p-5 relative flex-1 min-h-0 border border-gray-200 dark:border-gray-600">
             <div className="absolute inset-x-0 top-4 flex items-center justify-center text-gray-400 text-sm font-medium pointer-events-none">
@@ -4539,7 +4597,7 @@ export function PromoSection({
                   setShowTemplatesPopup(false);
                   confirmCardReplace(() => applyTemplate(template, name), {
                     title: 'Apply this template?',
-                    body: "This replaces the card you're editing with this template. It won't change what's live on your website until you publish — and you can still undo (Ctrl+Z).",
+                    body: "This replaces the card you're editing with this template. It won't change what's live on your website until you publish.",
                     confirmLabel: 'Apply template',
                   });
                 }}
@@ -4548,6 +4606,72 @@ export function PromoSection({
           </div>
         </div>
       )}
+
+      {/* My Draft popup — the single saved, unpublished draft. */}
+      {showDraftPopup && (() => {
+        const draftCard = draftPopupCard;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0" onClick={() => setShowDraftPopup(false)} />
+            <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[520px] flex-col overflow-hidden rounded-xl border border-white/10 bg-black/10 backdrop-blur-md shadow-2xl">
+              <div className="flex items-center justify-between gap-3 border-b border-white/10 px-6 py-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-on-surface">My Draft</h3>
+                  <p className="text-xs text-on-surface-variant">
+                    Your saved, unpublished promo card.
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {draftCard && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDraftPopup(false);
+                        confirmCardReplace(() => restoreDraftPromoCard(draftCard), {
+                          title: 'Continue editing this draft?',
+                          body: "This loads your saved draft into the editor, replacing the current card. It won't change what's live until you publish.",
+                          confirmLabel: 'Continue editing',
+                        });
+                      }}
+                      className="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+                    >
+                      Continue editing draft
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowDraftPopup(false)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+                    aria-label="Close draft"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="campaign-custom-scrollbar overflow-y-auto p-6">
+                {draftPopupLoading ? (
+                  <div className="p-8 text-center text-sm text-on-surface-variant">
+                    Loading your draft…
+                  </div>
+                ) : draftCard ? (
+                  // Render at the card's own width (same as the editor), never
+                  // stretched to the popup width.
+                  <div
+                    className="mx-auto"
+                    style={{ width: `${draftCard.cardWidth || 400}px`, maxWidth: '100%' }}
+                  >
+                    <PromoMiniPreview promoCard={draftCard} faithful />
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-sm text-on-surface-variant">
+                    No saved draft yet. Your unpublished work is saved here as a draft.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Versions popup — save / restore / delete up to MAX_VERSIONS snapshots */}
       {showVersionsPopup && (
@@ -4591,7 +4715,7 @@ export function PromoSection({
                           setShowVersionsPopup(false);
                           confirmCardReplace(() => applyVersion(version), {
                             title: 'Apply this variant?',
-                            body: "This replaces the card you're editing with this saved variant. It won't change what's live on your website until you publish — and you can still undo (Ctrl+Z).",
+                            body: "This replaces the card you're editing with this saved variant. It won't change what's live on your website until you publish.",
                             confirmLabel: 'Apply variant',
                           });
                         }}

@@ -4,13 +4,16 @@ import { getTemplateTimerPreviewText } from "@/lib/timerUtils";
 
 interface PromoMiniPreviewProps {
   promoCard: PromoCard;
+  // When true, render purely from the card's own HTML — no forced font
+  // size/weight — so it matches the editor exactly (used by the Draft popup).
+  faithful?: boolean;
 }
 
 /**
  * Static visual preview of a PromoCard — same look as the Sample Templates
  * cards. Used to render saved versions as click-to-apply tiles.
  */
-export function PromoMiniPreview({ promoCard }: PromoMiniPreviewProps) {
+export function PromoMiniPreview({ promoCard, faithful }: PromoMiniPreviewProps) {
   const style = promoCard.style;
   return (
     <div
@@ -19,7 +22,7 @@ export function PromoMiniPreview({ promoCard }: PromoMiniPreviewProps) {
     >
       {promoCard.title && (
         <h3
-          className="mb-1 break-words rounded px-2 py-1 text-lg font-bold"
+          className={`mb-1 break-words rounded px-2 py-1 ${faithful ? "" : "text-lg font-bold"}`}
           style={{
             background: getBackgroundStyle(style.titleStyle.background),
             color: style.titleStyle.textColor,
@@ -30,7 +33,7 @@ export function PromoMiniPreview({ promoCard }: PromoMiniPreviewProps) {
       )}
       {promoCard.subtitle && (
         <h4
-          className="mb-2 break-words rounded px-2 py-1 text-sm"
+          className={`mb-2 break-words rounded px-2 py-1 ${faithful ? "" : "text-sm"}`}
           style={{
             background: getBackgroundStyle(style.subheadingStyle.background),
             color: style.subheadingStyle.textColor,
@@ -41,7 +44,7 @@ export function PromoMiniPreview({ promoCard }: PromoMiniPreviewProps) {
       )}
       {promoCard.description && (
         <p
-          className="mb-2 break-words rounded px-2 py-1 text-sm"
+          className={`mb-2 break-words rounded px-2 py-1 ${faithful ? "" : "text-sm"}`}
           style={{
             background: getBackgroundStyle(style.descriptionStyle.background),
             color: style.descriptionStyle.textColor,
@@ -52,7 +55,7 @@ export function PromoMiniPreview({ promoCard }: PromoMiniPreviewProps) {
       )}
       {promoCard.showTimer && promoCard.timerText && (
         <div
-          className="mb-4 break-words rounded px-2 py-1 text-xs"
+          className={`mb-4 break-words rounded px-2 py-1 ${faithful ? "" : "text-xs"}`}
           style={{
             background: getBackgroundStyle(style.dateStyle.background),
             color: style.dateStyle.textColor,
@@ -67,7 +70,7 @@ export function PromoMiniPreview({ promoCard }: PromoMiniPreviewProps) {
         <div className={promoCard.buttonFullWidth ? "" : "flex justify-center"}>
           <button
             type="button"
-            className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+            className={`rounded-lg px-4 py-2 ${faithful ? "" : "text-sm font-semibold"} ${
               promoCard.buttonFullWidth ? "w-full" : ""
             }`}
             style={{

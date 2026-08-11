@@ -1,11 +1,10 @@
 /**
- * promoVersions — local snapshot store for Promo Card "versions".
+ * promoVersions — saved Promo Card "versions" ("My Saved"), stored in the DB.
  *
- * Keeps up to MAX_VERSIONS named snapshots of a PromoCard in localStorage,
- * oldest-first. Saving beyond the cap drops the oldest (FIFO).
- *
- * All functions are async so the storage backend can later be swapped for a
- * real API/DB without touching any call site — only this file changes.
+ * Keeps up to MAX_VERSIONS named snapshots of a PromoCard, oldest-first. Saving
+ * beyond the cap drops the oldest (FIFO). Backed by the `/api/variants` route
+ * (DB variants column); every mutation reads the current list, edits it, and
+ * writes the whole array back.
  */
 
 import { PromoCard } from '@/types/campaign';
@@ -21,27 +20,30 @@ export interface PromoVersion {
   promoCard: PromoCard;
 }
 
-const STORAGE_KEY = 'promo_card_versions';
 export const MAX_VERSIONS = 5;
 
-function read(): PromoVersion[] {
+async function read(): Promise<PromoVersion[]> {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as PromoVersion[]) : [];
+    const res = await fetch('/api/variants');
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data?.variants) ? (data.variants as PromoVersion[]) : [];
   } catch {
     return [];
   }
 }
 
-function write(versions: PromoVersion[]): void {
+async function write(versions: PromoVersion[]): Promise<void> {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(versions));
+    await fetch('/api/variants', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ variants: versions }),
+    });
   } catch {
-    // Storage full / unavailable — fail silently; versions are best-effort for now.
+    // Network/DB unavailable — best-effort; the caller still gets the new list.
   }
 }
 
@@ -56,6 +58,7 @@ function makeId(): string {
 export async function listVersions(): Promise<PromoVersion[]> {
   return read();
 }
+// (read/write are async; each mutation below reads, edits, then writes back.)
 
 /**
  * Save a new named snapshot. Returns the updated list (oldest first).
@@ -66,7 +69,7 @@ export async function saveVersion(
   label: string,
   options: { allowOverflow?: boolean } = {},
 ): Promise<PromoVersion[]> {
-  const versions = read();
+  const versions = await read();
   if (!options.allowOverflow && versions.length >= MAX_VERSIONS) {
     return versions;
   }
@@ -78,7 +81,7 @@ export async function saveVersion(
   };
   versions.push(next);
   while (versions.length > MAX_VERSIONS) versions.shift();
-  write(versions);
+  await write(versions);
   return versions;
 }
 
@@ -88,7 +91,7 @@ export async function updateVersion(
   promoCard: PromoCard,
   label?: string,
 ): Promise<PromoVersion[]> {
-  const versions = read();
+  const versions = await read();
   const index = versions.findIndex((version) => version.id === id);
   if (index === -1) return versions;
   versions[index] = {
@@ -97,18 +100,18 @@ export async function updateVersion(
     label: label?.trim() || versions[index].label,
     promoCard: JSON.parse(JSON.stringify(promoCard)) as PromoCard,
   };
-  write(versions);
+  await write(versions);
   return versions;
 }
 
 /** Delete one version by id. Returns the updated list. */
 export async function deleteVersion(id: string): Promise<PromoVersion[]> {
-  const versions = read().filter((v) => v.id !== id);
-  write(versions);
+  const versions = (await read()).filter((v) => v.id !== id);
+  await write(versions);
   return versions;
 }
 
 /** Remove all versions. */
 export async function clearVersions(): Promise<void> {
-  write([]);
+  await write([]);
 }
