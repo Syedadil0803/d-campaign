@@ -8,14 +8,15 @@ interface HeaderProps {
   onEnterEdit: () => void;
   hasAnnouncementChanges: boolean;
   hasPromoChanges: boolean;
+  // Announcement still stages via Save → Publish (no dedicated "Save as
+  // draft" entry point of its own yet). Promo skipped this step: it saves
+  // straight to a draft via the tab strip, so its top button is Publish-only.
   readyToPublishAnnouncement: boolean;
-  readyToPublishPromo: boolean;
   promoDateInvalid: boolean;
   isPublishing: boolean;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
   handleSaveAnnouncement: () => void;
-  handleSavePromo: () => void;
   handlePublishAnnouncement: () => Promise<void> | void;
   handlePublishPromo: () => Promise<void> | void;
   handleLogout: () => void;
@@ -29,44 +30,34 @@ export function Header({
   hasAnnouncementChanges,
   hasPromoChanges,
   readyToPublishAnnouncement,
-  readyToPublishPromo,
   promoDateInvalid,
   isPublishing,
   isDarkMode,
   toggleDarkMode,
   handleSaveAnnouncement,
-  handleSavePromo,
   handlePublishAnnouncement,
   handlePublishPromo,
   handleLogout,
 }: HeaderProps) {
   const [saving, setSaving] = useState(false);
 
-  const currentHasChanges =
-    activeTab === 'announcement' ? hasAnnouncementChanges :
-    activeTab === 'promo' ? hasPromoChanges :
-    false;
-  const currentReadyToPublish =
-    activeTab === 'announcement' ? readyToPublishAnnouncement :
-    activeTab === 'promo' ? readyToPublishPromo :
-    false;
-
+  // Announcement: three states (unsaved → Save; ready → Publish; published).
+  // Promo: two states only — editing goes straight to "ready to Publish",
+  // since drafting lives in the tab strip instead of this button.
   const state: 'published' | 'unsaved' | 'ready' =
-    currentReadyToPublish ? 'ready' :
-    currentHasChanges ? 'unsaved' :
-    'published';
+    activeTab === 'announcement'
+      ? (readyToPublishAnnouncement ? 'ready' : hasAnnouncementChanges ? 'unsaved' : 'published')
+      : (hasPromoChanges ? 'ready' : 'published');
 
-  // Block Save/Publish while the promo schedule range is invalid (start > end).
+  // Block Publish while the promo schedule range is invalid (start > end).
   const blockForDateRange = activeTab === 'promo' && promoDateInvalid;
-  const dateRangeTooltip = 'Fix invalid date range to save.';
+  const dateRangeTooltip = 'Fix invalid date range to publish.';
 
   async function onSave() {
     setSaving(true);
-    // Brief acknowledgment only — the actual save is instant (local draft).
-    // Kept at 500ms to match the publish loader for a consistent feel.
+    // Brief acknowledgment only — the actual save is instant.
     await new Promise(r => setTimeout(r, 500));
-    if (activeTab === 'announcement') handleSaveAnnouncement();
-    else handleSavePromo();
+    handleSaveAnnouncement();
     setSaving(false);
   }
 
@@ -169,8 +160,7 @@ export function Header({
               {state === 'unsaved' && (
                 <button
                   onClick={onSave}
-                  disabled={saving || blockForDateRange}
-                  title={blockForDateRange ? dateRangeTooltip : undefined}
+                  disabled={saving}
                   className="inline-flex items-center rounded-md border border-primary/40 bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-all hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}

@@ -26,6 +26,9 @@ import {
   ClipboardPaste,
   Copy,
   Power,
+  CalendarDays,
+  Save,
+  Loader2,
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
@@ -89,6 +92,18 @@ interface PromoSectionProps {
     tab: 'dashboard' | 'announcement' | 'promo',
     mode?: 'view' | 'edit',
   ) => void;
+  // Explicit "Save as draft" — the only way a draft is written now. Saves the
+  // FULL editor state (announcement + promo), not just this promo card.
+  onSaveDraft: () => void;
+  savingDraft: boolean;
+  // Deletes the single saved draft slot (called from the My Draft popup).
+  onDeleteDraft: () => void;
+  /** Editor content already matches the stored draft — nothing new to save. */
+  draftUpToDate: boolean;
+  /** A draft is already stored, so saving overwrites it rather than creating one. */
+  draftExists: boolean;
+  /** Takes the live card off the site AND clears it from the published config. */
+  onRemoveLive: () => void;
 }
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
@@ -383,6 +398,12 @@ export function PromoSection({
   hasUnsavedChanges,
   activeTab,
   setActiveTab,
+  onSaveDraft,
+  savingDraft,
+  onDeleteDraft,
+  draftUpToDate,
+  draftExists,
+  onRemoveLive,
 }: PromoSectionProps) {
   const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
     const date = new Date();
@@ -510,6 +531,7 @@ export function PromoSection({
   const [showDraftPopup, setShowDraftPopup] = useState(false);
   const [draftPopupCard, setDraftPopupCard] = useState<PromoCard | null>(null);
   const [draftPopupLoading, setDraftPopupLoading] = useState(false);
+  const [confirmDeleteDraft, setConfirmDeleteDraft] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [showGoOnAirConfirm, setShowGoOnAirConfirm] = useState(false);
   // Paste-from-AI import: modal open, textarea contents, and last parse error.
@@ -787,7 +809,7 @@ export function PromoSection({
     };
   }
 
-  function startFreshPromoCard() {
+  function startFreshPromoCard(options: { silent?: boolean } = {}) {
     const previousSnapshot = getPromoSnapshot();
     const freshCard = withDefaultDates(getFreshPromoCard());
     // If the card is already fresh, do nothing — no toast, no "unsaved changes"
@@ -821,7 +843,9 @@ export function PromoSection({
     setPromoAppliedCardBaseline(freshCard, previousSnapshot);
     setCanResetPromoEdits(false);
     markChanged();
-    toast("Fresh promo card started");
+    // Callers that already show their own toast (e.g. deleting the live card)
+    // pass silent so the user doesn't get two messages for one action.
+    if (!options.silent) toast("Fresh promo card started");
   }
 
   useEffect(() => {
@@ -2149,8 +2173,27 @@ export function PromoSection({
     });
   }
 
+  // The campaign's scheduled run, shown on each "My Published" entry so the
+  // published date range is visible at a glance (not just the save time).
+  function formatScheduleRange(start?: string, end?: string): string {
+    const fmt = (d?: string) => {
+      if (!d) return "";
+      const dt = new Date(`${d}T00:00:00`);
+      if (Number.isNaN(dt.getTime())) return "";
+      return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    };
+    const s = fmt(start);
+    const e = fmt(end);
+    if (s && e) return `${s} → ${e}`;
+    return s || e || "";
+  }
+
 
   async function handleDeleteVersion(id: string) {
+    // "My Published" mirrors what's on the site, so deleting the entry that's
+    // currently on air must also take the card off the website — otherwise the
+    // campaign keeps serving to visitors with no saved copy left behind.
+    const wasLive = selectedVersionId === id && config.promoCard.active;
     const updated = await deleteVersion(id);
     setVersions(updated);
     if (selectedVersionId === id) {
@@ -2158,6 +2201,14 @@ export function PromoSection({
       onSelectedVersionChange?.(null);
     }
     setPendingDeleteId(null);
+    if (wasLive) {
+      onRemoveLive();
+      // The card is gone from My Published and from the site, so leaving it on
+      // the canvas would strand a copy that matches nothing — clear it too.
+      startFreshPromoCard({ silent: true });
+      toast("Deleted — the card has been removed from your website");
+      return;
+    }
     toast("Variant deleted");
   }
 
@@ -2190,6 +2241,7 @@ export function PromoSection({
     setShowDraftPopup(true);
     setDraftPopupLoading(true);
     setDraftPopupCard(null);
+    setConfirmDeleteDraft(false);
     try {
       const res = await fetch('/api/draft');
       const data = res.ok ? await res.json() : null;
@@ -2199,6 +2251,15 @@ export function PromoSection({
     } finally {
       setDraftPopupLoading(false);
     }
+  }
+
+  // Delete the single saved draft from where it's viewed. Only touches the DB
+  // row — the card currently in the editor is untouched either way.
+  function deleteDraft() {
+    onDeleteDraft();
+    setDraftPopupCard(null);
+    setConfirmDeleteDraft(false);
+    toast('Draft discarded');
   }
 
   // Load the saved draft's promo card back into the editor.
@@ -2245,7 +2306,13 @@ export function PromoSection({
   // content to lose (no point confirming on a blank card). Undo still works after.
   function confirmCardReplace(
     action: () => void,
-    opts: { title: string; body: string; confirmLabel: string },
+    opts: {
+      title: string;
+      body: string;
+      confirmLabel: string;
+      /** Copy used when nothing is actually at risk (see below). */
+      reassuranceBody?: string;
+    },
   ) {
     const pc = configRef.current.promoCard;
     const hasContent =
@@ -2253,14 +2320,34 @@ export function PromoSection({
       hasVisibleContent(pc.subtitle) ||
       hasVisibleContent(pc.description) ||
       hasVisibleContent(pc.buttonText);
-    // Warn only when there's actual content that isn't safely published — real
-    // work the action would discard. A blank/fresh card (even if the dirty flag
-    // is set, e.g. right after a previous Start Fresh) or a fully-published card
-    // with nothing pending is replaced silently.
-    if (!(hasContent && hasUnsavedChanges)) {
+    // A blank/fresh card has nothing to lose — replace it silently (this also
+    // covers the dirty flag being set right after a previous Start Fresh).
+    if (!hasContent) {
       action();
       return;
     }
+
+    if (!hasUnsavedChanges) {
+      // Card is on screen but has no pending edits. If it's a template or
+      // variant the user just applied, it's one click away in its own popup —
+      // stay quiet so browsing doesn't nag. Anything else (typically their
+      // published card, loaded on landing) is confirmed with reassuring copy
+      // so it never disappears unannounced.
+      const baseline = promoAppliedCardBaselineRef.current?.promoCard;
+      if (baseline && JSON.stringify(baseline) === JSON.stringify(pc)) {
+        action();
+        return;
+      }
+      setCardActionConfirm({
+        ...opts,
+        body:
+          opts.reassuranceBody ??
+          "This only changes the card you're editing. What's live on your website stays up until you publish again.",
+        onConfirm: action,
+      });
+      return;
+    }
+
     setCardActionConfirm({ ...opts, onConfirm: action });
   }
 
@@ -2669,6 +2756,17 @@ export function PromoSection({
   const hasSubtitle = hasVisibleContent(config.promoCard.subtitle);
   const hasDescription = hasVisibleContent(config.promoCard.description);
   const hasButtonText = hasVisibleContent(config.promoCard.buttonText);
+  // Nothing to save, nothing to clear: no visible text in any field AND the
+  // style is still the fresh default. Styling-only work counts as work, so it
+  // must keep both actions enabled — same test as startFreshPromoCard's no-op
+  // guard.
+  const canvasIsEmpty =
+    !hasTitle &&
+    !hasSubtitle &&
+    !hasDescription &&
+    !hasButtonText &&
+    JSON.stringify(config.promoCard.style) ===
+      JSON.stringify(getFreshPromoCard().style);
   const showContentScaffold =
     showPersistentScaffold ||
     currentField === "title" ||
@@ -3510,13 +3608,20 @@ export function PromoSection({
               type="button"
               onClick={() =>
                 confirmCardReplace(startFreshPromoCard, {
-                  title: 'Start a fresh card?',
-                  body: "This clears the card you're editing and starts from blank. It won't change what's live on your website until you publish.",
-                  confirmLabel: 'Start fresh',
+                  title: 'Clear the canvas?',
+                  body: "Everything you've edited so far will be deleted. What's live on your website won't change.",
+                  reassuranceBody:
+                    "You'll start from a blank card. Nothing is lost — your published card stays live on your website until you publish again.",
+                  confirmLabel: 'Clear canvas',
                 })
               }
-              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
-              title="Start from a blank promo card"
+              disabled={canvasIsEmpty}
+              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              title={
+                canvasIsEmpty
+                  ? 'Nothing to clear — the canvas is already blank.'
+                  : 'Start from a blank promo card'
+              }
             >
               <FilePlus2 className="h-4 w-4" /> Clear Canvas
             </button>
@@ -3542,7 +3647,25 @@ export function PromoSection({
               className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="View your saved draft"
             >
-              <FileText className="h-4 w-4" /> Draft
+              <FileText className="h-4 w-4" /> My Draft
+            </button>
+            <button
+              type="button"
+              onClick={onSaveDraft}
+              disabled={savingDraft || canvasIsEmpty || draftUpToDate}
+              className="ml-auto inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+              title={
+                canvasIsEmpty
+                  ? 'Nothing to save yet — add some content first.'
+                  : draftUpToDate
+                  ? 'Already saved as your draft — make a change to save again.'
+                  : draftExists
+                  ? 'Replace your saved draft with what you’re editing now'
+                  : 'Save the current editor state as your draft'
+              }
+            >
+              {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {draftExists ? 'Update draft' : 'Save as draft'}
             </button>
           </div>
           <div className="campaign-card-surface rounded-lg p-5 relative flex-1 min-h-0 border border-gray-200 dark:border-gray-600">
@@ -4610,6 +4733,19 @@ export function PromoSection({
       {/* My Draft popup — the single saved, unpublished draft. */}
       {showDraftPopup && (() => {
         const draftCard = draftPopupCard;
+        // The draft may already be what's on the canvas (you saved it, or just
+        // restored it). Restoring it again would be a no-op, so offering to
+        // "replace the current card" reads as nonsense — compare the cards and
+        // disable the action instead. `active`/`stoppedByUser` are live on/off
+        // flags, not content, so they're excluded (same rule as the dirty check).
+        const stripCard = (c: PromoCard) => {
+          const rest = { ...c } as Record<string, unknown>;
+          delete rest.active;
+          delete rest.stoppedByUser;
+          return JSON.stringify(rest);
+        };
+        const draftIsOnCanvas =
+          !!draftCard && stripCard(draftCard) === stripCard(config.promoCard);
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0" onClick={() => setShowDraftPopup(false)} />
@@ -4621,32 +4757,14 @@ export function PromoSection({
                     Your saved, unpublished promo card.
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {draftCard && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowDraftPopup(false);
-                        confirmCardReplace(() => restoreDraftPromoCard(draftCard), {
-                          title: 'Continue editing this draft?',
-                          body: "This loads your saved draft into the editor, replacing the current card. It won't change what's live until you publish.",
-                          confirmLabel: 'Continue editing',
-                        });
-                      }}
-                      className="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
-                    >
-                      Continue editing draft
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setShowDraftPopup(false)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
-                    aria-label="Close draft"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDraftPopup(false)}
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+                  aria-label="Close draft"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
               <div className="campaign-custom-scrollbar overflow-y-auto p-6">
                 {draftPopupLoading ? (
@@ -4668,6 +4786,65 @@ export function PromoSection({
                   </div>
                 )}
               </div>
+
+              {draftCard && (
+                <div className="flex shrink-0 items-center justify-end gap-2 border-t border-white/10 px-6 py-3">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteDraft(true)}
+                    className="rounded-lg border border-red-500/40 px-3 py-1.5 text-sm font-semibold text-red-500 transition-colors hover:bg-red-500/10"
+                  >
+                    Discard draft
+                  </button>
+                  <button
+                    type="button"
+                    disabled={draftIsOnCanvas}
+                    title={
+                      draftIsOnCanvas
+                        ? "You're already editing this draft."
+                        : 'Load this draft into the editor'
+                    }
+                    onClick={() => {
+                      setShowDraftPopup(false);
+                      confirmCardReplace(() => restoreDraftPromoCard(draftCard), {
+                        title: 'Continue editing this draft?',
+                        body: "This loads your saved draft into the editor, replacing the card you're editing now. What's live on your website won't change.",
+                        reassuranceBody:
+                          "This loads your saved draft into the editor. Nothing is lost, and what's live on your website won't change.",
+                        confirmLabel: 'Continue editing',
+                      });
+                    }}
+                    className="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {draftIsOnCanvas ? 'Already in editor' : 'Continue editing draft'}
+                  </button>
+                </div>
+              )}
+
+              {confirmDeleteDraft && (
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-xl bg-surface-elevated/95 p-6 text-center backdrop-blur-sm">
+                  <p className="text-sm font-semibold text-on-surface">Discard this draft?</p>
+                  <p className="-mt-1 text-xs text-on-surface-variant">
+                    Your saved draft will be deleted. This can&apos;t be undone.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteDraft(false)}
+                      className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={deleteDraft}
+                      className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600"
+                    >
+                      Discard draft
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -4749,6 +4926,12 @@ export function PromoSection({
                             </button>
                           </div>
                         </div>
+                        {formatScheduleRange(version.promoCard.startDate, version.promoCard.endDate) && (
+                          <p className="mb-2 flex items-center gap-1 text-[11px] font-medium text-gray-500 dark:text-gray-400">
+                            <CalendarDays className="h-3 w-3" />
+                            {formatScheduleRange(version.promoCard.startDate, version.promoCard.endDate)}
+                          </p>
+                        )}
                         <PromoMiniPreview promoCard={version.promoCard} />
 
                         {pendingDeleteId === version.id && (
@@ -4759,9 +4942,16 @@ export function PromoSection({
                             <p className="text-sm font-medium text-on-surface">
                               Delete “{version.label}”?
                             </p>
-                            <p className="-mt-1 text-[11px] text-on-surface-variant">
-                              This can’t be undone.
-                            </p>
+                            {isLive && config.promoCard.active ? (
+                              <p className="-mt-1 text-[11px] font-medium text-red-500">
+                                This card is live. Deleting it removes it from your
+                                website right away. This can’t be undone.
+                              </p>
+                            ) : (
+                              <p className="-mt-1 text-[11px] text-on-surface-variant">
+                                This can’t be undone.
+                              </p>
+                            )}
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
@@ -4781,7 +4971,9 @@ export function PromoSection({
                                 }}
                                 className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600"
                               >
-                                Delete
+                                {isLive && config.promoCard.active
+                                  ? 'Delete & take offline'
+                                  : 'Delete'}
                               </button>
                             </div>
                           </div>

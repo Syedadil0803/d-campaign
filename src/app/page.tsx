@@ -166,8 +166,9 @@ export default function Home() {
   const [publishedConfig, setPublishedConfig] = useState<CampaignConfig>(defaultConfig);
   const [hasAnnouncementChanges, setHasAnnouncementChanges] = useState(false);
   const [hasPromoChanges, setHasPromoChanges] = useState(false);
+  // Announcement still stages via Save → Publish (promo saves straight to a
+  // draft from the tab strip instead, so it has no staged/"ready" state).
   const [readyToPublishAnnouncement, setReadyToPublishAnnouncement] = useState(false);
-  const [readyToPublishPromo, setReadyToPublishPromo] = useState(false);
   const hasChanges = hasAnnouncementChanges || hasPromoChanges;
   const [pendingDraftAction, setPendingDraftAction] = useState<
     | { type: 'tab'; tab: 'dashboard' | 'announcement' | 'promo' }
@@ -203,14 +204,23 @@ export default function Home() {
   const [isConfirming, setIsConfirming] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [draftBanner, setDraftBanner] = useState<{ date: string } | null>(null);
+  // Explicit "Save as draft" — writing in progress, and the replace-confirm
+  // shown when a draft already exists (only one draft slot).
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [confirmReplaceDraft, setConfirmReplaceDraft] = useState(false);
+  // Signature of the draft actually stored in the DB (null = no draft). Kept
+  // in state, not a ref, so the "Save as draft" button can disable itself when
+  // the editor already matches the draft — re-saving identical content only
+  // produces a pointless "Replace saved draft?" prompt.
+  const [savedDraftSignature, setSavedDraftSignature] = useState<string | null>(null);
   const mainScrollRef = useRef<HTMLElement>(null);
   const configRef = useRef(config);
   configRef.current = config;
   const hasChangesRef = useRef(hasChanges);
   hasChangesRef.current = hasChanges;
-  // Any pending draft work (unsaved edits OR a saved-but-unpublished draft) —
-  // a live on-air toggle must preserve this, not discard it.
-  const pendingDraft = hasChanges || readyToPublishPromo || readyToPublishAnnouncement;
+  // Any pending draft work (unsaved edits OR a staged-but-unpublished
+  // announcement) — a live on-air toggle must preserve this, not discard it.
+  const pendingDraft = hasChanges || readyToPublishAnnouncement;
   const pendingDraftRef = useRef(pendingDraft);
   pendingDraftRef.current = pendingDraft;
   const draftSignatureRef = useRef<string | null>(null);
@@ -258,14 +268,20 @@ export default function Home() {
 
   async function getPromoVariantSaveStatus(cfg: CampaignConfig) {
     const promoSignature = getPromoSignature(cfg);
-    if (savedPromoSignatureRef.current === promoSignature) return 'skipped';
-
+    // The saved-signature cache is only trustworthy when the card is ACTUALLY in
+    // the saved list. loadConfig seeds savedPromoSignatureRef from the *published*
+    // card — which is NOT itself a saved variant — so an early ref short-circuit
+    // makes publishing a freshly loaded card return 'skipped' and record nothing
+    // in My Published (the reported "empty after publishing" bug). Consult the
+    // list itself as the source of truth instead.
     const existingVersions = await listVersions();
-    const matchingVersion = existingVersions.some(
+    const match = existingVersions.find(
       (version) => JSON.stringify(version.promoCard) === promoSignature,
     );
-    if (matchingVersion) {
+    if (match) {
       savedPromoSignatureRef.current = promoSignature;
+      // Already recorded — make sure it's the highlighted "Live" entry.
+      setSelectedPromoVersionId(match.id);
       return 'skipped';
     }
 
@@ -289,29 +305,18 @@ export default function Home() {
     }
   }, []);
 
-  // Browser close/refresh can only show the native unload warning. Keep drafting,
-  // but do not mark the draft prompt as handled unless the user chooses an in-app action.
+  // Browser close/refresh can only show the native unload warning. Drafting is
+  // manual now (explicit "Save as draft" only) — this just warns, it never
+  // writes a draft on its own.
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasChangesRef.current) {
-        saveDraft(configRef.current, { markHandled: false });
         e.preventDefault();
         e.returnValue = '';
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, []);
-
-  // Auto-save as draft to localStorage when tool/tab becomes hidden (timeout, switch away)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden' && hasChangesSinceDraft()) {
-        saveDraft(configRef.current, { markHandled: false });
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
   useEffect(() => {
@@ -352,13 +357,11 @@ export default function Home() {
     return false;
   }
 
-  // Wrap setActiveTab to prompt save-as-draft when switching tabs with unsaved edits since the last draft
+  // Tab switches no longer auto-save a draft — drafting is explicit only
+  // ("Save as draft"), so switching tabs just switches tabs.
   const handleTabSwitch = useCallback(
     (tab: 'dashboard' | 'announcement' | 'promo', mode: 'view' | 'edit' = 'edit') => {
       if (tab === activeTab) return;
-      if (hasChangesSinceDraft() && saveDraft(configRef.current)) {
-        toast('Draft saved');
-      }
       setEditorMode(mode);
       setActiveTab(tab);
     },
@@ -428,6 +431,7 @@ export default function Home() {
       body: JSON.stringify(cfg),
       keepalive: true,
     }).catch(() => {});
+    setSavedDraftSignature(getConfigSignature(cfg));
     if (options.markHandled !== false) {
       draftSignatureRef.current = getConfigSignature(cfg);
     }
@@ -437,6 +441,52 @@ export default function Home() {
   function clearDraft() {
     fetch('/api/draft', { method: 'DELETE', keepalive: true }).catch(() => {});
     draftSignatureRef.current = null;
+    setSavedDraftSignature(null);
+  }
+
+  // Explicit "Save as draft" — the ONLY way a draft is ever written now.
+  // Unlike the automatic saveDraft() above, this always writes what's in the
+  // editor: an explicit click means the user wants it saved, blank or not.
+  function writeDraftNow() {
+    const cfg = configRef.current;
+    setSavingDraft(true);
+    fetch('/api/draft', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cfg),
+    })
+      .then((res) => {
+        if (res.ok) {
+          draftSignatureRef.current = getConfigSignature(cfg);
+          setSavedDraftSignature(getConfigSignature(cfg));
+          toast('Draft saved');
+        } else {
+          toast('Failed to save draft', true);
+        }
+      })
+      .catch(() => toast('Failed to save draft', true))
+      .finally(() => setSavingDraft(false));
+  }
+
+  // There's only one draft slot — if it's already occupied, confirm before
+  // overwriting it.
+  async function handleSaveAsDraft() {
+    setSavingDraft(true);
+    let exists = false;
+    try {
+      const res = await fetch('/api/draft');
+      const data = res.ok ? await res.json() : null;
+      exists = Boolean(data?.draft);
+    } catch {
+      // Can't tell — fall through and just write; worst case is an
+      // unconfirmed overwrite, better than silently failing to save.
+    }
+    setSavingDraft(false);
+    if (exists) {
+      setConfirmReplaceDraft(true);
+      return;
+    }
+    writeDraftNow();
   }
 
   function completePendingDraftAction(action = pendingDraftAction) {
@@ -522,7 +572,6 @@ export default function Home() {
       if (mode === 'publish') {
         // cfg already has active:true — finish going live, don't re-prompt to publish.
         await persistConfig(cfg, 'Campaign is live on your website', 'promo');
-        setReadyToPublishPromo(false);
       } else {
         await persistConfig(cfg, 'Settings saved and promo variant saved');
       }
@@ -543,7 +592,6 @@ export default function Home() {
       savedPromoSignatureRef.current = getPromoSignature(cfg);
       if (mode === 'publish') {
         await persistConfig(cfg, 'Campaign is live on your website', 'promo');
-        setReadyToPublishPromo(false);
       } else {
         await persistConfig(cfg, 'Settings saved and promo variant updated');
       }
@@ -599,11 +647,11 @@ export default function Home() {
           // Only show banner if the draft has content AND differs from published
           setConfig(migrated);
           draftSignatureRef.current = getConfigSignature(migrated);
+          setSavedDraftSignature(getConfigSignature(migrated));
           savedPromoSignatureRef.current = getPromoSignature(migrated);
           setHasAnnouncementChanges(true);
           setHasPromoChanges(true);
           setReadyToPublishAnnouncement(true);
-          setReadyToPublishPromo(true);
           setDraftBanner({ date: migrated.lastUpdated || new Date().toISOString() });
           return;
         } else {
@@ -622,23 +670,21 @@ export default function Home() {
     }
   }
 
-  const ANNOUNCEMENT_PUBLISH_PROMPT = {
-    title: 'Changes saved',
-    message: 'Publish these changes to your website now, or keep them as a draft?',
-    confirmLabel: 'Publish now',
-    cancelLabel: 'Save as draft',
-  };
-
-  async function handleSaveAnnouncement() {
-    saveDraft(config);
+  // Stage the announcement for publish. No automatic draft write here —
+  // drafting is explicit-only ("Save as draft" in the Promo tab strip, which
+  // covers the full config including the announcement) — this just flips the
+  // header to "ready to Publish" and asks whether to publish now.
+  function handleSaveAnnouncement() {
     setHasAnnouncementChanges(false);
     setReadyToPublishAnnouncement(true);
     toast('Changes saved — please publish to go live');
-    // Right after saving, ask whether to publish now (publish-later otherwise).
     setPublishConfirm({
       warnings: [],
       onConfirm: handlePublishAnnouncement,
-      ...ANNOUNCEMENT_PUBLISH_PROMPT,
+      title: 'Changes saved',
+      message: 'Ready to publish, or you can review and publish later.',
+      confirmLabel: 'Publish now',
+      cancelLabel: 'Publish later',
     });
   }
 
@@ -663,9 +709,6 @@ export default function Home() {
   // doesn't create phantom "unsaved changes".
   async function setLiveActive(scope: 'promo' | 'announcement', active: boolean) {
     const pending = pendingDraftRef.current;
-    // Make sure the current draft is on disk before we touch the live config,
-    // so preserveDraft has something to keep.
-    if (pending) saveDraft(configRef.current);
     const base = publishedConfigObjRef.current ?? configRef.current;
     const next: CampaignConfig =
       scope === 'promo'
@@ -698,28 +741,6 @@ export default function Home() {
     await setLiveActive('announcement', true);
   }
 
-  async function handleSavePromo() {
-    // Fallback guard — the Save CTA is disabled while the range is invalid, but
-    // guard here too (Enter key / stale enabled state): scroll + flash, no save.
-    if (blockPromoSaveIfInvalidRange()) return;
-    saveDraft(config);
-    setHasPromoChanges(false);
-    setReadyToPublishPromo(true);
-    toast('Changes saved — please publish to go live');
-    // Step 1 popup: simple "publish now?" prompt (no Heads-up here). "Publish
-    // now" defers to the validation Heads-up popup (Step 2) rather than
-    // publishing directly; "Not yet" leaves it saved as Unpublished changes.
-    setPublishConfirm({
-      warnings: [],
-      onConfirm: promoPublishFromSavePrompt,
-      deferPublish: true,
-      title: 'Changes saved',
-      message: 'Publish these changes to your website now, or keep them as a draft?',
-      confirmLabel: 'Publish now',
-      cancelLabel: 'Save as draft',
-    });
-  }
-
   // Turning a stopped promo back on from the status chip: flip it on
   // provisionally and ask whether to go live. Publish → live; Cancel → revert
   // to the previous (stopped) state.
@@ -729,22 +750,29 @@ export default function Home() {
     await setLiveActive('promo', false);
   }
 
-  async function goOnAirPromoNow() {
-    await setLiveActive('promo', true);
+  // Deleting the live card from "My Published" is a real removal, not a Stop:
+  // besides taking it off air we clear its content from the published config so
+  // /api/config and the R2 copy stop carrying it. Unlike Stop, this can't be
+  // undone with "Go on air" — the content is gone from the live config.
+  async function removeLivePromo() {
+    const base = publishedConfigObjRef.current ?? configRef.current;
+    const next: CampaignConfig = {
+      ...base,
+      promoCard: {
+        ...defaultConfig.promoCard,
+        active: false,
+        stoppedByUser: true,
+      },
+    };
+    setPublishedConfig(next);
+    publishedConfigObjRef.current = next;
+    await persistConfig(next, 'Removed from your website', 'promo', {
+      preserveDraft: pendingDraftRef.current,
+    });
   }
 
-  // Step 1 "Publish now" → if validation has anything to report, open the
-  // Heads-up validator popup (Step 2); otherwise publish straight away.
-  async function promoPublishFromSavePrompt() {
-    const warnings = validatePromo();
-    if (warnings.length > 0) {
-      handlePublishPromoWithValidation();
-      return;
-    }
-    setIsPublishing(true);
-    await handlePublishPromo();
-    await new Promise(r => setTimeout(r, 500));
-    setIsPublishing(false);
+  async function goOnAirPromoNow() {
+    await setLiveActive('promo', true);
   }
 
   async function handlePublishPromo() {
@@ -770,13 +798,11 @@ export default function Home() {
       await savePromoVariant(cfgToSave);
       await persistConfig(cfgToSave, successMsg, 'promo');
       setConfig(cfgToSave);
-      setReadyToPublishPromo(false);
       return;
     }
 
     await persistConfig(cfgToSave, successMsg, 'promo');
     setConfig(cfgToSave);
-    setReadyToPublishPromo(false);
   }
 
   function validatePromo(): string[] {
@@ -878,30 +904,7 @@ export default function Home() {
   }
 
   function handlePublishAnnouncementWithValidation() {
-    // Same confirmation popup as the post-save prompt (Step 3).
-    setPublishConfirm({
-      warnings: [],
-      onConfirm: handlePublishAnnouncement,
-      ...ANNOUNCEMENT_PUBLISH_PROMPT,
-    });
-  }
-
-  async function handleSave() {
-    let cfgToSave = config;
-
-    const variantStatus = await getPromoVariantSaveStatus(cfgToSave);
-    if (variantStatus === 'pending') {
-      setPendingVariantSave({ config: cfgToSave, versions: await listVersions(), mode: 'save' });
-      return;
-    }
-
-    if (variantStatus === 'ready') {
-      await savePromoVariant(cfgToSave);
-      await persistConfig(cfgToSave, 'Settings saved and promo variant saved');
-      return;
-    }
-
-    await persistConfig(cfgToSave);
+    setPublishConfirm({ warnings: [], onConfirm: handlePublishAnnouncement });
   }
 
   function toast(message: string, isError = false) {
@@ -943,7 +946,6 @@ export default function Home() {
     setHasAnnouncementChanges(false);
     setHasPromoChanges(false);
     setReadyToPublishAnnouncement(false);
-    setReadyToPublishPromo(false);
     // Reload published config
     try {
       const response = await fetch('/api/config');
@@ -967,13 +969,6 @@ export default function Home() {
     setActiveTab('promo');
   }
 
-  function markChanged() {
-    setHasAnnouncementChanges(true);
-    setHasPromoChanges(true);
-    setReadyToPublishAnnouncement(false);
-    setReadyToPublishPromo(false);
-  }
-
   function markAnnouncementChanged() {
     // If config matches published state, no actual changes
     setTimeout(() => {
@@ -994,7 +989,6 @@ export default function Home() {
         return;
       }
       setHasPromoChanges(true);
-      setReadyToPublishPromo(false);
     }, 0);
   }
 
@@ -1048,13 +1042,11 @@ export default function Home() {
           hasAnnouncementChanges={hasAnnouncementChanges}
           hasPromoChanges={hasPromoChanges}
           readyToPublishAnnouncement={readyToPublishAnnouncement}
-          readyToPublishPromo={readyToPublishPromo}
           promoDateInvalid={promoDateRangeInvalid}
           isPublishing={isPublishing}
           isDarkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode}
           handleSaveAnnouncement={handleSaveAnnouncement}
-          handleSavePromo={handleSavePromo}
           handlePublishAnnouncement={handlePublishAnnouncementWithValidation}
           handlePublishPromo={handlePublishPromoWithValidation}
           handleLogout={handleLogout}
@@ -1075,7 +1067,7 @@ export default function Home() {
                 onGoOnAirPromo={goOnAirPromoNow}
                 onStopAnnouncement={stopAnnouncementNow}
                 onGoOnAirAnnouncement={goOnAirAnnouncementNow}
-                promoUnpublished={hasPromoChanges || readyToPublishPromo}
+                promoUnpublished={hasPromoChanges}
                 announcementUnpublished={hasAnnouncementChanges || readyToPublishAnnouncement}
               />
             )}
@@ -1111,9 +1103,18 @@ export default function Home() {
                   onStop={stopPromoNow}
                   onGoOnAir={goOnAirPromoNow}
                   dateErrorPing={promoDateErrorPing}
-                  hasUnsavedChanges={hasPromoChanges || readyToPublishPromo}
+                  hasUnsavedChanges={hasPromoChanges}
                   activeTab={activeTab}
                   setActiveTab={handleTabSwitch}
+                  onSaveDraft={handleSaveAsDraft}
+                  savingDraft={savingDraft}
+                  onDeleteDraft={clearDraft}
+                  draftUpToDate={
+                    savedDraftSignature !== null &&
+                    savedDraftSignature === getConfigSignature(config)
+                  }
+                  draftExists={savedDraftSignature !== null}
+                  onRemoveLive={removeLivePromo}
                 />
               </div>
             )}
@@ -1375,6 +1376,39 @@ export default function Home() {
                 className="rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95"
               >
                 Discard draft
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Replace-draft consent — there's only one draft slot, so saving again
+          overwrites whatever's already there. */}
+      {confirmReplaceDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
+          <div className="absolute inset-0" onClick={() => setConfirmReplaceDraft(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <h2 className="text-base font-semibold">Replace saved draft?</h2>
+            <p className="mt-2 text-sm text-on-surface-variant">
+              You already have a saved draft. Saving now will replace it with what&apos;s currently in the editor.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmReplaceDraft(false)}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmReplaceDraft(false);
+                  writeDraftNow();
+                }}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+              >
+                Replace draft
               </button>
             </div>
           </div>
