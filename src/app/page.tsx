@@ -4,10 +4,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { CampaignConfig, defaultConfig } from '@/types/campaign';
 import { normalizeLegacyTimerTokens, TIMER_FIXED_TOKEN } from '@/lib/timerUtils';
+import { fieldOverflows } from '@/lib/promoFit';
 import { Header } from '@/components/Header';
 import { Dashboard } from '@/components/Dashboard';
 import { AnnouncementSection } from '@/components/AnnouncementSection';
-import { PromoSection } from '@/components/PromoSection';
+import { PromoFlow } from '@/components/PromoFlow';
 import { Toast } from '@/components/Toast';
 import {
   listVersions,
@@ -213,6 +214,12 @@ export default function Home() {
   // the editor already matches the draft — re-saving identical content only
   // produces a pointless "Replace saved draft?" prompt.
   const [savedDraftSignature, setSavedDraftSignature] = useState<string | null>(null);
+  // Which guided-flow step the promo tab is on. Publish is an editor action, so
+  // the header hides it while the user is still picking a start or writing copy.
+  const [promoFlowStep, setPromoFlowStep] = useState<'start' | 'content' | 'editor'>('editor');
+  // Where the promo tab opens. Dashboard's View/Edit act on an existing
+  // campaign, so they go straight to the editor; the nav tab starts fresh.
+  const [promoEntryStep, setPromoEntryStep] = useState<'start' | 'editor'>('start');
   const mainScrollRef = useRef<HTMLElement>(null);
   const configRef = useRef(config);
   configRef.current = config;
@@ -362,6 +369,19 @@ export default function Home() {
   const handleTabSwitch = useCallback(
     (tab: 'dashboard' | 'announcement' | 'promo', mode: 'view' | 'edit' = 'edit') => {
       if (tab === activeTab) return;
+      if (tab === 'promo') setPromoEntryStep('start');
+      setEditorMode(mode);
+      setActiveTab(tab);
+    },
+    [activeTab],
+  );
+
+  // Dashboard shortcuts (View / Edit / the card itself) open an existing
+  // campaign, so they bypass the guided picker and land in the editor.
+  const handleDashboardTabSwitch = useCallback(
+    (tab: 'dashboard' | 'announcement' | 'promo', mode: 'view' | 'edit' = 'edit') => {
+      if (tab === activeTab) return;
+      if (tab === 'promo') setPromoEntryStep('editor');
       setEditorMode(mode);
       setActiveTab(tab);
     },
@@ -816,30 +836,10 @@ export default function Home() {
     if (!strip(pc.subtitle || '')) warnings.push('Subtitle is empty');
     if (!strip(pc.description || '')) warnings.push('Description is empty');
 
-    // 1b. DOM overflow check (pixel-perfect mirror)
-    const fieldMaxLines: Record<string, number> = { title: 1, subtitle: 2, description: 3 };
-    // Measure at the card's ACTUAL content width (the card auto-widens 400→440),
-    // not a fixed narrow width, and neutralize letter-spacing (the live preview
-    // strips it). Otherwise this warns "may overflow" for text that actually fits.
-    const contentWidth = (pc.cardWidth || 400) - 56; // card padding (40) + field padding (16)
+    // 1b. DOM overflow check — shared with the guided flow's live fit warnings
+    // so the publish gate and the inline hints can never disagree.
     (['title', 'subtitle', 'description'] as const).forEach((field) => {
-      const html = pc[field];
-      if (!strip(html || '')) return;
-      const ghost = document.createElement('div');
-      ghost.style.cssText = `
-        position:absolute;visibility:hidden;pointer-events:none;
-        width:${contentWidth}px;padding:0;font-family:inherit;line-height:24px;letter-spacing:normal;
-        word-break:break-word;overflow-wrap:break-word;
-      `;
-      ghost.innerHTML = '<span style="font-size:1rem">&nbsp;</span>';
-      document.body.appendChild(ghost);
-      const singleLineHeight = ghost.offsetHeight;
-      ghost.innerHTML = html;
-      ghost.querySelectorAll('*').forEach((el) => { (el as HTMLElement).style.letterSpacing = 'normal'; });
-      const contentHeight = ghost.offsetHeight;
-      document.body.removeChild(ghost);
-      const maxHeight = singleLineHeight * fieldMaxLines[field] + (singleLineHeight * 0.5);
-      if (contentHeight > maxHeight) {
+      if (fieldOverflows(pc[field], field, pc.cardWidth)) {
         warnings.push(`${field.charAt(0).toUpperCase() + field.slice(1)} text may overflow the card layout`);
       }
     });
@@ -1043,6 +1043,7 @@ export default function Home() {
           hasPromoChanges={hasPromoChanges}
           readyToPublishAnnouncement={readyToPublishAnnouncement}
           promoDateInvalid={promoDateRangeInvalid}
+          hideActions={activeTab === 'promo' && promoFlowStep !== 'editor'}
           isPublishing={isPublishing}
           isDarkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode}
@@ -1062,7 +1063,7 @@ export default function Home() {
             {activeTab === 'dashboard' && (
               <Dashboard
                 config={publishedConfig}
-                setActiveTab={handleTabSwitch}
+                setActiveTab={handleDashboardTabSwitch}
                 onStopPromo={stopPromoNow}
                 onGoOnAirPromo={goOnAirPromoNow}
                 onStopAnnouncement={stopAnnouncementNow}
@@ -1093,7 +1094,9 @@ export default function Home() {
                 className={editorMode === 'view' ? 'pointer-events-none select-none opacity-70' : ''}
                 aria-hidden={editorMode === 'view'}
               >
-                <PromoSection
+                <PromoFlow
+                  onStepChange={setPromoFlowStep}
+                  initialStep={promoEntryStep}
                   config={config}
                   setConfig={setConfig}
                   markChanged={markPromoChanged}

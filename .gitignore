@@ -43,3 +43,6 @@ next-env.d.ts
 
 # drizzle
 /drizzle
+
+# local design mockups (not part of the app)
+/public/promo-flow-mockup.html

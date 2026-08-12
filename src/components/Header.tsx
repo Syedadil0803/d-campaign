@@ -13,6 +13,8 @@ interface HeaderProps {
   // straight to a draft via the tab strip, so its top button is Publish-only.
   readyToPublishAnnouncement: boolean;
   promoDateInvalid: boolean;
+  /** Hides the status badge and Save/Publish — used outside the promo editor. */
+  hideActions?: boolean;
   isPublishing: boolean;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
@@ -31,6 +33,7 @@ export function Header({
   hasPromoChanges,
   readyToPublishAnnouncement,
   promoDateInvalid,
+  hideActions,
   isPublishing,
   isDarkMode,
   toggleDarkMode,
@@ -118,7 +121,7 @@ export function Header({
             {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
 
-          {activeTab !== 'dashboard' && editorMode === 'view' && (
+          {activeTab !== 'dashboard' && editorMode === 'view' && !hideActions && (
             <>
               <div className="hidden items-center text-sm font-medium text-on-surface-variant sm:flex">
                 <Eye className="mr-1.5 h-4 w-4" />
@@ -134,7 +137,7 @@ export function Header({
             </>
           )}
 
-          {activeTab !== 'dashboard' && editorMode === 'edit' && (
+          {activeTab !== 'dashboard' && editorMode === 'edit' && !hideActions && (
             <>
               {/* Status badge */}
               {state === 'unsaved' && (

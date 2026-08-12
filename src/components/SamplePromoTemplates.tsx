@@ -7,7 +7,9 @@ interface SamplePromoTemplatesProps {
   onApplyTemplate: (template: PromoCard, templateName: string) => void;
 }
 
-const sampleTemplates = [
+// Exported so the guided flow (start picker / content step) can list the same
+// templates without duplicating them.
+export const sampleTemplates = [
   {
     id: 'professional-slate',
     name: 'Executive Slate',

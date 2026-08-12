@@ -29,6 +29,7 @@ import {
   CalendarDays,
   Save,
   Loader2,
+  ArrowLeft,
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
@@ -104,6 +105,8 @@ interface PromoSectionProps {
   draftExists: boolean;
   /** Takes the live card off the site AND clears it from the published config. */
   onRemoveLive: () => void;
+  /** Returns to the guided flow's starting picker. Omitted = chip not shown. */
+  onStartOver?: () => void;
 }
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
@@ -404,6 +407,7 @@ export function PromoSection({
   draftUpToDate,
   draftExists,
   onRemoveLive,
+  onStartOver,
 }: PromoSectionProps) {
   const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
     const date = new Date();
@@ -3604,6 +3608,16 @@ export function PromoSection({
               Content Area, left-aligned. Fixed height so the preview below
               shrinks to keep the column scroll-free. */}
           <div className="flex shrink-0 items-center gap-2">
+            {onStartOver && (
+              <button
+                type="button"
+                onClick={onStartOver}
+                className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+                title="Back to the starting point — pick a template, draft or blank card"
+              >
+                <ArrowLeft className="h-4 w-4" /> Start over
+              </button>
+            )}
             <button
               type="button"
               onClick={() =>
