@@ -28,18 +28,30 @@ function formatDay(iso: string): string {
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+/**
+ * What the model is being asked to produce.
+ * - `copy`   — keep the design, write the words.
+ * - `both`   — write the words AND propose a palette.
+ * - `design` — keep the words, restyle only. Used when the user arrives from
+ *              the editor with copy they've already written.
+ */
+export type AiMode = 'copy' | 'both' | 'design';
+
 interface GuidedPromptOptions {
   card: PromoCard;
   templateName?: string;
-  /** false = the model may propose its own palette and replace the design. */
-  keepDesign: boolean;
+  mode: AiMode;
 }
 
 export function buildGuidedPromoPrompt({
   card,
   templateName,
-  keepDesign,
+  mode,
 }: GuidedPromptOptions): string {
+  const keepDesign = mode === 'copy';
+  const keepContent = mode === 'design';
+  const plain = (html?: string) =>
+    String(html ?? '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
   const s = card.style;
   const days =
     card.startDate && card.endDate
@@ -53,24 +65,32 @@ export function buildGuidedPromoPrompt({
         )
       : null;
 
-  // The colour question only exists when the user let AI restyle the card;
-  // with the design kept there is nothing to ask about.
-  const steps: string[][] = [
-    ['The offer and the product.'],
-    ['The audience and the tone (bold, elegant, playful, urgent…).'],
-    [
-      'The countdown timer. The run dates are already fixed (below), so do NOT',
-      'ask for dates — remind me how long the campaign runs and ask only whether',
-      'to SHOW a countdown on the card, and what wording should sit around it',
-      '(e.g. "Ends in", "Hurry —"). The timer is optional.',
-    ],
-    [
-      'The call to action — the button is optional; if I want one, get a',
-      'WhatsApp number, a link, or plain text.',
-    ],
-  ];
+  // Design-only: the copy already exists, so asking about the offer or the CTA
+  // would be asking the user to repeat themselves.
+  const steps: string[][] = keepContent
+    ? [
+        ['The mood you want — the feeling the card should give off.'],
+        [
+          'Any colours you already have in mind — brand colours, a season, a',
+          'reference — or whether I should choose the palette for you.',
+        ],
+      ]
+    : [
+        ['The offer and the product.'],
+        ['The audience and the tone (bold, elegant, playful, urgent…).'],
+        [
+          'The countdown timer. The run dates are already fixed (below), so do NOT',
+          'ask for dates — remind me how long the campaign runs and ask only whether',
+          'to SHOW a countdown on the card, and what wording should sit around it',
+          '(e.g. "Ends in", "Hurry —"). The timer is optional.',
+        ],
+        [
+          'The call to action — the button is optional; if I want one, get a',
+          'WhatsApp number, a link, or plain text.',
+        ],
+      ];
 
-  if (!keepDesign) {
+  if (!keepDesign && !keepContent) {
     steps.push([
       'The colours. Ask whether I already have something in mind — brand colours,',
       'a mood, a season — or whether you should choose the palette for me. If I',
@@ -117,7 +137,21 @@ export function buildGuidedPromoPrompt({
     '',
   );
 
-  if (keepDesign) {
+  if (keepContent) {
+    lines.push(
+      'KEEP MY WORDS EXACTLY AS THEY ARE. This card is already written:',
+      `- Title: "${plain(card.title)}"`,
+      `- Subtitle: "${plain(card.subtitle)}"`,
+      `- Description: "${plain(card.description)}"`,
+      card.showButton !== false ? `- Button: "${plain(card.buttonText)}"` : '- Button: hidden',
+      '',
+      'Do NOT rewrite, shorten or "improve" any of it, and do NOT return the copy',
+      'fields. Return ONLY the colour fields, choosing a palette that suits those',
+      'words and the campaign. Every text colour must be clearly readable against',
+      'its OWN section background; if a section background is "transparent" the',
+      'text sits on the card background, so contrast it against the card instead.',
+    );
+  } else if (keepDesign) {
     lines.push(
       'KEEP THIS DESIGN. Return ONLY the copy fields — do NOT return any colour,',
       'background, alignment or position fields. Write copy whose tone matches the',
@@ -151,16 +185,21 @@ export function buildGuidedPromoPrompt({
     `When the ${stepCount} questions are done, reply with ONLY a JSON object (no`,
     'prose, no code fences) using these keys:',
     '{',
-    '  "title": "", "subtitle": "", "description": "",',
-    '  "buttonText": "", "showButton": true, "showTimer": true,',
-    '  "timerText": "Ends in {timer}",',
-    `  "startDate": "${card.startDate || 'YYYY-MM-DD'}", "endDate": "${card.endDate || 'YYYY-MM-DD'}",`,
-    '  "ctaType": "whatsapp | link | text", "buttonUrl": "", "whatsappNumber": ""',
   );
+
+  if (!keepContent) {
+    lines.push(
+      '  "title": "", "subtitle": "", "description": "",',
+      '  "buttonText": "", "showButton": true, "showTimer": true,',
+      '  "timerText": "Ends in {timer}",',
+      `  "startDate": "${card.startDate || 'YYYY-MM-DD'}", "endDate": "${card.endDate || 'YYYY-MM-DD'}",`,
+      '  "ctaType": "whatsapp | link | text", "buttonUrl": "", "whatsappNumber": ""',
+    );
+  }
 
   if (!keepDesign) {
     lines.push(
-      '  , "cardBg": {"type":"linear","startColor":"#hex","endColor":"#hex"},',
+      `${keepContent ? '  ' : '  , '}"cardBg": {"type":"linear","startColor":"#hex","endColor":"#hex"},`,
       '  "cardTextColor": "#hex",',
       '  "titleBg": {"type":"solid","startColor":"#hex","endColor":"#hex"},',
       '  "titleTextColor": "#hex",',
@@ -209,6 +248,37 @@ const STYLE_KEYS = [
 export function stripStyleFields<T extends object>(data: T): T {
   const out = { ...data } as Record<string, unknown>;
   STYLE_KEYS.forEach((k) => {
+    delete out[k];
+  });
+  return out as T;
+}
+
+/** Copy keys — stripped when the user asked to keep their own words. */
+const CONTENT_KEYS = [
+  'title',
+  'subtitle',
+  'description',
+  'buttonText',
+  'timerText',
+  'showTimer',
+  'showButton',
+  'ctaType',
+  'buttonUrl',
+  'whatsappNumber',
+  'startDate',
+  'endDate',
+] as const;
+
+/**
+ * Drop any copy the model sent back.
+ *
+ * Same reasoning as stripStyleFields: the prompt says not to touch the words,
+ * but a model can ignore that, and silently rewriting copy the user already
+ * wrote is the worst possible surprise.
+ */
+export function stripContentFields<T extends object>(data: T): T {
+  const out = { ...data } as Record<string, unknown>;
+  CONTENT_KEYS.forEach((k) => {
     delete out[k];
   });
   return out as T;

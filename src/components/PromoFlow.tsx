@@ -19,6 +19,8 @@ import { PromoSection } from '@/components/PromoSection';
 import { PromoStartStep, PromoStartChoice } from '@/components/PromoStartStep';
 import { PromoAiStep } from '@/components/PromoAiStep';
 import { PromoSetupDialog, BuildMethod } from '@/components/PromoSetupDialog';
+import { GuidedTour, shouldShowTour } from '@/components/tour/GuidedTour';
+import { PROMO_DRAFT_TOUR } from '@/components/tour/tours';
 import { sampleTemplates } from '@/components/SamplePromoTemplates';
 import { PromoMiniPreview } from '@/components/PromoMiniPreview';
 import { applyTemplateFull } from '@/lib/promoTemplate';
@@ -33,6 +35,8 @@ type PromoSectionProps = React.ComponentProps<typeof PromoSection>;
 interface PromoFlowProps extends PromoSectionProps {
   /** Reports the active step so the page can hide Publish outside the editor. */
   onStepChange?: (step: Step) => void;
+  /** Called when AI content is applied, so the page can save it to the draft. */
+  onAiApplied?: () => void;
   /**
    * Where to land. The Dashboard's View/Edit are direct actions on an existing
    * campaign, so they open the editor; the Promo Card tab starts at the picker.
@@ -40,7 +44,12 @@ interface PromoFlowProps extends PromoSectionProps {
   initialStep?: Step;
 }
 
-export function PromoFlow({ onStepChange, initialStep, ...editorProps }: PromoFlowProps) {
+export function PromoFlow({
+  onStepChange,
+  onAiApplied,
+  initialStep,
+  ...editorProps
+}: PromoFlowProps) {
   const { config, setConfig, markChanged, toast } = editorProps;
 
   const [step, setStep] = useState<Step>(initialStep ?? 'start');
@@ -59,8 +68,16 @@ export function PromoFlow({ onStepChange, initialStep, ...editorProps }: PromoFl
   const [pendingCard, setPendingCard] = useState<PromoCard | null>(null);
   /** How the dialog should describe what's being built from. */
   const [pendingSource, setPendingSource] = useState('a blank card');
+  /** Where the AI step's Back should return to — it's reachable from both. */
+  const [aiBackTo, setAiBackTo] = useState<Step>('start');
   const [pendingStart, setPendingStart] = useState('');
   const [pendingEnd, setPendingEnd] = useState('');
+  /**
+   * First-run walkthrough. Held in state rather than read inline so that
+   * marking it seen (inside the tour) doesn't make it vanish mid-step, and so
+   * the localStorage read never runs during SSR.
+   */
+  const [showTour, setShowTour] = useState(false);
 
   function goTo(next: Step) {
     setStep(next);
@@ -69,6 +86,15 @@ export function PromoFlow({ onStepChange, initialStep, ...editorProps }: PromoFl
   useEffect(() => {
     onStepChange?.(step);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  /**
+   * The walkthrough explains the editor's draft model, so it waits for the
+   * editor — firing it on the picker would teach saving before there's
+   * anything to save.
+   */
+  useEffect(() => {
+    if (step === 'editor' && shouldShowTour(PROMO_DRAFT_TOUR)) setShowTour(true);
   }, [step]);
 
   // Leaving the promo tab entirely shouldn't leave Publish hidden.
@@ -127,6 +153,7 @@ export function PromoFlow({ onStepChange, initialStep, ...editorProps }: PromoFl
     markChanged();
     setShowSetup(false);
     setPendingCard(null);
+    if (method === 'ai') setAiBackTo('start');
     goTo(method === 'ai' ? 'ai' : 'editor');
   }
 
@@ -157,7 +184,22 @@ export function PromoFlow({ onStepChange, initialStep, ...editorProps }: PromoFl
   }
 
   if (step === 'editor') {
-    return <PromoSection {...editorProps} onStartOver={() => goTo('start')} />;
+    return (
+      <>
+        <PromoSection
+          {...editorProps}
+          onUseAi={() => {
+            setAiBackTo('editor');
+            goTo('ai');
+          }}
+        />
+        <GuidedTour
+          tour={PROMO_DRAFT_TOUR}
+          enabled={showTour}
+          onFinish={() => setShowTour(false)}
+        />
+      </>
+    );
   }
 
   return (
@@ -180,7 +222,9 @@ export function PromoFlow({ onStepChange, initialStep, ...editorProps }: PromoFl
           setConfig={setConfig}
           markChanged={markChanged}
           toast={toast}
-          onBack={() => goTo('start')}
+          onApplied={onAiApplied}
+          onBack={() => goTo(aiBackTo)}
+          backLabel={aiBackTo === 'editor' ? 'Back to editor' : 'Back'}
           onOpenEditor={() => goTo('editor')}
         />
       )}

@@ -19,19 +19,17 @@ import {
   FilePlus2,
   FileText,
   Sparkles,
-  ClipboardPaste,
-  Copy,
+  LayoutTemplate,
   Power,
   CalendarDays,
   Save,
   Loader2,
-  ArrowLeft,
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
 import { applyTemplateLook } from "@/lib/promoTemplate";
 import { HistoryManager } from "@/lib/historyManager";
-import { sampleTemplates } from "./SamplePromoTemplates";
+import { SamplePromoTemplates, sampleTemplates } from "./SamplePromoTemplates";
 import { useRichTextEditor } from "@/hooks/useRichTextEditor";
 import {
   wrapBareTextWithFontSize,
@@ -43,7 +41,6 @@ import {
 import RichTextToolbar from "./RichTextToolbar";
 import { PopupDropdown } from "./PopupDropdown";
 import { PromoMiniPreview } from "./PromoMiniPreview";
-import { parseAiPromo, applyAiPromo, AI_PROMO_SCHEMA_PROMPT } from "@/lib/promoImport";
 import {
   listVersions,
   deleteVersion,
@@ -87,10 +84,7 @@ interface PromoSectionProps {
   // Which top-level tab is active, and how to switch — used by the tab strip
   // above the preview.
   activeTab?: 'dashboard' | 'announcement' | 'promo';
-  setActiveTab?: (
-    tab: 'dashboard' | 'announcement' | 'promo',
-    mode?: 'view' | 'edit',
-  ) => void;
+  setActiveTab?: (tab: 'dashboard' | 'announcement' | 'promo') => void;
   // Explicit "Save as draft" — the only way a draft is written now. Saves the
   // FULL editor state (announcement + promo), not just this promo card.
   onSaveDraft: () => void;
@@ -103,8 +97,8 @@ interface PromoSectionProps {
   draftExists: boolean;
   /** Takes the live card off the site AND clears it from the published config. */
   onRemoveLive: () => void;
-  /** Returns to the guided flow's starting picker. Omitted = chip not shown. */
-  onStartOver?: () => void;
+  /** Opens the AI step for the card being edited. Omitted = chip not shown. */
+  onUseAi?: () => void;
 }
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
@@ -405,7 +399,7 @@ export function PromoSection({
   draftUpToDate,
   draftExists,
   onRemoveLive,
-  onStartOver,
+  onUseAi,
 }: PromoSectionProps) {
   const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
     const date = new Date();
@@ -529,6 +523,7 @@ export function PromoSection({
   const [showPersistentScaffold, setShowPersistentScaffold] = useState(true);
   // Action popups launched from the buttons under the Promo Card heading.
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
+  const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
   const [showDraftPopup, setShowDraftPopup] = useState(false);
   const [draftPopupCard, setDraftPopupCard] = useState<PromoCard | null>(null);
   const [draftPopupLoading, setDraftPopupLoading] = useState(false);
@@ -536,9 +531,6 @@ export function PromoSection({
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [showGoOnAirConfirm, setShowGoOnAirConfirm] = useState(false);
   // Paste-from-AI import: modal open, textarea contents, and last parse error.
-  const [showAiPaste, setShowAiPaste] = useState(false);
-  const [aiPasteText, setAiPasteText] = useState('');
-  const [aiPasteError, setAiPasteError] = useState('');
 
   // Saved promo-card versions (local-only for now; see lib/promoVersions).
   const [versions, setVersions] = useState<PromoVersion[]>([]);
@@ -1889,47 +1881,7 @@ export function PromoSection({
   }
 
   // The full brief we hand to any AI (ChatGPT or another tool the user prefers).
-  function promoAiInstructions() {
-    return [
-      "I'm building a promo card for a website floating offer widget.",
-      AI_PROMO_SCHEMA_PROMPT,
-      "",
-      "When you give me the final JSON, I'll paste it straight back into my tool.",
-    ].join("\n");
-  }
 
-  function copyPromoPrompt() {
-    if (!navigator.clipboard?.writeText) {
-      toast("Copying isn't available in this browser.", true);
-      return;
-    }
-    navigator.clipboard.writeText(promoAiInstructions()).then(
-      () => toast("Prompt copied — paste it into any AI tool you like."),
-      () => toast("Couldn't copy the prompt — please try again.", true),
-    );
-  }
-
-  function openChatGptWithPromoPrompt() {
-    // Hybrid so it works on the free tier (no custom GPT): a SHORT priming
-    // message opens via the URL (the full prompt would overflow it → HTTP 431),
-    // and the full instructions are copied to the clipboard for the user to
-    // paste when ChatGPT asks. The priming is shown as the user's first message,
-    // so it reads naturally; the paste cue lives in the toast.
-    const priming =
-      "I'd like your help designing a promo card for my website. I have a detailed " +
-      "brief ready to share — please ask me for it, then follow it exactly to guide " +
-      "me through the design step by step.";
-    const fullInstructions = promoAiInstructions();
-
-    const url = `https://chatgpt.com/?q=${encodeURIComponent(priming)}`;
-    // Open synchronously within the click — window.open() deferred into a
-    // promise callback is treated as non-user-initiated and gets popup-blocked.
-    window.open(url, "_blank", "noopener,noreferrer");
-    navigator.clipboard?.writeText(fullInstructions)?.then(
-      () => toast("Instructions copied — ChatGPT will ask you to paste them (Cmd/Ctrl+V)."),
-      () => toast("Couldn't copy automatically — use “Copy prompt” in the paste box.", true),
-    );
-  }
 
   function updateField(field: keyof PromoCard, value: any) {
     if ((configRef.current.promoCard as any)[field] === value) return;
@@ -1945,25 +1897,6 @@ export function PromoSection({
     markChanged();
   }
 
-  function applyAiPaste() {
-    const result = parseAiPromo(aiPasteText);
-    if (!result.ok) {
-      setAiPasteError(result.error);
-      return;
-    }
-    pushPromoState();
-    const nextPromoCard = applyAiPromo(config.promoCard, result.data);
-    setConfig({ ...config, promoCard: nextPromoCard });
-    markChanged();
-    setShowAiPaste(false);
-    setAiPasteText('');
-    setAiPasteError('');
-    const n = result.fields.length;
-    const summary =
-      `Applied ${n} field${n === 1 ? '' : 's'} from AI` +
-      (result.skipped.length ? ` · skipped ${result.skipped.length} (${result.skipped.join(', ')})` : '');
-    toast(summary);
-  }
 
   function getPopupPositionStyle(
     field: PopupField,
@@ -2140,7 +2073,7 @@ export function PromoSection({
     onDeleteDraft();
     setDraftPopupCard(null);
     setConfirmDeleteDraft(false);
-    toast('Draft discarded');
+    toast('Saved draft deleted');
   }
 
   // Load the saved draft's promo card back into the editor.
@@ -2155,11 +2088,48 @@ export function PromoSection({
     setPromoAppliedCardBaseline(restored);
     setSelectedVersionId(null);
     onSelectedVersionChange?.(null);
-    toast('Draft restored');
+    toast('Saved draft loaded into the editor');
+  }
+
+  /**
+   * Apply a template in full — its design AND its sample copy.
+   *
+   * This is the destructive half of the old Template Hub, kept deliberately:
+   * Themes swap the look and keep your words, so the only reason to come here
+   * is to take the template's wording too. Callers wrap it in
+   * confirmCardReplace, which stays quiet when there's nothing to lose.
+   */
+  function applyTemplate(template: PromoCard, templateName: string) {
+    isFreshCardRef.current = false;
+    promoAppliedRedoRef.current = null;
+    promoHistory.clear();
+    const cloned = withDefaultDates({
+      ...(JSON.parse(JSON.stringify(template)) as PromoCard),
+      active: configRef.current.promoCard.active,
+      stoppedByUser: configRef.current.promoCard.stoppedByUser,
+    });
+    cloned.timerText = serializeTimerHtml(cloned.timerText ?? "");
+    setConfig({ ...configRef.current, promoCard: cloned });
+    syncEditorsFromConfig(cloned);
+    markChanged();
+    setPromoAppliedCardBaseline(cloned);
+    setSelectedVersionId(null);
+    onSelectedVersionChange?.(null);
+    toast(`Template applied: ${templateName}`);
   }
 
   // Ask for consent before a replacing action — but only when there's actually
   // content to lose (no point confirming on a blank card). Undo still works after.
+  /** Visible words only — immune to the HTML normalisation editors apply. */
+  function stripHtmlText(html?: string): string {
+    return String(html ?? '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   function confirmCardReplace(
     action: () => void,
     opts: {
@@ -2183,17 +2153,35 @@ export function PromoSection({
       return;
     }
 
+    // Still byte-identical to whatever was last applied, so the user hasn't
+    // written anything into it — swapping it away loses nothing, and it's one
+    // click from its own popup. Checked BEFORE the dirty flag on purpose:
+    // applying a template calls markChanged(), so hasUnsavedChanges is always
+    // true straight afterwards and this branch was unreachable — which made
+    // browsing templates warn on every click after the first.
+    // Compare only what represents the USER'S work: the words and the styling.
+    // A whole-object compare fails on things the app changes by itself right
+    // after applying — cardWidth is recomputed 400↔440, the timer HTML is
+    // re-serialised, editors normalise font-size spans — so it reported "edited"
+    // for a card nobody had touched, and every template click warned.
+    const baseline = promoAppliedCardBaselineRef.current?.promoCard;
+    const workSignature = (c: PromoCard) =>
+      JSON.stringify({
+        title: hasVisibleContent(c.title) ? stripHtmlText(c.title) : '',
+        subtitle: hasVisibleContent(c.subtitle) ? stripHtmlText(c.subtitle) : '',
+        description: hasVisibleContent(c.description) ? stripHtmlText(c.description) : '',
+        buttonText: hasVisibleContent(c.buttonText) ? stripHtmlText(c.buttonText) : '',
+        style: c.style,
+      });
+    if (baseline && workSignature(baseline) === workSignature(pc)) {
+      action();
+      return;
+    }
+
     if (!hasUnsavedChanges) {
-      // Card is on screen but has no pending edits. If it's a template or
-      // variant the user just applied, it's one click away in its own popup —
-      // stay quiet so browsing doesn't nag. Anything else (typically their
-      // published card, loaded on landing) is confirmed with reassuring copy
-      // so it never disappears unannounced.
-      const baseline = promoAppliedCardBaselineRef.current?.promoCard;
-      if (baseline && JSON.stringify(baseline) === JSON.stringify(pc)) {
-        action();
-        return;
-      }
+      // Content with no pending edits — typically their published card, loaded
+      // on landing. Confirmed with reassuring copy so it never vanishes
+      // unannounced, but without implying work will be lost.
       setCardActionConfirm({
         ...opts,
         body:
@@ -2660,34 +2648,6 @@ export function PromoSection({
                   Floating widget for special offers.
                 </p>
               </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  openChatGptWithPromoPrompt();
-                }}
-                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
-                title="Design this promo with AI"
-                aria-label="Design this promo with AI"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  setAiPasteText('');
-                  setAiPasteError('');
-                  setShowAiPaste(true);
-                }}
-                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
-                title="Paste an AI-generated promo (JSON) to fill the card"
-                aria-label="Paste an AI-generated promo"
-              >
-                <ClipboardPaste className="w-3.5 h-3.5" />
-              </button>
             </div>
           </div>
 
@@ -3431,14 +3391,14 @@ export function PromoSection({
               Content Area, left-aligned. Fixed height so the preview below
               shrinks to keep the column scroll-free. */}
           <div className="flex shrink-0 items-center gap-2">
-            {onStartOver && (
+            {onUseAi && (
               <button
                 type="button"
-                onClick={onStartOver}
-                className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
-                title="Back to the starting point — pick a template, draft or blank card"
+                onClick={onUseAi}
+                className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-primary/40 bg-primary/[0.06] px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+                title="Let AI improve this card's content"
               >
-                <ArrowLeft className="h-4 w-4" /> Start over
+                <Sparkles className="h-4 w-4" /> Improve with AI
               </button>
             )}
             <button
@@ -3446,7 +3406,7 @@ export function PromoSection({
               onClick={() =>
                 confirmCardReplace(startFreshPromoCard, {
                   title: 'Clear the canvas?',
-                  body: "Everything you've edited so far will be deleted. What's live on your website won't change.",
+                  body: "Everything you've edited so far will be deleted. What's live on your website won't change until you publish.",
                   reassuranceBody:
                     "You'll start from a blank card. Nothing is lost — your published card stays live on your website until you publish again.",
                   confirmLabel: 'Clear canvas',
@@ -3464,6 +3424,14 @@ export function PromoSection({
             </button>
             <button
               type="button"
+              onClick={() => setShowTemplatesPopup(true)}
+              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              title="Start again from a ready-made card — design and sample text"
+            >
+              <LayoutTemplate className="h-4 w-4" /> Template Hub
+            </button>
+            <button
+              type="button"
               onClick={() => setShowVersionsPopup(true)}
               className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="Saved variants of this promo card"
@@ -3472,14 +3440,24 @@ export function PromoSection({
             </button>
             <button
               type="button"
+              data-tour="promo-my-draft"
               onClick={openDraftPopup}
               className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
-              title="View your saved draft"
+              title={draftExists ? 'View your saved draft' : 'No saved draft yet'}
             >
               <FileText className="h-4 w-4" /> My Draft
+              {/* Replaces the old "welcome back" popup: a draft you saved on
+                  purpose gets a marker, not an interruption. */}
+              {draftExists && (
+                <span
+                  aria-label="You have a saved draft"
+                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+                />
+              )}
             </button>
             <button
               type="button"
+              data-tour="promo-save-draft"
               onClick={onSaveDraft}
               disabled={savingDraft || canvasIsEmpty || draftUpToDate}
               className="ml-auto inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
@@ -3487,14 +3465,14 @@ export function PromoSection({
                 canvasIsEmpty
                   ? 'Nothing to save yet — add some content first.'
                   : draftUpToDate
-                  ? 'Already saved as your draft — make a change to save again.'
+                  ? 'Your saved draft already matches this — make a change to save again.'
                   : draftExists
                   ? 'Replace your saved draft with what you’re editing now'
-                  : 'Save the current editor state as your draft'
+                  : 'Store these edits as your saved draft'
               }
             >
               {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {draftExists ? 'Update draft' : 'Save as draft'}
+              {draftExists ? 'Update saved draft' : 'Save as draft'}
             </button>
           </div>
           <div className="campaign-card-surface rounded-lg px-5 pt-5 pb-2 relative flex-1 min-h-0 border border-gray-200 dark:border-gray-600">
@@ -4487,80 +4465,44 @@ export function PromoSection({
       )}
 
       {/* Paste-from-AI import */}
-      {showAiPaste && (
+      {/* Sample Templates popup — shows the same 6 cards; click one to apply */}
+      {showTemplatesPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0" onClick={() => setShowAiPaste(false)} />
-          <div className="relative z-10 w-full max-w-lg rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-base font-semibold">Paste from AI</h2>
-                <p className="mt-1 text-sm text-on-surface-variant">
-                  Chat with AI using the <Sparkles className="inline h-3.5 w-3.5 -mt-0.5" /> button
-                  (or <span className="font-medium">Copy prompt</span> for any AI tool), then paste
-                  the JSON it gives you here.
-                </p>
-              </div>
+          <div className="absolute inset-0" onClick={() => setShowTemplatesPopup(false)} />
+          <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border shadow-2xl backdrop-blur-md">
+            <div className="flex items-center justify-between px-6 py-2">
+              <p className="text-sm text-on-surface-variant">
+                Starts the card again with this template&apos;s design{' '}
+                <span className="font-semibold text-on-surface">and its sample text</span>. To keep
+                your words and change only the look, use Themes below the card.
+              </p>
               <button
                 type="button"
-                onClick={() => setShowAiPaste(false)}
-                aria-label="Close"
-                className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+                onClick={() => setShowTemplatesPopup(false)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+                aria-label="Close templates"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-
-            <textarea
-              value={aiPasteText}
-              onChange={(e) => {
-                setAiPasteText(e.target.value);
-                if (aiPasteError) setAiPasteError('');
-              }}
-              spellCheck={false}
-              placeholder='Paste the JSON here, e.g. {"title": "Summer Sale", "buttonText": "Shop now", ...}'
-              className="mt-4 h-40 w-full resize-none rounded-md border border-border bg-surface px-3 py-2 font-mono text-xs outline-none transition-colors focus:border-primary/80 focus:ring-1 focus:ring-primary/40"
-            />
-
-            {aiPasteError && (
-              <p className="mt-2 text-xs font-medium text-red-500">{aiPasteError}</p>
-            )}
-
-            <p className="mt-3 text-[11px] text-on-surface-variant/80">
-              Only the fields the AI provides are changed — nothing else is touched.
-            </p>
-
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={copyPromoPrompt}
-                className="inline-flex flex-none items-center gap-1.5 whitespace-nowrap rounded-md border border-white/10 bg-transparent px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
-              >
-                <Copy className="h-3.5 w-3.5" />
-                Copy prompt
-              </button>
-              <div className="flex flex-none gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAiPaste(false)}
-                  className="whitespace-nowrap rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={applyAiPaste}
-                  disabled={!aiPasteText.trim()}
-                  className="whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:opacity-50"
-                >
-                  Apply to card
-                </button>
-              </div>
+            <div className="campaign-custom-scrollbar overflow-y-auto p-6">
+              <SamplePromoTemplates
+                onApplyTemplate={(template, name) => {
+                  setShowTemplatesPopup(false);
+                  confirmCardReplace(() => applyTemplate(template, name), {
+                    title: 'Start again from this template?',
+                    body: "This replaces your text and design with the template's. What's live on your website won't change until you publish.",
+                    reassuranceBody:
+                      "This replaces the card you're editing with the template, text included. What's live on your website won't change until you publish.",
+                    confirmLabel: 'Use template',
+                  });
+                }}
+              />
             </div>
           </div>
         </div>
       )}
 
-      {/* Sample Templates popup — shows the same 6 cards; click one to apply */}
       {/* My Draft popup — the single saved, unpublished draft. */}
       {showDraftPopup && (() => {
         const draftCard = draftPopupCard;
@@ -4585,7 +4527,7 @@ export function PromoSection({
                 <div>
                   <h3 className="text-sm font-semibold text-on-surface">My Draft</h3>
                   <p className="text-xs text-on-surface-variant">
-                    Your saved, unpublished promo card.
+                    The card you stored — kept until you replace or delete it.
                   </p>
                 </div>
                 <button
@@ -4600,7 +4542,7 @@ export function PromoSection({
               <div className="campaign-custom-scrollbar overflow-y-auto p-6">
                 {draftPopupLoading ? (
                   <div className="p-8 text-center text-sm text-on-surface-variant">
-                    Loading your draft…
+                    Loading your saved draft…
                   </div>
                 ) : draftCard ? (
                   // Render at the card's own width (same as the editor), never
@@ -4613,7 +4555,7 @@ export function PromoSection({
                   </div>
                 ) : (
                   <div className="p-8 text-center text-sm text-on-surface-variant">
-                    No saved draft yet. Your unpublished work is saved here as a draft.
+                    No saved draft yet. Use “Save as draft” to store the card you’re editing here.
                   </div>
                 )}
               </div>
@@ -4625,36 +4567,36 @@ export function PromoSection({
                     onClick={() => setConfirmDeleteDraft(true)}
                     className="rounded-lg border border-red-500/40 px-3 py-1.5 text-sm font-semibold text-red-500 transition-colors hover:bg-red-500/10"
                   >
-                    Discard draft
+                    Delete saved draft
                   </button>
                   <button
                     type="button"
                     disabled={draftIsOnCanvas}
                     title={
                       draftIsOnCanvas
-                        ? "You're already editing this draft."
-                        : 'Load this draft into the editor'
+                        ? "You're already editing your saved draft."
+                        : 'Load your saved draft into the editor'
                     }
                     onClick={() => {
                       setShowDraftPopup(false);
                       confirmCardReplace(() => restoreDraftPromoCard(draftCard), {
-                        title: 'Continue editing this draft?',
-                        body: "This loads your saved draft into the editor, replacing the card you're editing now. What's live on your website won't change.",
+                        title: 'Continue editing your saved draft?',
+                        body: "This loads your saved draft into the editor, replacing the card you're editing now. What's live on your website won't change until you publish.",
                         reassuranceBody:
-                          "This loads your saved draft into the editor. Nothing is lost, and what's live on your website won't change.",
+                          "This loads your saved draft into the editor. Nothing is lost, and what's live on your website won't change until you publish.",
                         confirmLabel: 'Continue editing',
                       });
                     }}
                     className="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {draftIsOnCanvas ? 'Already in editor' : 'Continue editing draft'}
+                    {draftIsOnCanvas ? 'Already in editor' : 'Continue editing'}
                   </button>
                 </div>
               )}
 
               {confirmDeleteDraft && (
                 <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-xl bg-surface-elevated/95 p-6 text-center backdrop-blur-sm">
-                  <p className="text-sm font-semibold text-on-surface">Discard this draft?</p>
+                  <p className="text-sm font-semibold text-on-surface">Delete your saved draft?</p>
                   <p className="-mt-1 text-xs text-on-surface-variant">
                     Your saved draft will be deleted. This can&apos;t be undone.
                   </p>
@@ -4671,7 +4613,7 @@ export function PromoSection({
                       onClick={deleteDraft}
                       className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600"
                     >
-                      Discard draft
+                      Delete
                     </button>
                   </div>
                 </div>

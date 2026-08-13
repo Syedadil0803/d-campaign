@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { LayoutDashboard, Megaphone, Gift, LayoutGrid, Save, Upload, Sun, Moon, LogOut, Loader2, Check, Eye, Pencil } from 'lucide-react';
+import { LayoutDashboard, Megaphone, Gift, LayoutGrid, Save, Upload, Sun, Moon, LogOut, Loader2, Check, Undo2 } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: 'dashboard' | 'announcement' | 'promo';
   setActiveTab: (tab: 'dashboard' | 'announcement' | 'promo') => void;
-  editorMode: 'view' | 'edit';
-  onEnterEdit: () => void;
   hasAnnouncementChanges: boolean;
   hasPromoChanges: boolean;
   // Announcement still stages via Save → Publish (no dedicated "Save as
@@ -15,6 +13,8 @@ interface HeaderProps {
   promoDateInvalid: boolean;
   /** Hides the status badge and Save/Publish — used outside the promo editor. */
   hideActions?: boolean;
+  /** Throws away unpublished edits for the active tab, back to what's live. */
+  onDiscardChanges?: () => void;
   isPublishing: boolean;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
@@ -27,13 +27,12 @@ interface HeaderProps {
 export function Header({
   activeTab,
   setActiveTab,
-  editorMode,
-  onEnterEdit,
   hasAnnouncementChanges,
   hasPromoChanges,
   readyToPublishAnnouncement,
   promoDateInvalid,
   hideActions,
+  onDiscardChanges,
   isPublishing,
   isDarkMode,
   toggleDarkMode,
@@ -121,23 +120,7 @@ export function Header({
             {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
 
-          {activeTab !== 'dashboard' && editorMode === 'view' && !hideActions && (
-            <>
-              <div className="hidden items-center text-sm font-medium text-on-surface-variant sm:flex">
-                <Eye className="mr-1.5 h-4 w-4" />
-                Viewing
-              </div>
-              <button
-                onClick={onEnterEdit}
-                className="inline-flex items-center rounded-md border border-primary/40 bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-all hover:opacity-95"
-              >
-                <Pencil className="w-4 h-4 mr-2" />
-                <span>Edit</span>
-              </button>
-            </>
-          )}
-
-          {activeTab !== 'dashboard' && editorMode === 'edit' && !hideActions && (
+          {activeTab !== 'dashboard' && !hideActions && (
             <>
               {/* Status badge */}
               {state === 'unsaved' && (
@@ -159,6 +142,20 @@ export function Header({
                 </div>
               )}
 
+              {/* Discard — the way back to what's live. Without it the badge
+                  only reports a state you can't leave: once you've edited, the
+                  editor keeps your version until you publish it. */}
+              {state !== 'published' && onDiscardChanges && (
+                <button
+                  onClick={onDiscardChanges}
+                  title="Throw away these edits and go back to what's live"
+                  className="inline-flex items-center rounded-md px-2.5 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:text-red-500"
+                >
+                  <Undo2 className="mr-1.5 h-4 w-4" />
+                  Discard
+                </button>
+              )}
+
               {/* Action button */}
               {state === 'unsaved' && (
                 <button
@@ -172,6 +169,7 @@ export function Header({
               )}
               {state === 'ready' && (
                 <button
+                  data-tour="header-publish"
                   onClick={onPublish}
                   disabled={isPublishing || blockForDateRange}
                   title={blockForDateRange ? dateRangeTooltip : undefined}

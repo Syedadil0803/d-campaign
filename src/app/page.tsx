@@ -204,7 +204,6 @@ export default function Home() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [draftBanner, setDraftBanner] = useState<{ date: string } | null>(null);
   // Explicit "Save as draft" — writing in progress, and the replace-confirm
   // shown when a draft already exists (only one draft slot).
   const [savingDraft, setSavingDraft] = useState(false);
@@ -317,15 +316,23 @@ export default function Home() {
     }
   }, []);
 
-  // Browser close/refresh can only show the native unload warning. Drafting is
-  // manual now (explicit "Save as draft" only) — this just warns, it never
-  // writes a draft on its own.
+  /**
+   * Drafting is manual — except when the work is about to be lost.
+   *
+   * On tab close or refresh we take one rescue copy so unsaved work survives,
+   * and warn with the native prompt. saveDraft's own guard keeps this from
+   * creating phantom drafts: nothing is written unless there's restorable
+   * work, and a blank card clears the slot instead.
+   *
+   * markHandled: false so this never counts as the user having decided —
+   * they'll still be offered the draft on return.
+   */
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasChangesRef.current) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
+      if (!hasChangesRef.current) return;
+      saveDraft(configRef.current, { markHandled: false });
+      e.preventDefault();
+      e.returnValue = '';
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -343,10 +350,12 @@ export default function Home() {
     mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab]);
 
-  // View vs Edit mode for the editors. Dashboard "View" opens read-only; "Edit" opens editable.
-  const [editorMode, setEditorMode] = useState<'view' | 'edit'>('edit');
   // Consent before discarding a draft (destructive).
   const [confirmDiscardDraft, setConfirmDiscardDraft] = useState(false);
+  // Consent before throwing away unpublished edits (also destructive).
+  const [confirmDiscardChanges, setConfirmDiscardChanges] = useState(false);
+  /** Bumped to remount the editors so they re-read a reverted config. */
+  const [editorResetKey, setEditorResetKey] = useState(0);
 
   // Invalid promo schedule = both dates set and start is after end. Blocks
   // Save/Publish (disabled CTA); the ping triggers PromoSection's scroll+flash
@@ -372,30 +381,36 @@ export default function Home() {
   // Tab switches no longer auto-save a draft — drafting is explicit only
   // ("Save as draft"), so switching tabs just switches tabs.
   const handleTabSwitch = useCallback(
-    (tab: 'dashboard' | 'announcement' | 'promo', mode: 'view' | 'edit' = 'edit') => {
+    (tab: 'dashboard' | 'announcement' | 'promo') => {
       if (tab === activeTab) return;
       if (tab === 'promo') setPromoEntryStep('start');
-      setEditorMode(mode);
       setActiveTab(tab);
     },
     [activeTab],
   );
 
+  /**
+   * AI content landed on the card. Nothing is saved here — drafting stays
+   * explicit — but the promo tab should now reopen on the editor rather than
+   * the start picker, so leaving and coming back keeps the generated card.
+   */
+  const handleAiApplied = useCallback(() => {
+    setPromoEntryStep('editor');
+  }, []);
+
   // "Create promo card" on an empty dashboard is a NEW campaign, so unlike the
-  // View/Edit shortcuts it opens the guided start screen.
+  // Edit shortcut it opens the guided start screen.
   const handleCreatePromo = useCallback(() => {
     setPromoEntryStep('start');
-    setEditorMode('edit');
     setActiveTab('promo');
   }, []);
 
-  // Dashboard shortcuts (View / Edit / the card itself) open an existing
-  // campaign, so they bypass the guided picker and land in the editor.
+  // Dashboard shortcuts (Edit / the card itself) open an existing campaign, so
+  // they bypass the guided picker and land in the editor.
   const handleDashboardTabSwitch = useCallback(
-    (tab: 'dashboard' | 'announcement' | 'promo', mode: 'view' | 'edit' = 'edit') => {
+    (tab: 'dashboard' | 'announcement' | 'promo') => {
       if (tab === activeTab) return;
       if (tab === 'promo') setPromoEntryStep('editor');
-      setEditorMode(mode);
       setActiveTab(tab);
     },
     [activeTab],
@@ -492,12 +507,12 @@ export default function Home() {
         if (res.ok) {
           draftSignatureRef.current = getConfigSignature(cfg);
           setSavedDraftSignature(getConfigSignature(cfg));
-          toast('Draft saved');
+          toast('Saved draft updated');
         } else {
-          toast('Failed to save draft', true);
+          toast('Couldn’t save your draft', true);
         }
       })
-      .catch(() => toast('Failed to save draft', true))
+      .catch(() => toast('Couldn’t save your draft', true))
       .finally(() => setSavingDraft(false));
   }
 
@@ -533,7 +548,7 @@ export default function Home() {
   }
 
   function saveDraftAndContinue() {
-    if (saveDraft(configRef.current)) toast('Draft saved');
+    if (saveDraft(configRef.current)) toast('Saved draft updated');
     completePendingDraftAction();
   }
 
@@ -685,7 +700,6 @@ export default function Home() {
           setHasAnnouncementChanges(true);
           setHasPromoChanges(true);
           setReadyToPublishAnnouncement(true);
-          setDraftBanner({ date: migrated.lastUpdated || new Date().toISOString() });
           // Work in progress exists, so the promo tab opens on it, not the picker.
           setPromoEntryStep('editor');
           return;
@@ -951,13 +965,8 @@ export default function Home() {
     window.location.href = '/login';
   }
 
-  function dismissDraftBanner() {
-    setDraftBanner(null);
-  }
-
   async function discardDraft() {
     clearDraft();
-    setDraftBanner(null);
     setHasAnnouncementChanges(false);
     setHasPromoChanges(false);
     setReadyToPublishAnnouncement(false);
@@ -976,16 +985,85 @@ export default function Home() {
     } catch (e) {
       console.error('Failed to reload config:', e);
     }
-    toast('Draft discarded');
+    toast('Saved draft deleted');
   }
 
-  function reviewDraft() {
-    setDraftBanner(null);
-    // The draft is already loaded into `config`; open it in the editor rather
-    // than the start picker, which would offer to start over instead.
-    setPromoEntryStep('editor');
-    setEditorMode('edit');
-    setActiveTab('promo');
+  /**
+   * Throw away unpublished edits for one section and go back to what's live.
+   *
+   * The gap this fills: edits survive tab switches (they're React state) and a
+   * tab close writes them to the saved draft, so before this there was no way
+   * back to the published version short of deleting the draft.
+   *
+   * Only the active section is reverted — discarding promo work because you
+   * wanted to undo an announcement edit would be its own bug. The editors read
+   * their content into local state on mount, so the remount key forces them to
+   * re-read; without it the reverted config wouldn't reach the contentEditable
+   * fields.
+   */
+  async function discardEditorChanges(section: 'promo' | 'announcement') {
+    const live = publishedConfigObjRef.current;
+    if (!live) return;
+
+    /**
+     * Fall back to the nearest thing the user SAVED, not all the way to live.
+     * Someone who saved a draft and then tried a colour on top expects Discard
+     * to undo the colour — reverting to live would throw away the draft work
+     * they explicitly chose to keep.
+     */
+    let base: CampaignConfig = live;
+    if (savedDraftSignature !== null) {
+      try {
+        const res = await fetch('/api/draft');
+        if (res.ok) {
+          const data = await res.json();
+          const draft = (data?.draft as CampaignConfig | null) ?? null;
+          if (draft) base = migrateConfig(draft, draft.version);
+        }
+      } catch {
+        // Draft unreachable — falling back to live is still better than
+        // leaving the user stuck with edits they asked to drop.
+      }
+    }
+
+    const next: CampaignConfig =
+      section === 'promo'
+        ? { ...configRef.current, promoCard: JSON.parse(JSON.stringify(base.promoCard)) }
+        : {
+            ...configRef.current,
+            announcementBar: JSON.parse(JSON.stringify(base.announcementBar)),
+          };
+
+    setConfig(next);
+    configRef.current = next;
+    draftSignatureRef.current = getConfigSignature(next);
+
+    // Landing on a saved draft still leaves unpublished work, so the dirty
+    // flag has to reflect what we landed on — reporting "all published" while
+    // showing draft content would be a lie the Publish button acts on.
+    const matchesLive = getConfigSignature(next) === publishedConfigRef.current;
+
+    if (section === 'promo') {
+      setHasPromoChanges(!matchesLive);
+      savedPromoSignatureRef.current = getPromoSignature(next);
+      // The remount below restarts PromoFlow at `initialStep`. Without this it
+      // restarts at the picker, so discarding looked like it did nothing —
+      // the reverted card was never shown.
+      setPromoEntryStep('editor');
+    } else {
+      setHasAnnouncementChanges(!matchesLive);
+      setReadyToPublishAnnouncement(false);
+    }
+
+    // The saved draft is deliberately NOT deleted here. Discard undoes the
+    // edits made since it was saved; destroying the draft as well would throw
+    // away work the user explicitly chose to keep.
+    setEditorResetKey((k) => k + 1);
+    toast(
+      base === live
+        ? 'Changes discarded — back to what’s live'
+        : 'Changes discarded — back to your saved draft',
+    );
   }
 
   function markAnnouncementChanged() {
@@ -1056,13 +1134,12 @@ export default function Home() {
         <Header
           activeTab={activeTab}
           setActiveTab={handleTabSwitch}
-          editorMode={editorMode}
-          onEnterEdit={() => setEditorMode('edit')}
           hasAnnouncementChanges={hasAnnouncementChanges}
           hasPromoChanges={hasPromoChanges}
           readyToPublishAnnouncement={readyToPublishAnnouncement}
           promoDateInvalid={promoDateRangeInvalid}
           hideActions={activeTab === 'promo' && promoFlowStep !== 'editor'}
+          onDiscardChanges={() => setConfirmDiscardChanges(true)}
           isPublishing={isPublishing}
           isDarkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode}
@@ -1094,27 +1171,21 @@ export default function Home() {
             )}
 
             {activeTab === 'announcement' && (
-              <div
-                className={editorMode === 'view' ? 'pointer-events-none select-none opacity-70' : ''}
-                aria-hidden={editorMode === 'view'}
-              >
-                <AnnouncementSection
-                  config={config}
-                  setConfig={setConfig}
-                  markChanged={markAnnouncementChanged}
-                  canReactivate={announcementCanReactivate}
-                  onStop={stopAnnouncementNow}
-                  onGoOnAir={goOnAirAnnouncementNow}
-                />
-              </div>
+              <AnnouncementSection
+                key={`announcement-${editorResetKey}`}
+                config={config}
+                setConfig={setConfig}
+                markChanged={markAnnouncementChanged}
+                canReactivate={announcementCanReactivate}
+                onStop={stopAnnouncementNow}
+                onGoOnAir={goOnAirAnnouncementNow}
+              />
             )}
 
             {activeTab === 'promo' && (
-              <div
-                className={editorMode === 'view' ? 'pointer-events-none select-none opacity-70' : ''}
-                aria-hidden={editorMode === 'view'}
-              >
-                <PromoFlow
+              <PromoFlow
+                  key={`promo-${editorResetKey}`}
+                  onAiApplied={handleAiApplied}
                   onStepChange={setPromoFlowStep}
                   initialStep={promoEntryStep}
                   config={config}
@@ -1137,9 +1208,8 @@ export default function Home() {
                     savedDraftSignature === getConfigSignature(config)
                   }
                   draftExists={savedDraftSignature !== null}
-                  onRemoveLive={removeLivePromo}
-                />
-              </div>
+                onRemoveLive={removeLivePromo}
+              />
             )}
           </div>
         </main>
@@ -1158,7 +1228,7 @@ export default function Home() {
                   Save changes as draft?
                 </h2>
                 <p className="mt-1 text-sm text-on-surface-variant">
-                  You have changes that are not saved as a draft yet.
+                  These edits aren&apos;t in your saved draft yet.
                 </p>
               </div>
               <button
@@ -1177,7 +1247,7 @@ export default function Home() {
                 onClick={continueWithoutDraft}
                 className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
               >
-                Continue without draft
+                Continue without saving
               </button>
               <button
                 type="button"
@@ -1191,7 +1261,7 @@ export default function Home() {
                 onClick={saveDraftAndContinue}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
               >
-                Save Draft
+                Save as draft
               </button>
             </div>
           </div>
@@ -1260,54 +1330,10 @@ export default function Home() {
         </div>
       )}
 
-      {/* Welcome Back — Unpublished Draft Popup. pointer-events-none on the
-          full-screen container: it's an informational banner, and an invisible
-          full-screen layer here was silently swallowing every click on the
-          page (e.g. clicks into the promo timer never focused it → no caret).
-          Only the dialog itself accepts pointer events. */}
-      {draftBanner && activeTab === 'promo' && (
-        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="pointer-events-auto relative w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
-            {/* Dismiss without deciding: keep working on the draft. The two
-                action buttons are commitments (discard / publish); the ✕ is
-                the "not now" the banner otherwise lacked. */}
-            <button
-              type="button"
-              onClick={() => setDraftBanner(null)}
-              aria-label="Dismiss"
-              className="absolute top-3 right-4 text-on-surface-variant transition-colors hover:text-on-surface"
-            >
-              ✕
-            </button>
-            <p className="text-base font-semibold">
-              <span className="mr-1.5">💡</span>Welcome back
-            </p>
-            <p className="mt-2 text-sm text-on-surface-variant">
-              You have an unpublished draft from{' '}
-              <span className="font-semibold text-on-surface">
-                {new Date(draftBanner.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-              </span>.
-              These changes haven&apos;t gone live yet.
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmDiscardDraft(true)}
-                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
-              >
-                Discard Draft
-              </button>
-              <button
-                type="button"
-                onClick={reviewDraft}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
-              >
-                Review & Publish
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* No "welcome back" popup. Saving a draft is a deliberate act, so
+          announcing it back on every load interrupts the one moment someone
+          wants to start working. The draft is restored into the editor
+          silently and the My Draft chip carries a dot instead. */}
 
       {/* Publish Confirmation */}
       {publishConfirm && (
@@ -1372,15 +1398,61 @@ export default function Home() {
         </div>
       )}
 
+      {/* Discard unpublished edits — destructive and easy to hit by accident
+          from the header, so it states exactly what survives. */}
+      {confirmDiscardChanges && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" onClick={() => setConfirmDiscardChanges(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <h2 className="text-base font-semibold">Discard these changes?</h2>
+            <p className="mt-2 text-sm text-on-surface-variant">
+              {savedDraftSignature !== null ? (
+                <>
+                  The {activeTab === 'promo' ? 'promo card' : 'announcement bar'} goes back to your{' '}
+                  <span className="font-semibold text-on-surface">saved draft</span>. Your draft is
+                  kept — only the edits you made since saving it are lost, and that can&apos;t be
+                  undone.
+                </>
+              ) : (
+                <>
+                  The {activeTab === 'promo' ? 'promo card' : 'announcement bar'} goes back to
+                  what&apos;s live on your website right now. Edits you haven&apos;t published will be
+                  lost, and this can&apos;t be undone.
+                </>
+              )}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDiscardChanges(false)}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                Keep editing
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmDiscardChanges(false);
+                  discardEditorChanges(activeTab === 'promo' ? 'promo' : 'announcement');
+                }}
+                className="rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95"
+              >
+                Discard changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Discard Draft consent — deleting a draft is destructive, so confirm first */}
       {confirmDiscardDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0" onClick={() => setConfirmDiscardDraft(false)} />
           <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
-            <h2 className="text-base font-semibold">Discard draft?</h2>
+            <h2 className="text-base font-semibold">Delete your saved draft?</h2>
             <p className="mt-2 text-sm text-on-surface-variant">
-              Your draft will be deleted and you&apos;ll start fresh from what&apos;s currently published. This
-              can&apos;t be undone.
+              Your saved draft will be deleted and you&apos;ll start fresh from what&apos;s currently
+              published. This can&apos;t be undone.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -1398,7 +1470,7 @@ export default function Home() {
                 }}
                 className="rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95"
               >
-                Discard draft
+                Delete saved draft
               </button>
             </div>
           </div>
@@ -1431,7 +1503,7 @@ export default function Home() {
                 }}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
               >
-                Replace draft
+                Replace saved draft
               </button>
             </div>
           </div>

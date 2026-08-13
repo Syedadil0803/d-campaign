@@ -24,7 +24,7 @@ import { AnnouncementBarPreview } from './AnnouncementBarPreview';
 
 interface DashboardProps {
   config: CampaignConfig;
-  setActiveTab: (tab: 'dashboard' | 'announcement' | 'promo', mode?: 'view' | 'edit') => void;
+  setActiveTab: (tab: 'dashboard' | 'announcement' | 'promo') => void;
   onStopPromo?: () => void;
   onGoOnAirPromo?: () => void;
   onStopAnnouncement?: () => void;
@@ -437,14 +437,16 @@ export function Dashboard({
             <p className="mt-4 text-sm text-on-surface-variant">Not scheduled yet — set a start and end date.</p>
           )}
 
-          {/* actions — View · Edit · lifecycle (View + Edit both open the Promo tab).
-              With nothing created yet, none of those apply: the only useful
-              action is to make one, and it opens the start screen. */}
+          {/* actions — Edit · lifecycle. There's no separate read-only screen:
+              the preview above already answers "what does it look like", and a
+              disabled copy of the editor added a step without adding anything.
+              With nothing created yet, neither applies: the only useful action
+              is to make one, and it opens the start screen. */}
           {promoUncreated ? (
             <div className="mt-auto pt-4">
               <button
                 className={`${primaryBtn} w-full`}
-                onClick={() => (onCreatePromo ? onCreatePromo() : setActiveTab('promo', 'edit'))}
+                onClick={() => (onCreatePromo ? onCreatePromo() : setActiveTab('promo'))}
               >
                 <Plus className="h-4 w-4" />
                 Create promo card
@@ -452,11 +454,7 @@ export function Dashboard({
             </div>
           ) : (
           <div className="mt-auto flex gap-2 pt-4">
-            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('promo', 'view')}>
-              <Eye className="h-4 w-4" />
-              View
-            </button>
-            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('promo', 'edit')}>
+            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('promo')}>
               <Pencil className="h-4 w-4" />
               Edit
             </button>
@@ -565,13 +563,9 @@ export function Dashboard({
             </div>
           )}
 
-          {/* actions — View · Edit · lifecycle (View + Edit both open the Announcement tab) */}
+          {/* actions — Edit · lifecycle (same as promo: no read-only screen) */}
           <div className="mt-auto flex gap-2 pt-4">
-            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('announcement', 'view')}>
-              <Eye className="h-4 w-4" />
-              View
-            </button>
-            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('announcement', 'edit')}>
+            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('announcement')}>
               <Pencil className="h-4 w-4" />
               Edit
             </button>

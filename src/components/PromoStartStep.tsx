@@ -40,6 +40,9 @@ export function PromoStartStep({
   onChoose,
   onSkipToEditor,
 }: PromoStartStepProps) {
+  /** Nothing published yet — the only time the explainer is worth the space. */
+  const firstTime = publishedCount === 0;
+
   const cardBase =
     'group relative flex flex-col rounded-xl border border-border bg-surface p-4 text-left ' +
     'transition-all hover:-translate-y-0.5 hover:border-primary hover:shadow-lg';
@@ -90,14 +93,24 @@ export function PromoStartStep({
 
   return (
     <div className="mx-auto w-full max-w-[1180px] pb-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className={`${firstTime ? 'mb-6' : 'mb-4'} flex items-start justify-between gap-4`}>
         <div>
-          <h2 className="font-display text-2xl font-semibold text-on-surface">
-            Create your promo card
+          {/* First time out, the screen introduces itself and reassures. Once
+              you've published, both are things you already know, so the heading
+              drops to the one thing still worth saying — what this screen wants
+              from you — and the explainer gives its room back to the templates. */}
+          <h2
+            className={`font-display font-semibold text-on-surface ${
+              firstTime ? 'text-2xl' : 'text-lg'
+            }`}
+          >
+            {firstTime ? 'Create your promo card' : 'Pick a starting point'}
           </h2>
-          <p className="mt-1 text-sm text-on-surface-variant">
-            Pick a starting point. You can change the look later without losing your words.
-          </p>
+          {firstTime && (
+            <p className="mt-1 text-sm text-on-surface-variant">
+              Pick a starting point. You can change the look later without losing your words.
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -138,8 +151,11 @@ export function PromoStartStep({
       </div>
 
       {/* ── Row 2: every template, scrolled horizontally ────────────── */}
+      {/* Same idea as the page heading: the how-to earns its place once. */}
       <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
-        Templates - Pick any one to start editing - Scroll to see all {templates.length}
+        {firstTime
+          ? `Templates - Pick any one to start editing - Scroll to see all ${templates.length}`
+          : `Templates (${templates.length})`}
       </h3>
 
       <div className="campaign-custom-scrollbar -mx-2 flex items-start gap-4 overflow-x-auto px-2 pb-4 pt-2">

@@ -12,6 +12,12 @@ import { Toast } from './Toast';
 import { PopupDropdown } from './PopupDropdown';
 import { useEditorHistory } from '@/hooks/useEditorHistory';
 import { EditorSnapshot, LinkSnapshot } from '@/lib/historyManager';
+import {
+  announcementThemes,
+  matchAnnouncementTheme,
+  themeBackgroundCss,
+  type AnnouncementTheme,
+} from '@/lib/announcementThemes';
 
 interface AnnouncementSectionProps {
   config: CampaignConfig;
@@ -914,6 +920,27 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     updateBg(patch);
   }
 
+  /**
+   * Apply a ready-made look. Sets background AND text colour together — they're
+   * a pair, and the fine-grained controls below can still adjust either
+   * afterwards.
+   */
+  function applyAnnouncementTheme(theme: AnnouncementTheme) {
+    pushImmediateState(getEditorSnapshot());
+    setConfig({
+      ...config,
+      announcementBar: {
+        ...config.announcementBar,
+        style: {
+          ...config.announcementBar.style,
+          background: { ...config.announcementBar.style.background, ...theme.background },
+          textColor: theme.textColor,
+        },
+      },
+    });
+    markChanged();
+  }
+
   // Status is immediate (no Save → Publish): stopping takes the campaign off,
   // and "Go on air" reactivates the SAME already-published content. The page
   // owns the actual persistence.
@@ -941,6 +968,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   }
 
   const bg = config.announcementBar.style.background;
+  /** Highlights the theme chip the bar currently matches, if any. */
+  const activeThemeId = matchAnnouncementTheme(bg, config.announcementBar.style.textColor);
   const [previewDirection, setPreviewDirection] = useState<string | null>(null);
   const previewBg = previewDirection ? { ...bg, direction: previewDirection } : bg;
   const today = new Date();
@@ -2257,7 +2286,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
               {/* Bottom: Loop + Style pinned to bottom */}
               <div className="shrink-0 mt-auto">
                 {/* Section 2: Loop Toggle */}
-                <div className="flex items-center justify-between pt-8 pb-4 border-t border-border">
+                <div className="flex items-center justify-between pt-5 pb-3 border-t border-border">
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">Loop</label>
                     <p className="mt-2 text-sm text-on-surface-variant">Seamless continuous scroll (duplicates content to fill the bar)</p>
@@ -2292,33 +2321,39 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                   </button>
                 </div>
 
-                {/* Section 3: Background Type Guide */}
-                <div className="border-t border-border pt-8">
+                {/* Section 3: Themes — one click for the whole look.
+                    Replaces the old "Background Type Guide", which was a
+                    non-clickable legend explaining solid/linear/radial: it
+                    taught CSS vocabulary instead of letting anyone pick a bar.
+                    The colour controls above still fine-tune whatever a theme
+                    sets. */}
+                <div className="border-t border-border pt-4">
                   <div className="pb-1">
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] mb-2">Background Type Guide</label>
-                    <p className="mb-4 text-sm text-on-surface-variant">Choose the background style and fine-tune its colors and balance.</p>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="space-y-1">
-                        <div
-                          className="h-8 rounded-lg border border-border shadow-inner"
-                          style={{ background: 'rgb(100, 132, 150)' }}
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] mb-1">
+                      Themes
+                    </label>
+                    <p className="mb-1 text-sm text-on-surface-variant">
+                      Click any one to restyle the bar — your message stays as written.
+                    </p>
+                    {/* One scrolling row, not a grid: the panel's height must
+                        not grow with the number of themes, so adding more
+                        scrolls sideways instead of pushing everything down. */}
+                    <div className="campaign-custom-scrollbar flex gap-2 overflow-x-auto px-1.5 pb-3 pt-2">
+                      {announcementThemes.map((theme) => (
+                        <button
+                          key={theme.id}
+                          type="button"
+                          onClick={() => applyAnnouncementTheme(theme)}
+                          title={theme.name}
+                          aria-pressed={activeThemeId === theme.id}
+                          style={{ background: themeBackgroundCss(theme.background) }}
+                          className={`h-8 w-12 shrink-0 rounded-md ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
+                            activeThemeId === theme.id
+                              ? 'ring-2 ring-primary'
+                              : 'ring-1 ring-border hover:ring-primary/60'
+                          }`}
                         />
-                        <p className="text-[11px] font-semibold text-on-surface-variant text-center">Solid</p>
-                      </div>
-                      <div className="space-y-1">
-                        <div
-                          className="h-8 rounded-lg border border-border shadow-inner"
-                          style={{ background: 'linear-gradient(to right, rgb(100, 132, 150) 0%, rgb(51, 89, 112) 100%)' }}
-                        />
-                        <p className="text-[11px] font-semibold text-on-surface-variant text-center">Linear</p>
-                      </div>
-                      <div className="space-y-1">
-                        <div
-                          className="h-8 rounded-lg border border-border shadow-inner"
-                          style={{ background: 'radial-gradient(circle at 50% 45%, rgb(100, 132, 150) 8%, rgb(51, 89, 112) 100%)' }}
-                        />
-                        <p className="text-[11px] font-semibold text-on-surface-variant text-center">Radial</p>
-                      </div>
+                      ))}
                     </div>
                   </div>
 
