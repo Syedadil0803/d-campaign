@@ -128,9 +128,36 @@ export function rgbToHexString(r: number, g: number, b: number): string {
     .join('');
 }
 
-/** Map a CSS font-size value to a label (xs/sm/md/lg/xl/xxl) */
+/**
+ * Map a CSS font-size to a label (xs/sm/md/lg/xl/xxl).
+ *
+ * Templates use sizes outside the six presets (1.6rem, 0.8rem, 1.35rem…), and
+ * an exact-match lookup returned nothing for those — so the toolbar reported
+ * "md" for text that was clearly much larger. Anything without an exact match
+ * snaps to the closest preset instead.
+ */
 export function fontSizeToLabel(fontSize: string): string {
-  return FONT_SIZE_LABEL_MAP[fontSize] || '';
+  if (!fontSize) return '';
+  const exact = FONT_SIZE_LABEL_MAP[fontSize];
+  if (exact) return exact;
+
+  // Accept rem or px (browsers report computed styles in px).
+  const match = fontSize.trim().match(/^(-?\d*\.?\d+)(rem|em|px)?$/);
+  if (!match) return '';
+  const value = Number(match[1]);
+  if (!Number.isFinite(value)) return '';
+  const rem = match[2] === 'px' ? value / 16 : value;
+
+  let closest = '';
+  let smallestGap = Infinity;
+  Object.entries(FONT_SIZE_MAP).forEach(([label, css]) => {
+    const gap = Math.abs(parseFloat(css) - rem);
+    if (gap < smallestGap) {
+      smallestGap = gap;
+      closest = label;
+    }
+  });
+  return closest;
 }
 
 // ============================================================

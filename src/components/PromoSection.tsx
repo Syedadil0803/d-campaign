@@ -15,10 +15,6 @@ import {
   Gift,
   X,
   Palette,
-  Undo2,
-  Redo2,
-  RotateCcw,
-  LayoutTemplate,
   History,
   FilePlus2,
   FileText,
@@ -33,14 +29,16 @@ import {
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
+import { applyTemplateLook } from "@/lib/promoTemplate";
 import { HistoryManager } from "@/lib/historyManager";
-import { SamplePromoTemplates } from "./SamplePromoTemplates";
+import { sampleTemplates } from "./SamplePromoTemplates";
 import { useRichTextEditor } from "@/hooks/useRichTextEditor";
 import {
   wrapBareTextWithFontSize,
   rgbToHex,
   FONT_SIZE_LABEL_MAP,
   FONT_SIZE_MAP,
+  fontSizeToLabel,
 } from "@/lib/richTextUtils";
 import RichTextToolbar from "./RichTextToolbar";
 import { PopupDropdown } from "./PopupDropdown";
@@ -530,7 +528,6 @@ export function PromoSection({
   const [showCardBgPopup, setShowCardBgPopup] = useState(false);
   const [showPersistentScaffold, setShowPersistentScaffold] = useState(true);
   // Action popups launched from the buttons under the Promo Card heading.
-  const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
   const [showDraftPopup, setShowDraftPopup] = useState(false);
   const [draftPopupCard, setDraftPopupCard] = useState<PromoCard | null>(null);
@@ -605,15 +602,11 @@ export function PromoSection({
   const skipOverflowBlockRef = useRef(false);
   const promoDeletingRef = useRef(false);
   const promoAppliedCardBaselineRef = useRef<PromoSnapshot | null>(null);
-  const promoPreAppliedCardRef = useRef<PromoSnapshot | null>(null);
   const promoAppliedRedoRef = useRef<PromoAppliedRedoSnapshot | null>(null);
   // True while the current card is a Start-Fresh card. Leaving a fresh card,
   // undo should land on its EDITED state; leaving a template/variant, undo
   // should land on that card's CLEAN baseline (not the edited state).
   const isFreshCardRef = useRef(false);
-  const [canUndoPromo, setCanUndoPromo] = useState(false);
-  const [canRedoPromo, setCanRedoPromo] = useState(false);
-  const [canResetPromoEdits, setCanResetPromoEdits] = useState(false);
 
   function clonePromoCard(card: PromoCard): PromoCard {
     return JSON.parse(JSON.stringify(card)) as PromoCard;
@@ -623,17 +616,6 @@ export function PromoSection({
     return JSON.stringify(a) === JSON.stringify(b);
   }
 
-  function syncPromoHistoryButtons() {
-    setCanUndoPromo(promoHistory.canUndo() || Boolean(promoPreAppliedCardRef.current));
-    setCanRedoPromo(promoHistory.canRedo() || Boolean(promoAppliedRedoRef.current));
-  }
-
-  function syncResetPromoEditsButton(nextPromoCard = configRef.current.promoCard) {
-    const baseline = promoAppliedCardBaselineRef.current?.promoCard;
-    setCanResetPromoEdits(
-      Boolean(baseline && !promoCardsEqual(nextPromoCard, baseline)),
-    );
-  }
 
   function getPromoSnapshot(): PromoSnapshot {
     const editor = getActivePromoEditor();
@@ -669,14 +651,12 @@ export function PromoSection({
   function pushPromoState(options: { replace?: boolean } = {}) {
     if (restoringSnapshotRef.current) return;
     if (promoAppliedCardBaselineRef.current) {
-      syncPromoHistoryButtons();
       return;
     }
     promoAppliedRedoRef.current = null;
     const replaceLockedSnapshot = options.replace;
     if (replaceLockedSnapshot) promoHistory.unlock();
     promoHistory.pushState(getPromoSnapshot());
-    syncPromoHistoryButtons();
   }
 
   function getFieldRef(field: PromoField | null) {
@@ -697,7 +677,6 @@ export function PromoSection({
     );
     setConfig({ ...configRef.current, promoCard: nextPromoCard });
     syncEditorsFromConfig(nextPromoCard);
-    syncResetPromoEditsButton(nextPromoCard);
     setTimeout(() => {
       const ref = getFieldRef(snapshot.currentField);
       activeEditorRef.current = ref?.current || null;
@@ -710,78 +689,17 @@ export function PromoSection({
     markChanged();
   }
 
-  function undoPromo() {
-    const snapshot = promoHistory.undo(getPromoSnapshot());
-    if (snapshot) {
-      applyPromoSnapshot(snapshot);
-      toast("Promo action undone");
-      syncPromoHistoryButtons();
-      return;
-    }
-
-    const preAppliedSnapshot = promoPreAppliedCardRef.current;
-    if (preAppliedSnapshot) {
-      const currentSnapshot = getPromoSnapshot();
-      promoAppliedRedoRef.current = {
-        snapshot: currentSnapshot,
-        baseline: promoAppliedCardBaselineRef.current
-          ? {
-              ...promoAppliedCardBaselineRef.current,
-              promoCard: clonePromoCard(promoAppliedCardBaselineRef.current.promoCard),
-            }
-          : null,
-      };
-      promoPreAppliedCardRef.current = null;
-      if (promoAppliedCardBaselineRef.current) {
-        promoAppliedCardBaselineRef.current = null;
-        setCanResetPromoEdits(false);
-      }
-      applyPromoSnapshot(preAppliedSnapshot);
-      toast("Promo action undone");
-    }
-    syncPromoHistoryButtons();
-  }
-
-  function redoPromo() {
-    const snapshot = promoHistory.redo(getPromoSnapshot());
-    if (snapshot) {
-      applyPromoSnapshot(snapshot);
-      toast("Promo action redone");
-      syncPromoHistoryButtons();
-      return;
-    }
-
-    const appliedRedo = promoAppliedRedoRef.current;
-    if (appliedRedo) {
-      promoAppliedRedoRef.current = null;
-      promoPreAppliedCardRef.current = getPromoSnapshot();
-      promoAppliedCardBaselineRef.current = appliedRedo.baseline;
-      applyPromoSnapshot(appliedRedo.snapshot);
-      syncResetPromoEditsButton(appliedRedo.snapshot.promoCard);
-      toast("Promo action redone");
-    }
-    syncPromoHistoryButtons();
-  }
-
-  function resetPromoEdits() {
-    const snapshot = promoAppliedCardBaselineRef.current;
-    if (!snapshot) return;
-    promoHistory.clear();
-    syncPromoHistoryButtons();
-    applyPromoSnapshot(snapshot);
-    setCanResetPromoEdits(false);
-    toast("Promo edits reset");
-  }
-
-  function setPromoAppliedCardBaseline(promoCard: PromoCard, previousSnapshot: PromoSnapshot) {
+  /**
+   * Remember the card exactly as it was applied. Only the consent check reads
+   * this now — an untouched template/variant doesn't need a "you'll lose work"
+   * prompt, because it's one click away in its own popup.
+   */
+  function setPromoAppliedCardBaseline(promoCard: PromoCard) {
     promoAppliedCardBaselineRef.current = {
       promoCard: clonePromoCard(promoCard),
       currentField: currentFieldRef.current,
       selection: null,
     };
-    promoPreAppliedCardRef.current = previousSnapshot;
-    setCanResetPromoEdits(false);
-    syncPromoHistoryButtons();
   }
 
   // Fill default start/end dates if missing. Must be applied BEFORE a card's
@@ -814,7 +732,6 @@ export function PromoSection({
   }
 
   function startFreshPromoCard(options: { silent?: boolean } = {}) {
-    const previousSnapshot = getPromoSnapshot();
     const freshCard = withDefaultDates(getFreshPromoCard());
     // If the card is already fresh, do nothing — no toast, no "unsaved changes"
     // flip. "Already fresh" = no visible text in any field AND the style matches
@@ -844,8 +761,7 @@ export function PromoSection({
     setShowPersistentScaffold(true);
     setSelectedVersionId(null);
     onSelectedVersionChange?.(null);
-    setPromoAppliedCardBaseline(freshCard, previousSnapshot);
-    setCanResetPromoEdits(false);
+    setPromoAppliedCardBaseline(freshCard);
     markChanged();
     // Callers that already show their own toast (e.g. deleting the live card)
     // pass silent so the user doesn't get two messages for one action.
@@ -853,7 +769,6 @@ export function PromoSection({
   }
 
   useEffect(() => {
-    syncResetPromoEditsButton(config.promoCard);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.promoCard]);
 
@@ -1149,7 +1064,6 @@ export function PromoSection({
         s?.removeAllRanges();
         s?.addRange(r);
       }
-      syncResetPromoEditsButton(nextPromoCard);
       markChanged();
       refreshPromoToolbarFormats(el);
       return;
@@ -1211,7 +1125,6 @@ export function PromoSection({
       d: nextPromoCard.description,
       b: nextPromoCard.buttonText,
     });
-    syncResetPromoEditsButton(nextPromoCard);
     markChanged();
     refreshPromoToolbarFormats(el);
 
@@ -1236,16 +1149,6 @@ export function PromoSection({
   function onPromoEditorKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
-
-    if (mod && (key === "z" || key === "y")) {
-      e.preventDefault();
-      const isUndo = key === "z" && !e.shiftKey;
-      const isRedo = (key === "z" && e.shiftKey) || key === "y";
-      if (isUndo) undoPromo();
-      if (isRedo) redoPromo();
-      promoDeletingRef.current = false;
-      return;
-    }
 
     if (mod) return;
 
@@ -1445,7 +1348,9 @@ export function PromoSection({
 
       while (node && node !== container) {
         if (!foundSize && node.style.fontSize) {
-          const label = FONT_SIZE_LABEL_MAP[node.style.fontSize];
+          // Snaps to the nearest preset — template sizes like 1.6rem aren't in
+          // the six-value map and used to fall through, showing "md".
+          const label = fontSizeToLabel(node.style.fontSize);
           if (label) {
             sizes.add(label);
             foundSize = true;
@@ -1969,28 +1874,7 @@ export function PromoSection({
     setShowCardBgPopup(false);
   }, []);
 
-  useEffect(() => {
-    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (!mod) return;
-
-      const key = e.key.toLowerCase();
-      const isUndo = key === "z" && !e.shiftKey;
-      const isRedo = (key === "z" && e.shiftKey) || key === "y";
-      if (!isUndo && !isRedo) return;
-
-      const target = e.target as HTMLElement | null;
-      if (target?.isContentEditable) return;
-
-      e.preventDefault();
-      if (isUndo) undoPromo();
-      if (isRedo) redoPromo();
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  });
-
+  
   // Status is immediate (no Save → Publish): stopping takes the campaign off,
   // and "Go on air" reactivates the SAME already-published content. The page
   // owns the actual persistence.
@@ -2058,7 +1942,6 @@ export function PromoSection({
       ...config,
       promoCard: nextPromoCard,
     });
-    syncResetPromoEditsButton(nextPromoCard);
     markChanged();
   }
 
@@ -2071,7 +1954,6 @@ export function PromoSection({
     pushPromoState();
     const nextPromoCard = applyAiPromo(config.promoCard, result.data);
     setConfig({ ...config, promoCard: nextPromoCard });
-    syncResetPromoEditsButton(nextPromoCard);
     markChanged();
     setShowAiPaste(false);
     setAiPasteText('');
@@ -2220,19 +2102,14 @@ export function PromoSection({
   function applyVersion(version: PromoVersion) {
     // Leaving a fresh card → undo lands on its EDITED state (getPromoSnapshot).
     // Leaving a template/variant → undo lands on its CLEAN baseline.
-    const leavingFresh = isFreshCardRef.current;
     isFreshCardRef.current = false;
-    const previousSnapshot =
-      !leavingFresh && promoAppliedCardBaselineRef.current
-        ? promoAppliedCardBaselineRef.current
-        : getPromoSnapshot();
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
     const restored = withDefaultDates({ ...clonePromoCard(version.promoCard), active: false });
     setConfig({ ...configRef.current, promoCard: restored });
     syncEditorsFromConfig(restored);
     markChanged();
-    setPromoAppliedCardBaseline(restored, previousSnapshot);
+    setPromoAppliedCardBaseline(restored);
     setSelectedVersionId(version.id);
     onSelectedVersionChange?.(version.id);
     setShowVersionsPopup(false);
@@ -2268,7 +2145,6 @@ export function PromoSection({
 
   // Load the saved draft's promo card back into the editor.
   function restoreDraftPromoCard(card: PromoCard) {
-    const previousSnapshot = getPromoSnapshot();
     isFreshCardRef.current = false;
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
@@ -2276,34 +2152,10 @@ export function PromoSection({
     setConfig({ ...configRef.current, promoCard: restored });
     syncEditorsFromConfig(restored);
     markChanged();
-    setPromoAppliedCardBaseline(restored, previousSnapshot);
+    setPromoAppliedCardBaseline(restored);
     setSelectedVersionId(null);
     onSelectedVersionChange?.(null);
     toast('Draft restored');
-  }
-
-  function applyTemplate(template: PromoCard, templateName: string) {
-    // Leaving a fresh card → undo lands on its EDITED state (getPromoSnapshot).
-    // Leaving a template/variant → undo lands on its CLEAN baseline.
-    const leavingFresh = isFreshCardRef.current;
-    isFreshCardRef.current = false;
-    const previousSnapshot =
-      !leavingFresh && promoAppliedCardBaselineRef.current
-        ? promoAppliedCardBaselineRef.current
-        : getPromoSnapshot();
-    promoAppliedRedoRef.current = null;
-    promoHistory.clear();
-    let cloned = JSON.parse(JSON.stringify(template));
-    cloned.timerText = serializeTimerHtml(cloned.timerText ?? "");
-    cloned.active = false;
-    cloned = withDefaultDates(cloned);
-    setConfig({ ...configRef.current, promoCard: cloned });
-    syncEditorsFromConfig(cloned);
-    markChanged();
-    setPromoAppliedCardBaseline(cloned, previousSnapshot);
-    setSelectedVersionId(null);
-    onSelectedVersionChange?.(null);
-    toast(`Template applied: ${templateName}`);
   }
 
   // Ask for consent before a replacing action — but only when there's actually
@@ -2836,33 +2688,6 @@ export function PromoSection({
               >
                 <ClipboardPaste className="w-3.5 h-3.5" />
               </button>
-              <button
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={resetPromoEdits}
-                disabled={!canResetPromoEdits}
-                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Reset edits to selected template or variant"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={undoPromo}
-                disabled={!canUndoPromo}
-                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Undo promo action"
-              >
-                <Undo2 className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={redoPromo}
-                disabled={!canRedoPromo}
-                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                title="Redo promo action"
-              >
-                <Redo2 className="w-3.5 h-3.5" />
-              </button>
             </div>
           </div>
 
@@ -3143,7 +2968,6 @@ export function PromoSection({
                     ...(nextValue ? { showTimer: true } : {}),
                   };
                   setConfig({ ...config, promoCard: nextPromoCard });
-                  syncResetPromoEditsButton(nextPromoCard);
                   markChanged();
                 },
               })}
@@ -3171,7 +2995,6 @@ export function PromoSection({
                     ...(nextValue ? { showTimer: true } : {}),
                   };
                   setConfig({ ...config, promoCard: nextPromoCard });
-                  syncResetPromoEditsButton(nextPromoCard);
                   markChanged();
                 },
               })}
@@ -3649,14 +3472,6 @@ export function PromoSection({
             </button>
             <button
               type="button"
-              onClick={() => setShowTemplatesPopup(true)}
-              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
-              title="Start from a ready-made sample template"
-            >
-              <LayoutTemplate className="h-4 w-4" /> Template Hub
-            </button>
-            <button
-              type="button"
               onClick={openDraftPopup}
               className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="View your saved draft"
@@ -3682,7 +3497,7 @@ export function PromoSection({
               {draftExists ? 'Update draft' : 'Save as draft'}
             </button>
           </div>
-          <div className="campaign-card-surface rounded-lg p-5 relative flex-1 min-h-0 border border-gray-200 dark:border-gray-600">
+          <div className="campaign-card-surface rounded-lg px-5 pt-5 pb-2 relative flex-1 min-h-0 border border-gray-200 dark:border-gray-600">
             <div className="absolute inset-x-0 top-4 flex items-center justify-center text-gray-400 text-sm font-medium pointer-events-none">
               Website Content Area
             </div>
@@ -4567,6 +4382,46 @@ export function PromoSection({
               )}
             </div>
           </div>
+
+          {/* Themes — restyle the card without touching the words. This is the
+              safe half of what "Template Hub" used to do: applying a template
+              wholesale replaced the user's copy, which is what made it need a
+              consent popup. Swapping only the look never destroys anything. */}
+          <div className="mt-5 shrink-0 pb-1">
+            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
+              Themes - Click any to change the look - Your text stays
+            </p>
+            <div className="campaign-custom-scrollbar flex gap-2 overflow-x-auto px-1.5 pb-3 pt-2">
+              {sampleTemplates.map((t) => {
+                const on =
+                  JSON.stringify((t.promoCard as PromoCard).style) ===
+                  JSON.stringify(config.promoCard.style);
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    title={t.name}
+                    onClick={() => {
+                      setConfig({
+                        ...configRef.current,
+                        promoCard: applyTemplateLook(
+                          configRef.current.promoCard,
+                          t.promoCard as PromoCard,
+                        ),
+                      });
+                      markChanged();
+                    }}
+                    style={{
+                      background: getBackgroundStyle((t.promoCard as PromoCard).style.background),
+                    }}
+                    className={`h-8 w-12 shrink-0 rounded-md ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
+                      on ? "ring-2 ring-primary" : "ring-1 ring-border hover:ring-primary/60"
+                    }`}
+                  />
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -4706,44 +4561,6 @@ export function PromoSection({
       )}
 
       {/* Sample Templates popup — shows the same 6 cards; click one to apply */}
-      {showTemplatesPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0"
-            onClick={() => setShowTemplatesPopup(false)}
-          />
-          <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border backdrop-blur-md shadow-2xl">
-            <div className="flex items-center justify-between border-border px-6 py-2">
-              <div>
-                <p className="text-sm text-on-surface-variant">
-                  Click a template to apply it to your promo card.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowTemplatesPopup(false)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
-                aria-label="Close templates"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="campaign-custom-scrollbar overflow-y-auto p-6">
-              <SamplePromoTemplates
-                onApplyTemplate={(template, name) => {
-                  setShowTemplatesPopup(false);
-                  confirmCardReplace(() => applyTemplate(template, name), {
-                    title: 'Apply this template?',
-                    body: "This replaces the card you're editing with this template. It won't change what's live on your website until you publish.",
-                    confirmLabel: 'Apply template',
-                  });
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* My Draft popup — the single saved, unpublished draft. */}
       {showDraftPopup && (() => {
         const draftCard = draftPopupCard;

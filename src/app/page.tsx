@@ -216,7 +216,7 @@ export default function Home() {
   const [savedDraftSignature, setSavedDraftSignature] = useState<string | null>(null);
   // Which guided-flow step the promo tab is on. Publish is an editor action, so
   // the header hides it while the user is still picking a start or writing copy.
-  const [promoFlowStep, setPromoFlowStep] = useState<'start' | 'content' | 'editor'>('editor');
+  const [promoFlowStep, setPromoFlowStep] = useState<'start' | 'ai' | 'editor'>('editor');
   // Where the promo tab opens. Dashboard's View/Edit act on an existing
   // campaign, so they go straight to the editor; the nav tab starts fresh.
   const [promoEntryStep, setPromoEntryStep] = useState<'start' | 'editor'>('start');
@@ -249,8 +249,13 @@ export default function Home() {
       delete clone.stoppedByUser;
       return clone;
     };
+    // `lastUpdated` is rewritten on every save, so including it made two
+    // identical configs compare as different — which meant a draft could never
+    // match what's published, and the "Welcome back" banner fired for drafts
+    // holding no real changes.
+    const { lastUpdated: _ignored, ...content } = cfg;
     return JSON.stringify({
-      ...cfg,
+      ...content,
       announcementBar: strip(cfg.announcementBar as unknown as Record<string, unknown>),
       promoCard: strip(cfg.promoCard as unknown as Record<string, unknown>),
     });
@@ -375,6 +380,14 @@ export default function Home() {
     },
     [activeTab],
   );
+
+  // "Create promo card" on an empty dashboard is a NEW campaign, so unlike the
+  // View/Edit shortcuts it opens the guided start screen.
+  const handleCreatePromo = useCallback(() => {
+    setPromoEntryStep('start');
+    setEditorMode('edit');
+    setActiveTab('promo');
+  }, []);
 
   // Dashboard shortcuts (View / Edit / the card itself) open an existing
   // campaign, so they bypass the guided picker and land in the editor.
@@ -673,6 +686,8 @@ export default function Home() {
           setHasPromoChanges(true);
           setReadyToPublishAnnouncement(true);
           setDraftBanner({ date: migrated.lastUpdated || new Date().toISOString() });
+          // Work in progress exists, so the promo tab opens on it, not the picker.
+          setPromoEntryStep('editor');
           return;
         } else {
           // Draft matches published — discard it silently
@@ -966,6 +981,10 @@ export default function Home() {
 
   function reviewDraft() {
     setDraftBanner(null);
+    // The draft is already loaded into `config`; open it in the editor rather
+    // than the start picker, which would offer to start over instead.
+    setPromoEntryStep('editor');
+    setEditorMode('edit');
     setActiveTab('promo');
   }
 
@@ -1064,6 +1083,7 @@ export default function Home() {
               <Dashboard
                 config={publishedConfig}
                 setActiveTab={handleDashboardTabSwitch}
+                onCreatePromo={handleCreatePromo}
                 onStopPromo={stopPromoNow}
                 onGoOnAirPromo={goOnAirPromoNow}
                 onStopAnnouncement={stopAnnouncementNow}

@@ -1,27 +1,32 @@
 'use client';
 
 /**
- * Guided promo flow: Start → Write content → Editor.
+ * Guided promo flow: Start → (setup) → Editor, or Start → (setup) → AI → Editor.
  *
- * This is a wrapper, deliberately. The editor (PromoSection) is rendered
- * unchanged as the final step — the flow decides WHEN to show it, never how it
- * looks. Returning users with a live campaign land straight on the editor, so
- * the wizard only appears when there's genuinely something new to create.
+ * The editor (PromoSection) is rendered unchanged as the final step — this
+ * wrapper only decides WHEN to show it. Between the two sits a single setup
+ * dialog asking when the campaign runs and how the copy gets written; picking
+ * "write myself" goes straight to the editor, so there's no second editor to
+ * pass through.
+ *
+ * Paths that already have copy — continuing a live card or a saved draft — skip
+ * the dialog entirely and open the editor.
  */
 
 import { useEffect, useState } from 'react';
 import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
 import { PromoSection } from '@/components/PromoSection';
 import { PromoStartStep, PromoStartChoice } from '@/components/PromoStartStep';
-import { PromoContentStep } from '@/components/PromoContentStep';
-import { SamplePromoTemplates, sampleTemplates } from '@/components/SamplePromoTemplates';
+import { PromoAiStep } from '@/components/PromoAiStep';
+import { PromoSetupDialog, BuildMethod } from '@/components/PromoSetupDialog';
+import { sampleTemplates } from '@/components/SamplePromoTemplates';
 import { PromoMiniPreview } from '@/components/PromoMiniPreview';
-import { applyTemplateFull, isCardEmpty } from '@/lib/promoTemplate';
+import { applyTemplateFull } from '@/lib/promoTemplate';
 import { listVersions, PromoVersion } from '@/lib/promoVersions';
 import { getISODateWithOffset } from '@/lib/utils';
 import { X } from 'lucide-react';
 
-type Step = 'start' | 'content' | 'editor';
+type Step = 'start' | 'ai' | 'editor';
 
 type PromoSectionProps = React.ComponentProps<typeof PromoSection>;
 
@@ -38,21 +43,29 @@ interface PromoFlowProps extends PromoSectionProps {
 export function PromoFlow({ onStepChange, initialStep, ...editorProps }: PromoFlowProps) {
   const { config, setConfig, markChanged, toast } = editorProps;
 
-  // Everyone lands on the picker, including returning users — the current
-  // campaign is offered there as "Continue current campaign", so nothing is
-  // hidden and the entry point is the same every time.
   const [step, setStep] = useState<Step>(initialStep ?? 'start');
-  const [draftCard, setDraftCard] = useState<PromoCard | null>(null);
-  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [versions, setVersions] = useState<PromoVersion[]>([]);
-  const [showTemplates, setShowTemplates] = useState(false);
   const [showPublished, setShowPublished] = useState(false);
+  /** Open once a starting point is chosen that still needs copy written. */
+  const [showSetup, setShowSetup] = useState(false);
+  /** Set when AI was chosen upfront — the dialog then only asks the schedule. */
+  const [forcedMethod, setForcedMethod] = useState<BuildMethod | undefined>(undefined);
+  /**
+   * The card chosen in the picker, held here until the setup dialog is
+   * confirmed. Writing it straight into `config` made a template you merely
+   * clicked look like work in progress, and left its dates behind so the next
+   * attempt skipped the schedule question.
+   */
+  const [pendingCard, setPendingCard] = useState<PromoCard | null>(null);
+  /** How the dialog should describe what's being built from. */
+  const [pendingSource, setPendingSource] = useState('a blank card');
+  const [pendingStart, setPendingStart] = useState('');
+  const [pendingEnd, setPendingEnd] = useState('');
 
   function goTo(next: Step) {
     setStep(next);
   }
 
-  // Keep the page in sync — Publish only belongs in the editor step.
   useEffect(() => {
     onStepChange?.(step);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64,18 +77,9 @@ export function PromoFlow({ onStepChange, initialStep, ...editorProps }: PromoFl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load what the Start step needs to offer.
   useEffect(() => {
     if (step !== 'start') return;
     let alive = true;
-    fetch('/api/draft')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!alive) return;
-        setDraftCard((d?.draft?.promoCard as PromoCard | undefined) ?? null);
-        setDraftSavedAt((d?.draft?.lastUpdated as string | undefined) ?? null);
-      })
-      .catch(() => {});
     listVersions()
       .then((v) => alive && setVersions(v))
       .catch(() => {});
@@ -93,48 +97,63 @@ export function PromoFlow({ onStepChange, initialStep, ...editorProps }: PromoFl
     };
   }
 
-  /** Apply a template and move to the content step. */
-  function pickTemplate(template: PromoCard, name: string) {
+  /**
+   * A starting point that still needs copy. Nothing is applied yet — the card
+   * waits here until the dialog is confirmed, so closing it changes nothing.
+   * The schedule starts fresh each time (today, no end date) so every attempt
+   * asks how long it should run.
+   */
+  function startWithSetup(card: PromoCard, source: string, method?: BuildMethod) {
+    setPendingCard(card);
+    setPendingSource(source);
+    setPendingStart(getISODateWithOffset(0));
+    setPendingEnd('');
+    setForcedMethod(method);
+    setShowSetup(true);
+  }
+
+  function cancelSetup() {
+    setShowSetup(false);
+    setPendingCard(null);
+  }
+
+  /** Commit the pending card and its schedule, then head to the right step. */
+  function handleBuildMethod(method: BuildMethod) {
+    const card = pendingCard ?? config.promoCard;
     setConfig((prev) => ({
       ...prev,
-      promoCard: withDefaultDates(applyTemplateFull(prev.promoCard, template)),
+      promoCard: { ...card, startDate: pendingStart, endDate: pendingEnd },
     }));
     markChanged();
-    toast(`Template applied: ${name}`);
-    goTo('content');
+    setShowSetup(false);
+    setPendingCard(null);
+    goTo(method === 'ai' ? 'ai' : 'editor');
+  }
+
+  function pickTemplate(template: PromoCard, name: string) {
+    startWithSetup(applyTemplateFull(config.promoCard, template), 'the selected template');
+    toast(`Selected: ${name}`);
   }
 
   function handleChoose(choice: PromoStartChoice) {
-    if (choice === 'current') {
-      // Already the card in the editor — just open it, change nothing.
-      goTo('editor');
-      return;
-    }
-    if (choice === 'draft' && draftCard) {
-      setConfig((prev) => ({ ...prev, promoCard: withDefaultDates({ ...draftCard }) }));
-      markChanged();
-      goTo('content');
-      return;
-    }
-    if (choice === 'template') {
-      setShowTemplates(true);
+    // AI picks the design itself, so it starts from whatever's on the card.
+    if (choice === 'ai') {
+      startWithSetup(config.promoCard, 'your card', 'ai');
       return;
     }
     if (choice === 'published') {
       setShowPublished(true);
       return;
     }
-    // Blank — a clean card, straight into the editor.
-    setConfig((prev) => ({
-      ...prev,
-      promoCard: withDefaultDates({
-        ...JSON.parse(JSON.stringify(defaultConfig.promoCard)),
-        active: prev.promoCard.active,
-        stoppedByUser: prev.promoCard.stoppedByUser,
-      }),
-    }));
-    markChanged();
-    goTo('editor');
+    // Start fresh — a blank card that still needs copy.
+    startWithSetup(
+      {
+        ...(JSON.parse(JSON.stringify(defaultConfig.promoCard)) as PromoCard),
+        active: config.promoCard.active,
+        stoppedByUser: config.promoCard.stoppedByUser,
+      },
+      'a blank card',
+    );
   }
 
   if (step === 'editor') {
@@ -145,24 +164,18 @@ export function PromoFlow({ onStepChange, initialStep, ...editorProps }: PromoFl
     <div className="pb-10">
       {step === 'start' && (
         <PromoStartStep
-          currentCard={isCardEmpty(config.promoCard) ? null : config.promoCard}
-          currentIsLive={config.promoCard.active}
-          draftCard={draftCard}
-          draftSavedAt={draftSavedAt}
           publishedCount={versions.length}
-          templates={sampleTemplates as unknown as {
-            id: string;
-            name: string;
-            promoCard: PromoCard;
-          }[]}
+          templates={
+            sampleTemplates as unknown as { id: string; name: string; promoCard: PromoCard }[]
+          }
           onPickTemplate={pickTemplate}
           onChoose={handleChoose}
           onSkipToEditor={() => goTo('editor')}
         />
       )}
 
-      {step === 'content' && (
-        <PromoContentStep
+      {step === 'ai' && (
+        <PromoAiStep
           config={config}
           setConfig={setConfig}
           markChanged={markChanged}
@@ -172,38 +185,19 @@ export function PromoFlow({ onStepChange, initialStep, ...editorProps }: PromoFl
         />
       )}
 
-      {/* Template picker — starting fresh, so the template brings its copy too. */}
-      {showTemplates && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0" onClick={() => setShowTemplates(false)} />
-          <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border shadow-2xl backdrop-blur-md">
-            <div className="flex items-center justify-between px-6 py-2">
-              <p className="text-sm text-on-surface-variant">
-                Pick a template to start from — you can change the design later without losing
-                your words.
-              </p>
-              <button
-                type="button"
-                onClick={() => setShowTemplates(false)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
-                aria-label="Close templates"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="campaign-custom-scrollbar overflow-y-auto p-6">
-              <SamplePromoTemplates
-                onApplyTemplate={(template, name) => {
-                  setShowTemplates(false);
-                  pickTemplate(template, name);
-                }}
-              />
-            </div>
-          </div>
-        </div>
+      {showSetup && (
+        <PromoSetupDialog
+          sourceLabel={pendingSource}
+          forcedMethod={forcedMethod}
+          startDate={pendingStart}
+          endDate={pendingEnd}
+          onChangeStart={setPendingStart}
+          onChangeEnd={setPendingEnd}
+          onChoose={handleBuildMethod}
+          onClose={cancelSetup}
+        />
       )}
 
-      {/* Reuse a published campaign */}
       {showPublished && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0" onClick={() => setShowPublished(false)} />
@@ -227,32 +221,43 @@ export function PromoFlow({ onStepChange, initialStep, ...editorProps }: PromoFl
                   No published campaigns yet.
                 </p>
               ) : (
-                [...versions].reverse().map((v) => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => {
-                      setShowPublished(false);
-                      setConfig((prev) => ({
-                        ...prev,
-                        promoCard: withDefaultDates({
-                          ...JSON.parse(JSON.stringify(v.promoCard)),
-                          active: prev.promoCard.active,
-                          stoppedByUser: prev.promoCard.stoppedByUser,
-                        }),
-                      }));
-                      markChanged();
-                      toast(`Started from: ${v.label}`);
-                      goTo('content');
-                    }}
-                    className="rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition-colors hover:border-primary hover:shadow-lg dark:border-gray-700 dark:bg-gray-900"
-                  >
-                    <p className="mb-2 truncate text-xs font-semibold text-gray-800 dark:text-gray-200">
-                      {v.label}
-                    </p>
-                    <PromoMiniPreview promoCard={v.promoCard} />
-                  </button>
-                ))
+                [...versions].reverse().map((v) => {
+                  const choose = () => {
+                    setShowPublished(false);
+                    startWithSetup(
+                      {
+                        ...(JSON.parse(JSON.stringify(v.promoCard)) as PromoCard),
+                        active: config.promoCard.active,
+                        stoppedByUser: config.promoCard.stoppedByUser,
+                      },
+                      'your past campaign',
+                    );
+                    toast(`Selected: ${v.label}`);
+                  };
+                  return (
+                    // Not a <button>: PromoMiniPreview renders the card's own
+                    // CTA button, and nesting buttons is invalid HTML (React
+                    // throws a hydration error).
+                    <div
+                      key={v.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={choose}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          choose();
+                        }
+                      }}
+                      className="cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition-colors hover:border-primary hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:border-gray-700 dark:bg-gray-900"
+                    >
+                      <p className="mb-2 truncate text-xs font-semibold text-gray-800 dark:text-gray-200">
+                        {v.label}
+                      </p>
+                      <PromoMiniPreview promoCard={v.promoCard} />
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>

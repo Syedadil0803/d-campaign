@@ -25,6 +25,7 @@ import { useState, useRef, useCallback, Dispatch, SetStateAction } from 'react';
 import {
   FONT_SIZE_MAP,
   FONT_SIZE_LABEL_MAP,
+  fontSizeToLabel,
   applyFontSize,
   applyInlineColor,
   wrapBareTextWithFontSize,
@@ -229,7 +230,7 @@ export function useRichTextEditor(
       let node: Node | null = selection.anchorNode;
       while (node && node !== document.body) {
         if (node instanceof HTMLElement && node.style.fontSize) {
-          const label = FONT_SIZE_LABEL_MAP[node.style.fontSize];
+          const label = fontSizeToLabel(node.style.fontSize);
           if (label) size = label;
           break;
         }
@@ -294,7 +295,7 @@ export function useRichTextEditor(
         let detectedSize = 'md';
         while (node && node !== document.body) {
           if (node instanceof HTMLElement && node.style.fontSize) {
-            const label = FONT_SIZE_LABEL_MAP[node.style.fontSize];
+            const label = fontSizeToLabel(node.style.fontSize);
             if (label) detectedSize = label;
             break;
           }

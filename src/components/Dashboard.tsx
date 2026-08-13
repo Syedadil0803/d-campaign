@@ -15,6 +15,7 @@ import {
   X,
   ChevronRight,
   Infinity as InfinityIcon,
+  Plus,
 } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { stripHtml, getBackgroundStyle } from '@/lib/utils';
@@ -28,8 +29,15 @@ interface DashboardProps {
   onGoOnAirPromo?: () => void;
   onStopAnnouncement?: () => void;
   onGoOnAirAnnouncement?: () => void;
+  /** Opens the promo tab at its start screen — used by the first-run Create. */
+  onCreatePromo?: () => void;
   promoUnpublished?: boolean;
   announcementUnpublished?: boolean;
+}
+
+/** No copy anywhere on the card — the operator hasn't created one yet. */
+function isPromoUncreated(promo: CampaignConfig['promoCard']): boolean {
+  return !stripHtml(promo.title) && !stripHtml(promo.subtitle) && !stripHtml(promo.description);
 }
 
 const DAY = 86_400_000;
@@ -85,10 +93,12 @@ export function Dashboard({
   onGoOnAirPromo,
   onStopAnnouncement,
   onGoOnAirAnnouncement,
+  onCreatePromo,
   promoUnpublished = false,
   announcementUnpublished = false,
 }: DashboardProps) {
   const hasUnpublished = promoUnpublished || announcementUnpublished;
+  const promoUncreated = isPromoUncreated(config.promoCard);
   // Stop / go-on-air both change the live website, so confirm first.
   const [pending, setPending] = useState<{ kind: 'stop' | 'goOnAir'; target: 'promo' | 'announcement' } | null>(
     null,
@@ -353,6 +363,16 @@ export function Dashboard({
           <div className="group relative">
             {promoViewOverlay}
             <div className="flex h-28 items-center justify-center overflow-hidden rounded-xl border border-border bg-surface-subtle p-3 shadow-inner">
+              {promoUncreated ? (
+                // Nothing made yet — a skeleton says "this is where it appears"
+                // without pretending a sample card is real content.
+                <div className="w-full max-w-[220px] space-y-1.5 rounded-lg border border-dashed border-border p-2.5">
+                  <div className="h-3 w-3/4 animate-pulse rounded bg-on-surface-variant/20" />
+                  <div className="h-2.5 w-full animate-pulse rounded bg-on-surface-variant/15" />
+                  <div className="h-2.5 w-5/6 animate-pulse rounded bg-on-surface-variant/15" />
+                  <div className="h-4 w-full animate-pulse rounded bg-on-surface-variant/20" />
+                </div>
+              ) : (
               <div
                 className="w-full max-w-[220px] rounded-lg p-2 shadow-md"
                 style={{ background: getBackgroundStyle(promo.style.background) }}
@@ -389,6 +409,7 @@ export function Dashboard({
                   )}
                 </div>
               </div>
+              )}
             </div>
           </div>
 
@@ -406,11 +427,30 @@ export function Dashboard({
                 <span>{fmtDate(promo.endDate)}</span>
               </div>
             </div>
+          ) : promoUncreated ? (
+            // Nothing to schedule yet — telling them to set dates for a card
+            // that doesn't exist is an instruction they can't act on here.
+            <p className="mt-4 text-sm text-on-surface-variant">
+              No promo card yet — create one to show it on your site.
+            </p>
           ) : (
             <p className="mt-4 text-sm text-on-surface-variant">Not scheduled yet — set a start and end date.</p>
           )}
 
-          {/* actions — View · Edit · lifecycle (View + Edit both open the Promo tab) */}
+          {/* actions — View · Edit · lifecycle (View + Edit both open the Promo tab).
+              With nothing created yet, none of those apply: the only useful
+              action is to make one, and it opens the start screen. */}
+          {promoUncreated ? (
+            <div className="mt-auto pt-4">
+              <button
+                className={`${primaryBtn} w-full`}
+                onClick={() => (onCreatePromo ? onCreatePromo() : setActiveTab('promo', 'edit'))}
+              >
+                <Plus className="h-4 w-4" />
+                Create promo card
+              </button>
+            </div>
+          ) : (
           <div className="mt-auto flex gap-2 pt-4">
             <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('promo', 'view')}>
               <Eye className="h-4 w-4" />
@@ -435,6 +475,7 @@ export function Dashboard({
               </button>
             )}
           </div>
+          )}
         </div>
 
         {/* Announcement */}

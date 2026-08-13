@@ -3,17 +3,19 @@
 /**
  * Step 1 of the guided promo flow — the starting point picker.
  *
- * Two rows: the actions you can take (continue live/draft, reuse a past
- * campaign, start fresh), then every design as a horizontal strip. Designs sit
- * on the page rather than behind a popup — the page has the room, and it turns
- * "choose a template" from tile → popup → scroll into a single click.
+ * Two rows: how to start something new (reuse a past campaign, start fresh),
+ * then every template as a horizontal strip. Resuming existing work lives in
+ * the editor's My Draft popup and the welcome-back banner — offering it here
+ * as well meant the same card appeared twice under different names. Templates sit on the page rather than behind a popup — the page has
+ * the room, and it turns "choose a template" from tile → popup → scroll into a
+ * single click.
  */
 
 import { FilePlus2, History, ArrowRight } from 'lucide-react';
 import { PromoCard } from '@/types/campaign';
 import { PromoCardThumb } from '@/components/PromoCardThumb';
 
-export type PromoStartChoice = 'current' | 'draft' | 'template' | 'published' | 'blank';
+export type PromoStartChoice = 'ai' | 'published' | 'blank';
 
 interface TemplateOption {
   id: string;
@@ -22,33 +24,16 @@ interface TemplateOption {
 }
 
 interface PromoStartStepProps {
-  /** The card already in the editor (live or in progress), when it has content. */
-  currentCard: PromoCard | null;
-  currentIsLive: boolean;
-  /** The saved draft's card, when one exists. */
-  draftCard: PromoCard | null;
-  draftSavedAt?: string | null;
   /** How many saved variants exist in "My Published". */
   publishedCount: number;
-  /** Every design, shown as a horizontal strip below the action cards. */
+  /** Every template, shown as a horizontal strip below the action cards. */
   templates: TemplateOption[];
   onPickTemplate: (template: PromoCard, name: string) => void;
   onChoose: (choice: PromoStartChoice) => void;
   onSkipToEditor: () => void;
 }
 
-function formatWhen(iso?: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
 export function PromoStartStep({
-  currentCard,
-  currentIsLive,
-  draftCard,
-  draftSavedAt,
   publishedCount,
   templates,
   onPickTemplate,
@@ -103,8 +88,6 @@ export function PromoStartStep({
     );
   }
 
-  const hasContinue = Boolean(currentCard || draftCard || publishedCount > 0);
-
   return (
     <div className="mx-auto w-full max-w-[1180px] pb-8">
       <div className="mb-6 flex items-start justify-between gap-4">
@@ -127,48 +110,6 @@ export function PromoStartStep({
 
       {/* ── Row 1: what you can do ──────────────────────────────────── */}
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {currentCard && (
-          <PickCard onClick={() => onChoose('current')}>
-            <span
-              className={`absolute right-3 top-3 z-10 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                currentIsLive
-                  ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-                  : 'bg-primary/15 text-primary'
-              }`}
-            >
-              {currentIsLive ? 'ON AIR' : 'IN PROGRESS'}
-            </span>
-            <div className="mb-3">
-              <PromoCardThumb promoCard={currentCard} />
-            </div>
-            <h3 className="text-sm font-semibold text-on-surface">
-              {currentIsLive ? 'Continue your live campaign' : 'Continue current campaign'}
-            </h3>
-            <p className="mt-1 text-xs text-on-surface-variant">
-              {currentIsLive
-                ? "Edit what's running on your site right now."
-                : 'Pick up the card you were working on.'}
-            </p>
-          </PickCard>
-        )}
-
-        {draftCard && (
-          <PickCard onClick={() => onChoose('draft')}>
-            <span className="absolute right-3 top-3 z-10 rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] font-bold text-green-600 dark:text-green-400">
-              DRAFT
-            </span>
-            <div className="mb-3">
-              <PromoCardThumb promoCard={draftCard} />
-            </div>
-            <h3 className="text-sm font-semibold text-on-surface">Continue where you left off</h3>
-            <p className="mt-1 text-xs text-on-surface-variant">
-              {draftSavedAt
-                ? `Your saved draft from ${formatWhen(draftSavedAt)}.`
-                : 'Your saved draft, exactly as you left it.'}
-            </p>
-          </PickCard>
-        )}
-
         <PickCard
           onClick={() => onChoose('published')}
           disabled={publishedCount === 0}
@@ -196,7 +137,7 @@ export function PromoStartStep({
         </PickCard>
       </div>
 
-      {/* ── Row 2: every design, scrolled horizontally ──────────────── */}
+      {/* ── Row 2: every template, scrolled horizontally ────────────── */}
       <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
         Templates - Pick any one to start editing - Scroll to see all {templates.length}
       </h3>
@@ -213,12 +154,6 @@ export function PromoStartStep({
           </PickCard>
         ))}
       </div>
-
-      {!hasContinue && (
-        <p className="mt-6 text-center text-xs text-on-surface-variant">
-          Nothing is applied until you pick one — your site stays as it is.
-        </p>
-      )}
     </div>
   );
 }

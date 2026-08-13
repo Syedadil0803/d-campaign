@@ -6,7 +6,7 @@ import { Megaphone, MoreVertical, Sparkles, Undo2, Redo2, Radio, Infinity as Inf
 import { CampaignConfig, defaultConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
-import { wrapBareTextWithFontSize, rgbToHex, FONT_SIZE_LABEL_MAP } from '@/lib/richTextUtils';
+import { wrapBareTextWithFontSize, rgbToHex, fontSizeToLabel } from '@/lib/richTextUtils';
 import RichTextToolbar from './RichTextToolbar';
 import { Toast } from './Toast';
 import { PopupDropdown } from './PopupDropdown';
@@ -776,7 +776,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
       let node: HTMLElement | null = textNode.parentElement;
       while (node && node !== container) {
         if (!foundSize && node.style.fontSize) {
-          const label = FONT_SIZE_LABEL_MAP[node.style.fontSize];
+          const label = fontSizeToLabel(node.style.fontSize);
           if (label) { sizes.add(label); foundSize = true; }
         }
         if (!foundColor && node.style.color) {
