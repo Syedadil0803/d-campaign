@@ -82,6 +82,17 @@ interface PromoSectionProps {
    * still serving to visitors.
    */
   livePromoCard?: PromoCard;
+  /**
+   * The promo card as saved in My Draft.
+   *
+   * Compared field-by-field rather than trusting `draftUpToDate`, which is a
+   * whole-config signature and drifts on HTML the app re-normalises itself.
+   */
+  draftPromoCard?: PromoCard | null;
+  /** A different card just landed on the canvas (template, variant, fresh). */
+  onCardReplaced?: () => void;
+  /** The user has actually edited the countdown — they know where it lives. */
+  onTimerEdited?: () => void;
   // Immediate on/off (no Save → Publish) — the page persists the status change.
   onStop: () => void;
   onGoOnAir: () => void;
@@ -420,6 +431,9 @@ export function PromoSection({
   onSelectedVersionChange,
   canReactivate,
   livePromoCard,
+  draftPromoCard,
+  onCardReplaced,
+  onTimerEdited,
   onStop,
   onGoOnAir,
   dateErrorPing,
@@ -837,6 +851,7 @@ export function PromoSection({
     // Callers that already show their own toast (e.g. deleting the live card)
     // pass silent so the user doesn't get two messages for one action.
     if (!options.silent) toast("Fresh promo card started");
+    onCardReplaced?.();
   }
 
   useEffect(() => {
@@ -2154,6 +2169,7 @@ export function PromoSection({
     onSelectedVersionChange?.(version.id);
     setShowVersionsPopup(false);
     toast(`Variant applied: ${version.label}`);
+    onCardReplaced?.();
   }
 
   // Fetch the single saved draft from the DB and open the My Draft popup. We
@@ -2226,6 +2242,7 @@ export function PromoSection({
     setSelectedVersionId(null);
     onSelectedVersionChange?.(null);
     toast(`Template applied: ${templateName}`);
+    onCardReplaced?.();
   }
 
   // Ask for consent before a replacing action — but only when there's actually
@@ -2360,7 +2377,8 @@ export function PromoSection({
      * saved draft?" — offering to overwrite the draft with a card that was
      * already safe, which is both pointless and destructive.
      */
-    const cardIsPublished = !!livePromoCard && promoCardsEqual(pc, livePromoCard);
+    const cardIsPublished =
+      !!livePromoCard && cardSignature(pc) === cardSignature(livePromoCard);
     if (offerDraftSave && cardIsPublished) {
       // Keeps the caller's title — the dialog still asks "Apply this template?".
       // Only the body changes, to say why nothing is at risk.
@@ -2378,7 +2396,15 @@ export function PromoSection({
       return;
     }
 
-    if (offerDraftSave && draftExists && draftUpToDate) {
+    /**
+     * Already in the draft. Uses the card comparison, not `draftUpToDate`:
+     * that flag is a whole-config signature, so switching tabs and coming back
+     * made an unchanged card look edited and prompted to re-save it.
+     */
+    const cardIsInDraft =
+      !!draftPromoCard && cardSignature(pc) === cardSignature(draftPromoCard);
+
+    if (offerDraftSave && (cardIsInDraft || (draftExists && draftUpToDate))) {
       // Already saved and untouched since — nothing can be lost.
       setCardActionConfirm({
         ...opts,
@@ -2394,7 +2420,7 @@ export function PromoSection({
       return;
     }
 
-    if (offerDraftSave && draftExists && !draftUpToDate) {
+    if (offerDraftSave && draftExists && !draftUpToDate && !cardIsInDraft) {
       // A draft exists but the editor has moved on. Continuing overwrites the
       // draft with what's on screen now — say so before it happens.
       setCardActionConfirm({
@@ -2918,7 +2944,7 @@ export function PromoSection({
 
           {/* Consent before a card-replacing action */}
           {cardActionConfirm && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div data-modal className="fixed inset-0 z-[60] flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-black/20" onClick={() => setCardActionConfirm(null)} />
               <div
                 className={`relative z-10 w-full rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md ${
@@ -4010,9 +4036,13 @@ export function PromoSection({
                        align); chrome='inline' keeps the editor from adding any
                        wrapper styling that would change that look. */
                     <div
+                      data-tour="promo-timer"
                       className={`mb-4 px-2 py-1 rounded break-words ${currentField === "timer" ? "ring-1 ring-primary/70" : ""}`}
                       onMouseDown={() => {
                         if (currentField !== "timer") setCurrentField("timer");
+                        // Touching the countdown is the signal that the hint
+                        // has done its job and should stop reappearing.
+                        onTimerEdited?.();
                       }}
                       onClick={(e) => {
                         setShowCardBgPopup(false);
@@ -4804,7 +4834,7 @@ export function PromoSection({
       {/* Paste-from-AI import */}
       {/* Sample Templates popup — shows the same 6 cards; click one to apply */}
       {showTemplatesPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div data-modal className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0" onClick={() => setShowTemplatesPopup(false)} />
           <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border shadow-2xl backdrop-blur-md">
             <div className="flex items-center gap-3 border-b border-border px-6 py-3">
@@ -4925,7 +4955,7 @@ export function PromoSection({
         const draftIsOnCanvas =
           !!draftCard && stripCard(draftCard) === stripCard(config.promoCard);
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div data-modal className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0" onClick={() => setShowDraftPopup(false)} />
             <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[520px] flex-col overflow-hidden rounded-xl border border-white/10 bg-black/10 backdrop-blur-md shadow-2xl">
               <div className="flex items-center justify-between gap-3 border-b border-white/10 px-6 py-3">
@@ -5032,7 +5062,7 @@ export function PromoSection({
 
       {/* Versions popup — save / restore / delete up to MAX_VERSIONS snapshots */}
       {showVersionsPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div data-modal className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
             className="absolute inset-0"
             onClick={() => setShowVersionsPopup(false)}

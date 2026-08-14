@@ -65,13 +65,20 @@ function hasCopy(card: PromoCard): boolean {
 const MODES: {
   value: AiMode;
   label: string;
+  /**
+   * Two hints per mode: one for a card that already has the user's content and
+   * a chosen design, one for a brand-new card that has neither. "Keeps the
+   * design you picked" is a lie on a first card — nothing has been picked yet.
+   */
   hint: string;
+  newCardHint: string;
   icon: typeof Palette;
 }[] = [
   {
     value: 'design',
     label: 'Colors only',
     hint: 'Your content stays exactly as written.',
+    newCardHint: 'Sets a palette now; you write the content yourself.',
     icon: Palette,
   },
   {
@@ -80,12 +87,14 @@ const MODES: {
     value: 'copy',
     label: 'Content only',
     hint: 'Keeps the design you picked.',
+    newCardHint: "Keeps the card's current look.",
     icon: Type,
   },
   {
     value: 'both',
     label: 'Content and colors',
     hint: 'AI writes the content and proposes a palette.',
+    newCardHint: 'AI writes the content and proposes a palette.',
     icon: Wand2,
   },
 ];
@@ -134,7 +143,11 @@ export function PromoBuildPanel({
    * Always starts on the choice — it's what the user came here to decide.
    */
   const [aiStep, setAiStep] = useState<'what' | 'brief'>('what');
-  const availableModes = MODES.filter((m) => m.value !== 'design' || cardHasCopy);
+  // All three, always. "Colors only" used to be hidden on a new card because
+  // there was no content to preserve — but choosing a palette before writing
+  // is a legitimate way to start, and hiding an option makes the step look
+  // different depending on history.
+  const availableModes = MODES;
   const activeMode = MODES.find((m) => m.value === mode);
   /**
    * Back exists wherever there's a previous step: the brief returns to the
@@ -334,7 +347,9 @@ export function PromoBuildPanel({
           >
             <Icon className={`mb-1.5 h-5 w-5 ${on ? 'text-primary' : 'text-on-surface-variant'}`} />
             <p className="text-sm font-semibold text-on-surface">{m.label}</p>
-            <p className="mt-0.5 text-xs leading-snug text-on-surface-variant">{m.hint}</p>
+            <p className="mt-0.5 text-xs leading-snug text-on-surface-variant">
+              {cardHasCopy ? m.hint : m.newCardHint}
+            </p>
           </button>
         );
       })}
@@ -575,7 +590,10 @@ export function PromoBuildPanel({
                       up top left the whole gap stacked underneath. */}
                   <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-xl border border-border bg-surface-subtle p-3">
                     <div className="w-full shrink-0" style={{ maxWidth: `${pc.cardWidth || 400}px` }}>
-                      <PromoMiniPreview promoCard={pc} faithful />
+                      {/* Scaffold on a blank card, so a new campaign previews
+                          as the shape AI is about to fill rather than an
+                          empty box — same as the editor's own canvas. */}
+                      <PromoMiniPreview promoCard={pc} faithful scaffold={!cardHasCopy} />
                     </div>
                   </div>
                 </div>

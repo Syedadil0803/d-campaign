@@ -18,9 +18,9 @@
 import { useEffect, useState } from 'react';
 import { PromoSection } from '@/components/PromoSection';
 import { PromoBuildPanel, type BuildStage } from '@/components/PromoBuildPanel';
-import { GuidedTour, shouldShowTour } from '@/components/tour/GuidedTour';
+import { GuidedTour, markTourSeen, shouldShowTour } from '@/components/tour/GuidedTour';
 import { useSignalEffect } from '@/hooks/useSignalEffect';
-import { PROMO_DRAFT_TOUR } from '@/components/tour/tours';
+import { PROMO_DRAFT_TOUR, PROMO_TIMER_TOUR } from '@/components/tour/tours';
 
 type PromoSectionProps = React.ComponentProps<typeof PromoSection>;
 
@@ -56,18 +56,45 @@ export function PromoFlow({
   );
   const [showTour, setShowTour] = useState(false);
   /**
+   * The countdown hint. Unlike the first-run tour this recurs: it fires each
+   * time a different card lands on the canvas, because that's when "where do I
+   * edit the timer?" is actually being asked. It retires when the user edits
+   * the timer — not when they dismiss it.
+   */
+  const [showTimerHint, setShowTimerHint] = useState(false);
+
+  const handleCardReplaced = () => {
+    if (shouldShowTour(PROMO_TIMER_TOUR)) setShowTimerHint(true);
+  };
+
+  const handleTimerEdited = () => {
+    markTourSeen(PROMO_TIMER_TOUR);
+    setShowTimerHint(false);
+  };
+  /**
    * Bumped to open the editor's Template Hub. A signal rather than a boolean:
    * the popup owns its own open/closed state, and this only ever asks it to
    * open, so re-asking after the user closes it has to be distinguishable.
    */
   const [openTemplatesSignal, setOpenTemplatesSignal] = useState(0);
 
-  useSignalEffect(openBuildSignal, () => setPanelStage('mode'));
+  useSignalEffect(openBuildSignal, () => {
+    setPanelStage('mode');
+    // Reaching the build stage IS a new card — the page resets the canvas
+    // before sending us here, so PromoSection's own "card replaced" callbacks
+    // never fire for this route.
+    handleCardReplaced();
+  });
 
   // The walkthrough explains the editor's draft model, so it waits until the
   // editor is actually on screen.
   useEffect(() => {
     if (shouldShowTour(PROMO_DRAFT_TOUR)) setShowTour(true);
+    // Arriving straight on the build stage (dashboard → Create new) is a new
+    // card too, and the signal above can't cover it: it's set in the same
+    // batch as the tab switch, so this component mounts with it already raised.
+    if (initialStep === 'build' && shouldShowTour(PROMO_TIMER_TOUR)) setShowTimerHint(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -75,6 +102,8 @@ export function PromoFlow({
       <PromoSection
         {...editorProps}
         onUseAi={() => setPanelStage('ai')}
+        onCardReplaced={handleCardReplaced}
+        onTimerEdited={handleTimerEdited}
         openTemplatesSignal={openTemplatesSignal}
         // Back out of the templates popup returns to the question that sent
         // the user there, rather than dumping them on the editor.
@@ -87,7 +116,11 @@ export function PromoFlow({
           setConfig={setConfig}
           markChanged={markChanged}
           toast={toast}
-          onApplied={onAiApplied}
+          onApplied={() => {
+            onAiApplied?.();
+            // AI filling the card counts as a new card landing.
+            handleCardReplaced();
+          }}
           initialStage={panelStage}
           onClose={() => setPanelStage(null)}
           onChooseManual={() => {
@@ -104,6 +137,16 @@ export function PromoFlow({
         tour={PROMO_DRAFT_TOUR}
         enabled={showTour && !panelStage}
         onFinish={() => setShowTour(false)}
+      />
+
+      {/* Dismissing this one means "not now", so it isn't retired on close —
+          only editing the timer retires it. Held back while the first-run tour
+          or the build panel is up, so two marks never compete. */}
+      <GuidedTour
+        tour={PROMO_TIMER_TOUR}
+        enabled={showTimerHint && !panelStage && !showTour}
+        persistDismissal={false}
+        onFinish={() => setShowTimerHint(false)}
       />
     </>
   );

@@ -17,6 +17,10 @@
  * restyling a button can't silently break a tour. A step whose anchor never
  * appears (a conditional button, a collapsed panel) is skipped rather than
  * left pointing at nothing.
+ *
+ * Marks never draw while a modal is open: any element carrying `data-modal`
+ * pauses every tour. A ring pulsing behind a dialog points at something the
+ * user can't reach, and reads as the page glitching.
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -42,10 +46,19 @@ export interface TourDefinition {
   steps: TourStep[];
 }
 
-/** Gap between the highlighted element and the popover. */
-const GAP = 10;
-/** Deliberately narrow: a coach mark sits beside the UI, it doesn't cover it. */
-const POPOVER_WIDTH = 244;
+/**
+ * Gap between the highlighted element and the popover.
+ *
+ * Has to clear the highlight ring too, which itself sits 4px outside the
+ * anchor — at 10px the mark looked like it was resting on the card it was
+ * pointing at.
+ */
+const GAP = 20;
+/**
+ * Wide enough that short hints sit on one or two lines instead of wrapping
+ * into a block, but still a mark beside the UI rather than a panel over it.
+ */
+const POPOVER_WIDTH = 320;
 /** Give a late-rendering anchor this long to appear before skipping its step. */
 const ANCHOR_TIMEOUT_MS = 1500;
 
@@ -139,9 +152,22 @@ interface GuidedTourProps {
   enabled: boolean;
   /** Fired once the tour ends (finished, skipped or dismissed). */
   onFinish?: () => void;
+  /**
+   * Whether ending the tour retires it for good. Default true.
+   *
+   * False for recurring hints, where dismissing means "not now" rather than "I
+   * know this" — the caller decides what actually counts as learned and calls
+   * markTourSeen itself.
+   */
+  persistDismissal?: boolean;
 }
 
-export function GuidedTour({ tour, enabled, onFinish }: GuidedTourProps) {
+export function GuidedTour({
+  tour,
+  enabled,
+  onFinish,
+  persistDismissal = true,
+}: GuidedTourProps) {
   const [index, setIndex] = useState(0);
   const [anchor, setAnchor] = useState<Box | null>(null);
   const [popH, setPopH] = useState(150);
@@ -150,13 +176,19 @@ export function GuidedTour({ tour, enabled, onFinish }: GuidedTourProps) {
   const waitingSince = useRef<number | null>(null);
 
   const step = tour.steps[index];
-  const running = enabled && !done && !!step;
+  /**
+   * Paused while a dialog is open. Tracked in state rather than read during
+   * render so it re-evaluates as dialogs come and go — the tour resumes by
+   * itself once the screen is clear.
+   */
+  const [modalOpen, setModalOpen] = useState(false);
+  const running = enabled && !done && !modalOpen && !!step;
 
   const finish = useCallback(() => {
-    markTourSeen(tour);
+    if (persistDismissal) markTourSeen(tour);
     setDone(true);
     onFinish?.();
-  }, [tour, onFinish]);
+  }, [tour, onFinish, persistDismissal]);
 
   // Track the anchor's box continuously: the page scrolls, panels resize, and
   // a ring that lags behind its button is worse than no ring.
@@ -194,6 +226,20 @@ export function GuidedTour({ tour, enabled, onFinish }: GuidedTourProps) {
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [running, step?.anchor, index, tour.steps.length, finish]);
+
+  // A dialog can open at any moment, so this watches continuously rather than
+  // checking once when the tour starts.
+  useEffect(() => {
+    if (!enabled || done) return;
+    let frame = 0;
+    const tick = () => {
+      const open = !!document.querySelector('[data-modal]');
+      setModalOpen((prev) => (prev === open ? prev : open));
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [enabled, done]);
 
   // Bring an off-screen target into view before pointing at it.
   useEffect(() => {
@@ -248,7 +294,7 @@ export function GuidedTour({ tour, enabled, onFinish }: GuidedTourProps) {
         ref={popRef}
         role="dialog"
         aria-label={step.title}
-        className="pointer-events-auto absolute rounded-lg border border-border bg-surface-elevated p-3 text-on-surface shadow-xl"
+        className="pointer-events-auto absolute rounded-lg border border-border bg-surface-elevated px-3.5 py-2.5 text-on-surface shadow-xl"
         style={{ top, left, width: POPOVER_WIDTH }}
       >
         {/* Caret pointing back at the control. */}
@@ -303,10 +349,16 @@ export function GuidedTour({ tour, enabled, onFinish }: GuidedTourProps) {
 
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2.5">
           {/* Position as a plain count. Dots this small read as decoration and
-              stop being countable past three steps; a number never does. */}
-          <span className="text-[10px] font-medium tabular-nums text-on-surface-variant">
-            {index + 1} of {tour.steps.length}
-          </span>
+              stop being countable past three steps; a number never does.
+              Hidden for a single step — "1 of 1" tells you nothing and makes a
+              standalone hint look like a truncated tour. */}
+          {tour.steps.length > 1 ? (
+            <span className="text-[10px] font-medium tabular-nums text-on-surface-variant">
+              {index + 1} of {tour.steps.length}
+            </span>
+          ) : (
+            <span />
+          )}
 
           <div className="flex items-center gap-1">
             {index > 0 && (

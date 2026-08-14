@@ -12,15 +12,22 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight, CalendarDays, PenLine, Sparkles, X } from 'lucide-react';
 import { PromoDatePicker } from '@/components/PromoDatePicker';
+import { toLocalISODate } from '@/lib/utils';
 
 export type BuildMethod = 'ai' | 'manual';
 
-/** One-click campaign lengths, so most users never open a calendar. */
+/**
+ * One-click campaign lengths, so most users never open a calendar.
+ *
+ * Labelled in the unit that's actually set. "1 month" set 30 days, which is
+ * only true for four months of the year — and a campaign's length is a count
+ * of days, not a calendar unit. Weeks stay: 7 and 14 are exact.
+ */
 const DURATIONS = [
   { days: 3, label: '3 days' },
   { days: 7, label: '1 week' },
   { days: 14, label: '2 weeks' },
-  { days: 30, label: '1 month' },
+  { days: 30, label: '30 days' },
 ];
 
 interface PromoSetupDialogProps {
@@ -64,17 +71,22 @@ export function PromoSetupDialog({
 }: PromoSetupDialogProps) {
   const [showError, setShowError] = useState(false);
   const [customDates, setCustomDates] = useState(false);
-  const todayISO = new Date().toISOString().split('T')[0];
+  const todayISO = toLocalISODate(new Date());
   const rangeInvalid = Boolean(startDate && endDate && startDate > endDate);
   const incomplete = !startDate || !endDate;
   const scheduleReady = !rangeInvalid && !incomplete;
 
-  /** Days between the two dates, when they make sense. */
+  /**
+   * How many calendar days the campaign runs, counting BOTH ends.
+   *
+   * The end date is inclusive everywhere else (the dashboard runs a campaign
+   * until endDate + 24h), so a range of 14th–16th is three days, not two.
+   */
   const runLength = useMemo(() => {
     if (!scheduleReady) return null;
     const ms =
       new Date(`${endDate}T00:00:00`).getTime() - new Date(`${startDate}T00:00:00`).getTime();
-    return Math.round(ms / 86_400_000);
+    return Math.round(ms / 86_400_000) + 1;
   }, [startDate, endDate, scheduleReady]);
 
   const summary = useMemo(() => {
@@ -90,10 +102,12 @@ export function PromoSetupDialog({
   function setRunLength(days: number) {
     const start = startDate || todayISO;
     const end = new Date(`${start}T00:00:00`);
-    end.setDate(end.getDate() + days);
+    // days - 1: the start day counts. "3 days" starting today is today,
+    // tomorrow and the day after — not today plus three more.
+    end.setDate(end.getDate() + days - 1);
     setShowError(false);
     onChangeStart(start);
-    onChangeEnd(end.toISOString().split('T')[0]);
+    onChangeEnd(toLocalISODate(end));
   }
 
   function pick(method: BuildMethod) {
@@ -120,7 +134,7 @@ export function PromoSetupDialog({
     'focus:outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/40';
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div data-modal className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative z-10 w-full max-w-2xl rounded-xl border border-border bg-surface-elevated text-on-surface shadow-2xl">
         <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-4">
@@ -146,9 +160,9 @@ export function PromoSetupDialog({
             schedule it ahead — it stays off your site until the start date.
           </p>
 
-          {/* Standalone pills. The selected one is a primary tint with a ring
-              rather than a solid fill, so it doesn't compete with the dialog's
-              actual buttons. */}
+          {/* Standalone pills, solid-filled when chosen. A tint was too quiet:
+              picking "3 days" left the chip looking untouched, and the schedule
+              is the only thing this dialog asks for. */}
           <div className="mb-3 flex flex-wrap gap-1.5">
             {DURATIONS.map((d) => {
               const on = !customDates && runLength === d.days;
@@ -162,7 +176,7 @@ export function PromoSetupDialog({
                   }}
                   className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
                     on
-                      ? 'border-primary bg-primary/10 text-primary ring-1 ring-primary/30'
+                      ? 'border-primary bg-primary text-on-primary shadow-sm'
                       : 'border-border text-on-surface-variant hover:border-primary/70 hover:text-primary'
                   }`}
                 >
@@ -175,7 +189,7 @@ export function PromoSetupDialog({
               onClick={() => setCustomDates(true)}
               className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
                 customDates
-                  ? 'border-primary bg-primary/10 text-primary ring-1 ring-primary/30'
+                  ? 'border-primary bg-primary text-on-primary shadow-sm'
                   : 'border-border text-on-surface-variant hover:border-primary/70 hover:text-primary'
               }`}
             >

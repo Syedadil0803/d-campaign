@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, Megaphone, Gift, LayoutGrid, Save, Upload, Sun, Moon, LogOut, Loader2, Check, Undo2 } from 'lucide-react';
+import { LayoutDashboard, Megaphone, Gift, LayoutGrid, Save, Upload, Sun, Moon, LogOut, Loader2, Check } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: 'dashboard' | 'announcement' | 'promo';
@@ -13,10 +13,6 @@ interface HeaderProps {
   promoDateInvalid: boolean;
   /** Hides the status badge and Save/Publish — used outside the promo editor. */
   hideActions?: boolean;
-  /** Throws away unpublished edits for the active tab, back to what's live. */
-  onDiscardChanges?: () => void;
-  /** False when there's no published card or saved draft to fall back to. */
-  canDiscard?: boolean;
   isPublishing: boolean;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
@@ -34,8 +30,6 @@ export function Header({
   readyToPublishAnnouncement,
   promoDateInvalid,
   hideActions,
-  onDiscardChanges,
-  canDiscard,
   isPublishing,
   isDarkMode,
   toggleDarkMode,
@@ -143,20 +137,6 @@ export function Header({
                   <Check className="mr-1.5 h-4 w-4" />
                   All changes published
                 </div>
-              )}
-
-              {/* Discard — the way back to what's live. Without it the badge
-                  only reports a state you can't leave: once you've edited, the
-                  editor keeps your version until you publish it. */}
-              {state !== 'published' && canDiscard && onDiscardChanges && (
-                <button
-                  onClick={onDiscardChanges}
-                  title="Throw away these edits and go back to what's live"
-                  className="inline-flex items-center rounded-md px-2.5 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:text-red-500"
-                >
-                  <Undo2 className="mr-1.5 h-4 w-4" />
-                  Discard
-                </button>
               )}
 
               {/* Action button */}

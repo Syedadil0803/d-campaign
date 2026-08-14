@@ -11,7 +11,7 @@ import { AnnouncementSection } from '@/components/AnnouncementSection';
 import { PromoFlow } from '@/components/PromoFlow';
 import { PromoSetupDialog } from '@/components/PromoSetupDialog';
 import { Toast } from '@/components/Toast';
-import { getISODateWithOffset } from '@/lib/utils';
+import { getISODateWithOffset, toLocalISODate } from '@/lib/utils';
 import {
   listVersions,
   MAX_VERSIONS,
@@ -186,6 +186,24 @@ export default function Home() {
     mode: 'save' | 'publish';
   } | null>(null);
   const [selectedPromoVersionId, setSelectedPromoVersionId] = useState<string | null>(null);
+  /**
+   * Everything in My Published.
+   *
+   * The unsaved-work guard needs these synchronously: a card sitting in My
+   * Published is already recoverable, so offering to save it to My Draft is
+   * asking the user to keep a second copy of something they haven't lost.
+   */
+  const [promoVariants, setPromoVariants] = useState<PromoVersion[]>([]);
+
+  const refreshPromoVariants = useCallback(() => {
+    listVersions()
+      .then(setPromoVariants)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshPromoVariants();
+  }, [refreshPromoVariants]);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastIsError, setToastIsError] = useState(false);
@@ -215,6 +233,17 @@ export default function Home() {
   // the editor already matches the draft — re-saving identical content only
   // produces a pointless "Replace saved draft?" prompt.
   const [savedDraftSignature, setSavedDraftSignature] = useState<string | null>(null);
+  /**
+   * The promo card as it exists in the saved draft.
+   *
+   * `savedDraftSignature` is a JSON signature of the WHOLE config, so it drifts
+   * whenever the app re-normalises HTML by itself — font-size spans, the timer
+   * chip, the auto card width. After a tab switch the editor stopped
+   * recognising that its card WAS the saved draft, and started asking to save
+   * a card that was already saved. Comparing the card itself, field by field,
+   * survives that noise.
+   */
+  const [draftPromoCard, setDraftPromoCard] = useState<CampaignConfig['promoCard'] | null>(null);
   // Which guided-flow step the promo tab is on. Publish is an editor action, so
   // the header hides it while the user is still picking a start or writing copy.
   // Where the promo tab opens. Dashboard's View/Edit act on an existing
@@ -241,6 +270,49 @@ export default function Home() {
   // compare the announcement against what's live.
   const publishedConfigObjRef = useRef<CampaignConfig | null>(null);
 
+  /**
+   * Strips differences the APP creates on its own, so they don't read as edits.
+   *
+   * The editors rewrite their own HTML constantly: bare text gets wrapped in a
+   * default font-size span on sync, the timer chip re-serialises, contentEditable
+   * leaves zero-width characters behind, and cardWidth flips 400↔440 by itself.
+   * A raw JSON compare counted every one of those as an unpublished change, so
+   * the badge appeared without the user editing anything.
+   *
+   * Real edits still register: text, formatting other than the injected default,
+   * and every style field are all preserved here.
+   */
+  function normalizeForCompare(html: unknown): unknown {
+    if (typeof html !== 'string') return html;
+    return (
+      html
+        // The default-size wrapper the editors inject around bare text — it
+        // changes the markup without changing what anything looks like.
+        .replace(/<span style="font-size:\s*1rem;?">([\s\S]*?)<\/span>/gi, '$1')
+        .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+    );
+  }
+
+  function normalizePromoForCompare(card: Record<string, unknown>) {
+    const clone = { ...card };
+    delete clone.active;
+    delete clone.stoppedByUser;
+    // Recomputed by the fit logic, never chosen by the user.
+    delete clone.cardWidth;
+    (['title', 'subtitle', 'description', 'buttonText'] as const).forEach((k) => {
+      clone[k] = normalizeForCompare(clone[k]);
+    });
+    // The countdown's markup is regenerated on every render; only its wording
+    // is the user's.
+    clone.timerText = String(clone.timerText ?? '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return clone;
+  }
+
   function getConfigSignature(cfg: CampaignConfig) {
     // `active` / `stoppedByUser` are live on/off flags managed by Go-on-air /
     // Stop, not content. Exclude them so the Save/dirty check reflects real
@@ -261,7 +333,9 @@ export default function Home() {
     return JSON.stringify({
       ...content,
       announcementBar: strip(cfg.announcementBar as unknown as Record<string, unknown>),
-      promoCard: strip(cfg.promoCard as unknown as Record<string, unknown>),
+      promoCard: normalizePromoForCompare(
+        cfg.promoCard as unknown as Record<string, unknown>,
+      ),
     });
   }
 
@@ -308,6 +382,7 @@ export default function Home() {
     const updatedVersions = await saveVersion(cfg.promoCard, getAutoVariantLabel(), { allowOverflow });
     setSelectedPromoVersionId(updatedVersions[updatedVersions.length - 1]?.id ?? null);
     savedPromoSignatureRef.current = getPromoSignature(cfg);
+    refreshPromoVariants();
   }
 
   useEffect(() => {
@@ -357,8 +432,6 @@ export default function Home() {
 
   // Consent before discarding a draft (destructive).
   const [confirmDiscardDraft, setConfirmDiscardDraft] = useState(false);
-  // Consent before throwing away unpublished edits (also destructive).
-  const [confirmDiscardChanges, setConfirmDiscardChanges] = useState(false);
   /**
    * A dashboard action held back because the editor has work that isn't in the
    * draft. Both entries lead somewhere that replaces the canvas, so the user
@@ -498,11 +571,36 @@ export default function Home() {
    * the card that the answer applies to.
    */
   function startNewPromo() {
+    /**
+     * "Create new" starts from a blank card, not from whatever was last on the
+     * canvas. Keeping the old card meant AI wrote on top of a previous
+     * campaign's leftovers, and the AI panel previewed a card the user wasn't
+     * making. Unsaved work is already protected by the guard that runs before
+     * this — by the time we're here, the user has agreed to move on.
+     *
+     * The schedule-only path (an existing card missing dates) leaves the card
+     * alone: nothing about that flow says "start over".
+     */
+    const startingFresh = createIntent === 'new';
+
     setConfig((prev) => ({
       ...prev,
-      promoCard: { ...prev.promoCard, startDate: createStart, endDate: createEnd },
+      promoCard: startingFresh
+        ? {
+            ...(JSON.parse(JSON.stringify(defaultConfig.promoCard)) as CampaignConfig['promoCard']),
+            // On-air state belongs to the website, not the card being drafted;
+            // creating a new one must never take the live campaign down.
+            active: prev.promoCard.active,
+            stoppedByUser: prev.promoCard.stoppedByUser,
+            startDate: createStart,
+            endDate: createEnd,
+          }
+        : { ...prev.promoCard, startDate: createStart, endDate: createEnd },
     }));
     markPromoChanged();
+    // Remount so the contentEditable fields re-read the blank card; without it
+    // the old text stays visible even though state has been replaced.
+    if (startingFresh) setEditorResetKey((k) => k + 1);
     setShowCreateSetup(false);
     // "Create new" always continues to the build panel — that's the point of
     // it. The schedule-only prompt returns to the card it interrupted, unless
@@ -591,6 +689,7 @@ export default function Home() {
       keepalive: true,
     }).catch(() => {});
     setSavedDraftSignature(getConfigSignature(cfg));
+    setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
     if (options.markHandled !== false) {
       draftSignatureRef.current = getConfigSignature(cfg);
     }
@@ -601,6 +700,42 @@ export default function Home() {
     fetch('/api/draft', { method: 'DELETE', keepalive: true }).catch(() => {});
     draftSignatureRef.current = null;
     setSavedDraftSignature(null);
+    setDraftPromoCard(null);
+  }
+
+  /**
+   * Deleting the saved draft, from the My Draft popup.
+   *
+   * If the canvas is showing exactly that draft, it goes back to what's live —
+   * otherwise the "deleted" work stays on screen, still counts as unsaved, and
+   * every entry point starts offering to save it again. Mirrors what deleting
+   * a live variant already does.
+   *
+   * Edits made since the draft was saved are left alone: those are the user's
+   * current work, not the thing they just deleted.
+   */
+  function handleDeleteDraft() {
+    const deleted = draftPromoCard;
+    const live = publishedConfigObjRef.current;
+    clearDraft();
+    if (!deleted || !live) return;
+    // Normalised for the same reason as everywhere else — otherwise the app's
+    // own HTML rewrites make the canvas look "edited since saving" and the
+    // deleted draft is left sitting on it.
+    const sig = (card: CampaignConfig['promoCard']) =>
+      JSON.stringify(normalizePromoForCompare(card as unknown as Record<string, unknown>));
+    if (sig(configRef.current.promoCard) !== sig(deleted)) return;
+
+    const next: CampaignConfig = {
+      ...configRef.current,
+      promoCard: JSON.parse(JSON.stringify(live.promoCard)),
+    };
+    setConfig(next);
+    configRef.current = next;
+    draftSignatureRef.current = getConfigSignature(next);
+    savedPromoSignatureRef.current = getPromoSignature(next);
+    setHasPromoChanges(getConfigSignature(next) !== publishedConfigRef.current);
+    setEditorResetKey((k) => k + 1);
   }
 
   // Explicit "Save as draft" — the ONLY way a draft is ever written now.
@@ -618,6 +753,7 @@ export default function Home() {
         if (res.ok) {
           draftSignatureRef.current = getConfigSignature(cfg);
           setSavedDraftSignature(getConfigSignature(cfg));
+          setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
           toast('Saved draft updated');
         } else {
           toast('Couldn’t save your draft', true);
@@ -807,6 +943,7 @@ export default function Home() {
           setConfig(migrated);
           draftSignatureRef.current = getConfigSignature(migrated);
           setSavedDraftSignature(getConfigSignature(migrated));
+          setDraftPromoCard(JSON.parse(JSON.stringify(migrated.promoCard)));
           savedPromoSignatureRef.current = getPromoSignature(migrated);
           setHasAnnouncementChanges(true);
           setHasPromoChanges(true);
@@ -988,7 +1125,10 @@ export default function Home() {
     if (!pc.startDate || !pc.endDate) {
       warnings.push('Start date or end date is not set');
     } else {
-      const today = new Date().toISOString().split('T')[0];
+      // Local, not UTC: east of Greenwich a UTC "today" is still yesterday
+      // for the first hours of the day, which would flag a campaign ending
+      // today as already expired.
+      const today = toLocalISODate(new Date());
       if (pc.endDate < today) {
         warnings.push('End date is in the past');
       } else if (pc.startDate <= today) {
@@ -1099,69 +1239,6 @@ export default function Home() {
     toast('Saved draft deleted');
   }
 
-  /**
-   * Throw away unpublished edits for one section and go back to what's live.
-   *
-   * The gap this fills: edits survive tab switches (they're React state) and a
-   * tab close writes them to the saved draft, so before this there was no way
-   * back to the published version short of deleting the draft.
-   *
-   * Only the active section is reverted — discarding promo work because you
-   * wanted to undo an announcement edit would be its own bug. The editors read
-   * their content into local state on mount, so the remount key forces them to
-   * re-read; without it the reverted config wouldn't reach the contentEditable
-   * fields.
-   */
-  async function discardEditorChanges(section: 'promo' | 'announcement') {
-    const live = publishedConfigObjRef.current;
-    if (!live) return;
-
-    /**
-     * Always back to LIVE — one meaning, no guessing which version you land on.
-     * An earlier version fell back to the saved draft, but the draft already
-     * has its own way back (My Draft), so routing Discard through it made the
-     * button mean two different things depending on hidden state.
-     *
-     * The draft itself is never touched here.
-     */
-    const base: CampaignConfig = live;
-
-    const next: CampaignConfig =
-      section === 'promo'
-        ? { ...configRef.current, promoCard: JSON.parse(JSON.stringify(base.promoCard)) }
-        : {
-            ...configRef.current,
-            announcementBar: JSON.parse(JSON.stringify(base.announcementBar)),
-          };
-
-    setConfig(next);
-    configRef.current = next;
-    draftSignatureRef.current = getConfigSignature(next);
-
-    // Landing on a saved draft still leaves unpublished work, so the dirty
-    // flag has to reflect what we landed on — reporting "all published" while
-    // showing draft content would be a lie the Publish button acts on.
-    const matchesLive = getConfigSignature(next) === publishedConfigRef.current;
-
-    if (section === 'promo') {
-      setHasPromoChanges(!matchesLive);
-      savedPromoSignatureRef.current = getPromoSignature(next);
-      // The remount below restarts PromoFlow at `initialStep`. Without this it
-      // restarts at the picker, so discarding looked like it did nothing —
-      // the reverted card was never shown.
-      setPromoEntryStep('editor');
-    } else {
-      setHasAnnouncementChanges(!matchesLive);
-      setReadyToPublishAnnouncement(false);
-    }
-
-    // The saved draft is deliberately NOT deleted here. Discard undoes the
-    // edits made since it was saved; destroying the draft as well would throw
-    // away work the user explicitly chose to keep.
-    setEditorResetKey((k) => k + 1);
-    toast('Changes discarded — back to what’s live');
-  }
-
   function markAnnouncementChanged() {
     // If config matches published state, no actual changes
     setTimeout(() => {
@@ -1226,8 +1303,32 @@ export default function Home() {
 
   // Work worth protecting: the promo differs from what's live AND isn't the
   // thing already sitting in the draft.
-  promoWorkNotInDraftRef.current =
-    hasPromoChanges && savedDraftSignature !== getConfigSignature(config);
+  /**
+   * Computed from the cards themselves rather than from `hasPromoChanges`.
+   *
+   * That flag is only recalculated when something calls markPromoChanged(), so
+   * it survives events that make it untrue — deleting the saved draft being the
+   * one that bit: the flag stayed true, the guard fired, and "Create new" asked
+   * to save work into a draft the user had just deleted. A refresh "fixed" it
+   * only because reloading recomputed everything from scratch.
+   */
+  promoWorkNotInDraftRef.current = (() => {
+    // Normalised, like every other comparison: a raw stringify counts the
+    // app's own rewrites (the injected default font-size span, zero-width
+    // characters, the re-serialised timer, the auto cardWidth) as edits — so
+    // simply opening the editor made "Create new" claim there was unsaved work.
+    const sig = (card: CampaignConfig['promoCard']) =>
+      JSON.stringify(
+        normalizePromoForCompare(card as unknown as Record<string, unknown>),
+      );
+    const current = sig(config.promoCard);
+    const differsFromLive = current !== sig(publishedConfig.promoCard);
+    const differsFromDraft = !draftPromoCard || current !== sig(draftPromoCard);
+    // My Published counts as saved. Matching any variant in there means the
+    // card can be brought back, so there is nothing to protect.
+    const differsFromSaved = !promoVariants.some((v) => sig(v.promoCard) === current);
+    return differsFromLive && differsFromDraft && differsFromSaved;
+  })();
 
   return (
     <div className="campaign-page-bg flex h-screen text-on-surface">
@@ -1239,19 +1340,6 @@ export default function Home() {
           hasPromoChanges={hasPromoChanges}
           readyToPublishAnnouncement={readyToPublishAnnouncement}
           promoDateInvalid={promoDateRangeInvalid}
-          onDiscardChanges={() => setConfirmDiscardChanges(true)}
-          /**
-           * Discard goes back to what's LIVE, so it only exists when something
-           * is live. A saved draft doesn't qualify: it has its own way back
-           * (My Draft), the same way published work does (My Published).
-           * Without this, a first card would be wiped to an empty default with
-           * nothing to restore.
-           */
-          canDiscard={
-            activeTab === 'promo'
-              ? promoHasVisibleContent(publishedConfig.promoCard)
-              : publishedConfig.announcementBar.announcements.length > 0
-          }
           isPublishing={isPublishing}
           isDarkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode}
@@ -1310,6 +1398,7 @@ export default function Home() {
                   onSelectedVersionChange={setSelectedPromoVersionId}
                   canReactivate={promoCanReactivate}
                   livePromoCard={publishedConfig.promoCard}
+                  draftPromoCard={draftPromoCard}
                   onStop={stopPromoNow}
                   onGoOnAir={goOnAirPromoNow}
                   dateErrorPing={promoDateErrorPing}
@@ -1322,7 +1411,7 @@ export default function Home() {
                   // decision reads as a bug.
                   onSaveDraftDirect={writeDraftNow}
                   savingDraft={savingDraft}
-                  onDeleteDraft={clearDraft}
+                  onDeleteDraft={handleDeleteDraft}
                   draftUpToDate={
                     savedDraftSignature !== null &&
                     savedDraftSignature === getConfigSignature(config)
@@ -1336,7 +1425,7 @@ export default function Home() {
       </div>
 
       {pendingDraftAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
+        <div data-modal className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
           <div
             className="absolute inset-0"
             onClick={() => setPendingDraftAction(null)}
@@ -1389,7 +1478,7 @@ export default function Home() {
       )}
 
       {pendingVariantSave && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
+        <div data-modal className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
           <div
             className="absolute inset-0"
             onClick={cancelPendingVariantSave}
@@ -1457,7 +1546,7 @@ export default function Home() {
 
       {/* Publish Confirmation */}
       {publishConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div data-modal className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0" onClick={() => { if (isConfirming) return; publishConfirm.onCancel?.(); setPublishConfirm(null); }} />
           <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
             <h2 className="text-base font-semibold">{publishConfirm.title ?? 'Publish to website?'}</h2>
@@ -1539,7 +1628,7 @@ export default function Home() {
           would replace the canvas. Saving is offered, never required — the
           same rule as Clear Canvas. */}
       {pendingDashboardAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div data-modal className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0" onClick={() => setPendingDashboardAction(null)} />
           <div className="relative z-10 w-full max-w-xl rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
             <h2 className="text-base font-semibold">You have unsaved changes</h2>
@@ -1601,51 +1690,9 @@ export default function Home() {
         </div>
       )}
 
-      {/* Discard unpublished edits — destructive and easy to hit by accident
-          from the header, so it states exactly what survives. */}
-      {confirmDiscardChanges && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0" onClick={() => setConfirmDiscardChanges(false)} />
-          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
-            <h2 className="text-base font-semibold">Discard these changes?</h2>
-            <p className="mt-2 text-sm text-on-surface-variant">
-              The {activeTab === 'promo' ? 'promo card' : 'announcement bar'} goes back to
-              what&apos;s live on your website right now. Edits you haven&apos;t published will be
-              lost, and this can&apos;t be undone.
-              {savedDraftSignature !== null && (
-                <>
-                  {' '}
-                  Your saved draft is untouched — reopen it from{' '}
-                  <span className="font-semibold text-on-surface">My Draft</span>.
-                </>
-              )}
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmDiscardChanges(false)}
-                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
-              >
-                Keep editing
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmDiscardChanges(false);
-                  discardEditorChanges(activeTab === 'promo' ? 'promo' : 'announcement');
-                }}
-                className="rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-95"
-              >
-                Discard changes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Discard Draft consent — deleting a draft is destructive, so confirm first */}
       {confirmDiscardDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div data-modal className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0" onClick={() => setConfirmDiscardDraft(false)} />
           <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
             <h2 className="text-base font-semibold">Delete your saved draft?</h2>
@@ -1679,7 +1726,7 @@ export default function Home() {
       {/* Replace-draft consent — there's only one draft slot, so saving again
           overwrites whatever's already there. */}
       {confirmReplaceDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
+        <div data-modal className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
           <div className="absolute inset-0" onClick={() => setConfirmReplaceDraft(false)} />
           <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
             <h2 className="text-base font-semibold">Replace saved draft?</h2>
