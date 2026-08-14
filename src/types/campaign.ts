@@ -121,7 +121,11 @@ export const defaultConfig: CampaignConfig = {
     title: '',
     subtitle: '',
     description: '',
-    buttonText: 'Shop Now',
+    // Blank, like every other copy field. A pre-filled "Shop Now" made a
+    // brand-new card render a CTA nobody had written, and made the card count
+    // as "not empty" — so Clear Canvas offered to clear a canvas that looked
+    // blank. The preview hides the button while this is empty.
+    buttonText: '',
     buttonUrl: '',
     ctaType: 'whatsapp',
     whatsappNumber: '',

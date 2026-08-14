@@ -15,6 +15,8 @@ interface HeaderProps {
   hideActions?: boolean;
   /** Throws away unpublished edits for the active tab, back to what's live. */
   onDiscardChanges?: () => void;
+  /** False when there's no published card or saved draft to fall back to. */
+  canDiscard?: boolean;
   isPublishing: boolean;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
@@ -33,6 +35,7 @@ export function Header({
   promoDateInvalid,
   hideActions,
   onDiscardChanges,
+  canDiscard,
   isPublishing,
   isDarkMode,
   toggleDarkMode,
@@ -145,7 +148,7 @@ export function Header({
               {/* Discard — the way back to what's live. Without it the badge
                   only reports a state you can't leave: once you've edited, the
                   editor keeps your version until you publish it. */}
-              {state !== 'published' && onDiscardChanges && (
+              {state !== 'published' && canDiscard && onDiscardChanges && (
                 <button
                   onClick={onDiscardChanges}
                   title="Throw away these edits and go back to what's live"

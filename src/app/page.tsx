@@ -9,7 +9,9 @@ import { Header } from '@/components/Header';
 import { Dashboard } from '@/components/Dashboard';
 import { AnnouncementSection } from '@/components/AnnouncementSection';
 import { PromoFlow } from '@/components/PromoFlow';
+import { PromoSetupDialog } from '@/components/PromoSetupDialog';
 import { Toast } from '@/components/Toast';
+import { getISODateWithOffset } from '@/lib/utils';
 import {
   listVersions,
   MAX_VERSIONS,
@@ -215,10 +217,13 @@ export default function Home() {
   const [savedDraftSignature, setSavedDraftSignature] = useState<string | null>(null);
   // Which guided-flow step the promo tab is on. Publish is an editor action, so
   // the header hides it while the user is still picking a start or writing copy.
-  const [promoFlowStep, setPromoFlowStep] = useState<'start' | 'ai' | 'editor'>('editor');
   // Where the promo tab opens. Dashboard's View/Edit act on an existing
   // campaign, so they go straight to the editor; the nav tab starts fresh.
-  const [promoEntryStep, setPromoEntryStep] = useState<'start' | 'editor'>('start');
+  // Includes 'ai' so the dashboard's create dialog can send someone straight
+  // to the AI screen without passing through the editor first.
+  // Where the promo tab opens: the editor, or the editor with the AI panel
+  // already up. There is no separate start screen any more.
+  const [promoEntryStep, setPromoEntryStep] = useState<'ai' | 'build' | 'editor'>('editor');
   const mainScrollRef = useRef<HTMLElement>(null);
   const configRef = useRef(config);
   configRef.current = config;
@@ -354,6 +359,33 @@ export default function Home() {
   const [confirmDiscardDraft, setConfirmDiscardDraft] = useState(false);
   // Consent before throwing away unpublished edits (also destructive).
   const [confirmDiscardChanges, setConfirmDiscardChanges] = useState(false);
+  /**
+   * A dashboard action held back because the editor has work that isn't in the
+   * draft. Both entries lead somewhere that replaces the canvas, so the user
+   * is offered the save here rather than losing it silently.
+   */
+  const [pendingDashboardAction, setPendingDashboardAction] = useState<
+    'create' | 'published' | null
+  >(null);
+  /**
+   * True when the editor holds promo work that is NOT in the saved draft.
+   *
+   * A ref because the dashboard handlers are stable callbacks — reading state
+   * inside them would capture whatever it was when they were created.
+   */
+  const promoWorkNotInDraftRef = useRef(false);
+  // Bumped to open the build panel when the flow is already mounted.
+  const [openBuildSignal, setOpenBuildSignal] = useState(0);
+  // A picker the editor should open as soon as it mounts, set by the
+  // dashboard's "Edit published". Cleared by the editor once acted on.
+  const [pendingPromoPopup, setPendingPromoPopup] = useState<'published' | 'draft' | null>(null);
+  // The schedule dialog serves two intents, and they end differently:
+  //   'new'      → starting a campaign, so it continues to the build panel
+  //   'schedule' → an existing card just missing dates, so it returns to work
+  const [createIntent, setCreateIntent] = useState<'new' | 'schedule'>('new');
+  const [showCreateSetup, setShowCreateSetup] = useState(false);
+  const [createStart, setCreateStart] = useState('');
+  const [createEnd, setCreateEnd] = useState('');
   /** Bumped to remount the editors so they re-read a reverted config. */
   const [editorResetKey, setEditorResetKey] = useState(0);
 
@@ -383,7 +415,22 @@ export default function Home() {
   const handleTabSwitch = useCallback(
     (tab: 'dashboard' | 'announcement' | 'promo') => {
       if (tab === activeTab) return;
-      if (tab === 'promo') setPromoEntryStep('start');
+      // The Promo Card tab goes straight into the editor on the last edited
+      // state — same as every other route into promo.
+      if (tab === 'promo') {
+        setPromoEntryStep('editor');
+        // Reaching the editor by the tab used to skip the schedule question
+        // entirely, so a card started this way had no dates — while the editor
+        // marks Campaign Duration REQUIRED and Publish refuses without it.
+        // Ask here too, so the date step can't be missed whichever door is used.
+        const pc = configRef.current.promoCard;
+        if (!pc.startDate || !pc.endDate) {
+          setCreateIntent('schedule');
+          setCreateStart(pc.startDate || getISODateWithOffset(0));
+          setCreateEnd(pc.endDate || '');
+          setShowCreateSetup(true);
+        }
+      }
       setActiveTab(tab);
     },
     [activeTab],
@@ -398,12 +445,76 @@ export default function Home() {
     setPromoEntryStep('editor');
   }, []);
 
-  // "Create promo card" on an empty dashboard is a NEW campaign, so unlike the
-  // Edit shortcut it opens the guided start screen.
+  /**
+   * "Create promo card" on an empty dashboard. The schedule + build-method
+   * dialog opens HERE, over the dashboard, rather than sending the user to a
+   * picker first — there's nothing to pick from on a first run.
+   */
   const handleCreatePromo = useCallback(() => {
-    setPromoEntryStep('start');
-    setActiveTab('promo');
+    if (promoWorkNotInDraftRef.current) {
+      setPendingDashboardAction('create');
+      return;
+    }
+    startCreatePromo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** The actual create flow, once nothing is at risk. */
+  const startCreatePromo = useCallback(() => {
+    setCreateIntent('new');
+    setCreateStart(getISODateWithOffset(0));
+    setCreateEnd('');
+    setShowCreateSetup(true);
+  }, []);
+
+  /**
+   * Dashboard → the editor with a picker already open.
+   *
+   * The choice of WHICH card belongs in front of the canvas it loads onto, so
+   * these entries don't load anything themselves — they open My Published or
+   * My Draft and let the user pick there.
+   */
+  const handleOpenPublishedPromo = useCallback(() => {
+    if (promoWorkNotInDraftRef.current) {
+      setPendingDashboardAction('published');
+      return;
+    }
+    openPublishedPicker();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Opens My Published in the editor, once nothing is at risk. */
+  const openPublishedPicker = useCallback(() => {
+    setPromoEntryStep('editor');
+    setActiveTab('promo');
+    setPendingPromoPopup('published');
+    toast('Pick a published campaign to work from — or use Improve with AI.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * Commits the schedule from the dashboard dialog and opens the editor with
+   * the build panel up. The dashboard asks WHEN; the editor asks HOW, next to
+   * the card that the answer applies to.
+   */
+  function startNewPromo() {
+    setConfig((prev) => ({
+      ...prev,
+      promoCard: { ...prev.promoCard, startDate: createStart, endDate: createEnd },
+    }));
+    markPromoChanged();
+    setShowCreateSetup(false);
+    // "Create new" always continues to the build panel — that's the point of
+    // it. The schedule-only prompt returns to the card it interrupted, unless
+    // that card is blank, in which case building is what comes next anyway.
+    const hasContent = promoHasVisibleContent(configRef.current.promoCard);
+    const goToBuild = createIntent === 'new' || !hasContent;
+    setPromoEntryStep(goToBuild ? 'build' : 'editor');
+    // Covers the case where the promo tab is already open: initialStep is only
+    // read at mount, so without this the dialog closed onto nothing.
+    if (goToBuild) setOpenBuildSignal((n) => n + 1);
+    setActiveTab('promo');
+  }
 
   // Dashboard shortcuts (Edit / the card itself) open an existing campaign, so
   // they bypass the guided picker and land in the editor.
@@ -1006,25 +1117,14 @@ export default function Home() {
     if (!live) return;
 
     /**
-     * Fall back to the nearest thing the user SAVED, not all the way to live.
-     * Someone who saved a draft and then tried a colour on top expects Discard
-     * to undo the colour — reverting to live would throw away the draft work
-     * they explicitly chose to keep.
+     * Always back to LIVE — one meaning, no guessing which version you land on.
+     * An earlier version fell back to the saved draft, but the draft already
+     * has its own way back (My Draft), so routing Discard through it made the
+     * button mean two different things depending on hidden state.
+     *
+     * The draft itself is never touched here.
      */
-    let base: CampaignConfig = live;
-    if (savedDraftSignature !== null) {
-      try {
-        const res = await fetch('/api/draft');
-        if (res.ok) {
-          const data = await res.json();
-          const draft = (data?.draft as CampaignConfig | null) ?? null;
-          if (draft) base = migrateConfig(draft, draft.version);
-        }
-      } catch {
-        // Draft unreachable — falling back to live is still better than
-        // leaving the user stuck with edits they asked to drop.
-      }
-    }
+    const base: CampaignConfig = live;
 
     const next: CampaignConfig =
       section === 'promo'
@@ -1059,11 +1159,7 @@ export default function Home() {
     // edits made since it was saved; destroying the draft as well would throw
     // away work the user explicitly chose to keep.
     setEditorResetKey((k) => k + 1);
-    toast(
-      base === live
-        ? 'Changes discarded — back to what’s live'
-        : 'Changes discarded — back to your saved draft',
-    );
+    toast('Changes discarded — back to what’s live');
   }
 
   function markAnnouncementChanged() {
@@ -1128,6 +1224,11 @@ export default function Home() {
     }
   })();
 
+  // Work worth protecting: the promo differs from what's live AND isn't the
+  // thing already sitting in the draft.
+  promoWorkNotInDraftRef.current =
+    hasPromoChanges && savedDraftSignature !== getConfigSignature(config);
+
   return (
     <div className="campaign-page-bg flex h-screen text-on-surface">
       <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -1138,8 +1239,19 @@ export default function Home() {
           hasPromoChanges={hasPromoChanges}
           readyToPublishAnnouncement={readyToPublishAnnouncement}
           promoDateInvalid={promoDateRangeInvalid}
-          hideActions={activeTab === 'promo' && promoFlowStep !== 'editor'}
           onDiscardChanges={() => setConfirmDiscardChanges(true)}
+          /**
+           * Discard goes back to what's LIVE, so it only exists when something
+           * is live. A saved draft doesn't qualify: it has its own way back
+           * (My Draft), the same way published work does (My Published).
+           * Without this, a first card would be wiped to an empty default with
+           * nothing to restore.
+           */
+          canDiscard={
+            activeTab === 'promo'
+              ? promoHasVisibleContent(publishedConfig.promoCard)
+              : publishedConfig.announcementBar.announcements.length > 0
+          }
           isPublishing={isPublishing}
           isDarkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode}
@@ -1161,6 +1273,7 @@ export default function Home() {
                 config={publishedConfig}
                 setActiveTab={handleDashboardTabSwitch}
                 onCreatePromo={handleCreatePromo}
+                onOpenPublishedPromo={handleOpenPublishedPromo}
                 onStopPromo={stopPromoNow}
                 onGoOnAirPromo={goOnAirPromoNow}
                 onStopAnnouncement={stopAnnouncementNow}
@@ -1186,7 +1299,9 @@ export default function Home() {
               <PromoFlow
                   key={`promo-${editorResetKey}`}
                   onAiApplied={handleAiApplied}
-                  onStepChange={setPromoFlowStep}
+                  openBuildSignal={openBuildSignal}
+                  pendingPopup={pendingPromoPopup}
+                  onPendingPopupHandled={() => setPendingPromoPopup(null)}
                   initialStep={promoEntryStep}
                   config={config}
                   setConfig={setConfig}
@@ -1194,6 +1309,7 @@ export default function Home() {
                   toast={toast}
                   onSelectedVersionChange={setSelectedPromoVersionId}
                   canReactivate={promoCanReactivate}
+                  livePromoCard={publishedConfig.promoCard}
                   onStop={stopPromoNow}
                   onGoOnAir={goOnAirPromoNow}
                   dateErrorPing={promoDateErrorPing}
@@ -1201,6 +1317,10 @@ export default function Home() {
                   activeTab={activeTab}
                   setActiveTab={handleTabSwitch}
                   onSaveDraft={handleSaveAsDraft}
+                  // Writes the draft with no replace-confirm of its own — the
+                  // template dialogs already asked, and asking twice for one
+                  // decision reads as a bug.
+                  onSaveDraftDirect={writeDraftNow}
                   savingDraft={savingDraft}
                   onDeleteDraft={clearDraft}
                   draftUpToDate={
@@ -1398,6 +1518,89 @@ export default function Home() {
         </div>
       )}
 
+      {/* First-run campaign setup, opened from the dashboard's "Create promo
+          card". Same dialog the guided flow uses, so the questions asked are
+          identical wherever a campaign starts. */}
+      {showCreateSetup && (
+        <PromoSetupDialog
+          sourceLabel="a blank card"
+          scheduleOnly
+          onContinue={startNewPromo}
+          startDate={createStart}
+          endDate={createEnd}
+          onChangeStart={setCreateStart}
+          onChangeEnd={setCreateEnd}
+          onChoose={() => startNewPromo()}
+          onClose={() => setShowCreateSetup(false)}
+        />
+      )}
+
+      {/* Unsaved promo work, caught at the dashboard before an action that
+          would replace the canvas. Saving is offered, never required — the
+          same rule as Clear Canvas. */}
+      {pendingDashboardAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0" onClick={() => setPendingDashboardAction(null)} />
+          <div className="relative z-10 w-full max-w-xl rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <h2 className="text-base font-semibold">You have unsaved changes</h2>
+            <p className="mt-2 text-sm text-on-surface-variant">
+              Your promo card has edits that aren&apos;t in{' '}
+              <span className="font-semibold text-on-surface">My Draft</span>.{' '}
+              {pendingDashboardAction === 'create'
+                ? 'Starting a new campaign replaces them.'
+                : 'Opening a published campaign replaces them.'}{' '}
+              {savedDraftSignature !== null ? (
+                <>
+                  Saving now replaces the card currently in{' '}
+                  <span className="font-semibold text-on-surface">My Draft</span>.
+                </>
+              ) : (
+                <>
+                  Save them to <span className="font-semibold text-on-surface">My Draft</span> to
+                  keep a copy.
+                </>
+              )}
+            </p>
+            <div className="mt-5 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingDashboardAction(null)}
+                className="shrink-0 whitespace-nowrap rounded-md px-2 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:text-primary"
+              >
+                Cancel
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const action = pendingDashboardAction;
+                    setPendingDashboardAction(null);
+                    if (action === 'create') startCreatePromo();
+                    else openPublishedPicker();
+                  }}
+                  className="whitespace-nowrap rounded-md border border-white/15 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-red-400/70 hover:text-red-500"
+                >
+                  Continue anyway
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const action = pendingDashboardAction;
+                    setPendingDashboardAction(null);
+                    writeDraftNow();
+                    if (action === 'create') startCreatePromo();
+                    else openPublishedPicker();
+                  }}
+                  className="whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+                >
+                  {savedDraftSignature !== null ? 'Replace draft & continue' : 'Save & continue'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Discard unpublished edits — destructive and easy to hit by accident
           from the header, so it states exactly what survives. */}
       {confirmDiscardChanges && (
@@ -1406,18 +1609,14 @@ export default function Home() {
           <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
             <h2 className="text-base font-semibold">Discard these changes?</h2>
             <p className="mt-2 text-sm text-on-surface-variant">
-              {savedDraftSignature !== null ? (
+              The {activeTab === 'promo' ? 'promo card' : 'announcement bar'} goes back to
+              what&apos;s live on your website right now. Edits you haven&apos;t published will be
+              lost, and this can&apos;t be undone.
+              {savedDraftSignature !== null && (
                 <>
-                  The {activeTab === 'promo' ? 'promo card' : 'announcement bar'} goes back to your{' '}
-                  <span className="font-semibold text-on-surface">saved draft</span>. Your draft is
-                  kept — only the edits you made since saving it are lost, and that can&apos;t be
-                  undone.
-                </>
-              ) : (
-                <>
-                  The {activeTab === 'promo' ? 'promo card' : 'announcement bar'} goes back to
-                  what&apos;s live on your website right now. Edits you haven&apos;t published will be
-                  lost, and this can&apos;t be undone.
+                  {' '}
+                  Your saved draft is untouched — reopen it from{' '}
+                  <span className="font-semibold text-on-surface">My Draft</span>.
                 </>
               )}
             </p>

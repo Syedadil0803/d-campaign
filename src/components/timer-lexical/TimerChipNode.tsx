@@ -79,7 +79,7 @@ export class TimerChipNode extends DecoratorNode<React.ReactElement> {
     el.style.verticalAlign = 'baseline';
     el.style.whiteSpace = 'nowrap';
     // Not natively selectable — the chip is a widget. A clicked part shows
-    // OUR selection-coloured highlight (see TimerChipComponent), which Lexical
+    // OUR selection-colored highlight (see TimerChipComponent), which Lexical
     // can't clear the way it clears native selection inside a decorator.
     el.style.userSelect = 'none';
     return el;

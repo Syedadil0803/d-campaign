@@ -6,7 +6,7 @@
  * Not a scaled-down PromoMiniPreview: scaling crops and blurs, and the real
  * preview renders a <button>, which can't be nested inside a clickable card.
  * This is a flat, three-row summary (title / description / button) that keeps
- * the card's own colours so it still reads as *that* campaign.
+ * the card's own colors so it still reads as *that* campaign.
  */
 
 import { PromoCard } from '@/types/campaign';

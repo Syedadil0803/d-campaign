@@ -35,6 +35,13 @@ interface PromoSetupDialogProps {
    * "Generate with AI"). The dialog then only asks for the schedule.
    */
   forcedMethod?: BuildMethod;
+  /**
+   * Asks the schedule only. Used from the dashboard, where the build method is
+   * asked afterwards — in the editor, next to the card it applies to.
+   */
+  scheduleOnly?: boolean;
+  /** Confirm handler for scheduleOnly mode. */
+  onContinue?: () => void;
   startDate: string;
   endDate: string;
   onChangeStart: (v: string) => void;
@@ -46,6 +53,8 @@ interface PromoSetupDialogProps {
 export function PromoSetupDialog({
   sourceLabel,
   forcedMethod,
+  scheduleOnly,
+  onContinue,
   startDate,
   endDate,
   onChangeStart,
@@ -227,9 +236,31 @@ export function PromoSetupDialog({
             )
           )}
 
-          {!forcedMethod && <div className="my-5 border-t border-border" />}
+          {!forcedMethod && !scheduleOnly && <div className="my-5 border-t border-border" />}
 
-          {forcedMethod ? (
+          {scheduleOnly ? (
+            /* Schedule only — the build method is asked in the editor, where
+               the card it applies to is actually on screen. */
+            <div className="mt-5 flex items-center justify-between gap-4">
+              <p className="text-xs text-on-surface-variant">
+                Next: choose how to build it.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!scheduleReady) {
+                    setShowError(true);
+                    return;
+                  }
+                  onContinue?.();
+                }}
+                disabled={!scheduleReady}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Continue <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          ) : forcedMethod ? (
             <div className="flex justify-end">
               <button
                 type="button"
@@ -268,7 +299,8 @@ export function PromoSetupDialog({
               <Sparkles className="mb-2 h-5 w-5 text-primary" />
               <span className="text-sm font-semibold text-on-surface">Generate with AI</span>
               <span className="mt-0.5 text-xs text-on-surface-variant">
-                Describe your campaign and let AI write the content into {sourceLabel}.
+                Describe your campaign, take the prepared prompt to your AI tool, and paste
+                the reply into {sourceLabel}.
               </span>
               <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary">
                 Start

@@ -22,7 +22,7 @@
  * the panel stays a clean text-entry box. The styled result shows in the
  * read-only preview card on the right (which does NOT carry this class).
  * The target outline (the blue highlight on a clicked chip cell) is left
- * alone — only the font/colour properties are neutralised. */
+ * alone — only the font/color properties are neutralized. */
 .timer-panel-plain [contenteditable] [style],
 .timer-panel-plain [data-timer-chip],
 .timer-panel-plain [data-timer-chip] [style],

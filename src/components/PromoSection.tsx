@@ -12,6 +12,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import {
+  ArrowLeft,
   Gift,
   X,
   Palette,
@@ -27,10 +28,11 @@ import {
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
-import { applyTemplateLook } from "@/lib/promoTemplate";
+import { applyTemplateFull, applyTemplateLook } from "@/lib/promoTemplate";
 import { HistoryManager } from "@/lib/historyManager";
 import { SamplePromoTemplates, sampleTemplates } from "./SamplePromoTemplates";
 import { useRichTextEditor } from "@/hooks/useRichTextEditor";
+import { useSignalEffect } from "@/hooks/useSignalEffect";
 import {
   wrapBareTextWithFontSize,
   rgbToHex,
@@ -71,6 +73,15 @@ interface PromoSectionProps {
   // "Go on air" is a one-click reactivation, only when the current content
   // matches what's published (same content, not new/edited).
   canReactivate: boolean;
+  /**
+   * The promo card currently PUBLISHED to the website.
+   *
+   * "Live" in My Published is a fact about the site, not about the editor —
+   * it was previously derived from whichever variant matched the canvas, so
+   * editing anything made the Live marker vanish from a campaign that was
+   * still serving to visitors.
+   */
+  livePromoCard?: PromoCard;
   // Immediate on/off (no Save → Publish) — the page persists the status change.
   onStop: () => void;
   onGoOnAir: () => void;
@@ -87,7 +98,28 @@ interface PromoSectionProps {
   setActiveTab?: (tab: 'dashboard' | 'announcement' | 'promo') => void;
   // Explicit "Save as draft" — the only way a draft is written now. Saves the
   // FULL editor state (announcement + promo), not just this promo card.
+  /**
+   * Increment to open Template Hub from outside — used by the build panel's
+   * "Write it myself", so a new card is designed in the same picker as every
+   * other template change.
+   */
+  openTemplatesSignal?: number;
+  /** Returns to the build panel from the templates popup, when it opened it. */
+  onTemplatesBack?: () => void;
+  /**
+   * A picker to open as soon as the editor is on screen, from the dashboard.
+   *
+   * An intent rather than a counter: the dashboard sets it in the same batch
+   * that switches tabs, so this component MOUNTS with the request already
+   * pending. A counter can't say "act now" across a mount — on first render
+   * there's no previous value to have incremented from.
+   */
+  pendingPopup?: 'published' | 'draft' | null;
+  /** Called once the pending popup has been opened, so it fires only once. */
+  onPendingPopupHandled?: () => void;
   onSaveDraft: () => void;
+  /** Saves the draft immediately, skipping the replace-confirm dialog. */
+  onSaveDraftDirect?: () => void;
   savingDraft: boolean;
   // Deletes the single saved draft slot (called from the My Draft popup).
   onDeleteDraft: () => void;
@@ -387,13 +419,19 @@ export function PromoSection({
   toast,
   onSelectedVersionChange,
   canReactivate,
+  livePromoCard,
   onStop,
   onGoOnAir,
   dateErrorPing,
   hasUnsavedChanges,
   activeTab,
   setActiveTab,
+  openTemplatesSignal,
+  onTemplatesBack,
+  pendingPopup,
+  onPendingPopupHandled,
   onSaveDraft,
+  onSaveDraftDirect,
   savingDraft,
   onDeleteDraft,
   draftUpToDate,
@@ -510,9 +548,18 @@ export function PromoSection({
   // Consent before a card-replacing action (Start Fresh / apply Variant / apply Template).
   const [cardActionConfirm, setCardActionConfirm] = useState<{
     title: string;
-    body: string;
+    // ReactNode, not string: names of places in the UI ("My Published") are
+    // emphasised inline so they read as things you can go and open.
+    body: React.ReactNode;
     confirmLabel: string;
     onConfirm: () => void;
+    /**
+     * Optional third button, for actions where keeping a copy is worth
+     * offering but must never be imposed — Clear Canvas being the case: the
+     * user asked to destroy the card, so saving is an offer, not a condition.
+     */
+    secondaryLabel?: string;
+    onSecondary?: () => void;
   } | null>(null);
 
   const [showCardPositionDropdown, setShowCardPositionDropdown] =
@@ -524,6 +571,30 @@ export function PromoSection({
   // Action popups launched from the buttons under the Promo Card heading.
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
   const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
+
+  /**
+   * True when the popup was opened by the build panel rather than the toolbar
+   * chip — that's the only case with somewhere to go Back to.
+   */
+  const [templatesFromBuild, setTemplatesFromBuild] = useState(false);
+
+  // Opened from outside (the build panel's "Write it myself"). Guarded on > 0
+  // so the initial render doesn't pop it open on its own.
+  useSignalEffect(openTemplatesSignal, () => {
+    setTemplatesFromBuild(true);
+    setShowTemplatesPopup(true);
+  });
+
+  // The dashboard's "My Published" / "My Draft" entries land in the editor and
+  // open the matching picker, so the choice of WHICH card is made here — in
+  // front of the canvas it will load onto.
+  useEffect(() => {
+    if (!pendingPopup) return;
+    if (pendingPopup === 'published') setShowVersionsPopup(true);
+    else openDraftPopup();
+    onPendingPopupHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPopup]);
   const [showDraftPopup, setShowDraftPopup] = useState(false);
   const [draftPopupCard, setDraftPopupCard] = useState<PromoCard | null>(null);
   const [draftPopupLoading, setDraftPopupLoading] = useState(false);
@@ -709,6 +780,12 @@ export function PromoSection({
   function getFreshPromoCard(): PromoCard {
     // Inherits the green/blue style from defaultConfig (single source of truth
     // for the default look) — only the empty text fields differ from default.
+    //
+    // The SCHEDULE carries over: it was chosen when the campaign was created,
+    // and clearing the card's content is not a decision to re-plan when it
+    // runs. Same rule as applying a template or a variant — content and design
+    // are replaceable, the schedule is the user's.
+    const current = configRef.current.promoCard;
     return {
       ...clonePromoCard(defaultConfig.promoCard),
       active: false,
@@ -720,6 +797,8 @@ export function PromoSection({
       showTimer: true,
       showButton: true,
       timerText: "Ends In {timer}",
+      startDate: current.startDate,
+      endDate: current.endDate,
     };
   }
 
@@ -1957,13 +2036,24 @@ export function PromoSection({
     });
   }, []);
 
+  /**
+   * Keeps the "Live" marker pointed at the variant the editor is actually
+   * holding — including when that's none of them.
+   *
+   * This used to `return` early on no match, so the marker stayed on whatever
+   * it last matched. Edit the card away from the published one and a variant
+   * still claimed to be Live, which then fed real damage: deleting that variant
+   * checks `selectedVersionId === id && active` to decide whether to pull the
+   * campaign off the website, so a stale marker could take the site down (or
+   * fail to) for the wrong card.
+   */
   useEffect(() => {
     const matchingVersion = [...versions]
       .reverse()
       .find((version) => promoCardsEqual(version.promoCard, config.promoCard));
-    if (!matchingVersion) return;
-    setSelectedVersionId(matchingVersion.id);
-    onSelectedVersionChange?.(matchingVersion.id);
+    const nextId = matchingVersion?.id ?? null;
+    setSelectedVersionId((prev) => (prev === nextId ? prev : nextId));
+    onSelectedVersionChange?.(nextId);
   }, [config.promoCard, versions, onSelectedVersionChange]);
 
   // Refresh the list whenever the popup is opened (keeps it current).
@@ -2008,11 +2098,18 @@ export function PromoSection({
   }
 
 
+  /** True when this saved variant is the card currently on the website. */
+  function isLiveVersion(version: PromoVersion): boolean {
+    if (!livePromoCard || !livePromoCard.active) return false;
+    return promoCardsEqual(version.promoCard, livePromoCard);
+  }
+
   async function handleDeleteVersion(id: string) {
     // "My Published" mirrors what's on the site, so deleting the entry that's
     // currently on air must also take the card off the website — otherwise the
     // campaign keeps serving to visitors with no saved copy left behind.
-    const wasLive = selectedVersionId === id && config.promoCard.active;
+    const target = versions.find((v) => v.id === id);
+    const wasLive = !!target && isLiveVersion(target);
     const updated = await deleteVersion(id);
     setVersions(updated);
     if (selectedVersionId === id) {
@@ -2038,7 +2135,17 @@ export function PromoSection({
     isFreshCardRef.current = false;
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
-    const restored = withDefaultDates({ ...clonePromoCard(version.promoCard), active: false });
+    // Same rule as templates: a variant contributes its design and its copy,
+    // not its schedule. Its dates belong to the campaign that already ran, so
+    // dragging them onto the card being edited silently re-dates it — and on a
+    // past variant those dates are usually in the past.
+    const current = configRef.current.promoCard;
+    const restored = withDefaultDates({
+      ...clonePromoCard(version.promoCard),
+      active: false,
+      startDate: current.startDate || version.promoCard.startDate,
+      endDate: current.endDate || version.promoCard.endDate,
+    });
     setConfig({ ...configRef.current, promoCard: restored });
     syncEditorsFromConfig(restored);
     markChanged();
@@ -2103,11 +2210,14 @@ export function PromoSection({
     isFreshCardRef.current = false;
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
-    const cloned = withDefaultDates({
-      ...(JSON.parse(JSON.stringify(template)) as PromoCard),
-      active: configRef.current.promoCard.active,
-      stoppedByUser: configRef.current.promoCard.stoppedByUser,
-    });
+    // Delegates to applyTemplateFull so the schedule survives. Cloning the
+    // template wholesale here reset startDate/endDate to the template's own
+    // sample dates (every one ships "today"), wiping the dates the user chose
+    // when creating the campaign. A template is a design and its copy —
+    // scheduling isn't part of it.
+    const cloned = withDefaultDates(
+      applyTemplateFull(configRef.current.promoCard, template),
+    );
     cloned.timerText = serializeTimerHtml(cloned.timerText ?? "");
     setConfig({ ...configRef.current, promoCard: cloned });
     syncEditorsFromConfig(cloned);
@@ -2134,13 +2244,67 @@ export function PromoSection({
     action: () => void,
     opts: {
       title: string;
-      body: string;
+      body: React.ReactNode;
       confirmLabel: string;
       /** Copy used when nothing is actually at risk (see below). */
-      reassuranceBody?: string;
+      reassuranceBody?: React.ReactNode;
+      /**
+       * What is about to take the card's place, as a noun phrase — "this
+       * template", "this variant", "a blank canvas". The draft branches below
+       * are shared by every card-replacing action, so without this they can
+       * only say "the new one", which names nothing.
+       */
+      replacementLabel?: string;
+      /**
+       * The card that would replace the current one, when the caller knows it.
+       *
+       * Lets the consent detect a no-op: applying the template or variant the
+       * editor already holds changes nothing, so asking permission for it is
+       * noise — and the dialog's own wording ("this replaces the card you're
+       * editing") would be false.
+       */
+      nextCard?: PromoCard;
+      /**
+       * Whether the draft branches apply. True for actions that swap one card
+       * for another, where saving first protects the outgoing work.
+       *
+       * False for deliberate destruction (Clear Canvas): the user is throwing
+       * the card away, so quietly saving it over their existing draft would
+       * destroy the draft to preserve something they just discarded.
+       */
+      offerDraftSave?: boolean;
     },
   ) {
     const pc = configRef.current.promoCard;
+
+    /**
+     * What the card actually IS, ignoring noise the app rewrites by itself:
+     * font-size spans the editors normalise, re-serialised timer HTML, and the
+     * auto 400/440 width. A raw compare reports "different" for cards that
+     * look and behave identically.
+     */
+    const cardSignature = (c: PromoCard) =>
+      JSON.stringify({
+        title: stripHtmlText(c.title),
+        subtitle: stripHtmlText(c.subtitle),
+        description: stripHtmlText(c.description),
+        buttonText: stripHtmlText(c.buttonText),
+        timerText: stripHtmlText(c.timerText),
+        showTimer: c.showTimer,
+        showButton: c.showButton,
+        ctaType: c.ctaType,
+        buttonUrl: c.buttonUrl,
+        whatsappNumber: c.whatsappNumber,
+        style: c.style,
+      });
+
+    // Applying what's already on the canvas is a no-op: don't ask, don't apply
+    // (applying would mark the card changed for no visible reason).
+    if (opts.nextCard && cardSignature(opts.nextCard) === cardSignature(pc)) {
+      toast('That’s already the card you’re editing.');
+      return;
+    }
+
     const hasContent =
       hasVisibleContent(pc.title) ||
       hasVisibleContent(pc.subtitle) ||
@@ -2178,6 +2342,81 @@ export function PromoSection({
       return;
     }
 
+    // ── Draft-aware branches ──────────────────────────────────────────
+    // The card holds real work, so what happens next depends entirely on
+    // whether that work is already safe in the draft. In every branch "No"
+    // simply closes the dialog: it cancels the template change and touches
+    // nothing, because a button labelled No must never destroy anything.
+
+    const incoming = opts.replacementLabel ?? 'the new card';
+    const offerDraftSave = opts.offerDraftSave !== false;
+
+    /**
+     * Already published — the card on the canvas can be fetched back from My
+     * Published, so nothing is at risk and no save is worth offering.
+     *
+     * Checked BEFORE the draft branches on purpose: with a draft lying around
+     * from other work, replacing a published card used to prompt "Replace your
+     * saved draft?" — offering to overwrite the draft with a card that was
+     * already safe, which is both pointless and destructive.
+     */
+    const cardIsPublished = !!livePromoCard && promoCardsEqual(pc, livePromoCard);
+    if (offerDraftSave && cardIsPublished) {
+      // Keeps the caller's title — the dialog still asks "Apply this template?".
+      // Only the body changes, to say why nothing is at risk.
+      setCardActionConfirm({
+        ...opts,
+        body: (
+          <>
+            The card currently in your editor is already saved in{' '}
+            <span className="font-semibold text-on-surface">My Published</span> and can be restored
+            from there at any time. Your live campaign remains unchanged until you publish.
+          </>
+        ),
+        onConfirm: action,
+      });
+      return;
+    }
+
+    if (offerDraftSave && draftExists && draftUpToDate) {
+      // Already saved and untouched since — nothing can be lost.
+      setCardActionConfirm({
+        ...opts,
+        body: (
+          <>
+            The card currently in your editor is already saved in{' '}
+            <span className="font-semibold text-on-surface">My Draft</span> and can be restored from
+            there at any time. Your live campaign remains unchanged until you publish.
+          </>
+        ),
+        onConfirm: action,
+      });
+      return;
+    }
+
+    if (offerDraftSave && draftExists && !draftUpToDate) {
+      // A draft exists but the editor has moved on. Continuing overwrites the
+      // draft with what's on screen now — say so before it happens.
+      setCardActionConfirm({
+        ...opts,
+        title: 'Replace your saved draft?',
+        body: (
+          <>
+            Applying {incoming} will replace your current card. Your current card contains changes
+            made after your last save, and continuing will save it to{' '}
+            <span className="font-semibold text-on-surface">My Draft</span>, replacing the previous
+            version.
+          </>
+        ),
+        confirmLabel: 'Save and continue',
+        onConfirm: () => {
+          (onSaveDraftDirect ?? onSaveDraft)();
+          action();
+        },
+      });
+      return;
+    }
+
     if (!hasUnsavedChanges) {
       // Content with no pending edits — typically their published card, loaded
       // on landing. Confirmed with reassuring copy so it never vanishes
@@ -2192,7 +2431,30 @@ export function PromoSection({
       return;
     }
 
-    setCardActionConfirm({ ...opts, onConfirm: action });
+    // Destructive by intent (Clear Canvas): warn plainly, save nothing.
+    if (!offerDraftSave) {
+      setCardActionConfirm({ ...opts, onConfirm: action });
+      return;
+    }
+
+    // Unsaved work with no draft behind it — the only branch where continuing
+    // could actually lose something, so it offers to save on the way through.
+    setCardActionConfirm({
+      ...opts,
+      title: 'Save this card as a draft?',
+      body: (
+        <>
+          Applying {incoming} will replace your current card, which has not been saved. Continuing
+          will save it to <span className="font-semibold text-on-surface">My Draft</span> so a copy
+          is kept.
+        </>
+      ),
+      confirmLabel: 'Save and continue',
+      onConfirm: () => {
+        (onSaveDraftDirect ?? onSaveDraft)();
+        action();
+      },
+    });
   }
 
   function formatDateLabel(value: string): string {
@@ -2658,28 +2920,55 @@ export function PromoSection({
           {cardActionConfirm && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-black/20" onClick={() => setCardActionConfirm(null)} />
-              <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+              <div
+                className={`relative z-10 w-full rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md ${
+                  cardActionConfirm.secondaryLabel ? 'max-w-xl' : 'max-w-md'
+                }`}
+              >
                 <h2 className="text-base font-semibold">{cardActionConfirm.title}</h2>
                 <p className="mt-2 text-sm text-on-surface-variant">{cardActionConfirm.body}</p>
-                <div className="mt-5 flex justify-end gap-2">
+                {/* Cancel sits apart on the left — it's "leave", not one of the
+                    ways forward. The two ways forward group on the right, with
+                    the safe one weighted. Three buttons in a single row read as
+                    a queue and hide which is which. */}
+                <div className="mt-5 flex items-center justify-between gap-3">
                   <button
                     type="button"
                     onClick={() => setCardActionConfirm(null)}
-                    className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+                    className="shrink-0 whitespace-nowrap rounded-md px-2 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:text-primary"
                   >
                     Cancel
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const fn = cardActionConfirm.onConfirm;
-                      setCardActionConfirm(null);
-                      fn();
-                    }}
-                    className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
-                  >
-                    {cardActionConfirm.confirmLabel}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const fn = cardActionConfirm.onConfirm;
+                        setCardActionConfirm(null);
+                        fn();
+                      }}
+                      className={
+                        cardActionConfirm.secondaryLabel
+                          ? 'whitespace-nowrap rounded-md border border-white/15 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-red-400/70 hover:text-red-500'
+                          : 'whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95'
+                      }
+                    >
+                      {cardActionConfirm.confirmLabel}
+                    </button>
+                    {cardActionConfirm.secondaryLabel && cardActionConfirm.onSecondary && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const fn = cardActionConfirm.onSecondary!;
+                          setCardActionConfirm(null);
+                          fn();
+                        }}
+                        className="whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+                      >
+                        {cardActionConfirm.secondaryLabel}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -3406,10 +3695,47 @@ export function PromoSection({
               onClick={() =>
                 confirmCardReplace(startFreshPromoCard, {
                   title: 'Clear the canvas?',
-                  body: "Everything you've edited so far will be deleted. What's live on your website won't change until you publish.",
+                  // Never routed through the save-first branches: clearing is
+                  // destruction the user asked for, so saving is offered as a
+                  // third button below, never made a condition of continuing.
+                  offerDraftSave: false,
+                  body: (
+                    <>
+                      This removes all content and styling from the card you are editing. Your live
+                      campaign remains unchanged.
+                      {draftUpToDate ? (
+                        <>
+                          {' '}
+                          This card is already saved in{' '}
+                          <span className="font-semibold text-on-surface">My Draft</span>.
+                        </>
+                      ) : draftExists ? (
+                        <>
+                          {' '}
+                          Keeping a copy will replace the card currently in{' '}
+                          <span className="font-semibold text-on-surface">My Draft</span>.
+                        </>
+                      ) : null}
+                    </>
+                  ),
                   reassuranceBody:
-                    "You'll start from a blank card. Nothing is lost — your published card stays live on your website until you publish again.",
-                  confirmLabel: 'Clear canvas',
+                    'This removes all content and styling from the card you are editing. Your live ' +
+                    'campaign remains unchanged.',
+                  // Short enough that three buttons fit one row at max-w-md.
+                  // "anyway" only means something next to a save button; alone
+                  // it implies a choice that isn't being offered.
+                  confirmLabel: canvasIsEmpty || draftUpToDate ? 'Clear canvas' : 'Clear anyway',
+                  // Offered only when there is something to save that isn't
+                  // already saved — otherwise it's a button that does nothing.
+                  ...(canvasIsEmpty || draftUpToDate
+                    ? {}
+                    : {
+                        secondaryLabel: draftExists ? 'Replace draft & clear' : 'Save & clear',
+                        onSecondary: () => {
+                          (onSaveDraftDirect ?? onSaveDraft)();
+                          startFreshPromoCard();
+                        },
+                      }),
                 })
               }
               disabled={canvasIsEmpty}
@@ -3424,7 +3750,13 @@ export function PromoSection({
             </button>
             <button
               type="button"
-              onClick={() => setShowTemplatesPopup(true)}
+              onClick={() => {
+                // Reset the flag: without this the popup kept the build-flow
+                // header ("Pick a starting design", Back, Start blank) forever
+                // once the build panel had opened it once.
+                setTemplatesFromBuild(false);
+                setShowTemplatesPopup(true);
+              }}
               className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="Start again from a ready-made card — design and sample text"
             >
@@ -3475,7 +3807,12 @@ export function PromoSection({
               {draftExists ? 'Update saved draft' : 'Save as draft'}
             </button>
           </div>
-          <div className="campaign-card-surface rounded-lg px-5 pt-5 pb-2 relative flex-1 min-h-0 border border-gray-200 dark:border-gray-600">
+          {/* data-promo-canvas: the build panel measures this box and sits
+              inside it, so it never floats over the toolbar above. */}
+          <div
+            data-promo-canvas
+            className="campaign-card-surface rounded-lg px-5 pt-5 pb-2 relative flex-1 min-h-0 border border-gray-200 dark:border-gray-600"
+          >
             <div className="absolute inset-x-0 top-4 flex items-center justify-center text-gray-400 text-sm font-medium pointer-events-none">
               Website Content Area
             </div>
@@ -4470,16 +4807,82 @@ export function PromoSection({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0" onClick={() => setShowTemplatesPopup(false)} />
           <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border shadow-2xl backdrop-blur-md">
-            <div className="flex items-center justify-between px-6 py-2">
-              <p className="text-sm text-on-surface-variant">
-                Starts the card again with this template&apos;s design{' '}
-                <span className="font-semibold text-on-surface">and its sample text</span>. To keep
-                your words and change only the look, use Themes below the card.
-              </p>
+            <div className="flex items-center gap-3 border-b border-border px-6 py-3">
+              {/* Back exists only when the build panel sent us here; opened
+                  from the toolbar chip there is nowhere to go back to. */}
+              {templatesFromBuild && onTemplatesBack && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTemplatesPopup(false);
+                    setTemplatesFromBuild(false);
+                    onTemplatesBack();
+                  }}
+                  aria-label="Back"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+              )}
+              {/* Two audiences, one popup. Arriving from the build panel this
+                  is a step in creating a card, so it gets a step title and a
+                  "start blank" alternative. Opened from the Template Hub chip
+                  it's just the template browser, and those would be clutter —
+                  starting blank already lives in Clear Canvas next to it. */}
+              {templatesFromBuild ? (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-on-surface">Pick a starting design</p>
+                    <p className="text-xs text-on-surface-variant">
+                      Applies the design and its sample text. You can change either afterwards.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTemplatesPopup(false);
+                      setTemplatesFromBuild(false);
+                      confirmCardReplace(startFreshPromoCard, {
+                        title: 'Start from a blank card?',
+                        offerDraftSave: false,
+                        body: (
+                          <>
+                            This removes all content and styling from the card you are editing.
+                            Anything saved in{' '}
+                            <span className="font-semibold text-on-surface">My Draft</span> and your
+                            live campaign remain unchanged.
+                          </>
+                        ),
+                        reassuranceBody: (
+                          <>
+                            This removes all content and styling from the card you are editing.
+                            Anything saved in{' '}
+                            <span className="font-semibold text-on-surface">My Draft</span> and your
+                            live campaign remain unchanged.
+                          </>
+                        ),
+                        confirmLabel: 'Start blank',
+                      });
+                    }}
+                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+                  >
+                    <FilePlus2 className="h-4 w-4" /> Start blank
+                  </button>
+                </>
+              ) : (
+                <p className="min-w-0 flex-1 text-sm text-on-surface-variant">
+                  Starts the card again with this template&apos;s design{' '}
+                  <span className="font-semibold text-on-surface">and its sample text</span>. To keep
+                  your words and change only the look, use Themes below the card.
+                </p>
+              )}
               <button
                 type="button"
-                onClick={() => setShowTemplatesPopup(false)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+                onClick={() => {
+                  setShowTemplatesPopup(false);
+                  setTemplatesFromBuild(false);
+                }}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
                 aria-label="Close templates"
               >
                 <X className="h-4 w-4" />
@@ -4490,11 +4893,13 @@ export function PromoSection({
                 onApplyTemplate={(template, name) => {
                   setShowTemplatesPopup(false);
                   confirmCardReplace(() => applyTemplate(template, name), {
-                    title: 'Start again from this template?',
-                    body: "This replaces your text and design with the template's. What's live on your website won't change until you publish.",
+                    title: 'Apply this template?',
+                    replacementLabel: 'this template',
+                    nextCard: applyTemplateFull(configRef.current.promoCard, template),
+                    body: "This replaces the text and design of the card you're editing. Your live campaign remains unchanged until you publish.",
                     reassuranceBody:
-                      "This replaces the card you're editing with the template, text included. What's live on your website won't change until you publish.",
-                    confirmLabel: 'Use template',
+                      "This replaces the card you're editing, including its text. Your live campaign remains unchanged until you publish.",
+                    confirmLabel: 'Apply template',
                   });
                 }}
               />
@@ -4581,6 +4986,8 @@ export function PromoSection({
                       setShowDraftPopup(false);
                       confirmCardReplace(() => restoreDraftPromoCard(draftCard), {
                         title: 'Continue editing your saved draft?',
+                        replacementLabel: 'your saved draft',
+                        nextCard: draftCard,
                         body: "This loads your saved draft into the editor, replacing the card you're editing now. What's live on your website won't change until you publish.",
                         reassuranceBody:
                           "This loads your saved draft into the editor. Nothing is lost, and what's live on your website won't change until you publish.",
@@ -4657,29 +5064,46 @@ export function PromoSection({
               ) : (
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                   {[...versions].reverse().map((version) => {
-                    const isLive = version.id === selectedVersionId;
+                    // Two independent facts: what's on your website, and what's
+                    // in your editor. A variant can be either, both or neither.
+                    const isLive = isLiveVersion(version);
+                    const isOnCanvas = promoCardsEqual(version.promoCard, config.promoCard);
                     return (
                       <div
                         key={version.id}
                         onClick={() => {
                           setShowVersionsPopup(false);
+                          if (isOnCanvas) return;
                           confirmCardReplace(() => applyVersion(version), {
                             title: 'Apply this variant?',
+                            replacementLabel: 'this saved variant',
+                            nextCard: version.promoCard,
                             body: "This replaces the card you're editing with this saved variant. It won't change what's live on your website until you publish.",
                             confirmLabel: 'Apply variant',
                           });
                         }}
-                        className="group relative rounded-xl border border-gray-200 hover:border-primary hover:ring-1 hover:ring-primary bg-white p-3 shadow-sm transition-colors hover:shadow-lg cursor-pointer dark:border-gray-700 dark:bg-gray-900"
+                        className={`group relative rounded-xl border bg-white p-3 shadow-sm transition-colors dark:border-gray-700 dark:bg-gray-900 ${
+                          isOnCanvas
+                            ? 'cursor-default border-primary/60 ring-1 ring-primary/30'
+                            : 'cursor-pointer border-gray-200 hover:border-primary hover:shadow-lg hover:ring-1 hover:ring-primary'
+                        }`}
                       >
                         <div className="mb-2 flex items-center justify-between gap-2">
                           <p className="min-w-0 truncate text-xs font-semibold text-gray-800 dark:text-gray-200">
                             {version.label}
                           </p>
                           <div className="flex shrink-0 items-center gap-1">
+                            {/* Live first — it's the fact about the website.
+                                "In editor" is only worth saying when the
+                                variant isn't already marked Live. */}
                             {isLive ? (
                               <span className="inline-flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] font-semibold text-green-600 dark:text-green-400">
                                 <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
                                 Live
+                              </span>
+                            ) : isOnCanvas ? (
+                              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                                In editor
                               </span>
                             ) : (
                               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium dark:bg-gray-700 dark:text-gray-200">
@@ -4715,7 +5139,7 @@ export function PromoSection({
                             <p className="text-sm font-medium text-on-surface">
                               Delete “{version.label}”?
                             </p>
-                            {isLive && config.promoCard.active ? (
+                            {isLive ? (
                               <p className="-mt-1 text-[11px] font-medium text-red-500">
                                 This card is live. Deleting it removes it from your
                                 website right away. This can’t be undone.
@@ -4744,9 +5168,7 @@ export function PromoSection({
                                 }}
                                 className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600"
                               >
-                                {isLive && config.promoCard.active
-                                  ? 'Delete & take offline'
-                                  : 'Delete'}
+                                {isLive ? 'Delete & take offline' : 'Delete'}
                               </button>
                             </div>
                           </div>

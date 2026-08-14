@@ -921,7 +921,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   }
 
   /**
-   * Apply a ready-made look. Sets background AND text colour together — they're
+   * Apply a ready-made look. Sets background AND text color together — they're
    * a pair, and the fine-grained controls below can still adjust either
    * afterwards.
    */
@@ -2325,7 +2325,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                     Replaces the old "Background Type Guide", which was a
                     non-clickable legend explaining solid/linear/radial: it
                     taught CSS vocabulary instead of letting anyone pick a bar.
-                    The colour controls above still fine-tune whatever a theme
+                    The color controls above still fine-tune whatever a theme
                     sets. */}
                 <div className="border-t border-border pt-4">
                   <div className="pb-1">

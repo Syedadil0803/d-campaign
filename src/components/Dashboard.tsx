@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Infinity as InfinityIcon,
   Plus,
+  History,
 } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { stripHtml, getBackgroundStyle } from '@/lib/utils';
@@ -31,6 +32,8 @@ interface DashboardProps {
   onGoOnAirAnnouncement?: () => void;
   /** Opens the promo tab at its start screen — used by the first-run Create. */
   onCreatePromo?: () => void;
+  /** Opens the editor with My Published up, to pick a past campaign. */
+  onOpenPublishedPromo?: () => void;
   promoUnpublished?: boolean;
   announcementUnpublished?: boolean;
 }
@@ -94,6 +97,7 @@ export function Dashboard({
   onStopAnnouncement,
   onGoOnAirAnnouncement,
   onCreatePromo,
+  onOpenPublishedPromo,
   promoUnpublished = false,
   announcementUnpublished = false,
 }: DashboardProps) {
@@ -155,15 +159,11 @@ export function Dashboard({
     ((promo.ctaType === 'whatsapp' && !!promo.whatsappNumber) ||
       (promo.ctaType === 'link' && !!promo.buttonUrl) ||
       promo.ctaType === 'text');
-  const checks: { ok: boolean; text: string; action?: { label: string; onClick: () => void } }[] = [
-    hasUnpublished
-      ? {
-          ok: false,
-          text: 'You have unpublished changes',
-          action: { label: 'Review', onClick: () => setActiveTab(promoUnpublished ? 'promo' : 'announcement') },
-        }
-      : { ok: true, text: 'All changes are published' },
-  ];
+  // Deliberately NOT listing "you have unpublished changes": the dashboard
+  // mirrors what's live on the website only. Editor state is the editor's
+  // business — the way back into unfinished work is My Draft below, which is
+  // always available rather than appearing as an alert.
+  const checks: { ok: boolean; text: string; action?: { label: string; onClick: () => void } }[] = [];
   if (promo.active && !hasCta) {
     checks.push({
       ok: false,
@@ -279,16 +279,10 @@ export function Dashboard({
           <span className="text-xs text-on-surface-variant">
             Last published {now ? timeAgo(config.lastUpdated, now) : '—'}
           </span>
-          {hasUnpublished && (
-            <button
-              type="button"
-              onClick={() => setActiveTab(promoUnpublished ? 'promo' : 'announcement')}
-              className={primaryBtn}
-            >
-              <Upload className="h-4 w-4" />
-              Publish changes
-            </button>
-          )}
+          {/* No "Publish changes" here — publishing belongs to the editor,
+              where you can see what you'd be publishing. Surfacing it on the
+              dashboard also meant leaking editor state into a view that only
+              reports what's live. */}
         </div>
       </section>
 
@@ -437,11 +431,11 @@ export function Dashboard({
             <p className="mt-4 text-sm text-on-surface-variant">Not scheduled yet — set a start and end date.</p>
           )}
 
-          {/* actions — Edit · lifecycle. There's no separate read-only screen:
-              the preview above already answers "what does it look like", and a
-              disabled copy of the editor added a step without adding anything.
-              With nothing created yet, neither applies: the only useful action
-              is to make one, and it opens the start screen. */}
+          {/* actions — two ways in, then lifecycle.
+              "Continue where left off" opens whatever you had open; "Edit
+              published" starts from the live card. Both are always offered,
+              so the dashboard never has to announce that unfinished work
+              exists — you just pick which version you want to work on. */}
           {promoUncreated ? (
             <div className="mt-auto pt-4">
               <button
@@ -453,10 +447,25 @@ export function Dashboard({
               </button>
             </div>
           ) : (
-          <div className="mt-auto flex gap-2 pt-4">
-            <button className={`${ghostBtn} flex-1`} onClick={() => setActiveTab('promo')}>
-              <Pencil className="h-4 w-4" />
-              Edit
+          <div className="mt-auto pt-4">
+            {/* Three actions, one row: start something new, work on what's
+                published, or take it off air. My Draft isn't here — a draft is
+                editor state, and the editor is where it belongs. */}
+          <div className="flex gap-2">
+            <button
+              className={`${ghostBtn} flex-1`}
+              onClick={() => (onCreatePromo ? onCreatePromo() : setActiveTab('promo'))}
+            >
+              <Plus className="h-4 w-4" />
+              Create new
+            </button>
+            <button
+              className={`${ghostBtn} flex-1`}
+              onClick={() => onOpenPublishedPromo?.()}
+              title="Open the editor and choose from your published campaigns"
+            >
+              <History className="h-4 w-4" />
+              Edit published
             </button>
             {promo.active ? (
               <button className={`${stopBtn} flex-1`} onClick={() => setPending({ kind: 'stop', target: 'promo' })}>
@@ -472,6 +481,7 @@ export function Dashboard({
                 Go on air
               </button>
             )}
+          </div>
           </div>
           )}
         </div>

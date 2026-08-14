@@ -1,7 +1,7 @@
 /**
  * Template helpers for the guided promo flow.
  *
- * A template is two separable things: a LOOK (colours, gradients, alignment,
+ * A template is two separable things: a LOOK (colors, gradients, alignment,
  * card width, position) and sample COPY. The old flow applied both at once, so
  * trying a different look destroyed whatever the user had written. Here the two
  * are split, so "change template" restyles the card and leaves the words alone.
@@ -45,9 +45,10 @@ export function applyTemplateFull(current: PromoCard, template: PromoCard): Prom
 /**
  * True when the user hasn't written anything on the card yet.
  *
- * Only the three copy fields count. `buttonText` is excluded because it ships
- * pre-filled ("Shop Now") on a brand-new card — including it would make every
- * fresh card look like it already had content.
+ * Includes `buttonText`: nothing ships pre-filled any more, so a CTA on the
+ * card is text somebody typed. This now agrees with PromoSection's
+ * `canvasIsEmpty` — the two disagreeing is what made Clear Canvas offer to
+ * clear a card that looked blank.
  */
 export function isCardEmpty(card: PromoCard): boolean {
   const blank = (html?: string) =>
@@ -56,5 +57,10 @@ export function isCardEmpty(card: PromoCard): boolean {
       .replace(/&nbsp;/g, ' ')
       .replace(/[​‌‍﻿]/g, '')
       .trim();
-  return blank(card.title) && blank(card.subtitle) && blank(card.description);
+  return (
+    blank(card.title) &&
+    blank(card.subtitle) &&
+    blank(card.description) &&
+    blank(card.buttonText)
+  );
 }

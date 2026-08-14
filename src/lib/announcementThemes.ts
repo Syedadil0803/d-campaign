@@ -4,17 +4,17 @@
  * Replaces the old "Background Type Guide", which showed three swatches
  * labelled Solid / Linear / Radial — a legend teaching CSS vocabulary before
  * anyone could see a result. A theme sets the whole look at once (background
- * AND text colour), so the choice is "which bar do I want" rather than "which
+ * AND text color), so the choice is "which bar do I want" rather than "which
  * gradient function should I pick".
  *
- * Text colours are paired to their background here on purpose: picking a
+ * Text colors are paired to their background here on purpose: picking a
  * background alone is how you end up with dark text on a dark bar. Every pair
  * below clears WCAG AA for the bar's text size.
  *
  * On `midpoint`: the renderer holds startColor FLAT until midpoint%, then
  * blends to endColor (see getBackgroundStyle). So `midpoint: 0` is a true
- * edge-to-edge blend, and a higher value pushes the colour change later —
- * useful for a bar that stays one colour behind the text and shifts at the
+ * edge-to-edge blend, and a higher value pushes the color change later —
+ * useful for a bar that stays one color behind the text and shifts at the
  * end. It is NOT a midpoint in the usual gradient sense.
  */
 
@@ -197,7 +197,7 @@ export function themeBackgroundCss(bg: GradientStyle): string {
 
 /**
  * Which theme (if any) the current style matches, so the strip can show a
- * selection. Compares the colours that define the look — a user nudging the
+ * selection. Compares the colors that define the look — a user nudging the
  * balance slider afterwards means it's no longer that theme.
  */
 export function matchAnnouncementTheme(

@@ -70,8 +70,8 @@ export function TimerChipComponent({ nodeKey, endDate, model }: Props): React.Re
 
   // A CONTAINED highlight (background, not outline) painted INSIDE the cell —
   // an outline draws outside the box and bleeds into the tightly-packed
-  // neighbours. Uses the CSS system colours `Highlight` / `HighlightText`,
-  // which are the EXACT colours the browser uses for native text selection
+  // neighbours. Uses the CSS system colors `Highlight` / `HighlightText`,
+  // which are the EXACT colors the browser uses for native text selection
   // (double-click / drag-select), so the chip-cell highlight matches it.
   const outline = (cell: ChipCell | null): React.CSSProperties =>
     isActive(cell)

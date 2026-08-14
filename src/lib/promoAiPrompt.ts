@@ -14,7 +14,7 @@
 import { PromoCard } from '@/types/campaign';
 import { GradientStyle } from '@/types/campaign';
 
-/** Human-readable colour for a section, so the model can judge contrast. */
+/** Human-readable color for a section, so the model can judge contrast. */
 function describeBg(bg: GradientStyle | undefined): string {
   if (!bg) return 'transparent';
   if (bg.type === 'solid') return bg.startColor;
@@ -71,7 +71,7 @@ export function buildGuidedPromoPrompt({
     ? [
         ['The mood you want — the feeling the card should give off.'],
         [
-          'Any colours you already have in mind — brand colours, a season, a',
+          'Any colors you already have in mind — brand colors, a season, a',
           'reference — or whether I should choose the palette for you.',
         ],
       ]
@@ -92,9 +92,9 @@ export function buildGuidedPromoPrompt({
 
   if (!keepDesign && !keepContent) {
     steps.push([
-      'The colours. Ask whether I already have something in mind — brand colours,',
+      'The colors. Ask whether I already have something in mind — brand colors,',
       'a mood, a season — or whether you should choose the palette for me. If I',
-      'give you colours or a direction, build the palette around them. If I leave',
+      'give you colors or a direction, build the palette around them. If I leave',
       'it to you, design a tasteful, cohesive one yourself and say briefly why it',
       'suits the campaign.',
     ]);
@@ -146,14 +146,14 @@ export function buildGuidedPromoPrompt({
       card.showButton !== false ? `- Button: "${plain(card.buttonText)}"` : '- Button: hidden',
       '',
       'Do NOT rewrite, shorten or "improve" any of it, and do NOT return the copy',
-      'fields. Return ONLY the colour fields, choosing a palette that suits those',
-      'words and the campaign. Every text colour must be clearly readable against',
+      'fields. Return ONLY the color fields, choosing a palette that suits those',
+      'words and the campaign. Every text color must be clearly readable against',
       'its OWN section background; if a section background is "transparent" the',
       'text sits on the card background, so contrast it against the card instead.',
     );
   } else if (keepDesign) {
     lines.push(
-      'KEEP THIS DESIGN. Return ONLY the copy fields — do NOT return any colour,',
+      'KEEP THIS DESIGN. Return ONLY the copy fields — do NOT return any color,',
       'background, alignment or position fields. Write copy whose tone matches the',
       'palette above (a dark, muted palette wants restrained wording; a bright,',
       'high-contrast one can take bolder wording).',
@@ -161,7 +161,7 @@ export function buildGuidedPromoPrompt({
   } else {
     lines.push(
       'You may REPLACE this design. Propose a cohesive palette that suits the',
-      'campaign, returning the colour fields below. Every text colour must be',
+      'campaign, returning the color fields below. Every text color must be',
       'clearly readable against its OWN section background; if a section',
       'background is "transparent" the text sits on the card background, so',
       'contrast it against the card instead.',
