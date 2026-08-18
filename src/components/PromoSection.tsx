@@ -26,6 +26,7 @@ import {
   CalendarDays,
   Save,
   Loader2,
+  Radio,
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
@@ -94,6 +95,11 @@ interface PromoSectionProps {
    * still serving to visitors.
    */
   livePromoCard?: PromoCard;
+  /**
+   * The saved variant the published card came from, recorded at publish time.
+   * Absent for cards published before that was stored — see isLiveVersion.
+   */
+  liveVariantId?: string;
   /**
    * The promo card as saved in My Draft.
    *
@@ -459,6 +465,7 @@ export function PromoSection({
   configLoadedSignal,
   canReactivate,
   livePromoCard,
+  liveVariantId,
   draftPromoCard,
   onCardReplaced,
   onTimerEdited,
@@ -2348,7 +2355,23 @@ export function PromoSection({
 
   function isLiveVersion(version: PromoVersion): boolean {
     if (!livePromoCard || !livePromoCard.active) return false;
+    // Identity first: publishing records which variant went live, so an edit to
+    // the live card can't move the tag onto a different entry — or lose it.
+    if (liveVariantId) return version.id === liveVariantId;
+    // Cards published before that was recorded have no id to match, so fall
+    // back to comparing content rather than showing no Live tag at all.
     return cardSignature(version.promoCard) === cardSignature(livePromoCard);
+  }
+
+  /**
+   * True when a card is on the website but no saved variant is tagged Live —
+   * the live card was edited after publishing, its variant was deleted, or the
+   * list is empty. The popup then shows the live card itself, so the list can
+   * never say "nothing is live" while the site says otherwise.
+   */
+  function liveCardIsUnlisted(): boolean {
+    if (!livePromoCard || !livePromoCard.active) return false;
+    return !versions.some(isLiveVersion);
   }
 
   async function handleDeleteVersion(id: string) {
@@ -5350,6 +5373,41 @@ export function PromoSection({
 
             {/* Saved versions grid (newest first) — click a card to apply */}
             <div className="campaign-custom-scrollbar overflow-y-auto p-6">
+              {/* What's on the website, when no saved variant is carrying the
+                  Live tag. Without this the list can read "nothing is live"
+                  while the card is still serving — and with the list empty
+                  there was no control anywhere in here to take it off. */}
+              {liveCardIsUnlisted() && livePromoCard && (
+                <div className="mb-6 rounded-xl border border-primary/40 bg-primary/5 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="flex items-center gap-2 text-sm font-semibold text-on-surface">
+                        <Radio className="h-3.5 w-3.5 text-primary" />
+                        Live on your website
+                      </p>
+                      <p className="mt-1 text-xs text-on-surface-variant">
+                        This card is serving now but isn&apos;t one of your saved
+                        variants — it was edited after publishing, or its variant
+                        was deleted.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowVersionsPopup(false);
+                        setShowStopConfirm(true);
+                      }}
+                      className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-on-surface-variant transition-colors hover:border-red-500/70 hover:text-red-500"
+                    >
+                      Take it off my website
+                    </button>
+                  </div>
+                  <div className="mt-3 max-w-xs">
+                    <PromoMiniPreview promoCard={livePromoCard} />
+                  </div>
+                </div>
+              )}
+
               {versions.length === 0 ? (
                 <div className="p-10 text-center text-sm text-on-surface-variant">
                   No saved variants yet.

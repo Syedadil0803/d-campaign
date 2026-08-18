@@ -134,6 +134,8 @@ Press Ctrl+Z repeatedly and it walks back newest-first through those ~30 actions
 
 **One exception.** Deleting the variant that is currently **live** also takes the card off your website and clears the canvas. That one says so in the confirmation and offers no Undo — putting it back means publishing again.
 
+*Which entry is Live is recorded at publish time, not guessed from the words on the card. Edit the live card afterwards and the tag stays where it belongs. If a card is on your website but no saved variant carries the tag — you deleted its variant, or edited the card after publishing — My Published shows it at the top as "Live on your website", with a control to take it off, so the list can never disagree with the site.*
+
 ### Scenario 14 — Clearing the canvas (Undo toast, wipes the card)
 
 1. You've built a promo and click **Clear Canvas**.

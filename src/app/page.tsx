@@ -333,7 +333,11 @@ export default function Home() {
     // identical configs compare as different — which meant a draft could never
     // match what's published, and the "Welcome back" banner fired for drafts
     // holding no real changes.
-    const { lastUpdated: _ignored, ...content } = cfg;
+    const {
+      lastUpdated: _ignored,
+      livePromoVariantId: _liveVariant,
+      ...content
+    } = cfg;
     return JSON.stringify({
       ...content,
       announcementBar: strip(cfg.announcementBar as unknown as Record<string, unknown>),
@@ -360,7 +364,9 @@ export default function Home() {
     })}`;
   }
 
-  async function getPromoVariantSaveStatus(cfg: CampaignConfig) {
+  async function getPromoVariantSaveStatus(
+    cfg: CampaignConfig,
+  ): Promise<{ status: 'skipped' | 'pending' | 'ready'; variantId?: string }> {
     const promoSignature = getPromoSignature(cfg);
     // The saved-signature cache is only trustworthy when the card is ACTUALLY in
     // the saved list. loadConfig seeds savedPromoSignatureRef from the *published*
@@ -376,17 +382,32 @@ export default function Home() {
       savedPromoSignatureRef.current = promoSignature;
       // Already recorded — make sure it's the highlighted "Live" entry.
       setSelectedPromoVersionId(match.id);
-      return 'skipped';
+      return { status: 'skipped', variantId: match.id };
     }
 
-    return existingVersions.length >= MAX_VERSIONS ? 'pending' : 'ready';
+    return {
+      status: existingVersions.length >= MAX_VERSIONS ? 'pending' : 'ready',
+    };
+  }
+
+  /**
+   * Stamp the config with the variant that is going live, so My Published can
+   * tag it by identity instead of guessing from content.
+   */
+  function withLiveVariant(
+    cfg: CampaignConfig,
+    variantId: string | null,
+  ): CampaignConfig {
+    return { ...cfg, livePromoVariantId: variantId ?? undefined };
   }
 
   async function savePromoVariant(cfg: CampaignConfig, allowOverflow = false) {
     const updatedVersions = await saveVersion(cfg.promoCard, getAutoVariantLabel(), { allowOverflow });
-    setSelectedPromoVersionId(updatedVersions[updatedVersions.length - 1]?.id ?? null);
+    const savedId = updatedVersions[updatedVersions.length - 1]?.id ?? null;
+    setSelectedPromoVersionId(savedId);
     savedPromoSignatureRef.current = getPromoSignature(cfg);
     refreshPromoVariants();
+    return savedId;
   }
 
   useEffect(() => {
@@ -889,10 +910,14 @@ export default function Home() {
     setPendingVariantSave(null);
     if (mode === 'publish') setIsPublishing(true);
     try {
-      await savePromoVariant(cfg, true);
+      const savedId = await savePromoVariant(cfg, true);
       if (mode === 'publish') {
         // cfg already has active:true — finish going live, don't re-prompt to publish.
-        await persistConfig(cfg, 'Campaign is live on your website', 'promo');
+        await persistConfig(
+          withLiveVariant(cfg, savedId),
+          'Campaign is live on your website',
+          'promo',
+        );
       } else {
         await persistConfig(cfg, 'Settings saved and promo variant saved');
       }
@@ -912,7 +937,11 @@ export default function Home() {
       setSelectedPromoVersionId(versionId);
       savedPromoSignatureRef.current = getPromoSignature(cfg);
       if (mode === 'publish') {
-        await persistConfig(cfg, 'Campaign is live on your website', 'promo');
+        await persistConfig(
+          withLiveVariant(cfg, versionId),
+          'Campaign is live on your website',
+          'promo',
+        );
       } else {
         await persistConfig(cfg, 'Settings saved and promo variant updated');
       }
@@ -1083,6 +1112,7 @@ export default function Home() {
     const base = publishedConfigObjRef.current ?? configRef.current;
     const next: CampaignConfig = {
       ...base,
+      livePromoVariantId: undefined,
       promoCard: {
         ...defaultConfig.promoCard,
         active: false,
@@ -1110,7 +1140,7 @@ export default function Home() {
     const successMsg = 'Campaign is live on your website';
 
     const variantStatus = await getPromoVariantSaveStatus(cfgToSave);
-    if (variantStatus === 'pending') {
+    if (variantStatus.status === 'pending') {
       // Variant decision dialog handles the actual publish next.
       setConfig(cfgToSave);
       setPendingVariantSave({ config: cfgToSave, versions: await listVersions(), mode: 'publish' });
@@ -1119,15 +1149,18 @@ export default function Home() {
 
     // Flip the chip to On Air only AFTER the publish finishes — so it appears
     // when the "Publishing…" loader completes, not at the start.
-    if (variantStatus === 'ready') {
-      await savePromoVariant(cfgToSave);
-      await persistConfig(cfgToSave, successMsg, 'promo');
-      setConfig(cfgToSave);
+    if (variantStatus.status === 'ready') {
+      const savedId = await savePromoVariant(cfgToSave);
+      const live = withLiveVariant(cfgToSave, savedId);
+      await persistConfig(live, successMsg, 'promo');
+      setConfig(live);
       return;
     }
 
-    await persistConfig(cfgToSave, successMsg, 'promo');
-    setConfig(cfgToSave);
+    // 'skipped' — the card is already saved, so that entry is the live one.
+    const live = withLiveVariant(cfgToSave, variantStatus.variantId ?? null);
+    await persistConfig(live, successMsg, 'promo');
+    setConfig(live);
   }
 
   function validatePromo(): string[] {
@@ -1451,6 +1484,7 @@ export default function Home() {
                   onSelectedVersionChange={setSelectedPromoVersionId}
                   canReactivate={promoCanReactivate}
                   livePromoCard={publishedConfig.promoCard}
+                  liveVariantId={publishedConfig.livePromoVariantId}
                   draftPromoCard={draftPromoCard}
                   onStop={stopPromoNow}
                   onGoOnAir={goOnAirPromoNow}
