@@ -27,6 +27,7 @@ import {
   Save,
   Loader2,
   Radio,
+  MoreHorizontal,
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
@@ -634,6 +635,9 @@ export function PromoSection({
   const [showPersistentScaffold, setShowPersistentScaffold] = useState(true);
   // Action popups launched from the buttons under the Promo Card heading.
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
+  /** The ⋯ menu holding the rare, destructive actions. */
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
   /**
    * The design to return to, shown as the first chip in the Themes strip.
@@ -2284,6 +2288,17 @@ export function PromoSection({
     return getPopupFieldStyle(field).background;
   }
 
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setShowMoreMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [showMoreMenu]);
+
   // On mount: load saved versions. The saved config remains the source of truth.
   useEffect(() => {
     listVersions().then((list) => {
@@ -2456,6 +2471,57 @@ export function PromoSection({
         }
       },
     });
+  }
+
+  /**
+   * Clearing the canvas moved into the ⋯ menu: it is the one destructive action
+   * in the row and was sitting between two everyday ones, styled the same.
+   */
+  function confirmClearCanvas() {
+    confirmCardReplace(startFreshPromoCard, {
+                      title: 'Clear the canvas?',
+                      // Never routed through the save-first branches: clearing is
+                      // destruction the user asked for, so saving is offered as a
+                      // third button below, never made a condition of continuing.
+                      offerDraftSave: false,
+                      body: (
+                        <>
+                          This removes all content and styling from the card you are editing. Your live
+                          campaign remains unchanged.
+                          {draftUpToDate ? (
+                            <>
+                              {' '}
+                              This card is already saved in{' '}
+                              <span className="font-semibold text-on-surface">My Draft</span>.
+                            </>
+                          ) : draftExists ? (
+                            <>
+                              {' '}
+                              Keeping a copy will replace the card currently in{' '}
+                              <span className="font-semibold text-on-surface">My Draft</span>.
+                            </>
+                          ) : null}
+                        </>
+                      ),
+                      reassuranceBody:
+                        'This removes all content and styling from the card you are editing. Your live ' +
+                        'campaign remains unchanged.',
+                      // Short enough that three buttons fit one row at max-w-md.
+                      // "anyway" only means something next to a save button; alone
+                      // it implies a choice that isn't being offered.
+                      confirmLabel: canvasIsEmpty || draftUpToDate ? 'Clear canvas' : 'Clear anyway',
+                      // Offered only when there is something to save that isn't
+                      // already saved — otherwise it's a button that does nothing.
+                      ...(canvasIsEmpty || draftUpToDate
+                        ? {}
+                        : {
+                            secondaryLabel: draftExists ? 'Replace draft & clear' : 'Save & clear',
+                            onSecondary: () => {
+                              (onSaveDraftDirect ?? onSaveDraft)();
+                              startFreshPromoCard();
+                            },
+                          }),
+                    });
   }
 
   // Apply a saved version to the live card — click-to-apply, like a template.
@@ -3877,208 +3943,75 @@ export function PromoSection({
                   See your promo card update as you edit — click any field to restyle it.
                 </p>
               </div>
-              <div className="flex flex-col items-end gap-1">
-                <p className="text-[11px] text-primary font-medium flex items-center animate-pulse">
-                  💡 click Position to place the card • click Style to edit card
-                  background
-                </p>
-                <div className="flex flex-wrap items-center justify-end gap-1.5">
-                  <PopupDropdown
-                    label="Position"
-                    value={config.promoCard.style.position}
-                    options={[
-                      { value: "bottom-right", label: "Bottom Right" },
-                      { value: "bottom-left", label: "Bottom Left" },
-                    ]}
-                    open={showCardPositionDropdown}
-                    onOpen={() => {
-                      const next = !showCardPositionDropdown;
-                      closeAllPromoDropdowns();
-                      setShowCardPositionDropdown(next);
-                      setCardPositionPos(
-                        getDropdownPosition(cardPositionBtnRef.current),
-                      );
-                    }}
-                    onSelect={(v) => {
-                      pushPromoState();
-                      setConfig({
-                        ...config,
-                        promoCard: {
-                          ...config.promoCard,
-                          style: {
-                            ...config.promoCard.style,
-                            position: v as any,
-                          },
-                        },
-                      });
-                      markChanged();
-                      setShowCardPositionDropdown(false);
-                    }}
-                    buttonRef={cardPositionBtnRef}
-                    menuRef={cardPositionMenuRef}
-                    menuPosition={cardPositionPos}
-                    compact={true}
-                  />
-                  <div>
-                    <label className="block text-[10px] text-on-surface-variant mb-0.5">
-                      Style
-                    </label>
-                    <button
-                      ref={cardBgPopupBtnRef}
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        closeAllPromoDropdowns();
-                        setShowPersistentScaffold(true);
-                        setShowCardBgPopup((prev) => !prev);
-                      }}
-                      className="inline-flex h-9 items-center justify-center rounded-md border border-white/10 bg-black/10 px-2 text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10"
-                      title="Card Style"
-                    >
-                      <Palette className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="flex flex-col items-start pl-3">
-                    <label className="block text-[10px] text-on-surface-variant mb-0.5">
-                      Status
-                    </label>
-                    {/* Status chip — 3 states: On air (tap to stop) / Go on air
-                        enabled (same content, one click) / Go on air disabled
-                        (new or edited content → must Save & Publish). */}
-                    <button
-                      type="button"
-                      onClick={
-                        config.promoCard.active
-                          ? () => setShowStopConfirm(true)
-                          : canReactivate
-                          ? () => setShowGoOnAirConfirm(true)
-                          : undefined
-                      }
-                      disabled={!config.promoCard.active && !canReactivate}
-                      aria-pressed={config.promoCard.active}
-                      title={
-                        config.promoCard.active
-                          ? "On air — tap to stop"
-                          : canReactivate
-                          ? "Reactivate the same content — go on air now"
-                          : "You have unpublished changes — Save & Publish to go live"
-                      }
-                      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors duration-200 ${
-                        config.promoCard.active
-                          ? "border-transparent bg-primary/[0.13] text-primary hover:bg-primary/[0.18] cursor-pointer"
-                          : canReactivate
-                          ? "border-border bg-surface-subtle text-on-surface-variant hover:border-primary/50 hover:text-primary cursor-pointer"
-                          : "border-border bg-surface-subtle text-on-surface-variant/40 cursor-not-allowed"
-                      }`}
-                    >
-                      {config.promoCard.active ? (
-                        <>
-                          <span className="live-dot" />
-                          On air · tap to stop
-                        </>
-                      ) : (
-                        <>
-                          <Power className="h-3.5 w-3.5" />
-                          Go on air
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
+              <div className="shrink-0">
+                {/* Status chip — 3 states: On air (tap to stop) / Go on air
+                    enabled (same content, one click) / Go on air disabled
+                    (new or edited content → must Save & Publish). */}
+                <button
+                  type="button"
+                  onClick={
+                    config.promoCard.active
+                      ? () => setShowStopConfirm(true)
+                      : canReactivate
+                      ? () => setShowGoOnAirConfirm(true)
+                      : undefined
+                  }
+                  disabled={!config.promoCard.active && !canReactivate}
+                  aria-pressed={config.promoCard.active}
+                  title={
+                    config.promoCard.active
+                      ? "On air — tap to stop"
+                      : canReactivate
+                      ? "Reactivate the same content — go on air now"
+                      : "You have unpublished changes — Save & Publish to go live"
+                  }
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors duration-200 ${
+                    config.promoCard.active
+                      ? "border-transparent bg-primary/[0.13] text-primary hover:bg-primary/[0.18] cursor-pointer"
+                      : canReactivate
+                      ? "border-border bg-surface-subtle text-on-surface-variant hover:border-primary/50 hover:text-primary cursor-pointer"
+                      : "border-border bg-surface-subtle text-on-surface-variant/40 cursor-not-allowed"
+                  }`}
+                >
+                  {config.promoCard.active ? (
+                    <>
+                      <span className="live-dot" />
+                      On air · tap to stop
+                    </>
+                  ) : (
+                    <>
+                      <Power className="h-3.5 w-3.5" />
+                      Go on air
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
           {/* Action tabs — sit between the preview header and the Website
               Content Area, left-aligned. Fixed height so the preview below
               shrinks to keep the column scroll-free. */}
-          <div className="flex shrink-0 items-center gap-2">
-            {/* AI is a symbol, not a sentence.
+          {/* One toolbar, grouped by purpose.
 
-                It sat in the row as the widest chip, so the one action that is
-                optional shouted over Template Hub and My Published, which are
-                not. As a glowing icon it still reads as the special one — the
-                glow is doing the work the extra words were — and the label
-                arrives on hover, floating rather than expanding, so the buttons
-                beside it never move under the cursor. */}
+              Everything used to sit in one undifferentiated run of six chips
+              under two lines of instructions, so nothing looked more or less
+              important than anything else. Now: what changes the card, then the
+              places cards are kept, then the rare stuff behind ⋯, then the card
+              settings and the one primary action, pushed right. Thin rules mark
+              the seams. */}
+          <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
+            <div className="flex flex-wrap items-center gap-2">
             {onUseAi && (
-              <div className="group relative shrink-0">
-                <button
-                  type="button"
-                  onClick={onUseAi}
-                  aria-label="Improve with AI"
-                  className="grid h-9 w-9 place-items-center rounded-lg border border-primary/50 bg-primary/[0.08] text-primary shadow-[0_0_10px_-2px] shadow-primary/50 transition-all hover:scale-[1.04] hover:bg-primary/15 hover:shadow-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  <Sparkles className="h-4 w-4" />
-                </button>
-                <span
-                  role="tooltip"
-                  // Anchored left, not centred: this is the first button in
-                  // the row, so a centred tooltip hangs off the panel and gets
-                  // clipped to "ove with AI".
-                  className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 whitespace-nowrap rounded-md border border-border bg-surface-elevated px-2 py-1 text-[11px] font-medium text-on-surface opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100"
-                >
-                  Improve with AI
-                </span>
-              </div>
+              <button
+                type="button"
+                onClick={onUseAi}
+                className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-primary/40 bg-primary/[0.06] px-3 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+                title="Let AI write or restyle this card"
+              >
+                <Sparkles className="h-4 w-4" /> Improve with AI
+              </button>
             )}
-            <button
-              type="button"
-              onClick={() =>
-                confirmCardReplace(startFreshPromoCard, {
-                  title: 'Clear the canvas?',
-                  // Never routed through the save-first branches: clearing is
-                  // destruction the user asked for, so saving is offered as a
-                  // third button below, never made a condition of continuing.
-                  offerDraftSave: false,
-                  body: (
-                    <>
-                      This removes all content and styling from the card you are editing. Your live
-                      campaign remains unchanged.
-                      {draftUpToDate ? (
-                        <>
-                          {' '}
-                          This card is already saved in{' '}
-                          <span className="font-semibold text-on-surface">My Draft</span>.
-                        </>
-                      ) : draftExists ? (
-                        <>
-                          {' '}
-                          Keeping a copy will replace the card currently in{' '}
-                          <span className="font-semibold text-on-surface">My Draft</span>.
-                        </>
-                      ) : null}
-                    </>
-                  ),
-                  reassuranceBody:
-                    'This removes all content and styling from the card you are editing. Your live ' +
-                    'campaign remains unchanged.',
-                  // Short enough that three buttons fit one row at max-w-md.
-                  // "anyway" only means something next to a save button; alone
-                  // it implies a choice that isn't being offered.
-                  confirmLabel: canvasIsEmpty || draftUpToDate ? 'Clear canvas' : 'Clear anyway',
-                  // Offered only when there is something to save that isn't
-                  // already saved — otherwise it's a button that does nothing.
-                  ...(canvasIsEmpty || draftUpToDate
-                    ? {}
-                    : {
-                        secondaryLabel: draftExists ? 'Replace draft & clear' : 'Save & clear',
-                        onSecondary: () => {
-                          (onSaveDraftDirect ?? onSaveDraft)();
-                          startFreshPromoCard();
-                        },
-                      }),
-                })
-              }
-              disabled={canvasIsEmpty}
-              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-              title={
-                canvasIsEmpty
-                  ? 'Nothing to clear — the canvas is already blank.'
-                  : 'Start from a blank promo card'
-              }
-            >
-              <FilePlus2 className="h-4 w-4" /> Clear Canvas
-            </button>
+            <span className="h-6 w-px shrink-0 bg-border" aria-hidden="true" />
             <button
               type="button"
               onClick={() => {
@@ -4118,12 +4051,118 @@ export function PromoSection({
                 />
               )}
             </button>
+            {/* Rare and destructive lives behind ⋯ rather than beside the
+                everyday actions, styled identically to them. */}
+            <div className="relative shrink-0" ref={moreMenuRef}>
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={showMoreMenu}
+                aria-label="More card actions"
+                onClick={() => setShowMoreMenu((prev) => !prev)}
+                className="grid h-9 w-9 place-items-center rounded-lg border border-on-surface-variant/40 text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+              {showMoreMenu && (
+                <div
+                  role="menu"
+                  className="absolute left-0 top-full z-30 mt-1.5 w-52 overflow-hidden rounded-lg border border-border bg-surface-elevated py-1 shadow-lg"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={canvasIsEmpty}
+                    onClick={() => {
+                      setShowMoreMenu(false);
+                      confirmClearCanvas();
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-on-surface-variant"
+                    title={
+                      canvasIsEmpty
+                        ? 'Nothing to clear — the canvas is already blank.'
+                        : 'Start from a blank promo card'
+                    }
+                  >
+                    <FilePlus2 className="h-4 w-4" /> Clear Canvas
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Card settings sit with the primary action, away from the
+                content actions — they change where the card sits and what it
+                is made of, not what it says. */}
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              {/* The tip line that used to pulse above the header said exactly
+                  two things — what Position does and what Style does. They sit
+                  on the controls themselves now, read at the moment they
+                  matter rather than at every moment. */}
+              <span title="Where the card sits on your website">
+              <PopupDropdown
+                // Kept for screen readers, hidden on screen: three stacked
+                // mini-headings above three controls were most of what made
+                // this strip feel busy, and "Bottom Right" names itself.
+                labelClassName="sr-only"
+                label="Position"
+                value={config.promoCard.style.position}
+                options={[
+                  { value: "bottom-right", label: "Bottom Right" },
+                  { value: "bottom-left", label: "Bottom Left" },
+                ]}
+                open={showCardPositionDropdown}
+                onOpen={() => {
+                  const next = !showCardPositionDropdown;
+                  closeAllPromoDropdowns();
+                  setShowCardPositionDropdown(next);
+                  setCardPositionPos(
+                    getDropdownPosition(cardPositionBtnRef.current),
+                  );
+                }}
+                onSelect={(v) => {
+                  pushPromoState();
+                  setConfig({
+                    ...config,
+                    promoCard: {
+                      ...config.promoCard,
+                      style: {
+                        ...config.promoCard.style,
+                        position: v as any,
+                      },
+                    },
+                  });
+                  markChanged();
+                  setShowCardPositionDropdown(false);
+                }}
+                buttonRef={cardPositionBtnRef}
+                menuRef={cardPositionMenuRef}
+                menuPosition={cardPositionPos}
+                compact={true}
+              />
+              </span>
+              <button
+                ref={cardBgPopupBtnRef}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  closeAllPromoDropdowns();
+                  setShowPersistentScaffold(true);
+                  setShowCardBgPopup((prev) => !prev);
+                }}
+                className="inline-flex h-9 items-center justify-center rounded-md border border-white/10 bg-black/10 px-2 text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10"
+                title="Card background — click to edit the card’s own colours"
+              >
+              <Palette className="h-4 w-4" />
+              </button>
+              <span className="h-6 w-px shrink-0 bg-border" aria-hidden="true" />
             <button
               type="button"
               data-tour="promo-save-draft"
               onClick={onSaveDraft}
               disabled={savingDraft || canvasIsEmpty || draftUpToDate}
-              className="ml-auto inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
               title={
                 canvasIsEmpty
                   ? 'Nothing to save yet — add some content first.'
@@ -4137,6 +4176,7 @@ export function PromoSection({
               {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {draftExists ? 'Update saved draft' : 'Save as draft'}
             </button>
+            </div>
           </div>
           {/* data-promo-canvas: the build panel measures this box and sits
               inside it, so it never floats over the toolbar above. */}
