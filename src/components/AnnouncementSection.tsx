@@ -2,13 +2,13 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Megaphone, MoreVertical, Sparkles, Undo2, Redo2, Radio, Infinity as InfinityIcon, MoveLeft, Trash2 } from 'lucide-react';
+import { Megaphone, MoreVertical, Sparkles, Radio, Infinity as InfinityIcon, MoveLeft, Trash2 } from 'lucide-react';
 import { CampaignConfig, defaultConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { wrapBareTextWithFontSize, rgbToHex, fontSizeToLabel } from '@/lib/richTextUtils';
 import RichTextToolbar from './RichTextToolbar';
-import { Toast } from './Toast';
+import { Toast, TOAST_ACTION_MS, type ToastAction } from './Toast';
 import { PopupDropdown } from './PopupDropdown';
 import { useEditorHistory } from '@/hooks/useEditorHistory';
 import { EditorSnapshot, LinkSnapshot } from '@/lib/historyManager';
@@ -53,45 +53,32 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   const [showRichToolbar, setShowRichToolbar] = useState(true);
   const [loopCopies, setLoopCopies] = useState(1);
 
-  // List-level undo/redo (delete, reorder, add)
-  const listUndoStack = useRef<CampaignConfig['announcementBar']['announcements'][]>([]);
-  const listRedoStack = useRef<CampaignConfig['announcementBar']['announcements'][]>([]);
-  const [canUndoList, setCanUndoList] = useState(false);
-  const [canRedoList, setCanRedoList] = useState(false);
+  /**
+   * List actions (delete, reorder, clear, start fresh) are recovered by a
+   * one-tap Undo in their own toast, not by history buttons on screen.
+   *
+   * There used to be an Undo/Redo pair in the list header backed by a 30-deep
+   * stack. A visible history control is the main thing that makes a tool feel
+   * like a document editor, and it made recovery a thing you had to go and
+   * find — the toast puts it where the mistake just happened.
+   */
+  type AnnouncementList = CampaignConfig['announcementBar']['announcements'];
 
-  function pushListUndo() {
-    listUndoStack.current.push([...configRef.current.announcementBar.announcements]);
-    if (listUndoStack.current.length > 30) listUndoStack.current.shift();
-    listRedoStack.current = [];
-    setCanUndoList(true);
-    setCanRedoList(false);
-    console.log(`📋 [List] PUSH — undo: ${listUndoStack.current.length}, redo: 0, items: ${configRef.current.announcementBar.announcements.length}`);
-  }
-
-  function undoList() {
-    if (listUndoStack.current.length === 0) return;
-    listRedoStack.current.push([...configRef.current.announcementBar.announcements]);
-    const prev = listUndoStack.current.pop()!;
-    setConfig({ ...configRef.current, announcementBar: { ...configRef.current.announcementBar, announcements: prev } });
-    setCanUndoList(listUndoStack.current.length > 0);
-    setCanRedoList(true);
-    clearSelection();
-    showToast('Action undone');
-    markChanged();
-    console.log(`📋 [List] UNDO — undo: ${listUndoStack.current.length}, redo: ${listRedoStack.current.length}, restoring ${prev.length} items`);
-  }
-
-  function redoList() {
-    if (listRedoStack.current.length === 0) return;
-    listUndoStack.current.push([...configRef.current.announcementBar.announcements]);
-    const next = listRedoStack.current.pop()!;
-    setConfig({ ...configRef.current, announcementBar: { ...configRef.current.announcementBar, announcements: next } });
-    setCanUndoList(true);
-    setCanRedoList(listRedoStack.current.length > 0);
-    clearSelection();
-    showToast('Action redone');
-    markChanged();
-    console.log(`📋 [List] REDO — undo: ${listUndoStack.current.length}, redo: ${listRedoStack.current.length}, restoring ${next.length} items`);
+  function undoListAction(previous: AnnouncementList): ToastAction {
+    return {
+      label: 'Undo',
+      onClick: () => {
+        setConfig({
+          ...configRef.current,
+          announcementBar: {
+            ...configRef.current.announcementBar,
+            announcements: previous,
+          },
+        });
+        clearSelection();
+        markChanged();
+      },
+    };
   }
 
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -169,10 +156,9 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
 
   // Editor history (undo/redo)
   const {
-    pushImmediateState, pushLinkState, unlockEditor,
+    pushImmediateState, pushTypingState, pushLinkState,
     undoEditor, redoEditor, undoLink, redoLink,
     commit: commitHistory,
-    canUndoEditor, canRedoEditor, canUndoLink, canRedoLink,
   } = useEditorHistory();
 
   // Snapshot helpers
@@ -258,19 +244,55 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   }
 
   // Toast state
-  const [toast, setToast] = useState({ show: false, message: '', isError: false });
+  const [toast, setToast] = useState<{
+    show: boolean;
+    message: string;
+    isError: boolean;
+    action: ToastAction | null;
+  }>({ show: false, message: '', isError: false, action: null });
   const toastTimerRef = useRef<number | null>(null);
 
-  function showToast(message: string, isError = false, duration = 2500) {
+  function hideToast() {
     if (toastTimerRef.current) {
       window.clearTimeout(toastTimerRef.current);
       toastTimerRef.current = null;
     }
-    setToast({ show: true, message, isError });
-    toastTimerRef.current = window.setTimeout(() => {
-      setToast({ show: false, message: '', isError: false });
+    setToast({ show: false, message: '', isError: false, action: null });
+  }
+
+  /**
+   * `action` turns the toast into a one-tap recovery offer. It gets a longer
+   * life than a plain confirmation — long enough to read and reach, still short
+   * enough that the offer clearly expires with the toast.
+   */
+  function showToast(
+    message: string,
+    isError = false,
+    duration = 2500,
+    action?: ToastAction,
+  ) {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
       toastTimerRef.current = null;
-    }, duration) as unknown as number;
+    }
+    setToast({
+      show: true,
+      message,
+      isError,
+      action: action
+        ? {
+            label: action.label,
+            onClick: () => {
+              hideToast();
+              action.onClick();
+            },
+          }
+        : null,
+    });
+    toastTimerRef.current = window.setTimeout(
+      hideToast,
+      action ? TOAST_ACTION_MS : duration,
+    ) as unknown as number;
   }
 
   useEffect(() => {
@@ -395,16 +417,16 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
         if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
         e.preventDefault();
         // Remove from config
-        pushListUndo();
         const currentConfig = configRef.current;
+        const previous = [...currentConfig.announcementBar.announcements];
         const updated = currentConfig.announcementBar.announcements.filter((_, i) => i !== idx);
         setConfig({
           ...currentConfig,
           announcementBar: { ...currentConfig.announcementBar, announcements: updated },
         });
         clearSelection();
-        showToast('Announcement deleted');
         markChanged();
+        showToast('Announcement deleted', false, 2500, undoListAction(previous));
       }
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -491,8 +513,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   }
 
   function addAnnouncement() {
-    pushListUndo();
-    commitHistory(); // Clear editor undo/redo stacks on Add
+    // Adding or updating takes nothing away, so there's nothing to offer back.
+    commitHistory(); // The editor moves on — its step history goes with it.
     const html = getNormalizedHTML();
     const updated = [...config.announcementBar.announcements];
 
@@ -532,7 +554,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   }
 
   function removeAnnouncement(index: number) {
-    pushListUndo();
+    const previous = [...config.announcementBar.announcements];
     const updated = config.announcementBar.announcements.filter((_, currentIndex) => currentIndex !== index);
     setConfig({
       ...config,
@@ -549,13 +571,13 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     }
 
     markChanged();
-    showToast('Announcement deleted', false);
+    showToast('Announcement deleted', false, 2500, undoListAction(previous));
   }
 
-  // Empties the message list; undoable via the list-undo stack.
+  // Empties the message list; recoverable from its toast.
   function clearAnnouncements() {
     if (config.announcementBar.announcements.length === 0) return;
-    pushListUndo();
+    const previous = [...config.announcementBar.announcements];
     setConfig({
       ...config,
       announcementBar: {
@@ -565,13 +587,16 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     });
     clearSelection();
     markChanged();
-    showToast('All announcements cleared', false);
+    showToast('All announcements cleared', false, 2500, undoListAction(previous));
   }
 
   // Full reset of the draft to defaults (messages + styling). Confirm-gated and
   // not undoable, so history is wiped to avoid a confusing partial undo. `active`
   // is left alone — live status is owned by Go on air / Stop.
   function startFresh() {
+    const previousBar = JSON.parse(
+      JSON.stringify(config.announcementBar),
+    ) as CampaignConfig['announcementBar'];
     setConfig({
       ...config,
       announcementBar: {
@@ -584,13 +609,18 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
       },
     });
     clearSelection();
-    listUndoStack.current = [];
-    listRedoStack.current = [];
-    setCanUndoList(false);
-    setCanRedoList(false);
     commitHistory();
     markChanged();
-    showToast('Started fresh — messages and styling reset to defaults');
+    // A whole-bar wipe — styling included — so its Undo puts the whole bar
+    // back, not just the messages.
+    showToast('Started fresh — messages and styling reset to defaults', false, 2500, {
+      label: 'Undo',
+      onClick: () => {
+        setConfig({ ...configRef.current, announcementBar: previousBar });
+        clearSelection();
+        markChanged();
+      },
+    });
   }
 
   // Close the ••• menu on any outside click.
@@ -606,7 +636,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   }, [showResetMenu]);
 
   function reorderAnnouncements(fromIndex: number, toIndex: number) {
-    pushListUndo();
+    const previous = [...config.announcementBar.announcements];
     const updated = [...config.announcementBar.announcements];
     const [movedAnnouncement] = updated.splice(fromIndex, 1);
     updated.splice(toIndex, 0, movedAnnouncement);
@@ -628,6 +658,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
       setSelectedIndex(currentSelectedIndex + 1);
     }
     markChanged();
+    showToast('Order changed', false, 2500, undoListAction(previous));
   }
 
   // ── Undo/Redo keyboard shortcut (custom history, suppress native) ──
@@ -1003,7 +1034,13 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
 
   return (
     <section className="rounded-2xl border-border overflow-hidden">
-      <Toast show={toast.show} message={toast.message} isError={toast.isError} />
+      <Toast
+        show={toast.show}
+        message={toast.message}
+        isError={toast.isError}
+        action={toast.action}
+        actionDurationMs={TOAST_ACTION_MS}
+      />
 
       {/* Stop Announcement Confirmation — immediate (no save/publish needed) */}
       {showStopConfirm && (
@@ -1444,9 +1481,12 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                           richEditorRef.current?.contains(sel.anchorNode) &&
                           (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete')
                         ) {
-                          unlockEditor();
                           pushImmediateState(getEditorSnapshot());
-                          isDeletingRef.current = true;
+                          // Typing over a selection is a typing run, not a delete
+                          // run — leave the lock off so the rest of the word
+                          // collapses into this one step.
+                          isDeletingRef.current =
+                            e.key === 'Backspace' || e.key === 'Delete';
                         }
                       }
 
@@ -1457,8 +1497,23 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                           isDeletingRef.current = true;
                           pushImmediateState(getEditorSnapshot());
                         }
-                      } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
-                        // Forward typing — same session, don't reset
+                      } else if (
+                        (e.key.length === 1 || e.key === 'Enter') &&
+                        !e.metaKey &&
+                        !e.ctrlKey
+                      ) {
+                        // Ordinary typing. Snapshot BEFORE the character lands,
+                        // so undo restores the text as it was; the stack's
+                        // coalescing window folds the rest of the burst in.
+                        if (isDeletingRef.current) {
+                          // Typing after a delete run ends that run and opens its
+                          // own step, so the words survive one Ctrl+Z instead of
+                          // being swallowed together with the deletion.
+                          isDeletingRef.current = false;
+                          pushImmediateState(getEditorSnapshot());
+                        } else {
+                          pushTypingState(getEditorSnapshot());
+                        }
                       }
 
                       // ── 3. Suppress native undo/redo ──
@@ -2167,25 +2222,9 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                   <h4 className="text-2xl font-semibold leading-8 text-on-surface">Manage Announcements</h4>
                   <p className="mt-2 text-sm text-on-surface-variant">View, reorder, and style your announcement messages.</p>
                 </div>
+                {/* No Undo/Redo buttons here on purpose: editing is Ctrl+Z, and
+                    every list action offers Undo in its own toast. */}
                 <div className="flex items-center gap-0.5">
-                  <button
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={undoList}
-                    disabled={!canUndoList}
-                    className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                    title="Undo list action"
-                  >
-                    <Undo2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={redoList}
-                    disabled={!canRedoList}
-                    className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                    title="Redo list action"
-                  >
-                    <Redo2 className="w-3.5 h-3.5" />
-                  </button>
                   <button
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={clearAnnouncements}

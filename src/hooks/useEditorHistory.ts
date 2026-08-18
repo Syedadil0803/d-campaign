@@ -1,108 +1,84 @@
 /**
- * useEditorHistory — React hook for 1-level undo/redo.
- * 
- * Push before any destructive/style change.
- * Undo = restore previous. Redo = restore what was undone from.
- * Each new push overwrites the previous.
+ * useEditorHistory — bounded multi-step undo/redo for the announcement editor.
+ *
+ * Was a single-level history: one push locked "the previous state" and every
+ * later push was dropped until an undo unlocked it, so Ctrl+Z could only ever
+ * step back once. It now runs on the same UndoStack the promo editor uses —
+ * about 30 actions, newest-first, with typing bursts collapsed into one step.
+ *
+ * Two stacks, because the link popup is a separate editing surface with its own
+ * field: undo inside it should step back the URL, not the announcement text.
  */
 
 'use client';
 
-import { useRef, useState, useCallback } from 'react';
-import { HistoryManager, EditorSnapshot, LinkSnapshot } from '@/lib/historyManager';
+import { useRef, useCallback } from 'react';
+import { UndoStack } from '@/lib/undoStack';
+import { EditorSnapshot, LinkSnapshot } from '@/lib/historyManager';
 
 export interface UseEditorHistoryReturn {
+  /** A discrete action (color, format, delete run) — always its own step. */
   pushImmediateState: (snapshot: EditorSnapshot) => void;
+  /** Ordinary typing — collapses into one step for the length of the burst. */
+  pushTypingState: (snapshot: EditorSnapshot) => void;
   pushLinkState: (snapshot: LinkSnapshot) => void;
-  unlockEditor: () => void;
   undoEditor: (current: EditorSnapshot) => EditorSnapshot | null;
   redoEditor: (current: EditorSnapshot) => EditorSnapshot | null;
   undoLink: (current: LinkSnapshot) => LinkSnapshot | null;
   redoLink: (current: LinkSnapshot) => LinkSnapshot | null;
+  /** Drop both histories — used when the editor moves to a different message. */
   commit: () => void;
-  canUndoEditor: boolean;
-  canRedoEditor: boolean;
-  canUndoLink: boolean;
-  canRedoLink: boolean;
 }
 
 export function useEditorHistory(): UseEditorHistoryReturn {
-  const editorHistory = useRef(new HistoryManager<EditorSnapshot>('Editor')).current;
-  const linkHistory = useRef(new HistoryManager<LinkSnapshot>('Link')).current;
-
-  const [canUndoEditor, setCanUndoEditor] = useState(false);
-  const [canRedoEditor, setCanRedoEditor] = useState(false);
-  const [canUndoLink, setCanUndoLink] = useState(false);
-  const [canRedoLink, setCanRedoLink] = useState(false);
-
-  function syncEditorButtons() {
-    setCanUndoEditor(editorHistory.canUndo());
-    setCanRedoEditor(editorHistory.canRedo());
-  }
-
-  function syncLinkButtons() {
-    setCanUndoLink(linkHistory.canUndo());
-    setCanRedoLink(linkHistory.canRedo());
-  }
+  const editorHistory = useRef(new UndoStack<EditorSnapshot>()).current;
+  const linkHistory = useRef(new UndoStack<LinkSnapshot>()).current;
 
   const pushImmediateState = useCallback((snapshot: EditorSnapshot) => {
-    editorHistory.pushState(snapshot);
-    syncEditorButtons();
+    editorHistory.push(snapshot, { force: true });
+  }, []);
+
+  const pushTypingState = useCallback((snapshot: EditorSnapshot) => {
+    editorHistory.push(snapshot);
   }, []);
 
   const pushLinkState = useCallback((snapshot: LinkSnapshot) => {
-    linkHistory.pushState(snapshot);
-    syncLinkButtons();
+    linkHistory.push(snapshot, { force: true });
   }, []);
 
-  const unlockEditor = useCallback(() => {
-    editorHistory.unlock();
-    syncEditorButtons();
-  }, []);
+  const undoEditor = useCallback(
+    (current: EditorSnapshot) => editorHistory.undo(current),
+    [],
+  );
 
-  const undoEditor = useCallback((current: EditorSnapshot): EditorSnapshot | null => {
-    const result = editorHistory.undo(current);
-    syncEditorButtons();
-    return result;
-  }, []);
+  const redoEditor = useCallback(
+    (current: EditorSnapshot) => editorHistory.redo(current),
+    [],
+  );
 
-  const redoEditor = useCallback((current: EditorSnapshot): EditorSnapshot | null => {
-    const result = editorHistory.redo(current);
-    syncEditorButtons();
-    return result;
-  }, []);
+  const undoLink = useCallback(
+    (current: LinkSnapshot) => linkHistory.undo(current),
+    [],
+  );
 
-  const undoLink = useCallback((current: LinkSnapshot): LinkSnapshot | null => {
-    const result = linkHistory.undo(current);
-    syncLinkButtons();
-    return result;
-  }, []);
-
-  const redoLink = useCallback((current: LinkSnapshot): LinkSnapshot | null => {
-    const result = linkHistory.redo(current);
-    syncLinkButtons();
-    return result;
-  }, []);
+  const redoLink = useCallback(
+    (current: LinkSnapshot) => linkHistory.redo(current),
+    [],
+  );
 
   const commit = useCallback(() => {
-    editorHistory.commit();
-    linkHistory.commit();
-    syncEditorButtons();
-    syncLinkButtons();
+    editorHistory.clear();
+    linkHistory.clear();
   }, []);
 
   return {
     pushImmediateState,
+    pushTypingState,
     pushLinkState,
-    unlockEditor,
     undoEditor,
     redoEditor,
     undoLink,
     redoLink,
     commit,
-    canUndoEditor,
-    canRedoEditor,
-    canUndoLink,
-    canRedoLink,
   };
 }
