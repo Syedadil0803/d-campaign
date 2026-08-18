@@ -2174,8 +2174,8 @@ export function PromoSection({
   }
 
   /** The URL this card's button opens on the live site, if it opens anything. */
-  function ctaDestination(): string | null {
-    const c = configRef.current.promoCard;
+  function ctaDestination(card?: PromoCard): string | null {
+    const c = card ?? configRef.current.promoCard;
     if (c.ctaType === 'link') {
       const url = (c.buttonUrl || '').trim();
       if (!url) return null;
@@ -2243,7 +2243,7 @@ export function PromoSection({
     onSelectedVersionChange?.(version.id);
     setShowVersionsPopup(false);
     toast(`Variant applied: ${version.label}`);
-    setThemeBaseline(configRef.current.promoCard.style);
+    setThemeBaseline(restored.style);
     onCardReplaced?.();
   }
 
@@ -2318,7 +2318,9 @@ export function PromoSection({
     setSelectedVersionId(null);
     onSelectedVersionChange?.(null);
     toast(`Template applied: ${templateName}`);
-    setThemeBaseline(configRef.current.promoCard.style);
+    // From the card just built, not configRef — that ref catches up in an
+    // effect, so reading it here captured the design being replaced.
+    setThemeBaseline(cloned.style);
     onCardReplaced?.();
   }
 
@@ -3419,24 +3421,6 @@ export function PromoSection({
             />
           </div>
 
-          {/* The button's text lives here now, with the rest of the content.
-              It used to be typed on the card itself, which meant the card's
-              button could never behave like a button — a click had to mean
-              "edit". Moving it here frees the card's CTA to be clickable, and
-              makes the countdown genuinely the only field edited on the card. */}
-          <div className={!config.promoCard.showButton ? "opacity-50 pointer-events-none" : ""}>
-            <label className="mb-2 block text-sm font-semibold text-on-surface">
-              Button text
-            </label>
-            <input
-              type="text"
-              value={stripHtmlText(config.promoCard.buttonText)}
-              onChange={(e) => updateField("buttonText", e.target.value)}
-              placeholder="Shop now"
-              className="h-[44px] w-full rounded-md border border-border bg-surface px-3 text-sm text-on-surface outline-none transition-colors hover:border-primary/70 focus:border-primary"
-            />
-          </div>
-
           <div className={`space-y-4 ${!config.promoCard.showButton ? "opacity-50 pointer-events-none" : ""}`}>
               {/* CTA Type Selector */}
               <div className="flex items-center gap-2">
@@ -4215,24 +4199,25 @@ export function PromoSection({
                     >
                       <div
                         ref={previewButtonRef}
-                        role="button"
-                        tabIndex={0}
+                        {...(ctaDestination(config.promoCard)
+                          ? { role: 'button' as const, tabIndex: 0 }
+                          : {})}
                         data-placeholder="Button"
                         className={`promo-preview-button py-2 px-4 rounded-lg text-base font-semibold outline-none min-h-10 ${
                           config.promoCard.buttonFullWidth ? "w-full" : ""
-                        } cursor-pointer transition-opacity hover:opacity-90`}
+                        } ${currentField === "button" ? "ring-1 ring-primary/70" : ""} ${
+                          ctaDestination(config.promoCard)
+                            ? 'cursor-pointer transition-opacity hover:opacity-90'
+                            : ''
+                        }`}
                         onClick={() => {
+                          // The card's CTA behaves like the button it depicts:
+                          // it opens its destination. Its styles are reached
+                          // from the palette beside "Button Text" on the left,
+                          // so a click here doesn't have to serve two masters.
+                          const url = ctaDestination(config.promoCard);
+                          if (!url) return;
                           setShowCardBgPopup(false);
-                          const url = ctaDestination();
-                          if (!url) {
-                            toast(
-                              config.promoCard.ctaType === 'text'
-                                ? 'This button is text only — it has no link to open.'
-                                : 'Add a link or WhatsApp number first, then test it.',
-                              true,
-                            );
-                            return;
-                          }
                           window.open(url, '_blank', 'noopener,noreferrer');
                         }}
                         style={{
@@ -4243,7 +4228,7 @@ export function PromoSection({
                           textAlign:
                             config.promoCard.style.buttonStyle.textAlign ||
                             "center",
-                          cursor: "pointer",
+                          cursor: ctaDestination(config.promoCard) ? 'pointer' : 'default',
                         }}
                       />
                     </div>
