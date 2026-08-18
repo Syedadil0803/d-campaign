@@ -4202,6 +4202,18 @@ export function PromoSection({
                         {...(ctaDestination(config.promoCard)
                           ? { role: 'button' as const, tabIndex: 0 }
                           : {})}
+                        title={
+                          // Silence was the problem: an inert button gives no
+                          // clue that a destination is missing, so a click that
+                          // does nothing reads as broken rather than unset.
+                          ctaDestination(config.promoCard)
+                            ? `Opens ${ctaDestination(config.promoCard)} in a new tab`
+                            : config.promoCard.ctaType === 'text'
+                              ? 'Text only — this button has no link'
+                              : (config.promoCard.ctaType || 'whatsapp') === 'whatsapp'
+                                ? 'Add a WhatsApp number on the left to make this clickable'
+                                : 'Add a link on the left to make this clickable'
+                        }
                         data-placeholder="Button"
                         className={`promo-preview-button py-2 px-4 rounded-lg text-base font-semibold outline-none min-h-10 ${
                           config.promoCard.buttonFullWidth ? "w-full" : ""
