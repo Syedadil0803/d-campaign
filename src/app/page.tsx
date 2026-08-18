@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Loader2 } from 'lucide-react';
-import { CampaignConfig, defaultConfig } from '@/types/campaign';
+import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
 import { normalizeLegacyTimerTokens, TIMER_FIXED_TOKEN } from '@/lib/timerUtils';
 import { fieldOverflows } from '@/lib/promoFit';
 import { Header } from '@/components/Header';
@@ -15,6 +15,7 @@ import { getISODateWithOffset, toLocalISODate } from '@/lib/utils';
 import {
   listVersions,
   MAX_VERSIONS,
+  markLiveVersion,
   saveVersion,
   updateVersion,
   type PromoVersion,
@@ -333,11 +334,7 @@ export default function Home() {
     // identical configs compare as different — which meant a draft could never
     // match what's published, and the "Welcome back" banner fired for drafts
     // holding no real changes.
-    const {
-      lastUpdated: _ignored,
-      livePromoVariantId: _liveVariant,
-      ...content
-    } = cfg;
+    const { lastUpdated: _ignored, ...content } = cfg;
     return JSON.stringify({
       ...content,
       announcementBar: strip(cfg.announcementBar as unknown as Record<string, unknown>),
@@ -391,14 +388,16 @@ export default function Home() {
   }
 
   /**
-   * Stamp the config with the variant that is going live, so My Published can
-   * tag it by identity instead of guessing from content.
+   * Record which variant is going live, so My Published can tag it by identity
+   * instead of guessing from content.
+   *
+   * The flag lives on the variant, not on the config: the config row has fixed
+   * columns and quietly drops anything else, so a pointer stored there survived
+   * in memory and vanished on the next read.
    */
-  function withLiveVariant(
-    cfg: CampaignConfig,
-    variantId: string | null,
-  ): CampaignConfig {
-    return { ...cfg, livePromoVariantId: variantId ?? undefined };
+  async function markVariantLive(variantId: string | null) {
+    await markLiveVersion(variantId);
+    refreshPromoVariants();
   }
 
   async function savePromoVariant(cfg: CampaignConfig, allowOverflow = false) {
@@ -851,6 +850,54 @@ export default function Home() {
     completePendingDraftAction();
   }
 
+  /**
+   * Whatever is on the website has a saved copy behind it.
+   *
+   * Publishing the promo saved a variant, but that was the only path that did.
+   * Publishing the ANNOUNCEMENT writes the whole config — promo card included —
+   * so unpublished promo edits went live with nothing saved and no live-variant
+   * pointer; the same was true of Go on air when the recorded variant had since
+   * been deleted. The card was then live and unlisted, which is how you end up
+   * with something serving that My Published can't show you.
+   *
+   * So the guarantee lives here, at the single write both paths go through,
+   * rather than in each publish handler where the next new path would miss it.
+   */
+  async function ensureLivePromoVariant(
+    cfg: CampaignConfig,
+  ): Promise<CampaignConfig> {
+    if (!cfg.promoCard?.active) return cfg;
+    // A blank card is trivially recreatable — saving it would just spend a slot.
+    if (!promoHasVisibleContent(cfg.promoCard)) return cfg;
+
+    const signature = (card: PromoCard) =>
+      JSON.stringify(
+        normalizePromoForCompare(card as unknown as Record<string, unknown>),
+      );
+
+    const live = signature(cfg.promoCard);
+    const existing = await listVersions();
+    const match = existing.find((version) => signature(version.promoCard) === live);
+    if (match) {
+      // Already saved — just make sure the marker names it. Compared on
+      // normalized content, so the app's own HTML rewrites don't file a second
+      // copy of a card that's already in the list.
+      if (!match.isLive) {
+        setSelectedPromoVersionId(match.id);
+        await markVariantLive(match.id);
+      }
+      return cfg;
+    }
+
+    // Overflow is allowed on purpose: the list is capped at five, and dropping
+    // the oldest saved design is better than the live card having no copy at
+    // all. The publish flow still asks first when it can (see
+    // getPromoVariantSaveStatus); this is the backstop for paths that can't.
+    const savedId = await savePromoVariant(cfg, true);
+    await markVariantLive(savedId);
+    return cfg;
+  }
+
   async function persistConfig(
     cfg: CampaignConfig,
     successMessage = 'Settings saved successfully',
@@ -858,8 +905,11 @@ export default function Home() {
     options: { preserveDraft?: boolean } = {},
   ) {
     try {
+      // Anything going live gets a saved variant first, so the write below can
+      // never publish a card that My Published doesn't know about.
+      const guaranteed = await ensureLivePromoVariant(cfg);
       // Build the button destination from the CTA type
-      const cfgToSend = { ...cfg };
+      const cfgToSend = { ...guaranteed };
       const pc = cfgToSend.promoCard;
       const cta = pc.ctaType || 'whatsapp';
       if (cta === 'whatsapp' && pc.whatsappNumber) {
@@ -878,10 +928,13 @@ export default function Home() {
       });
 
       if (response.ok) {
-        // Whatever we just persisted IS the live site now — the Dashboard reads this.
-        setPublishedConfig(cfg);
-        publishedConfigRef.current = getConfigSignature(cfg);
-        publishedConfigObjRef.current = cfg;
+        // Whatever we just persisted IS the live site now — the Dashboard reads
+        // this. Record the guaranteed config, not the one passed in: it carries
+        // the live-variant pointer, and without it My Published would show no
+        // Live tag until the next reload.
+        setPublishedConfig(guaranteed);
+        publishedConfigRef.current = getConfigSignature(guaranteed);
+        publishedConfigObjRef.current = guaranteed;
         // A live on-air toggle (preserveDraft) must not clear the pending draft
         // or reset the "unpublished changes" flags — only a real publish does.
         if (!options.preserveDraft) {
@@ -913,11 +966,8 @@ export default function Home() {
       const savedId = await savePromoVariant(cfg, true);
       if (mode === 'publish') {
         // cfg already has active:true — finish going live, don't re-prompt to publish.
-        await persistConfig(
-          withLiveVariant(cfg, savedId),
-          'Campaign is live on your website',
-          'promo',
-        );
+        await markVariantLive(savedId);
+        await persistConfig(cfg, 'Campaign is live on your website', 'promo');
       } else {
         await persistConfig(cfg, 'Settings saved and promo variant saved');
       }
@@ -937,11 +987,8 @@ export default function Home() {
       setSelectedPromoVersionId(versionId);
       savedPromoSignatureRef.current = getPromoSignature(cfg);
       if (mode === 'publish') {
-        await persistConfig(
-          withLiveVariant(cfg, versionId),
-          'Campaign is live on your website',
-          'promo',
-        );
+        await markVariantLive(versionId);
+        await persistConfig(cfg, 'Campaign is live on your website', 'promo');
       } else {
         await persistConfig(cfg, 'Settings saved and promo variant updated');
       }
@@ -1110,9 +1157,10 @@ export default function Home() {
   // undone with "Go on air" — the content is gone from the live config.
   async function removeLivePromo() {
     const base = publishedConfigObjRef.current ?? configRef.current;
+    await markLiveVersion(null);
+    refreshPromoVariants();
     const next: CampaignConfig = {
       ...base,
-      livePromoVariantId: undefined,
       promoCard: {
         ...defaultConfig.promoCard,
         active: false,
@@ -1151,16 +1199,16 @@ export default function Home() {
     // when the "Publishing…" loader completes, not at the start.
     if (variantStatus.status === 'ready') {
       const savedId = await savePromoVariant(cfgToSave);
-      const live = withLiveVariant(cfgToSave, savedId);
-      await persistConfig(live, successMsg, 'promo');
-      setConfig(live);
+      await markVariantLive(savedId);
+      await persistConfig(cfgToSave, successMsg, 'promo');
+      setConfig(cfgToSave);
       return;
     }
 
     // 'skipped' — the card is already saved, so that entry is the live one.
-    const live = withLiveVariant(cfgToSave, variantStatus.variantId ?? null);
-    await persistConfig(live, successMsg, 'promo');
-    setConfig(live);
+    await markVariantLive(variantStatus.variantId ?? null);
+    await persistConfig(cfgToSave, successMsg, 'promo');
+    setConfig(cfgToSave);
   }
 
   function validatePromo(): string[] {
@@ -1484,7 +1532,6 @@ export default function Home() {
                   onSelectedVersionChange={setSelectedPromoVersionId}
                   canReactivate={promoCanReactivate}
                   livePromoCard={publishedConfig.promoCard}
-                  liveVariantId={publishedConfig.livePromoVariantId}
                   draftPromoCard={draftPromoCard}
                   onStop={stopPromoNow}
                   onGoOnAir={goOnAirPromoNow}

@@ -86,17 +86,6 @@ export interface CampaignConfig {
     };
   };
   promoCard: PromoCard;
-  /**
-   * Which saved variant is the one on the website.
-   *
-   * The Live tag used to be inferred by comparing each variant's content to the
-   * published card, so it pointed at whatever happened to match: nothing at all
-   * once the live card had been edited, or an unrelated variant that coincided.
-   * Publishing records the identity here instead. Cleared when the card is
-   * taken off the site. Absent on configs published before this existed — the
-   * content match is still used as a fallback for those.
-   */
-  livePromoVariantId?: string;
 }
 
 export const defaultConfig: CampaignConfig = {

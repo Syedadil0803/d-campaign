@@ -96,11 +96,6 @@ interface PromoSectionProps {
    */
   livePromoCard?: PromoCard;
   /**
-   * The saved variant the published card came from, recorded at publish time.
-   * Absent for cards published before that was stored — see isLiveVersion.
-   */
-  liveVariantId?: string;
-  /**
    * The promo card as saved in My Draft.
    *
    * Compared field-by-field rather than trusting `draftUpToDate`, which is a
@@ -465,7 +460,6 @@ export function PromoSection({
   configLoadedSignal,
   canReactivate,
   livePromoCard,
-  liveVariantId,
   draftPromoCard,
   onCardReplaced,
   onTimerEdited,
@@ -2355,11 +2349,11 @@ export function PromoSection({
 
   function isLiveVersion(version: PromoVersion): boolean {
     if (!livePromoCard || !livePromoCard.active) return false;
-    // Identity first: publishing records which variant went live, so an edit to
-    // the live card can't move the tag onto a different entry — or lose it.
-    if (liveVariantId) return version.id === liveVariantId;
-    // Cards published before that was recorded have no id to match, so fall
-    // back to comparing content rather than showing no Live tag at all.
+    // Identity first: publishing marks the variant that went live, so an edit
+    // to the live card can't move the tag onto a different entry — or lose it.
+    if (versions.some((version) => version.isLive)) return Boolean(version.isLive);
+    // Variants saved before the marker existed carry no flag, so fall back to
+    // comparing content rather than showing no Live tag at all.
     return cardSignature(version.promoCard) === cardSignature(livePromoCard);
   }
 

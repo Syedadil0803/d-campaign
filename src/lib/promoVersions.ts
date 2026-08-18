@@ -18,6 +18,16 @@ export interface PromoVersion {
   label: string;
   /** Deep snapshot of the promo card at save time. */
   promoCard: PromoCard;
+  /**
+   * True for the variant that is currently on the website.
+   *
+   * Lives here rather than on the config because the config row has fixed
+   * columns (version, announcementBar, promoCard, lastUpdated) — anything else
+   * added to it is silently dropped on save. The variants list is free-form
+   * JSON, and the flag describes the variant anyway, so deleting the entry
+   * takes the flag with it and restoring it brings the flag back.
+   */
+  isLive?: boolean;
 }
 
 export const MAX_VERSIONS = 5;
@@ -127,6 +137,27 @@ export async function restoreVersion(
   while (versions.length > MAX_VERSIONS) versions.shift();
   await write(versions);
   return versions;
+}
+
+/**
+ * Point the Live marker at one variant, or at none. Exactly one entry can carry
+ * it, so publishing a different card moves it rather than adding a second.
+ */
+export async function markLiveVersion(id: string | null): Promise<PromoVersion[]> {
+  const versions = await read();
+  let changed = false;
+  const next = versions.map((version) => {
+    const shouldBeLive = id !== null && version.id === id;
+    if (Boolean(version.isLive) === shouldBeLive) return version;
+    changed = true;
+    const copy = { ...version };
+    if (shouldBeLive) copy.isLive = true;
+    else delete copy.isLive;
+    return copy;
+  });
+  if (!changed) return versions;
+  await write(next);
+  return next;
 }
 
 /** Remove all versions. */
