@@ -13,6 +13,7 @@ import {
 } from "react";
 import {
   ArrowLeft,
+  ExternalLink,
   Gift,
   X,
   Palette,
@@ -146,9 +147,24 @@ interface PromoSectionProps {
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
 
-// Dialling codes for the WhatsApp CTA. `flag` is an emoji (renders on
-// macOS/iOS/Android; on Windows/some browsers it falls back to letters), so we
-// always show `name` too — the reliable, cross-browser identifier.
+// Dialling codes for the WhatsApp CTA. `flag` is an emoji, which Windows has
+// no glyphs for at all — it renders as two letters or as boxes. We show a
+// derived ISO code instead (see isoFromFlag), which looks the same everywhere.
+/**
+ * "🇬🇧" → "GB".
+ *
+ * A flag emoji is two regional-indicator code points, each 0x1F1E6 above its
+ * letter. Deriving the ISO code keeps one source of truth — the table doesn't
+ * need a second column that can drift out of sync with the flag.
+ */
+function isoFromFlag(flag: string): string {
+  const points = Array.from(flag).map((ch) => ch.codePointAt(0) ?? 0);
+  if (points.length !== 2) return '';
+  return points
+    .map((cp) => String.fromCharCode(cp - 0x1f1e6 + 65))
+    .join('');
+}
+
 const COUNTRY_CODES: { code: string; flag: string; name: string }[] = [
   { code: '+1', flag: '🇺🇸', name: 'United States' },
   { code: '+7', flag: '🇷🇺', name: 'Russia' },
@@ -585,6 +601,12 @@ export function PromoSection({
   // Action popups launched from the buttons under the Promo Card heading.
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
   const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
+  /**
+   * The card's own style before any theme was tried, shown as a "Yours" chip
+   * at the head of the strip. Null until the first theme click — there's
+   * nothing to go back to before then.
+   */
+  const [themeBaseline, setThemeBaseline] = useState<PromoCard['style'] | null>(null);
 
   /**
    * True when the popup was opened by the build panel rather than the toolbar
@@ -629,6 +651,8 @@ export function PromoSection({
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showCountryCodeDropdown, setShowCountryCodeDropdown] = useState(false);
+  /** Wraps the country button + its menu, so outside-clicks can be told apart. */
+  const countryCodeRef = useRef<HTMLDivElement>(null);
   const [startDateView, setStartDateView] = useState<Date>(() => {
     const base = config.promoCard.startDate
       ? new Date(`${config.promoCard.startDate}T00:00:00`)
@@ -1946,7 +1970,12 @@ export function PromoSection({
         setShowStartDatePicker(false);
       if (!endDatePickerRef.current?.contains(target))
         setShowEndDatePicker(false);
-      setShowCountryCodeDropdown(false);
+      // Only close when the click landed OUTSIDE the dropdown. Closing
+      // unconditionally unmounted the country row under the pointer before its
+      // click could fire, so no country could ever be selected.
+      if (!countryCodeRef.current?.contains(target)) {
+        setShowCountryCodeDropdown(false);
+      }
       // Keep card background popup open until explicit close (X button).
     };
     document.addEventListener("mousedown", onDocMouseDown);
@@ -2114,9 +2143,48 @@ export function PromoSection({
 
 
   /** True when this saved variant is the card currently on the website. */
+  /**
+   * What a card IS, ignoring noise the app rewrites by itself and the on-air
+   * flags that belong to the website rather than the design.
+   *
+   * Shared by every "same card?" question in here. A raw compare fails on two
+   * counts: a saved variant stores active:false while the live card is
+   * active:true, and the editors re-serialise their own HTML constantly.
+   */
+  function cardSignature(c: PromoCard): string {
+    return JSON.stringify({
+      title: stripHtmlText(c.title),
+      subtitle: stripHtmlText(c.subtitle),
+      description: stripHtmlText(c.description),
+      buttonText: stripHtmlText(c.buttonText),
+      timerText: stripHtmlText(c.timerText),
+      showTimer: c.showTimer,
+      showButton: c.showButton,
+      ctaType: c.ctaType,
+      buttonUrl: c.buttonUrl,
+      whatsappNumber: c.whatsappNumber,
+      style: c.style,
+    });
+  }
+
+  /** The URL this card's button opens on the live site, if it opens anything. */
+  function ctaDestination(): string | null {
+    const c = configRef.current.promoCard;
+    if (c.ctaType === 'link') {
+      const url = (c.buttonUrl || '').trim();
+      if (!url) return null;
+      return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    }
+    if ((c.ctaType || 'whatsapp') === 'whatsapp') {
+      const digits = `${c.whatsappCountryCode || '+44'}${c.whatsappNumber || ''}`.replace(/\D/g, '');
+      return digits.length > 6 ? `https://wa.me/${digits}` : null;
+    }
+    return null;
+  }
+
   function isLiveVersion(version: PromoVersion): boolean {
     if (!livePromoCard || !livePromoCard.active) return false;
-    return promoCardsEqual(version.promoCard, livePromoCard);
+    return cardSignature(version.promoCard) === cardSignature(livePromoCard);
   }
 
   async function handleDeleteVersion(id: string) {
@@ -2300,21 +2368,6 @@ export function PromoSection({
      * auto 400/440 width. A raw compare reports "different" for cards that
      * look and behave identically.
      */
-    const cardSignature = (c: PromoCard) =>
-      JSON.stringify({
-        title: stripHtmlText(c.title),
-        subtitle: stripHtmlText(c.subtitle),
-        description: stripHtmlText(c.description),
-        buttonText: stripHtmlText(c.buttonText),
-        timerText: stripHtmlText(c.timerText),
-        showTimer: c.showTimer,
-        showButton: c.showButton,
-        ctaType: c.ctaType,
-        buttonUrl: c.buttonUrl,
-        whatsappNumber: c.whatsappNumber,
-        style: c.style,
-      });
-
     // Applying what's already on the canvas is a no-op: don't ask, don't apply
     // (applying would mark the card changed for no visible reason).
     if (opts.nextCard && cardSignature(opts.nextCard) === cardSignature(pc)) {
@@ -2379,22 +2432,6 @@ export function PromoSection({
      */
     const cardIsPublished =
       !!livePromoCard && cardSignature(pc) === cardSignature(livePromoCard);
-    if (offerDraftSave && cardIsPublished) {
-      // Keeps the caller's title — the dialog still asks "Apply this template?".
-      // Only the body changes, to say why nothing is at risk.
-      setCardActionConfirm({
-        ...opts,
-        body: (
-          <>
-            The card currently in your editor is already saved in{' '}
-            <span className="font-semibold text-on-surface">My Published</span> and can be restored
-            from there at any time. Your live campaign remains unchanged until you publish.
-          </>
-        ),
-        onConfirm: action,
-      });
-      return;
-    }
 
     /**
      * Already in the draft. Uses the card comparison, not `draftUpToDate`:
@@ -2404,19 +2441,16 @@ export function PromoSection({
     const cardIsInDraft =
       !!draftPromoCard && cardSignature(pc) === cardSignature(draftPromoCard);
 
-    if (offerDraftSave && (cardIsInDraft || (draftExists && draftUpToDate))) {
-      // Already saved and untouched since — nothing can be lost.
-      setCardActionConfirm({
-        ...opts,
-        body: (
-          <>
-            The card currently in your editor is already saved in{' '}
-            <span className="font-semibold text-on-surface">My Draft</span> and can be restored from
-            there at any time. Your live campaign remains unchanged until you publish.
-          </>
-        ),
-        onConfirm: action,
-      });
+    /**
+     * Saved somewhere — apply it, say nothing.
+     *
+     * These two cases used to open a dialog whose entire message was "nothing
+     * is at risk". A confirmation that confirms nothing is just a click in the
+     * way: the card can be brought back from My Published or My Draft, and the
+     * action's own toast already reports what happened.
+     */
+    if (offerDraftSave && (cardIsPublished || cardIsInDraft || draftUpToDate)) {
+      action();
       return;
     }
 
@@ -3430,7 +3464,7 @@ export function PromoSection({
                     WhatsApp Number
                   </label>
                   <div className="flex items-center h-[44px] rounded-md border border-border bg-surface overflow-visible transition-colors hover:border-primary/70 focus-within:border-primary/80">
-                    <div className="relative h-full">
+                    <div ref={countryCodeRef} className="relative h-full">
                       <button
                         type="button"
                         onClick={() => setShowCountryCodeDropdown(!showCountryCodeDropdown)}
@@ -3441,7 +3475,9 @@ export function PromoSection({
                           const selected = COUNTRY_CODES.find((c) => c.code === selectedCode);
                           return (
                             <>
-                              <span className="text-base leading-none">{selected?.flag}</span>
+                              <span className="rounded border border-border px-1 py-0.5 text-[10px] font-bold leading-none tracking-wide text-on-surface-variant">
+                                {isoFromFlag(selected?.flag ?? '')}
+                              </span>
                               <span className="text-[15px] font-semibold text-on-surface tabular-nums">
                                 {selectedCode}
                               </span>
@@ -3473,7 +3509,9 @@ export function PromoSection({
                                   : 'text-on-surface hover:bg-primary/10 hover:text-primary'
                               }`}
                             >
-                              <span className="text-base leading-none shrink-0">{flag}</span>
+                              <span className="shrink-0 rounded border border-border px-1 py-0.5 text-[10px] font-bold leading-none tracking-wide text-on-surface-variant">
+                                {isoFromFlag(flag)}
+                              </span>
                               <span className="flex-1 truncate">{name}</span>
                               <span className="shrink-0 tabular-nums text-on-surface-variant">{code}</span>
                             </button>
@@ -3488,7 +3526,6 @@ export function PromoSection({
                       placeholder="7911 123456"
                       inputMode="tel"
                       className="flex-1 h-full px-3 outline-none text-sm bg-transparent text-on-surface"
-                      onFocus={() => setShowCountryCodeDropdown(false)}
                     />
                   </div>
                   <p className="mt-1 text-[11px] text-on-surface-variant">Select country code and enter number</p>
@@ -4136,9 +4173,11 @@ export function PromoSection({
                   {showButtonInPreview && (
                     <div
                       className={
+                        // relative + group/cta so the test affordance can pin
+                        // to the button's corner and appear on hover.
                         config.promoCard.buttonFullWidth
-                          ? ""
-                          : `flex ${
+                          ? "group/cta relative"
+                          : `group/cta relative flex ${
                               (config.promoCard.style.buttonStyle.textAlign ||
                                 "center") === "left"
                                 ? "justify-start"
@@ -4197,6 +4236,31 @@ export function PromoSection({
                           cursor: "text",
                         }}
                       />
+                      {/* Try the CTA for real. It's a separate control because
+                          the button itself is the only place its text can be
+                          written — a plain click has to keep meaning "edit". */}
+                      <button
+                        type="button"
+                        title="Open this link in a new tab"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const url = ctaDestination();
+                          if (!url) {
+                            toast(
+                              config.promoCard.ctaType === 'text'
+                                ? 'This button is text only — it has no link to open.'
+                                : 'Add a link or WhatsApp number first, then test it.',
+                              true,
+                            );
+                            return;
+                          }
+                          window.open(url, '_blank', 'noopener,noreferrer');
+                        }}
+                        className="absolute -right-2 -top-2 z-20 inline-flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface-elevated text-on-surface-variant opacity-0 shadow-sm transition-opacity hover:text-primary group-hover/cta:opacity-100"
+                        aria-label="Test this link"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
                     </div>
                   )}
 
@@ -4737,6 +4801,34 @@ export function PromoSection({
               Themes - Click any to change the look - Your text stays
             </p>
             <div className="campaign-custom-scrollbar flex gap-2 overflow-x-auto px-1.5 pb-3 pt-2">
+              {/* The look the card had before theme-browsing started, so trying
+                  one isn't a one-way door. Captured on first use rather than
+                  on every render, otherwise it would just track whatever theme
+                  was clicked last and never lead anywhere. */}
+              {themeBaseline && (
+                <button
+                  type="button"
+                  title="Back to your current design"
+                  onClick={() => {
+                    setConfig({
+                      ...configRef.current,
+                      promoCard: { ...configRef.current.promoCard, style: themeBaseline },
+                    });
+                    markChanged();
+                    toast('Back to your own design');
+                  }}
+                  style={{ background: getBackgroundStyle(themeBaseline.background) }}
+                  className={`relative h-8 w-12 shrink-0 rounded-md ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
+                    JSON.stringify(themeBaseline) === JSON.stringify(config.promoCard.style)
+                      ? 'ring-2 ring-primary'
+                      : 'ring-1 ring-border hover:ring-primary/60'
+                  }`}
+                >
+                  <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-full bg-surface px-1 text-[9px] font-bold uppercase tracking-wide text-on-surface-variant">
+                    Yours
+                  </span>
+                </button>
+              )}
               {sampleTemplates.map((t) => {
                 const on =
                   JSON.stringify((t.promoCard as PromoCard).style) ===
@@ -4747,6 +4839,7 @@ export function PromoSection({
                     type="button"
                     title={t.name}
                     onClick={() => {
+                      setThemeBaseline((prev) => prev ?? configRef.current.promoCard.style);
                       setConfig({
                         ...configRef.current,
                         promoCard: applyTemplateLook(

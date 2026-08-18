@@ -16,7 +16,6 @@ import {
   ChevronRight,
   Infinity as InfinityIcon,
   Plus,
-  History,
 } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { stripHtml, getBackgroundStyle } from '@/lib/utils';
@@ -32,8 +31,8 @@ interface DashboardProps {
   onGoOnAirAnnouncement?: () => void;
   /** Opens the promo tab at its start screen — used by the first-run Create. */
   onCreatePromo?: () => void;
-  /** Opens the editor with My Published up, to pick a past campaign. */
-  onOpenPublishedPromo?: () => void;
+  /** Opens the editor with the LIVE card loaded, from the thumbnail's Edit. */
+  onEditLivePromo?: () => void;
   promoUnpublished?: boolean;
   announcementUnpublished?: boolean;
 }
@@ -97,7 +96,7 @@ export function Dashboard({
   onStopAnnouncement,
   onGoOnAirAnnouncement,
   onCreatePromo,
-  onOpenPublishedPromo,
+  onEditLivePromo,
   promoUnpublished = false,
   announcementUnpublished = false,
 }: DashboardProps) {
@@ -242,17 +241,39 @@ export function Dashboard({
     setPending(null);
   };
 
-  // Hover overlay that reveals a "View" affordance over the promo thumbnail.
+  /**
+   * Hover overlay over the promo thumbnail: View, and Edit beside it.
+   *
+   * Edit sits on the card it acts on, which is where you'd reach for it —
+   * better than a button in a row underneath that has to name which card it
+   * means.
+   */
+  const overlayAction =
+    'inline-flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-1.5 text-sm font-semibold text-white ring-1 ring-white/30 backdrop-blur-sm transition-colors hover:bg-white/25';
+
   const promoViewOverlay = (
-    <button
-      type="button"
-      onClick={() => setShowPromoPreview(true)}
-      aria-label="View promo card preview"
-      className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl bg-black/0 text-transparent opacity-0 transition-all duration-200 group-hover:bg-black/45 group-hover:text-white group-hover:opacity-100 focus-visible:bg-black/45 focus-visible:text-white focus-visible:opacity-100"
-    >
-      <Eye className="h-5 w-5" />
-      <span className="text-sm font-semibold">View</span>
-    </button>
+    <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl bg-black/0 opacity-0 transition-all duration-200 group-hover:bg-black/45 group-hover:opacity-100 focus-within:bg-black/45 focus-within:opacity-100">
+      <button
+        type="button"
+        onClick={() => setShowPromoPreview(true)}
+        aria-label="View promo card preview"
+        className={overlayAction}
+      >
+        <Eye className="h-4 w-4" />
+        View
+      </button>
+      {!promoUncreated && (
+        <button
+          type="button"
+          onClick={() => onEditLivePromo?.()}
+          aria-label="Edit the live promo card"
+          className={overlayAction}
+        >
+          <Pencil className="h-4 w-4" />
+          Edit
+        </button>
+      )}
+    </div>
   );
 
   return (
@@ -458,14 +479,6 @@ export function Dashboard({
             >
               <Plus className="h-4 w-4" />
               Create new
-            </button>
-            <button
-              className={`${ghostBtn} flex-1`}
-              onClick={() => onOpenPublishedPromo?.()}
-              title="Open the editor and choose from your published campaigns"
-            >
-              <History className="h-4 w-4" />
-              Edit published
             </button>
             {promo.active ? (
               <button className={`${stopBtn} flex-1`} onClick={() => setPending({ kind: 'stop', target: 'promo' })}>

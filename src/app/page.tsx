@@ -556,12 +556,30 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Opens My Published in the editor, once nothing is at risk. */
+  /**
+   * Loads the LIVE card into the editor, once nothing is at risk.
+   *
+   * Straight to the card rather than the picker: this comes from Edit on the
+   * dashboard thumbnail, which shows the live card — so that's the card the
+   * user means. My Published is still there for choosing a different one.
+   */
   const openPublishedPicker = useCallback(() => {
+    const live = publishedConfigObjRef.current;
+    if (live) {
+      const next: CampaignConfig = {
+        ...configRef.current,
+        promoCard: JSON.parse(JSON.stringify(live.promoCard)),
+      };
+      setConfig(next);
+      configRef.current = next;
+      draftSignatureRef.current = getConfigSignature(next);
+      savedPromoSignatureRef.current = getPromoSignature(next);
+      setHasPromoChanges(getConfigSignature(next) !== publishedConfigRef.current);
+      setEditorResetKey((k) => k + 1);
+    }
     setPromoEntryStep('editor');
     setActiveTab('promo');
-    setPendingPromoPopup('published');
-    toast('Pick a published campaign to work from — or use Improve with AI.');
+    toast('Your live card is loaded — edit it here, or use Improve with AI.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1361,7 +1379,7 @@ export default function Home() {
                 config={publishedConfig}
                 setActiveTab={handleDashboardTabSwitch}
                 onCreatePromo={handleCreatePromo}
-                onOpenPublishedPromo={handleOpenPublishedPromo}
+                onEditLivePromo={handleOpenPublishedPromo}
                 onStopPromo={stopPromoNow}
                 onGoOnAirPromo={goOnAirPromoNow}
                 onStopAnnouncement={stopAnnouncementNow}
@@ -1637,7 +1655,7 @@ export default function Home() {
               <span className="font-semibold text-on-surface">My Draft</span>.{' '}
               {pendingDashboardAction === 'create'
                 ? 'Starting a new campaign replaces them.'
-                : 'Opening a published campaign replaces them.'}{' '}
+                : 'Loading your live card replaces them.'}{' '}
               {savedDraftSignature !== null ? (
                 <>
                   Saving now replaces the card currently in{' '}
