@@ -44,6 +44,7 @@ import {
 } from "@/lib/richTextUtils";
 import RichTextToolbar from "./RichTextToolbar";
 import { PopupDropdown } from "./PopupDropdown";
+import { whatsAppUrl, whatsAppLooksShort, maxNationalDigits } from "@/lib/whatsapp";
 import { PromoMiniPreview } from "./PromoMiniPreview";
 import {
   listVersions,
@@ -2387,8 +2388,10 @@ export function PromoSection({
       return /^https?:\/\//i.test(url) ? url : `https://${url}`;
     }
     if ((c.ctaType || 'whatsapp') === 'whatsapp') {
-      const digits = `${c.whatsappCountryCode || '+44'}${c.whatsappNumber || ''}`.replace(/\D/g, '');
-      return digits.length > 6 ? `https://wa.me/${digits}` : null;
+      // Any typed national digit makes a link. The old rule counted the
+      // dialling code too, so the real minimum slid by country and a
+      // half-typed number left the button dead with no explanation.
+      return whatsAppUrl(c.whatsappCountryCode, c.whatsappNumber);
     }
     return null;
   }
@@ -2886,7 +2889,7 @@ export function PromoSection({
     return (
       <div
         ref={mode === "start" ? startDatePickerRef : endDatePickerRef}
-        className="relative mt-2"
+        className="relative"
       >
         <button
           type="button"
@@ -3300,7 +3303,7 @@ export function PromoSection({
                   >
                     Cancel
                   </button>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <button
                       type="button"
                       onClick={() => {
@@ -3344,7 +3347,7 @@ export function PromoSection({
             </p>
           </div>
 
-          <div className="!mt-4">
+          <div className="!mt-6">
             <div className="!mt-0 flex items-center justify-between">
               <label className="block text-sm font-semibold text-on-surface mb-2">
                 Title
@@ -3610,7 +3613,7 @@ export function PromoSection({
               })}
               {promoDateRangeInvalid && (
                 <p
-                  className={`mt-1.5 text-xs font-medium text-red-600 dark:text-red-400 ${
+                  className={`mt-1.5 text-[11px] font-semibold text-red-600 dark:text-red-400 ${
                     dateErrorFlash ? "animate-pulse" : ""
                   }`}
                 >
@@ -3652,9 +3655,9 @@ export function PromoSection({
               !config.promoCard.showTimer ? "opacity-50 pointer-events-none" : ""
             }`}
           >
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5">
-                <label className="block text-sm font-medium text-on-surface-variant">
+                <label className="block text-sm font-semibold text-on-surface">
                   Timer Text
                 </label>
                 <div className="relative group">
@@ -3680,7 +3683,7 @@ export function PromoSection({
                 <Palette className="w-3.5 h-3.5" />
               </button>
             </div>
-            <p className="text-[11px] text-on-surface-variant/70 leading-relaxed">
+            <p className="text-[11px] text-on-surface-variant leading-relaxed">
               ↪ Edit the timer in the preview card on the right: type the text
               before/after the countdown, select text or click a number, word,
               or colon in the countdown to style it.
@@ -3711,13 +3714,13 @@ export function PromoSection({
             />
           </div>
 
-          <div className={`space-y-4 ${!config.promoCard.showButton ? "opacity-50 pointer-events-none" : ""}`}>
+          <div className={`space-y-5 ${!config.promoCard.showButton ? "opacity-50 pointer-events-none" : ""}`}>
               {/* CTA Type Selector */}
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => updateField("ctaType", "whatsapp")}
-                  className={`flex-1 h-9 rounded-md border text-xs font-semibold transition-colors inline-flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 h-11 rounded-md border text-xs font-semibold transition-colors inline-flex items-center justify-center gap-1.5 ${
                     (config.promoCard.ctaType || 'whatsapp') === 'whatsapp'
                       ? 'border-primary/80 bg-primary/10 text-primary'
                       : 'border-border text-on-surface-variant hover:border-primary/70 hover:text-primary'
@@ -3731,7 +3734,7 @@ export function PromoSection({
                 <button
                   type="button"
                   onClick={() => updateField("ctaType", "link")}
-                  className={`flex-1 h-9 rounded-md border text-xs font-semibold transition-colors inline-flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 h-11 rounded-md border text-xs font-semibold transition-colors inline-flex items-center justify-center gap-1.5 ${
                     config.promoCard.ctaType === 'link'
                       ? 'border-primary/80 bg-primary/10 text-primary'
                       : 'border-border text-on-surface-variant hover:border-primary/70 hover:text-primary'
@@ -3745,7 +3748,7 @@ export function PromoSection({
                 <button
                   type="button"
                   onClick={() => updateField("ctaType", "text")}
-                  className={`flex-1 h-9 rounded-md border text-xs font-semibold transition-colors inline-flex items-center justify-center gap-1.5 ${
+                  className={`flex-1 h-11 rounded-md border text-xs font-semibold transition-colors inline-flex items-center justify-center gap-1.5 ${
                     config.promoCard.ctaType === 'text'
                       ? 'border-primary/80 bg-primary/10 text-primary'
                       : 'border-border text-on-surface-variant hover:border-primary/70 hover:text-primary'
@@ -3769,7 +3772,7 @@ export function PromoSection({
                       <button
                         type="button"
                         onClick={() => setShowCountryCodeDropdown(!showCountryCodeDropdown)}
-                        className="h-full pl-3 pr-2 border-r border-border text-on-surface flex items-center gap-1.5 hover:bg-surface-subtle transition-colors"
+                        className="h-full px-3 border-r border-border text-on-surface flex items-center gap-1.5 hover:bg-surface-subtle transition-colors"
                       >
                         {(() => {
                           const selectedCode = config.promoCard.whatsappCountryCode || '+44';
@@ -3780,7 +3783,7 @@ export function PromoSection({
                                 flag={selected?.flag ?? ''}
                                 name={selected?.name ?? ''}
                               />
-                              <span className="text-[15px] font-semibold text-on-surface tabular-nums">
+                              <span className="text-sm font-semibold text-on-surface tabular-nums">
                                 {selectedCode}
                               </span>
                               {selected?.name && (
@@ -3791,12 +3794,12 @@ export function PromoSection({
                             </>
                           );
                         })()}
-                        <svg className={`h-3 w-3 shrink-0 text-on-surface-variant transition-transform ${showCountryCodeDropdown ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg className={`h-4 w-4 shrink-0 text-on-surface-variant transition-transform duration-200 ${showCountryCodeDropdown ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       </button>
                       {showCountryCodeDropdown && (
-                        <div className="absolute bottom-full left-0 mb-1 z-50 w-[240px] max-h-[240px] overflow-y-auto rounded-xl bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-1 campaign-custom-scrollbar">
+                        <div className="absolute bottom-full left-0 mb-1 z-50 w-[200px] max-h-[240px] overflow-y-auto rounded-xl bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-1 campaign-custom-scrollbar">
                           {COUNTRY_CODES.map(({ code, flag, name }) => (
                             <button
                               key={code}
@@ -3822,7 +3825,17 @@ export function PromoSection({
                     <input
                       type="tel"
                       value={config.promoCard.whatsappNumber || ''}
-                      onChange={(e) => updateField("whatsappNumber", e.target.value.replace(/\D/g, ''))}
+                      onChange={(e) =>
+                        updateField(
+                          "whatsappNumber",
+                          // Capped at what still fits E.164 once the dialling
+                          // code is prefixed — past that the link is invalid
+                          // however it's built.
+                          e.target.value
+                            .replace(/\D/g, '')
+                            .slice(0, maxNationalDigits(config.promoCard.whatsappCountryCode)),
+                        )
+                      }
                       placeholder="7911 123456"
                       inputMode="tel"
                       className="flex-1 h-full px-3 outline-none text-sm bg-transparent text-on-surface"
@@ -3992,10 +4005,16 @@ export function PromoSection({
               <button
                 type="button"
                 onClick={onUseAi}
-                className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-primary/40 bg-primary/[0.06] px-3 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
                 title="Let AI write or restyle this card"
+                className="ai-chip relative inline-flex h-9 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-lg border border-primary/40 bg-primary/[0.06] px-3 text-sm font-medium text-primary transition-colors duration-200 hover:border-primary/60 hover:bg-primary/[0.11] dark:bg-primary/[0.10] dark:hover:bg-primary/[0.16]"
               >
-                <Sparkles className="h-4 w-4" /> Improve with AI
+                {/* A light sweeps across the chip on hover and stops. Motion
+                    only on intent: nothing animates while you work, so the
+                    toolbar stays still, and the one control that isn't a plain
+                    command still announces itself. */}
+                <span aria-hidden="true" className="ai-sheen pointer-events-none absolute inset-0" />
+                <Sparkles className="relative h-4 w-4" />
+                <span className="relative">Improve with AI</span>
               </button>
             )}
             <span className="h-6 w-px shrink-0 bg-border" aria-hidden="true" />

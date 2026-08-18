@@ -410,3 +410,56 @@ select {
   opacity: 0.6;
   pointer-events: none;
 }
+
+/* "Improve with AI" — a sheen that crosses the chip once on hover.
+ *
+ * Only opacity and background-position animate, so nothing reflows, and the
+ * sweep is clipped by the chip's own overflow-hidden. It runs on hover rather
+ * than on a loop: a control that glitters at rest reads as a toy, and this
+ * toolbar sits next to the card the user is actually reading. */
+.ai-chip .ai-sheen {
+  background: linear-gradient(
+    100deg,
+    transparent 38%,
+    rgb(var(--primary) / 0.18) 50%,
+    transparent 62%
+  );
+  background-size: 260% 100%;
+  background-position: 130% 0;
+  opacity: 0;
+}
+
+.ai-chip:hover .ai-sheen {
+  animation: ai-sheen-sweep 900ms ease-out;
+}
+
+.dark .ai-chip .ai-sheen {
+  background: linear-gradient(
+    100deg,
+    transparent 38%,
+    rgb(var(--primary) / 0.12) 50%,
+    transparent 62%
+  );
+  background-size: 260% 100%;
+  background-position: 130% 0;
+}
+
+@keyframes ai-sheen-sweep {
+  0% {
+    opacity: 0;
+    background-position: 130% 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    background-position: -30% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-chip:hover .ai-sheen {
+    animation: none;
+  }
+}

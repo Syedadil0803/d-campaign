@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
+import { whatsAppUrl, whatsAppLooksShort } from '@/lib/whatsapp';
 import { normalizeLegacyTimerTokens, TIMER_FIXED_TOKEN } from '@/lib/timerUtils';
 import { fieldOverflows } from '@/lib/promoFit';
 import { Header } from '@/components/Header';
@@ -912,10 +913,14 @@ export default function Home() {
       const cfgToSend = { ...guaranteed };
       const pc = cfgToSend.promoCard;
       const cta = pc.ctaType || 'whatsapp';
-      if (cta === 'whatsapp' && pc.whatsappNumber) {
-        const code = (pc.whatsappCountryCode || '+44').replace('+', '');
-        const num = pc.whatsappNumber.replace(/\D/g, '');
-        cfgToSend.promoCard = { ...pc, buttonUrl: `https://wa.me/${code}${num}` };
+      if (cta === 'whatsapp') {
+        // The same builder the editor preview uses, so what goes live is
+        // exactly what the preview button opens. Unconditional, so switching
+        // from a link CTA to WhatsApp can't publish the old URL.
+        cfgToSend.promoCard = {
+          ...pc,
+          buttonUrl: whatsAppUrl(pc.whatsappCountryCode, pc.whatsappNumber) ?? '',
+        };
       } else if (cta === 'text') {
         // Plain text CTA: styled button with no link
         cfgToSend.promoCard = { ...pc, buttonUrl: '' };
@@ -1268,6 +1273,12 @@ export default function Home() {
           warnings.push('Button text is empty');
         } else if (!num) {
           warnings.push('WhatsApp number is empty');
+        } else if (whatsAppLooksShort(code, num)) {
+          // The editor links any typed digit on purpose, so this is the last
+          // place a half-typed number can be caught before it reaches the site.
+          warnings.push(
+            `WhatsApp number looks short for ${code}: ${code} ${num}`,
+          );
         } else {
           warnings.push(`WhatsApp number: ${code} ${num}`);
         }
