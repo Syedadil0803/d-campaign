@@ -30,7 +30,7 @@ import {
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
 import { applyTemplateFull, applyTemplateLook } from "@/lib/promoTemplate";
-import { HistoryManager } from "@/lib/historyManager";
+import { UndoStack } from "@/lib/undoStack";
 import { SamplePromoTemplates, sampleTemplates } from "./SamplePromoTemplates";
 import { useRichTextEditor } from "@/hooks/useRichTextEditor";
 import { useSignalEffect } from "@/hooks/useSignalEffect";
@@ -47,6 +47,7 @@ import { PromoMiniPreview } from "./PromoMiniPreview";
 import {
   listVersions,
   deleteVersion,
+  restoreVersion,
   MAX_VERSIONS,
   type PromoVersion,
 } from "@/lib/promoVersions";
@@ -69,8 +70,18 @@ interface PromoSectionProps {
   // onChange + onStateJson) and must merge instead of clobber via a stale closure.
   setConfig: (config: CampaignConfig | ((prev: CampaignConfig) => CampaignConfig)) => void;
   markChanged: () => void;
-  toast: (message: string, isError?: boolean) => void;
+  toast: (
+    message: string,
+    isError?: boolean,
+    action?: { label: string; onClick: () => void },
+  ) => void;
   onSelectedVersionChange?: (versionId: string | null) => void;
+  /**
+   * Bumped once the real card arrives from the DB. The editor mounts on
+   * defaultConfig, so anything seeded from the card at mount time (the Themes
+   * revert point) has to be re-seeded when the actual card lands.
+   */
+  configLoadedSignal?: number;
   // "Go on air" is a one-click reactivation, only when the current content
   // matches what's published (same content, not new/edited).
   canReactivate: boolean;
@@ -445,6 +456,7 @@ export function PromoSection({
   markChanged,
   toast,
   onSelectedVersionChange,
+  configLoadedSignal,
   canReactivate,
   livePromoCard,
   draftPromoCard,
@@ -614,6 +626,16 @@ export function PromoSection({
   );
 
   /**
+   * The editor mounts on defaultConfig and the real card arrives a moment
+   * later, so the seed above captures the DEFAULT template's look — the revert
+   * chip then showed a design the user never chose, and lit up as "current".
+   * Re-seed from the card that actually loaded.
+   */
+  useSignalEffect(configLoadedSignal, () => {
+    setThemeBaseline(configRef.current.promoCard.style);
+  });
+
+  /**
    * True when the popup was opened by the build panel rather than the toolbar
    * chip — that's the only case with somewhere to go Back to.
    */
@@ -701,9 +723,14 @@ export function PromoSection({
     defaultColor: PROMO_EDITOR_DEFAULT_COLOR,
   });
 
-  const promoHistory = useRef(
-    new HistoryManager<PromoSnapshot>("Promo"),
-  ).current;
+  /**
+   * Multi-step history for the promo editor.
+   *
+   * HistoryManager (still used by the announcement bar) keeps a single previous
+   * state, so it can swap once but can't walk back through a session. The promo
+   * needs ~30 actions of depth, so it gets a real stack.
+   */
+  const promoHistory = useRef(new UndoStack<PromoSnapshot>()).current;
   const restoringSnapshotRef = useRef(false);
   const skipOverflowBlockRef = useRef(false);
   const promoDeletingRef = useRef(false);
@@ -754,15 +781,69 @@ export function PromoSection({
     };
   }
 
+  /**
+   * Record the card as it is BEFORE a change, so undo restores this moment.
+   *
+   * `replace` marks an action that is its own step even mid-burst — the start
+   * of a delete run, an overwrite, a color or date change. Everything else
+   * coalesces, so a burst of typing collapses into one step.
+   *
+   * Pushes are no longer blocked while a template/variant baseline is set:
+   * editing after a swap is ordinary editing and belongs on the stack. Only the
+   * swap itself is off-limits, and that's handled by clearing the stack.
+   */
   function pushPromoState(options: { replace?: boolean } = {}) {
     if (restoringSnapshotRef.current) return;
-    if (promoAppliedCardBaselineRef.current) {
-      return;
-    }
     promoAppliedRedoRef.current = null;
-    const replaceLockedSnapshot = options.replace;
-    if (replaceLockedSnapshot) promoHistory.unlock();
-    promoHistory.pushState(getPromoSnapshot());
+    promoHistory.push(getPromoSnapshot(), { force: options.replace });
+  }
+
+  /**
+   * Everything a card-replacing action overwrites — the card itself plus the
+   * bookkeeping that hangs off it (which variant is selected, what the Themes
+   * strip reverts to, whether this counts as a fresh card).
+   *
+   * Ctrl+Z deliberately stops at these actions, so the only way back is the
+   * Undo offer on their toast, and that offer has to put all of it back.
+   */
+  interface PromoRestorePoint {
+    snapshot: PromoSnapshot;
+    selectedVersionId: string | null;
+    themeBaseline: PromoCard["style"];
+    isFreshCard: boolean;
+    appliedBaseline: PromoSnapshot | null;
+  }
+
+  function capturePromoRestorePoint(): PromoRestorePoint {
+    return {
+      snapshot: getPromoSnapshot(),
+      selectedVersionId,
+      themeBaseline,
+      isFreshCard: isFreshCardRef.current,
+      appliedBaseline: promoAppliedCardBaselineRef.current,
+    };
+  }
+
+  function restorePromoPoint(point: PromoRestorePoint) {
+    applyPromoSnapshot(point.snapshot);
+    setSelectedVersionId(point.selectedVersionId);
+    onSelectedVersionChange?.(point.selectedVersionId);
+    setThemeBaseline(point.themeBaseline);
+    isFreshCardRef.current = point.isFreshCard;
+    promoAppliedCardBaselineRef.current = point.appliedBaseline;
+    promoAppliedRedoRef.current = null;
+    // Stepping back over a swap is itself a boundary: the steps on the stack
+    // belong to the card we just left, not the one coming back.
+    promoHistory.clear();
+    onCardReplaced?.();
+  }
+
+  /** Confirmation toast that carries a one-tap way back. */
+  function toastWithUndo(message: string, point: PromoRestorePoint) {
+    toast(message, false, {
+      label: "Undo",
+      onClick: () => restorePromoPoint(point),
+    });
   }
 
   function getFieldRef(field: PromoField | null) {
@@ -863,6 +944,9 @@ export function PromoSection({
     if (curIsBlank && styleMatchesFresh) {
       return;
     }
+    // Captured before anything moves, so the toast's Undo can put the card —
+    // and the variant selection and theme revert point — back as they were.
+    const before = capturePromoRestorePoint();
     // Mark as a fresh card: leaving it later, undo should land on its edited state.
     isFreshCardRef.current = true;
     promoAppliedRedoRef.current = null;
@@ -879,7 +963,7 @@ export function PromoSection({
     markChanged();
     // Callers that already show their own toast (e.g. deleting the live card)
     // pass silent so the user doesn't get two messages for one action.
-    if (!options.silent) toast("Fresh promo card started");
+    if (!options.silent) toastWithUndo("Fresh promo card started", before);
     setThemeBaseline(freshCard.style);
     onCardReplaced?.();
   }
@@ -1252,13 +1336,63 @@ export function PromoSection({
     }
   }
 
+  /**
+   * Step back one action. Returns false when there's nothing left, so callers
+   * can decide whether to swallow the key.
+   */
+  function undoPromo(): boolean {
+    const previous = promoHistory.undo(getPromoSnapshot());
+    if (!previous) return false;
+    applyPromoSnapshot(previous);
+    return true;
+  }
+
+  function redoPromo(): boolean {
+    const next = promoHistory.redo(getPromoSnapshot());
+    if (!next) return false;
+    applyPromoSnapshot(next);
+    return true;
+  }
+
+  /**
+   * Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z for the whole promo editor.
+   *
+   * Bound at the window rather than per-field: every field, style control,
+   * date and CTA setting shares one timeline, so the shortcut can't belong to
+   * whichever element happens to have focus. It also has to REPLACE the
+   * browser's native contentEditable undo, which only knows about the box the
+   * caret is in and would otherwise fight this stack — hence preventDefault on
+   * every handled combination.
+   */
+  useEffect(() => {
+    function onKeyDown(e: globalThis.KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      const isUndo = key === 'z' && !e.shiftKey;
+      const isRedo = (key === 'z' && e.shiftKey) || key === 'y';
+      if (!isUndo && !isRedo) return;
+
+      // Typing in a plain input (WhatsApp number, button URL) is that field's
+      // own business — the browser's undo is the right one there.
+      const el = document.activeElement;
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
+
+      e.preventDefault();
+      if (isUndo) undoPromo();
+      else redoPromo();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function onPromoPreviewKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
-    if (mod && (key === "z" || key === "y")) {
-      onPromoEditorKeyDown(e);
-      return;
-    }
+    // Undo/redo are handled by the window-level listener above, for the whole
+    // editor at once. Everything else typed on the card is blocked here.
+    if (mod) return;
     e.preventDefault();
   }
 
@@ -1280,24 +1414,48 @@ export function PromoSection({
     const overwritesSelection = hasSelectionInEditor && e.key.length === 1;
 
     if (hasSelectionInEditor && (isDestructiveKey || overwritesSelection)) {
-      promoDeletingRef.current = true;
+      // Typing over a selection is a typing run, not a delete run — leave the
+      // lock off so the rest of the word coalesces into this one step.
+      promoDeletingRef.current = isDestructiveKey;
       pushPromoState({ replace: true });
       return;
     }
 
-    if (isDestructiveKey && !promoDeletingRef.current) {
-      promoDeletingRef.current = true;
-      // Start of a new delete session: unlock any stale lock (e.g. from an
-      // earlier style/format change) so we capture a fresh pre-delete snapshot,
-      // matching the select+delete path. The promoDeletingRef guard keeps the
-      // whole session collapsed into a single undo step.
+    const isTypingKey = e.key.length === 1 || e.key === "Enter";
+
+    if (isDestructiveKey) {
+      // One snapshot per delete run: hold the lock so a held-down Backspace
+      // undoes as a single step instead of one step per character.
+      if (!promoDeletingRef.current) {
+        promoDeletingRef.current = true;
+        pushPromoState({ replace: true });
+      }
+      return;
+    }
+
+    /**
+     * Ordinary typing. Snapshot BEFORE the character lands, so undo restores
+     * the text as it was; the stack's coalescing window collapses the rest of
+     * the burst into this one step.
+     *
+     * Without this, typing left no trace on the stack at all — Ctrl+Z would
+     * skip straight past everything the user had written to the last style or
+     * date change.
+     */
+    if (!isTypingKey) return;
+
+    if (promoDeletingRef.current) {
+      // Typing after a delete run ends that run and opens its own step, so the
+      // words survive one Ctrl+Z: delete "DROP", type "TODAY ONLY" → the first
+      // undo brings back "TODAY ONLY"'s absence, the second brings back "DROP".
+      // Without the force the coalescing window would fold the typing into the
+      // delete and Ctrl+Z would swallow both at once.
+      promoDeletingRef.current = false;
       pushPromoState({ replace: true });
       return;
     }
 
-    // Keep a delete/replace text session grouped across follow-up typing.
-    // Example: delete "DROP", type "TODAY ONLY", delete "ONLY" should undo
-    // to the original text with "DROP", not just restore "ONLY".
+    pushPromoState();
   }
 
   function getActivePromoEditor(): HTMLDivElement | null {
@@ -2198,10 +2356,12 @@ export function PromoSection({
     // currently on air must also take the card off the website — otherwise the
     // campaign keeps serving to visitors with no saved copy left behind.
     const target = versions.find((v) => v.id === id);
+    const targetIndex = versions.findIndex((v) => v.id === id);
     const wasLive = !!target && isLiveVersion(target);
+    const wasSelected = selectedVersionId === id;
     const updated = await deleteVersion(id);
     setVersions(updated);
-    if (selectedVersionId === id) {
+    if (wasSelected) {
       setSelectedVersionId(null);
       onSelectedVersionChange?.(null);
     }
@@ -2210,15 +2370,34 @@ export function PromoSection({
       onRemoveLive();
       // The card is gone from My Published and from the site, so leaving it on
       // the canvas would strand a copy that matches nothing — clear it too.
+      // Silent, because taking the card off the site is the headline here and
+      // this action carries its own Undo.
       startFreshPromoCard({ silent: true });
       toast("Deleted — the card has been removed from your website");
       return;
     }
-    toast("Variant deleted");
+    if (!target) {
+      toast("Variant deleted");
+      return;
+    }
+    // A delete is the one action here with nothing left on screen to recover
+    // from, so its Undo goes back to the list itself — same id, same slot.
+    toast("Variant deleted", false, {
+      label: "Undo",
+      onClick: async () => {
+        const restored = await restoreVersion(target, targetIndex);
+        setVersions(restored);
+        if (wasSelected) {
+          setSelectedVersionId(target.id);
+          onSelectedVersionChange?.(target.id);
+        }
+      },
+    });
   }
 
   // Apply a saved version to the live card — click-to-apply, like a template.
   function applyVersion(version: PromoVersion) {
+    const before = capturePromoRestorePoint();
     // Leaving a fresh card → undo lands on its EDITED state (getPromoSnapshot).
     // Leaving a template/variant → undo lands on its CLEAN baseline.
     isFreshCardRef.current = false;
@@ -2242,7 +2421,7 @@ export function PromoSection({
     setSelectedVersionId(version.id);
     onSelectedVersionChange?.(version.id);
     setShowVersionsPopup(false);
-    toast(`Variant applied: ${version.label}`);
+    toastWithUndo(`Variant applied: ${version.label}`, before);
     setThemeBaseline(restored.style);
     onCardReplaced?.();
   }
@@ -2276,6 +2455,7 @@ export function PromoSection({
 
   // Load the saved draft's promo card back into the editor.
   function restoreDraftPromoCard(card: PromoCard) {
+    const before = capturePromoRestorePoint();
     isFreshCardRef.current = false;
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
@@ -2287,7 +2467,7 @@ export function PromoSection({
     setSelectedVersionId(null);
     onSelectedVersionChange?.(null);
     setThemeBaseline(restored.style);
-    toast('Saved draft loaded into the editor');
+    toastWithUndo('Saved draft loaded into the editor', before);
   }
 
   /**
@@ -2299,6 +2479,7 @@ export function PromoSection({
    * confirmCardReplace, which stays quiet when there's nothing to lose.
    */
   function applyTemplate(template: PromoCard, templateName: string) {
+    const before = capturePromoRestorePoint();
     isFreshCardRef.current = false;
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
@@ -2317,7 +2498,7 @@ export function PromoSection({
     setPromoAppliedCardBaseline(cloned);
     setSelectedVersionId(null);
     onSelectedVersionChange?.(null);
-    toast(`Template applied: ${templateName}`);
+    toastWithUndo(`Template applied: ${templateName}`, before);
     // From the card just built, not configRef — that ref catches up in an
     // effect, so reading it here captured the design being replaced.
     setThemeBaseline(cloned.style);
@@ -4796,6 +4977,10 @@ export function PromoSection({
                   type="button"
                   title="Back to the design you had before trying themes"
                   onClick={() => {
+                    // A look change like any other, so Ctrl+Z can step back
+                    // over it — themes keep your words, so they belong with
+                    // ordinary styling, not with the swaps that clear history.
+                    pushPromoState({ replace: true });
                     setConfig({
                       ...configRef.current,
                       promoCard: { ...configRef.current.promoCard, style: themeBaseline },
@@ -4824,6 +5009,7 @@ export function PromoSection({
                     type="button"
                     title={t.name}
                     onClick={() => {
+                      pushPromoState({ replace: true });
                       setConfig({
                         ...configRef.current,
                         promoCard: applyTemplateLook(
@@ -5253,7 +5439,7 @@ export function PromoSection({
                               </p>
                             ) : (
                               <p className="-mt-1 text-[11px] text-on-surface-variant">
-                                This can’t be undone.
+                                You’ll have a few seconds to undo this.
                               </p>
                             )}
                             <div className="flex items-center gap-2">

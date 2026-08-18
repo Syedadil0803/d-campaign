@@ -111,6 +111,24 @@ export async function deleteVersion(id: string): Promise<PromoVersion[]> {
   return versions;
 }
 
+/**
+ * Put a deleted version back exactly as it was — same id, label and savedAt,
+ * at its original position in the list. Backs the "Undo" offer on a delete;
+ * re-saving instead would give it a new id and push it to the end.
+ */
+export async function restoreVersion(
+  version: PromoVersion,
+  index: number,
+): Promise<PromoVersion[]> {
+  const versions = await read();
+  if (versions.some((v) => v.id === version.id)) return versions;
+  const at = Math.max(0, Math.min(index, versions.length));
+  versions.splice(at, 0, JSON.parse(JSON.stringify(version)) as PromoVersion);
+  while (versions.length > MAX_VERSIONS) versions.shift();
+  await write(versions);
+  return versions;
+}
+
 /** Remove all versions. */
 export async function clearVersions(): Promise<void> {
   await write([]);

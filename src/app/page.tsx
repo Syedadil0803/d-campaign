@@ -10,7 +10,7 @@ import { Dashboard } from '@/components/Dashboard';
 import { AnnouncementSection } from '@/components/AnnouncementSection';
 import { PromoFlow } from '@/components/PromoFlow';
 import { PromoSetupDialog } from '@/components/PromoSetupDialog';
-import { Toast } from '@/components/Toast';
+import { Toast, ToastAction, TOAST_ACTION_MS } from '@/components/Toast';
 import { getISODateWithOffset, toLocalISODate } from '@/lib/utils';
 import {
   listVersions,
@@ -207,6 +207,10 @@ export default function Home() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastIsError, setToastIsError] = useState(false);
+  const [toastAction, setToastAction] = useState<ToastAction | null>(null);
+  // One timer owns the toast's life, so a second toast doesn't inherit the
+  // first one's countdown and vanish early.
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [publishConfirm, setPublishConfirm] = useState<{
     warnings: string[];
     onConfirm: () => Promise<void> | void;
@@ -449,6 +453,10 @@ export default function Home() {
   const promoWorkNotInDraftRef = useRef(false);
   // Bumped to open the build panel when the flow is already mounted.
   const [openBuildSignal, setOpenBuildSignal] = useState(0);
+  // Bumped once the real card lands from the DB. The editor mounts on
+  // defaultConfig, so anything the editor seeds from the card at mount time
+  // would otherwise freeze on the default template's look.
+  const [configLoadedSignal, setConfigLoadedSignal] = useState(0);
   // A picker the editor should open as soon as it mounts, set by the
   // dashboard's "Edit published". Cleared by the editor once acted on.
   const [pendingPromoPopup, setPendingPromoPopup] = useState<'published' | 'draft' | null>(null);
@@ -968,6 +976,7 @@ export default function Home() {
           setReadyToPublishAnnouncement(true);
           // Work in progress exists, so the promo tab opens on it, not the picker.
           setPromoEntryStep('editor');
+          setConfigLoadedSignal((n) => n + 1);
           return;
         } else {
           // Draft matches published — discard it silently
@@ -979,6 +988,7 @@ export default function Home() {
         setConfig(publishedCfg);
         draftSignatureRef.current = getConfigSignature(publishedCfg);
         savedPromoSignatureRef.current = getPromoSignature(publishedCfg);
+        setConfigLoadedSignal((n) => n + 1);
       }
     } catch (error) {
       console.error('Failed to load config:', error);
@@ -1205,11 +1215,35 @@ export default function Home() {
     setPublishConfirm({ warnings: [], onConfirm: handlePublishAnnouncement });
   }
 
-  function toast(message: string, isError = false) {
+  function dismissToast() {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = null;
+    setShowToast(false);
+    setToastAction(null);
+  }
+
+  /**
+   * `action` turns the toast into a one-tap recovery offer ("Undo"). It gets a
+   * longer life than a plain confirmation — long enough to read and reach, and
+   * still short enough that the offer clearly expires with the toast.
+   */
+  function toast(message: string, isError = false, action?: ToastAction) {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMessage(message);
     setToastIsError(isError);
+    setToastAction(
+      action
+        ? {
+            label: action.label,
+            onClick: () => {
+              dismissToast();
+              action.onClick();
+            },
+          }
+        : null,
+    );
     setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
+    toastTimerRef.current = setTimeout(dismissToast, action ? TOAST_ACTION_MS : 3000);
   }
 
   function toggleDarkMode() {
@@ -1406,6 +1440,7 @@ export default function Home() {
                   key={`promo-${editorResetKey}`}
                   onAiApplied={handleAiApplied}
                   openBuildSignal={openBuildSignal}
+                  configLoadedSignal={configLoadedSignal}
                   pendingPopup={pendingPromoPopup}
                   onPendingPopupHandled={() => setPendingPromoPopup(null)}
                   initialStep={promoEntryStep}
@@ -1774,7 +1809,13 @@ export default function Home() {
         </div>
       )}
 
-      <Toast show={showToast} message={toastMessage} isError={toastIsError} />
+      <Toast
+        show={showToast}
+        message={toastMessage}
+        isError={toastIsError}
+        action={toastAction}
+        actionDurationMs={TOAST_ACTION_MS}
+      />
     </div>
   );
 }
