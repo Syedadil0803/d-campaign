@@ -13,7 +13,7 @@ import {
 } from "react";
 import {
   ArrowLeft,
-  ExternalLink,
+  RotateCcw,
   Gift,
   X,
   Palette,
@@ -602,11 +602,16 @@ export function PromoSection({
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
   const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
   /**
-   * The card's own style before any theme was tried, shown as a "Yours" chip
-   * at the head of the strip. Null until the first theme click — there's
-   * nothing to go back to before then.
+   * The design to return to, shown as the first chip in the Themes strip.
+   *
+   * Seeded from the card immediately so the chip is there from the start, and
+   * re-seeded whenever a real change lands (template, variant, fresh card,
+   * restored draft). It deliberately does NOT follow theme clicks — that's the
+   * whole point: browse themes, then come back to where you were.
    */
-  const [themeBaseline, setThemeBaseline] = useState<PromoCard['style'] | null>(null);
+  const [themeBaseline, setThemeBaseline] = useState<PromoCard['style']>(
+    () => config.promoCard.style,
+  );
 
   /**
    * True when the popup was opened by the build panel rather than the toolbar
@@ -875,6 +880,7 @@ export function PromoSection({
     // Callers that already show their own toast (e.g. deleting the live card)
     // pass silent so the user doesn't get two messages for one action.
     if (!options.silent) toast("Fresh promo card started");
+    setThemeBaseline(freshCard.style);
     onCardReplaced?.();
   }
 
@@ -2237,6 +2243,7 @@ export function PromoSection({
     onSelectedVersionChange?.(version.id);
     setShowVersionsPopup(false);
     toast(`Variant applied: ${version.label}`);
+    setThemeBaseline(configRef.current.promoCard.style);
     onCardReplaced?.();
   }
 
@@ -2279,6 +2286,7 @@ export function PromoSection({
     setPromoAppliedCardBaseline(restored);
     setSelectedVersionId(null);
     onSelectedVersionChange?.(null);
+    setThemeBaseline(restored.style);
     toast('Saved draft loaded into the editor');
   }
 
@@ -2310,6 +2318,7 @@ export function PromoSection({
     setSelectedVersionId(null);
     onSelectedVersionChange?.(null);
     toast(`Template applied: ${templateName}`);
+    setThemeBaseline(configRef.current.promoCard.style);
     onCardReplaced?.();
   }
 
@@ -3410,6 +3419,24 @@ export function PromoSection({
             />
           </div>
 
+          {/* The button's text lives here now, with the rest of the content.
+              It used to be typed on the card itself, which meant the card's
+              button could never behave like a button — a click had to mean
+              "edit". Moving it here frees the card's CTA to be clickable, and
+              makes the countdown genuinely the only field edited on the card. */}
+          <div className={!config.promoCard.showButton ? "opacity-50 pointer-events-none" : ""}>
+            <label className="mb-2 block text-sm font-semibold text-on-surface">
+              Button text
+            </label>
+            <input
+              type="text"
+              value={stripHtmlText(config.promoCard.buttonText)}
+              onChange={(e) => updateField("buttonText", e.target.value)}
+              placeholder="Shop now"
+              className="h-[44px] w-full rounded-md border border-border bg-surface px-3 text-sm text-on-surface outline-none transition-colors hover:border-primary/70 focus:border-primary"
+            />
+          </div>
+
           <div className={`space-y-4 ${!config.promoCard.showButton ? "opacity-50 pointer-events-none" : ""}`}>
               {/* CTA Type Selector */}
               <div className="flex items-center gap-2">
@@ -4173,11 +4200,9 @@ export function PromoSection({
                   {showButtonInPreview && (
                     <div
                       className={
-                        // relative + group/cta so the test affordance can pin
-                        // to the button's corner and appear on hover.
                         config.promoCard.buttonFullWidth
-                          ? "group/cta relative"
-                          : `group/cta relative flex ${
+                          ? ""
+                          : `flex ${
                               (config.promoCard.style.buttonStyle.textAlign ||
                                 "center") === "left"
                                 ? "justify-start"
@@ -4190,60 +4215,14 @@ export function PromoSection({
                     >
                       <div
                         ref={previewButtonRef}
-                        contentEditable
-                        suppressContentEditableWarning
+                        role="button"
+                        tabIndex={0}
                         data-placeholder="Button"
                         className={`promo-preview-button py-2 px-4 rounded-lg text-base font-semibold outline-none min-h-10 ${
                           config.promoCard.buttonFullWidth ? "w-full" : ""
-                        } ${currentField === "button" ? "ring-1 ring-primary/70" : ""} cursor-pointer`}
-                        onMouseDown={() => {
-                          activeEditorRef.current = previewButtonRef.current;
-                        }}
+                        } cursor-pointer transition-opacity hover:opacity-90`}
                         onClick={() => {
                           setShowCardBgPopup(false);
-                          if (currentField !== "button")
-                            setCurrentField("button");
-                          activeEditorRef.current = previewButtonRef.current;
-                          setTimeout(
-                            () =>
-                              refreshPromoToolbarFormats(
-                                previewButtonRef.current,
-                              ),
-                            0,
-                          );
-                        }}
-                        onFocus={() => {
-                          activeEditorRef.current = previewButtonRef.current;
-                        }}
-                        onMouseUp={() => {
-                          refreshPromoToolbarFormats(previewButtonRef.current);
-                        }}
-                        onInput={() => onFieldInput("button")}
-                        onKeyDown={onPromoPreviewKeyDown}
-                        onPaste={(e) => e.preventDefault()}
-                        onDrop={(e) => e.preventDefault()}
-                        style={{
-                          background: getBackgroundStyle(
-                            getPreviewFieldBackground("button"),
-                          ),
-                          color: config.promoCard.style.buttonStyle.textColor,
-                          textAlign:
-                            config.promoCard.style.buttonStyle.textAlign ||
-                            "center",
-                          caretColor: "transparent",
-                          userSelect: "text",
-                          WebkitUserSelect: "text",
-                          cursor: "text",
-                        }}
-                      />
-                      {/* Try the CTA for real. It's a separate control because
-                          the button itself is the only place its text can be
-                          written — a plain click has to keep meaning "edit". */}
-                      <button
-                        type="button"
-                        title="Open this link in a new tab"
-                        onClick={(e) => {
-                          e.stopPropagation();
                           const url = ctaDestination();
                           if (!url) {
                             toast(
@@ -4256,11 +4235,17 @@ export function PromoSection({
                           }
                           window.open(url, '_blank', 'noopener,noreferrer');
                         }}
-                        className="absolute -right-2 -top-2 z-20 inline-flex h-6 w-6 items-center justify-center rounded-full border border-border bg-surface-elevated text-on-surface-variant opacity-0 shadow-sm transition-opacity hover:text-primary group-hover/cta:opacity-100"
-                        aria-label="Test this link"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </button>
+                        style={{
+                          background: getBackgroundStyle(
+                            getPreviewFieldBackground("button"),
+                          ),
+                          color: config.promoCard.style.buttonStyle.textColor,
+                          textAlign:
+                            config.promoCard.style.buttonStyle.textAlign ||
+                            "center",
+                          cursor: "pointer",
+                        }}
+                      />
                     </div>
                   )}
 
@@ -4802,20 +4787,24 @@ export function PromoSection({
             </p>
             <div className="campaign-custom-scrollbar flex gap-2 overflow-x-auto px-1.5 pb-3 pt-2">
               {/* The look the card had before theme-browsing started, so trying
-                  one isn't a one-way door. Captured on first use rather than
-                  on every render, otherwise it would just track whatever theme
-                  was clicked last and never lead anywhere. */}
-              {themeBaseline && (
-                <button
+                  one isn't a one-way door.
+
+                  Marked with a revert icon rather than a word: every label
+                  tried ("Yours", "Original", "Current") was either casual or
+                  wrong once a theme was applied, and a word in a row of color
+                  swatches is noise. The swatch shows the design; the icon says
+                  it takes you back. Captured on first use, otherwise it would
+                  track the last theme clicked and never lead anywhere. */}
+              <button
                   type="button"
-                  title="Back to your current design"
+                  title="Back to the design you had before trying themes"
                   onClick={() => {
                     setConfig({
                       ...configRef.current,
                       promoCard: { ...configRef.current.promoCard, style: themeBaseline },
                     });
                     markChanged();
-                    toast('Back to your own design');
+                    toast('Restored your original design');
                   }}
                   style={{ background: getBackgroundStyle(themeBaseline.background) }}
                   className={`relative h-8 w-12 shrink-0 rounded-md ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
@@ -4824,11 +4813,10 @@ export function PromoSection({
                       : 'ring-1 ring-border hover:ring-primary/60'
                   }`}
                 >
-                  <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-full bg-surface px-1 text-[9px] font-bold uppercase tracking-wide text-on-surface-variant">
-                    Yours
+                  <span className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-border bg-surface text-on-surface-variant">
+                    <RotateCcw className="h-2.5 w-2.5" />
                   </span>
                 </button>
-              )}
               {sampleTemplates.map((t) => {
                 const on =
                   JSON.stringify((t.promoCard as PromoCard).style) ===
@@ -4839,7 +4827,6 @@ export function PromoSection({
                     type="button"
                     title={t.name}
                     onClick={() => {
-                      setThemeBaseline((prev) => prev ?? configRef.current.promoCard.style);
                       setConfig({
                         ...configRef.current,
                         promoCard: applyTemplateLook(
