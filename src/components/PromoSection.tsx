@@ -3992,15 +3992,34 @@ export function PromoSection({
               Content Area, left-aligned. Fixed height so the preview below
               shrinks to keep the column scroll-free. */}
           <div className="flex shrink-0 items-center gap-2">
+            {/* AI is a symbol, not a sentence.
+
+                It sat in the row as the widest chip, so the one action that is
+                optional shouted over Template Hub and My Published, which are
+                not. As a glowing icon it still reads as the special one — the
+                glow is doing the work the extra words were — and the label
+                arrives on hover, floating rather than expanding, so the buttons
+                beside it never move under the cursor. */}
             {onUseAi && (
-              <button
-                type="button"
-                onClick={onUseAi}
-                className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-primary/40 bg-primary/[0.06] px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
-                title="Let AI improve this card's content"
-              >
-                <Sparkles className="h-4 w-4" /> Improve with AI
-              </button>
+              <div className="group relative shrink-0">
+                <button
+                  type="button"
+                  onClick={onUseAi}
+                  aria-label="Improve with AI"
+                  className="grid h-9 w-9 place-items-center rounded-lg border border-primary/50 bg-primary/[0.08] text-primary shadow-[0_0_10px_-2px] shadow-primary/50 transition-all hover:scale-[1.04] hover:bg-primary/15 hover:shadow-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <Sparkles className="h-4 w-4" />
+                </button>
+                <span
+                  role="tooltip"
+                  // Anchored left, not centred: this is the first button in
+                  // the row, so a centred tooltip hangs off the panel and gets
+                  // clipped to "ove with AI".
+                  className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 whitespace-nowrap rounded-md border border-border bg-surface-elevated px-2 py-1 text-[11px] font-medium text-on-surface opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100"
+                >
+                  Improve with AI
+                </span>
+              </div>
             )}
             <button
               type="button"
@@ -5017,28 +5036,22 @@ export function PromoSection({
               wholesale replaced the user's copy, which is what made it need a
               consent popup. Swapping only the look never destroys anything. */}
           <div className="mt-5 shrink-0 pb-1">
-            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
-              Themes - Click any to change the look - Your text stays
-            </p>
-            {/* Exactly one swatch is ever marked.
+            {/* Two labelled groups rather than one unbroken row.
 
-                The strip lit whatever matched: the leftmost swatch when the
-                card is on your own design, AND any theme whose palette happens
-                to equal it. Land on a design that's also in the row and two
-                things claimed to be current, which is one more than can be
-                true. Your design wins, and it sits at the left — a theme chip
-                only lights while you're actually trying it. */}
-            <div className="campaign-custom-scrollbar flex gap-2 overflow-x-auto px-1.5 pb-3 pt-2">
-              {/* The look the card had before theme-browsing started, so trying
-                  one isn't a one-way door.
-
-                  Marked with a revert icon rather than a word: every label
-                  tried ("Yours", "Original", "Current") was either casual or
-                  wrong once a theme was applied, and a word in a row of color
-                  swatches is noise. The swatch shows the design; the icon says
-                  it takes you back. Captured on first use, otherwise it would
-                  track the last theme clicked and never lead anywhere. */}
-              <button
+                The current design used to sit in the row as just another
+                swatch, told apart only by a small revert icon — so the one
+                thing you most need to find looked like a thirteenth theme. It
+                gets its own heading and its own space now, with a rule between
+                the two, and exactly one swatch across both groups is ever
+                marked: yours when the card is on your design, the theme's only
+                while you're trying it. */}
+            <div className="flex items-stretch gap-3">
+              <div className="shrink-0">
+                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
+                  Current
+                </p>
+                <div className="flex px-1.5 pb-3 pt-2">
+                  <button
                   type="button"
                   title="Back to the design you had before trying themes"
                   onClick={() => {
@@ -5061,11 +5074,23 @@ export function PromoSection({
                       : 'ring-1 ring-border hover:ring-primary/60'
                   }`}
                 >
-                  <span className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-border bg-surface text-on-surface-variant">
-                    <RotateCcw className="h-2.5 w-2.5" />
-                  </span>
-                </button>
-              {sampleTemplates.map((t) => {
+                    <span className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-border bg-surface text-on-surface-variant">
+                      <RotateCcw className="h-2.5 w-2.5" />
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* The rule is what makes "yours" read as a group of one rather
+                  than the first of thirteen. */}
+              <div className="my-auto h-10 w-px shrink-0 bg-border" />
+
+              <div className="min-w-0 flex-1">
+                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
+                  Themes - Click any to change the look - Your text stays
+                </p>
+                <div className="campaign-custom-scrollbar flex gap-2 overflow-x-auto px-1.5 pb-3 pt-2">
+                  {sampleTemplates.map((t) => {
                 const on =
                   !onOwnDesign &&
                   JSON.stringify((t.promoCard as PromoCard).style) ===
@@ -5093,9 +5118,11 @@ export function PromoSection({
                     className={`h-8 w-12 shrink-0 rounded-md ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
                       on ? "ring-2 ring-primary" : "ring-1 ring-border hover:ring-primary/60"
                     }`}
-                  />
-                );
-              })}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         </div>
