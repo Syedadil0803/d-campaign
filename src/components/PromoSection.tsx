@@ -670,6 +670,13 @@ export function PromoSection({
   }, [config.promoCard.style]);
 
   /**
+   * True when the card is wearing the design you chose rather than a theme you
+   * are trying. It decides which single swatch in the Themes strip is marked.
+   */
+  const onOwnDesign =
+    JSON.stringify(themeBaseline) === JSON.stringify(config.promoCard.style);
+
+  /**
    * The editor mounts on defaultConfig and the real card arrives a moment
    * later, so the seed above captures the DEFAULT template's look — the revert
    * chip then showed a design the user never chose, and lit up as "current".
@@ -5013,6 +5020,14 @@ export function PromoSection({
             <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
               Themes - Click any to change the look - Your text stays
             </p>
+            {/* Exactly one swatch is ever marked.
+
+                The strip lit whatever matched: the leftmost swatch when the
+                card is on your own design, AND any theme whose palette happens
+                to equal it. Land on a design that's also in the row and two
+                things claimed to be current, which is one more than can be
+                true. Your design wins, and it sits at the left — a theme chip
+                only lights while you're actually trying it. */}
             <div className="campaign-custom-scrollbar flex gap-2 overflow-x-auto px-1.5 pb-3 pt-2">
               {/* The look the card had before theme-browsing started, so trying
                   one isn't a one-way door.
@@ -5041,7 +5056,7 @@ export function PromoSection({
                   }}
                   style={{ background: getBackgroundStyle(themeBaseline.background) }}
                   className={`relative h-8 w-12 shrink-0 rounded-md ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
-                    JSON.stringify(themeBaseline) === JSON.stringify(config.promoCard.style)
+                    onOwnDesign
                       ? 'ring-2 ring-primary'
                       : 'ring-1 ring-border hover:ring-primary/60'
                   }`}
@@ -5052,8 +5067,9 @@ export function PromoSection({
                 </button>
               {sampleTemplates.map((t) => {
                 const on =
+                  !onOwnDesign &&
                   JSON.stringify((t.promoCard as PromoCard).style) ===
-                  JSON.stringify(config.promoCard.style);
+                    JSON.stringify(config.promoCard.style);
                 return (
                   <button
                     key={t.id}
