@@ -112,6 +112,20 @@ interface BriefQuestion {
   help: string;
   placeholder: string;
   chips?: string[];
+  /**
+   * 'multi' lets the answers stack — "Bold, Premium, Urgent" describes a voice
+   * far better than any single word, and a brief that says all three gets copy
+   * that reads that way. 'single' is for questions with one true answer (is
+   * there a countdown, where does the button go), where a second pick replaces
+   * the first rather than contradicting it.
+   */
+  chipMode?: 'single' | 'multi';
+  /**
+   * Multi-select chips that mean "and nothing else" — picking one clears the
+   * rest, and picking another chip clears it. "You choose" alongside "Warm
+   * tones" is an instruction that argues with itself.
+   */
+  exclusiveChips?: string[];
   optional?: boolean;
 }
 
@@ -119,22 +133,50 @@ const CONTENT_QUESTIONS: BriefQuestion[] = [
   {
     key: 'offer',
     title: 'What’s the offer, and what’s it on?',
-    help: 'The product or collection, plus the deal — a discount, a bundle, free delivery, a code.',
+    help: 'The product or collection, plus the deal — a discount, a bundle, free delivery, a code. Tap what applies, then add your own detail.',
     placeholder: '20% off all handwoven rugs, plus free UK delivery. Code RUGS20.',
+    chipMode: 'multi',
+    chips: [
+      'Percentage off',
+      'Buy one get one',
+      'Free delivery',
+      'Clearance',
+      'New arrivals',
+      'Members only',
+      'Discount code',
+    ],
   },
   {
     key: 'tone',
     title: 'Who are you selling to, and how should it read?',
-    help: 'Your shoppers, and the voice. Tone decides the words AI reaches for.',
+    help: 'Your shoppers, and the voice. Pick as many words as fit — “Bold, Premium, Urgent” shapes the copy more than any one of them alone.',
     placeholder: 'Returning customers who bought last winter. Warm, confident, not pushy.',
-    chips: ['Bold', 'Elegant', 'Playful', 'Urgent', 'Friendly', 'Premium'],
+    chipMode: 'multi',
+    // Eight, not ten: a tenth chip wrapped to another row and pushed the step
+    // past the panel's height, and this panel never scrolls. 'Warm' and
+    // 'Confident' went — the nearest neighbours of 'Friendly' and 'Bold'.
+    chips: [
+      'Bold',
+      'Elegant',
+      'Playful',
+      'Urgent',
+      'Friendly',
+      'Premium',
+      'Minimal',
+      'No hard sell',
+    ],
   },
   {
     key: 'timer',
     title: 'Should the card show a countdown?',
     help: 'Your dates are already set — this is only the wording that sits around the timer.',
     placeholder: 'Yes, with “Offer ends in”',
-    chips: ['Yes — “Ends in”', 'Yes — “Hurry, ends in”', 'No countdown'],
+    chips: [
+      'Yes — “Ends in”',
+      'Yes — “Hurry, ends in”',
+      'Yes — “Only … left”',
+      'No countdown',
+    ],
   },
   {
     key: 'cta',
@@ -148,9 +190,21 @@ const CONTENT_QUESTIONS: BriefQuestion[] = [
 const COLOR_QUESTION: BriefQuestion = {
   key: 'colors',
   title: 'Which colors should it use?',
-  help: 'Brand colors (hex codes help), a season or a mood — or hand the palette to AI.',
+  help: 'Brand colors (hex codes help), a season or a mood — or hand the palette to AI. Stack as many as you like.',
   placeholder: 'Brand green #0f766e with warm cream, dark text',
-  chips: ['You choose', 'Match my template', 'Warm tones', 'Cool tones', 'High contrast'],
+  chipMode: 'multi',
+  exclusiveChips: ['You choose', 'Match my template'],
+  chips: [
+    'You choose',
+    'Match my template',
+    'Warm tones',
+    'Cool tones',
+    'High contrast',
+    'Dark background',
+    'Light background',
+    'Gradient',
+    'Festive',
+  ],
 };
 
 const EXTRA_QUESTION: BriefQuestion = {
@@ -159,7 +213,57 @@ const EXTRA_QUESTION: BriefQuestion = {
   help: 'Optional. Claims you can’t make, words to steer clear of, a phrase you want included.',
   placeholder: 'Don’t say “cheap”. Do mention free 30-day returns.',
   optional: true,
+  chipMode: 'multi',
+  chips: [
+    'Mention free returns',
+    'Avoid the word “cheap”',
+    'No pushy language',
+    'Keep it very short',
+    'Include the code',
+    'Mention limited stock',
+  ],
 };
+
+/** Answers are stored as one readable phrase — chips are just a fast way to build it. */
+function answerParts(answer: string | undefined): string[] {
+  return (answer ?? '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function sameChip(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase();
+}
+
+function chipIsOn(answer: string | undefined, chip: string, q: BriefQuestion): boolean {
+  if ((q.chipMode ?? 'single') === 'single') return (answer ?? '').trim() === chip;
+  return answerParts(answer).some((part) => sameChip(part, chip));
+}
+
+/**
+ * What the answer becomes when a chip is tapped.
+ *
+ * Chips used to overwrite the whole answer, so a second tap threw the first one
+ * away — you could say "Bold" or "Premium" but never both, and anything typed
+ * was wiped by the next tap. Multi questions now add and remove instead, and
+ * keep whatever was typed alongside them.
+ */
+function toggleChip(answer: string | undefined, chip: string, q: BriefQuestion): string {
+  const on = chipIsOn(answer, chip, q);
+  if ((q.chipMode ?? 'single') === 'single') return on ? '' : chip;
+  if (q.exclusiveChips?.some((x) => sameChip(x, chip))) {
+    // "You choose" means exactly that — it replaces the rest.
+    return on ? '' : chip;
+  }
+  const kept = answerParts(answer).filter(
+    (part) => !q.exclusiveChips?.some((x) => sameChip(x, part)),
+  );
+  const next = on
+    ? kept.filter((part) => !sameChip(part, chip))
+    : [...kept, chip];
+  return next.join(', ');
+}
 
 export type BuildStage = 'mode' | 'ai';
 
@@ -371,20 +475,24 @@ export function PromoBuildPanel({
       <p className="mt-0.5 text-xs leading-snug text-on-surface-variant">{q.help}</p>
       {q.chips && (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
-          {q.chips.map((chip) => (
-            <button
-              key={chip}
-              type="button"
-              onClick={() => setAnswer(q.key, chip)}
-              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-all ${
-                brief[q.key] === chip
-                  ? 'border-primary bg-primary text-on-primary'
-                  : 'border-border text-on-surface-variant hover:border-primary/70 hover:text-primary'
-              }`}
-            >
-              {chip}
-            </button>
-          ))}
+          {q.chips.map((chip) => {
+            const on = chipIsOn(brief[q.key], chip, q);
+            return (
+              <button
+                key={chip}
+                type="button"
+                aria-pressed={on}
+                onClick={() => setAnswer(q.key, toggleChip(brief[q.key], chip, q))}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-all ${
+                  on
+                    ? 'border-primary bg-primary text-on-primary'
+                    : 'border-border text-on-surface-variant hover:border-primary/70 hover:text-primary'
+                }`}
+              >
+                {chip}
+              </button>
+            );
+          })}
         </div>
       )}
       <textarea
