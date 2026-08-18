@@ -151,8 +151,32 @@ export function buildGuidedPromoPrompt({
     `- Description: ${describeBg(s.descriptionStyle.background)}, text ${s.descriptionStyle.textColor}`,
     `- Timer: ${describeBg(s.dateStyle.background)}, text ${s.dateStyle.textColor}`,
     `- Button: ${describeBg(s.buttonStyle.background)}, text ${s.buttonStyle.textColor}`,
-    '',
   );
+
+  /**
+   * Alignment is design, and only "Content and colors" is allowed to change it.
+   *
+   * It was never in the prompt at all, so every card came back with whatever
+   * alignment the template happened to use — ask for a centred hero headline on
+   * a left-aligned template and you still got left-aligned lines, because the
+   * model was never told the field existed. "Colors only" leaves it alone on
+   * purpose: that mode promises colours and nothing else.
+   */
+  if (!keepDesign && !keepContent) {
+    lines.push(
+      '',
+      '── THE CARD\'S CURRENT ALIGNMENT — you may replace this too ──',
+      `- Title: ${s.titleStyle.textAlign ?? 'left'}`,
+      `- Subtitle: ${s.subheadingStyle.textAlign ?? 'left'}`,
+      `- Description: ${s.descriptionStyle.textAlign ?? 'left'}`,
+      `- Button: ${s.buttonStyle.textAlign ?? 'left'}`,
+      'Choose the alignment the design wants — a short hero headline usually',
+      'centres, a paragraph of detail usually reads better left. Do not just',
+      'repeat what is above.',
+    );
+  }
+
+  lines.push('');
 
   if (keepContent) {
     lines.push(
@@ -227,7 +251,16 @@ export function buildGuidedPromoPrompt({
       '  "timerBg": {"type":"solid","startColor":"#hex","endColor":"#hex"},',
       '  "timerTextColor": "#hex",',
       '  "buttonBg": {"type":"solid","startColor":"#hex","endColor":"#hex"},',
-      '  "buttonTextColor": "#hex"',
+      `  "buttonTextColor": "#hex"${keepContent ? '' : ','}`,
+    );
+  }
+
+  if (!keepDesign && !keepContent) {
+    lines.push(
+      '  "titleAlign": "left | center | right",',
+      '  "subtitleAlign": "left | center | right",',
+      '  "descriptionAlign": "left | center | right",',
+      '  "buttonAlign": "left | center | right"',
     );
   }
 
