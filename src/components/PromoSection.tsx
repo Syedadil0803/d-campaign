@@ -731,7 +731,13 @@ export function PromoSection({
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showCountryCodeDropdown, setShowCountryCodeDropdown] = useState(false);
   /** Wraps the country button + its menu, so outside-clicks can be told apart. */
-  const countryCodeRef = useRef<HTMLDivElement>(null);
+  const countryCodeBtnRef = useRef<HTMLButtonElement>(null);
+  const countryCodeMenuRef = useRef<HTMLDivElement>(null);
+  const [countryCodePos, setCountryCodePos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
   const [startDateView, setStartDateView] = useState<Date>(() => {
     const base = config.promoCard.startDate
       ? new Date(`${config.promoCard.startDate}T00:00:00`)
@@ -2169,6 +2175,7 @@ export function PromoSection({
         [cardPositionBtnRef, cardPositionMenuRef, setShowCardPositionDropdown],
         [cardBgTypeBtnRef, cardBgTypeMenuRef, setShowCardBgTypeDropdown],
         [fieldBgTypeBtnRef, fieldBgTypeMenuRef, setShowFieldBgTypeDropdown],
+        [countryCodeBtnRef, countryCodeMenuRef, setShowCountryCodeDropdown],
       ];
       pairs.forEach(([btnRef, menuRef, setOpen]) => {
         if (
@@ -2182,12 +2189,6 @@ export function PromoSection({
         setShowStartDatePicker(false);
       if (!endDatePickerRef.current?.contains(target))
         setShowEndDatePicker(false);
-      // Only close when the click landed OUTSIDE the dropdown. Closing
-      // unconditionally unmounted the country row under the pointer before its
-      // click could fire, so no country could ever be selected.
-      if (!countryCodeRef.current?.contains(target)) {
-        setShowCountryCodeDropdown(false);
-      }
       // Keep card background popup open until explicit close (X button).
     };
     document.addEventListener("mousedown", onDocMouseDown);
@@ -2198,6 +2199,7 @@ export function PromoSection({
     setShowCardPositionDropdown(false);
     setShowCardBgTypeDropdown(false);
     setShowFieldBgTypeDropdown(false);
+    setShowCountryCodeDropdown(false);
     setShowCardBgPopup(false);
   }, []);
 
@@ -3768,60 +3770,58 @@ export function PromoSection({
                     WhatsApp Number
                   </label>
                   <div className="flex items-center h-[44px] rounded-md border border-border bg-surface overflow-visible transition-colors hover:border-primary/70 focus-within:border-primary/80">
-                    <div ref={countryCodeRef} className="relative h-full">
-                      <button
-                        type="button"
-                        onClick={() => setShowCountryCodeDropdown(!showCountryCodeDropdown)}
-                        className="h-full px-3 border-r border-border text-on-surface flex items-center gap-1.5 hover:bg-surface-subtle transition-colors"
-                      >
-                        {(() => {
-                          const selectedCode = config.promoCard.whatsappCountryCode || '+44';
-                          const selected = COUNTRY_CODES.find((c) => c.code === selectedCode);
-                          return (
-                            <>
-                              <CountryFlag
-                                flag={selected?.flag ?? ''}
-                                name={selected?.name ?? ''}
-                              />
-                              <span className="text-sm font-semibold text-on-surface tabular-nums">
-                                {selectedCode}
-                              </span>
-                              {selected?.name && (
-                                <span className="max-w-[104px] truncate text-xs text-on-surface-variant">
-                                  {selected.name}
-                                </span>
-                              )}
-                            </>
-                          );
-                        })()}
-                        <svg className={`h-4 w-4 shrink-0 text-on-surface-variant transition-transform duration-200 ${showCountryCodeDropdown ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                      {showCountryCodeDropdown && (
-                        <div className="absolute bottom-full left-0 mb-1 z-50 w-[200px] max-h-[240px] overflow-y-auto rounded-xl bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-1 campaign-custom-scrollbar">
-                          {COUNTRY_CODES.map(({ code, flag, name }) => (
-                            <button
-                              key={code}
-                              type="button"
-                              onClick={() => {
-                                updateField("whatsappCountryCode", code);
-                                setShowCountryCodeDropdown(false);
-                              }}
-                              className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors flex items-center gap-1.5 ${
-                                (config.promoCard.whatsappCountryCode || '+44') === code
-                                  ? 'bg-primary/20 text-primary font-semibold'
-                                  : 'text-on-surface hover:bg-primary/10 hover:text-primary'
-                              }`}
-                            >
-                              <CountryFlag flag={flag} name={name} />
-                              <span className="flex-1 truncate">{name}</span>
-                              <span className="shrink-0 tabular-nums text-on-surface-variant">{code}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    {/* The shared dropdown, not a second one built by hand.
+                        This picker used to roll its own absolute panel: it was
+                        the only list in the app that didn't portal, so it could
+                        be clipped, and it drifted from the others in width,
+                        row height and hover colour. */}
+                    <PopupDropdown
+                      labelClassName="sr-only"
+                      label="Country dialling code"
+                      value={config.promoCard.whatsappCountryCode || '+44'}
+                      options={COUNTRY_CODES.map(({ code, flag, name }) => ({
+                        value: code,
+                        label: name,
+                        meta: code,
+                        icon: <CountryFlag flag={flag} name={name} />,
+                      }))}
+                      open={showCountryCodeDropdown}
+                      onOpen={() => {
+                        const next = !showCountryCodeDropdown;
+                        closeAllPromoDropdowns();
+                        setShowCountryCodeDropdown(next);
+                        setCountryCodePos(
+                          getDropdownPosition(countryCodeBtnRef.current),
+                        );
+                      }}
+                      onSelect={(v) => {
+                        updateField('whatsappCountryCode', v);
+                        setShowCountryCodeDropdown(false);
+                      }}
+                      buttonRef={countryCodeBtnRef}
+                      menuRef={countryCodeMenuRef}
+                      menuPosition={countryCodePos}
+                      // 66 rows have to scroll, and near the bottom of this
+                      // column the menu has to open upward.
+                      menuMaxHeight={260}
+                      flip
+                      buttonClassName="h-full px-3 border-r border-border text-on-surface flex items-center gap-1.5 hover:bg-surface-subtle transition-colors"
+                      triggerContent={(() => {
+                        const selectedCode = config.promoCard.whatsappCountryCode || '+44';
+                        const selected = COUNTRY_CODES.find((c) => c.code === selectedCode);
+                        return (
+                          <>
+                            <CountryFlag
+                              flag={selected?.flag ?? ''}
+                              name={selected?.name ?? ''}
+                            />
+                            <span className="text-sm font-semibold text-on-surface tabular-nums">
+                              {selectedCode}
+                            </span>
+                          </>
+                        );
+                      })()}
+                    />
                     <input
                       type="tel"
                       value={config.promoCard.whatsappNumber || ''}
@@ -3999,8 +3999,8 @@ export function PromoSection({
 
               Clear Canvas stays in the open on purpose: it is the reset, and a
               reset you cannot see is a reset you do not trust. */}
-          <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-col gap-2.5 border-t border-border pt-3">
+            <div className="flex flex-wrap items-center gap-1">
             {onUseAi && (
               <button
                 type="button"
@@ -4017,7 +4017,7 @@ export function PromoSection({
                 <span className="relative">Improve with AI</span>
               </button>
             )}
-            <span className="h-6 w-px shrink-0 bg-border" aria-hidden="true" />
+            <span className="mx-2 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
             <button
               type="button"
               onClick={() => {
@@ -4027,7 +4027,7 @@ export function PromoSection({
                 setTemplatesFromBuild(false);
                 setShowTemplatesPopup(true);
               }}
-              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
               title="Start again from a ready-made card — design and sample text"
             >
               <LayoutTemplate className="h-4 w-4" /> Template Hub
@@ -4035,7 +4035,7 @@ export function PromoSection({
             <button
               type="button"
               onClick={() => setShowVersionsPopup(true)}
-              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
               title="Saved variants of this promo card"
             >
               <History className="h-4 w-4" /> My Published
@@ -4044,7 +4044,7 @@ export function PromoSection({
               type="button"
               data-tour="promo-my-draft"
               onClick={openDraftPopup}
-              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
               title={draftExists ? 'View your saved draft' : 'No saved draft yet'}
             >
               <FileText className="h-4 w-4" /> My Draft
@@ -4061,7 +4061,7 @@ export function PromoSection({
               type="button"
               onClick={confirmClearCanvas}
               disabled={canvasIsEmpty}
-              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-on-surface-variant"
               title={
                 canvasIsEmpty
                   ? 'Nothing to clear — the canvas is already blank.'
@@ -4076,7 +4076,7 @@ export function PromoSection({
                 content actions — they change where the card sits and what it
                 is made of, not what it says. */}
 
-            <div className="flex items-center justify-end gap-2">
+            <div className="flex items-center justify-end gap-3">
               {/* The tip line that used to pulse above the header said exactly
                   two things — what Position does and what Style does. They sit
                   on the controls themselves now, read at the moment they
@@ -4137,7 +4137,7 @@ export function PromoSection({
               >
               <Palette className="h-4 w-4" />
               </button>
-              <span className="h-6 w-px shrink-0 bg-border" aria-hidden="true" />
+              <span className="mx-2 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
             <button
               type="button"
               data-tour="promo-save-draft"

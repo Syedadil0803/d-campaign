@@ -2,11 +2,15 @@
 
 import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
-import type { RefObject } from 'react';
+import type { ReactNode, RefObject } from 'react';
 
 export type PopupDropdownOption = {
   label: string;
   value: string;
+  /** Leading visual — the country picker passes a flag image. */
+  icon?: React.ReactNode;
+  /** Trailing detail, right-aligned: the dial code, a count, a hint. */
+  meta?: string;
 };
 
 interface PopupDropdownProps {
@@ -27,6 +31,15 @@ interface PopupDropdownProps {
   // (e.g. match a color-picker's label style and height).
   labelClassName?: string;
   buttonExtraClassName?: string;
+  /** Replaces the trigger's own content — e.g. a flag beside a dial code. */
+  triggerContent?: ReactNode;
+  /** Replaces the trigger's base classes outright, for a trigger that has to
+   *  sit inside another control's shell rather than look like a field. */
+  buttonClassName?: string;
+  /** Caps the menu and lets it scroll. Needed once a list runs to 66 rows. */
+  menuMaxHeight?: number;
+  /** Open upward when there isn't room below — long lists near the fold. */
+  flip?: boolean;
 }
 
 export function PopupDropdown({
@@ -45,12 +58,36 @@ export function PopupDropdown({
   compact = false,
   labelClassName,
   buttonExtraClassName,
+  triggerContent,
+  buttonClassName,
+  menuMaxHeight,
+  flip = false,
 }: PopupDropdownProps) {
   const selectedLabel = options.find((option) => option.value === value)?.label ?? value;
   const popupWidth = menuPosition?.width ?? 260;
   const [livePosition, setLivePosition] = useState<{ top: number; left: number; width: number } | null>(menuPosition);
   const initialButtonRectRef = useRef<{ top: number; left: number } | null>(null);
   const initialMenuPosRef = useRef<{ top: number; left: number; width: number } | null>(null);
+
+  /**
+   * Below the trigger, or above it when there isn't room.
+   *
+   * Only matters for long lists: a 66-row country list opened at the bottom of
+   * the column ran off the viewport, and the menu is portalled to the body so
+   * nothing clipped or scrolled it back into view.
+   */
+  function placeVertically(rect: DOMRect): number {
+    const below = rect.bottom + 6;
+    if (!flip) return below;
+    const height =
+      menuRef.current?.offsetHeight ?? menuMaxHeight ?? 0;
+    const room = window.innerHeight - rect.bottom - 12;
+    if (height && room < height) {
+      // Never push it off the top edge either.
+      return Math.max(8, rect.top - 6 - height);
+    }
+    return below;
+  }
 
   useEffect(() => {
     setLivePosition(menuPosition);
@@ -60,7 +97,10 @@ export function PopupDropdown({
     if (!open) return;
 
     const initialRect = buttonRef.current?.getBoundingClientRect();
-    if (initialRect && menuPosition) {
+    // A flipping menu can't use the caller's anchor: that path replays the
+    // opening offset on every scroll, which would pin an upward menu below the
+    // trigger again. It re-measures instead.
+    if (initialRect && menuPosition && !flip) {
       initialButtonRectRef.current = { top: initialRect.top, left: initialRect.left };
       initialMenuPosRef.current = { ...menuPosition };
     }
@@ -84,7 +124,7 @@ export function PopupDropdown({
 
       // Fallback when no initial anchor info is provided.
       setLivePosition({
-        top: rect.bottom + 6,
+        top: placeVertically(rect),
         left: rect.left,
         width: menuPosition?.width ?? rect.width,
       });
@@ -111,11 +151,11 @@ export function PopupDropdown({
           e.preventDefault();
           onOpen();
         }}
-        className={`${compact
+        className={`${buttonClassName ?? (compact
           ? 'flex h-9 w-full items-center justify-between gap-2 rounded-md border border-white/10 bg-black/10 px-2 py-1 text-left text-xs text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10'
-          : 'flex w-full items-center justify-between gap-2 rounded-md border border-white/10 bg-black/10 p-2 text-left text-sm text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10'}${buttonExtraClassName ? ' ' + buttonExtraClassName : ''}`}
+          : 'flex w-full items-center justify-between gap-2 rounded-md border border-white/10 bg-black/10 p-2 text-left text-sm text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10')}${buttonExtraClassName ? ' ' + buttonExtraClassName : ''}`}
       >
-        <span className="truncate">{selectedLabel}</span>
+        {triggerContent ?? <span className="truncate">{selectedLabel}</span>}
         <svg
           className={`h-4 w-4 flex-shrink-0 text-on-surface-variant transition-transform duration-200 ${arrowDirection === 'right' ? (open ? 'rotate-180' : 'rotate-0') : (open ? 'rotate-180' : 'rotate-0')}`}
           viewBox="0 0 20 20"
@@ -136,8 +176,18 @@ export function PopupDropdown({
           ref={menuRef}
           onMouseDown={(e) => e.stopPropagation()}
           onMouseLeave={() => onHoverEnd?.()}
-          style={{ position: 'fixed', zIndex: 9999, top: livePosition?.top ?? menuPosition?.top ?? 0, left: livePosition?.left ?? menuPosition?.left ?? 0, minWidth: `${livePosition?.width ?? popupWidth}px`, width: 'auto' }}
-          className="bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-3 rounded-xl"
+          style={{
+            position: 'fixed',
+            zIndex: 9999,
+            top: livePosition?.top ?? menuPosition?.top ?? 0,
+            left: livePosition?.left ?? menuPosition?.left ?? 0,
+            minWidth: `${livePosition?.width ?? popupWidth}px`,
+            width: 'auto',
+            ...(menuMaxHeight
+              ? { maxHeight: `${menuMaxHeight}px`, overflowY: 'auto' as const }
+              : null),
+          }}
+          className={`bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl rounded-xl ${menuMaxHeight ? 'p-1 campaign-custom-scrollbar' : 'p-3'}`}
         >
           {options.map((option) => (
             <div
@@ -156,9 +206,15 @@ export function PopupDropdown({
                   onSelect(option.value);
                 }
               }}
-              className={`block w-full cursor-pointer border-0 bg-transparent px-3 py-2 text-left text-sm whitespace-nowrap transition-colors hover:bg-surface-subtle ${option.value === value ? 'text-primary' : 'text-on-surface'}`}
+              className={`flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-3 py-2 text-left text-sm whitespace-nowrap transition-colors hover:bg-surface-subtle ${option.value === value ? 'text-primary font-semibold' : 'text-on-surface'}`}
             >
-              {option.label}
+              {option.icon}
+              <span className="min-w-0 flex-1 truncate">{option.label}</span>
+              {option.meta && (
+                <span className="shrink-0 tabular-nums text-on-surface-variant">
+                  {option.meta}
+                </span>
+              )}
             </div>
           ))}
         </div>,
