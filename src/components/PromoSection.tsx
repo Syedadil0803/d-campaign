@@ -27,7 +27,6 @@ import {
   Save,
   Loader2,
   Radio,
-  MoreHorizontal,
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
@@ -635,9 +634,6 @@ export function PromoSection({
   const [showPersistentScaffold, setShowPersistentScaffold] = useState(true);
   // Action popups launched from the buttons under the Promo Card heading.
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
-  /** The ⋯ menu holding the rare, destructive actions. */
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const moreMenuRef = useRef<HTMLDivElement>(null);
   const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
   /**
    * The design to return to, shown as the first chip in the Themes strip.
@@ -2287,17 +2283,6 @@ export function PromoSection({
   function getPreviewFieldBackground(field: PopupField) {
     return getPopupFieldStyle(field).background;
   }
-
-  useEffect(() => {
-    if (!showMoreMenu) return;
-    const onDown = (e: MouseEvent) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
-        setShowMoreMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [showMoreMenu]);
 
   // On mount: load saved versions. The saved config remains the source of truth.
   useEffect(() => {
@@ -3996,9 +3981,11 @@ export function PromoSection({
               Everything used to sit in one undifferentiated run of six chips
               under two lines of instructions, so nothing looked more or less
               important than anything else. Now: what changes the card, then the
-              places cards are kept, then the rare stuff behind ⋯, then the card
-              settings and the one primary action, pushed right. Thin rules mark
-              the seams. */}
+              places cards are kept, then the card settings and the one primary
+              action, pushed right. Thin rules mark the seams.
+
+              Clear Canvas stays in the open on purpose: it is the reset, and a
+              reset you cannot see is a reset you do not trust. */}
           <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
             <div className="flex flex-wrap items-center gap-2">
             {onUseAi && (
@@ -4051,49 +4038,24 @@ export function PromoSection({
                 />
               )}
             </button>
-            {/* Rare and destructive lives behind ⋯ rather than beside the
-                everyday actions, styled identically to them. */}
-            <div className="relative shrink-0" ref={moreMenuRef}>
-              <button
-                type="button"
-                aria-haspopup="menu"
-                aria-expanded={showMoreMenu}
-                aria-label="More card actions"
-                onClick={() => setShowMoreMenu((prev) => !prev)}
-                className="grid h-9 w-9 place-items-center rounded-lg border border-on-surface-variant/40 text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
-              {showMoreMenu && (
-                <div
-                  role="menu"
-                  className="absolute left-0 top-full z-30 mt-1.5 w-52 overflow-hidden rounded-lg border border-border bg-surface-elevated py-1 shadow-lg"
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    disabled={canvasIsEmpty}
-                    onClick={() => {
-                      setShowMoreMenu(false);
-                      confirmClearCanvas();
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-on-surface-variant"
-                    title={
-                      canvasIsEmpty
-                        ? 'Nothing to clear — the canvas is already blank.'
-                        : 'Start from a blank promo card'
-                    }
-                  >
-                    <FilePlus2 className="h-4 w-4" /> Clear Canvas
-                  </button>
-                </div>
-              )}
+            <button
+              type="button"
+              onClick={confirmClearCanvas}
+              disabled={canvasIsEmpty}
+              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              title={
+                canvasIsEmpty
+                  ? 'Nothing to clear — the canvas is already blank.'
+                  : 'Start from a blank promo card'
+              }
+            >
+              <FilePlus2 className="h-4 w-4" /> Clear Canvas
+            </button>
             </div>
 
             {/* Card settings sit with the primary action, away from the
                 content actions — they change where the card sits and what it
                 is made of, not what it says. */}
-            </div>
 
             <div className="flex items-center justify-end gap-2">
               {/* The tip line that used to pulse above the header said exactly
@@ -5164,6 +5126,14 @@ export function PromoSection({
                 </div>
               </div>
             </div>
+            {/* Says the quiet part out loud: trying a theme is reversible until
+                you commit to a new design. Without it the row reads as thirteen
+                one-way doors, which is exactly what made the swatch confusing. */}
+            <p className="px-1.5 text-[11px] text-on-surface-variant">
+              Trying a theme is reversible — your design waits under{' '}
+              <span className="font-semibold text-on-surface">Current</span> until
+              you pick a new one.
+            </p>
           </div>
         </div>
       </div>
