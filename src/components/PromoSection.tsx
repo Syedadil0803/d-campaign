@@ -638,14 +638,36 @@ export function PromoSection({
   /**
    * The design to return to, shown as the first chip in the Themes strip.
    *
-   * Seeded from the card immediately so the chip is there from the start, and
-   * re-seeded whenever a real change lands (template, variant, fresh card,
-   * restored draft). It deliberately does NOT follow theme clicks — that's the
-   * whole point: browse themes, then come back to where you were.
+   * It follows every look you CHOOSE — a template, a variant, the saved draft,
+   * a fresh card, an AI palette, or colors you pick by hand — and ignores only
+   * the theme chips. So it always means "the design that's mine", and the
+   * swatch only ever undoes theme browsing.
+   *
+   * It used to be re-seeded by hand at each of five places a card could land,
+   * which had two consequences: applying an AI palette wasn't one of them, so
+   * the swatch pointed at the look from before the AI and quietly undid it; and
+   * colors picked by hand were never recorded, so one click on the swatch threw
+   * them away — while its tooltip promised it only undid themes. One rule, fed
+   * by the style itself, can't miss a route the way a list of call sites can.
    */
   const [themeBaseline, setThemeBaseline] = useState<PromoCard['style']>(
     () => config.promoCard.style,
   );
+
+  /**
+   * Set for the one action that must NOT move the baseline: sampling a theme.
+   * The revert swatch sets it too — landing back on your own design shouldn't
+   * re-record it.
+   */
+  const samplingThemeRef = useRef(false);
+
+  useEffect(() => {
+    if (samplingThemeRef.current) {
+      samplingThemeRef.current = false;
+      return;
+    }
+    setThemeBaseline(config.promoCard.style);
+  }, [config.promoCard.style]);
 
   /**
    * The editor mounts on defaultConfig and the real card arrives a moment
@@ -831,7 +853,6 @@ export function PromoSection({
   interface PromoRestorePoint {
     snapshot: PromoSnapshot;
     selectedVersionId: string | null;
-    themeBaseline: PromoCard["style"];
     isFreshCard: boolean;
     appliedBaseline: PromoSnapshot | null;
   }
@@ -840,7 +861,6 @@ export function PromoSection({
     return {
       snapshot: getPromoSnapshot(),
       selectedVersionId,
-      themeBaseline,
       isFreshCard: isFreshCardRef.current,
       appliedBaseline: promoAppliedCardBaselineRef.current,
     };
@@ -850,7 +870,6 @@ export function PromoSection({
     applyPromoSnapshot(point.snapshot);
     setSelectedVersionId(point.selectedVersionId);
     onSelectedVersionChange?.(point.selectedVersionId);
-    setThemeBaseline(point.themeBaseline);
     isFreshCardRef.current = point.isFreshCard;
     promoAppliedCardBaselineRef.current = point.appliedBaseline;
     promoAppliedRedoRef.current = null;
@@ -986,7 +1005,6 @@ export function PromoSection({
     // Callers that already show their own toast (e.g. deleting the live card)
     // pass silent so the user doesn't get two messages for one action.
     if (!options.silent) toastWithUndo("Fresh promo card started", before);
-    setThemeBaseline(freshCard.style);
     onCardReplaced?.();
   }
 
@@ -2460,7 +2478,6 @@ export function PromoSection({
     onSelectedVersionChange?.(version.id);
     setShowVersionsPopup(false);
     toastWithUndo(`Variant applied: ${version.label}`, before);
-    setThemeBaseline(restored.style);
     onCardReplaced?.();
   }
 
@@ -2504,7 +2521,6 @@ export function PromoSection({
     setPromoAppliedCardBaseline(restored);
     setSelectedVersionId(null);
     onSelectedVersionChange?.(null);
-    setThemeBaseline(restored.style);
     toastWithUndo('Saved draft loaded into the editor', before);
   }
 
@@ -2537,9 +2553,6 @@ export function PromoSection({
     setSelectedVersionId(null);
     onSelectedVersionChange?.(null);
     toastWithUndo(`Template applied: ${templateName}`, before);
-    // From the card just built, not configRef — that ref catches up in an
-    // effect, so reading it here captured the design being replaced.
-    setThemeBaseline(cloned.style);
     onCardReplaced?.();
   }
 
@@ -5018,6 +5031,7 @@ export function PromoSection({
                     // over it — themes keep your words, so they belong with
                     // ordinary styling, not with the swaps that clear history.
                     pushPromoState({ replace: true });
+                    samplingThemeRef.current = true;
                     setConfig({
                       ...configRef.current,
                       promoCard: { ...configRef.current.promoCard, style: themeBaseline },
@@ -5047,6 +5061,7 @@ export function PromoSection({
                     title={t.name}
                     onClick={() => {
                       pushPromoState({ replace: true });
+                      samplingThemeRef.current = true;
                       setConfig({
                         ...configRef.current,
                         promoCard: applyTemplateLook(
