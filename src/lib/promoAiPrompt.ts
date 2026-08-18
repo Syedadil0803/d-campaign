@@ -12,6 +12,7 @@
  */
 
 import { PromoCard } from '@/types/campaign';
+import { PROMO_COPY_STYLE_GUIDE } from '@/lib/promoCopyStyle';
 import { GradientStyle } from '@/types/campaign';
 
 /** Human-readable color for a section, so the model can judge contrast. */
@@ -186,6 +187,8 @@ export function buildGuidedPromoPrompt({
     );
   }
 
+  if (!keepContent) lines.push('', ...PROMO_COPY_STYLE_GUIDE);
+
   lines.push(
     '',
     'The card is SMALL, so keep copy tight and it will never overflow:',
@@ -195,10 +198,6 @@ export function buildGuidedPromoPrompt({
     '',
     'Always fill title, subtitle and description. The timer and button are',
     'optional: use "showTimer": false or "showButton": false to drop them.',
-    '',
-    "You may use light inline HTML in the copy: <strong>, <em>, and",
-    "<span style='font-size:1.2rem'> — use SINGLE quotes in HTML attributes so",
-    'the JSON stays valid.',
     '',
     'Reply with ONLY a JSON object (no prose, no code fences) using these keys:',
     '{',

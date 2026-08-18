@@ -7,6 +7,7 @@
 
 import { jsonrepair } from 'jsonrepair';
 import type { PromoCard, GradientStyle } from '@/types/campaign';
+import { PROMO_COPY_STYLE_GUIDE } from '@/lib/promoCopyStyle';
 
 // A section background: either a single hex (→ solid) or a gradient pair.
 type AiBg = string | { from?: string; to?: string; direction?: string; type?: string };
@@ -145,7 +146,11 @@ function sanitizeNode(node: Element): void {
       return;
     }
     for (const attr of Array.from(el.attributes)) {
-      if (el.tagName === 'SPAN' && attr.name === 'style') {
+      // style is allowed on any kept tag, not just SPAN: the templates size
+      // text with <strong style='font-size:1.6rem'>, so restricting it to
+      // spans quietly flattened exactly the markup we ask the AI to copy.
+      // cleanStyleAttr still admits nothing but font-size and color.
+      if (attr.name === 'style') {
         const cleaned = cleanStyleAttr(attr.value);
         if (cleaned) el.setAttribute('style', cleaned);
         else el.removeAttribute('style');
@@ -157,12 +162,29 @@ function sanitizeNode(node: Element): void {
   });
 }
 
-// The timer feeds buildTimerDisplayHtml, which needs the {timer} token as bare
-// text (nested inside HTML it would crash), so the timer copy is plain text only.
 function plainText(v: unknown): string | undefined {
   if (typeof v !== 'string') return undefined;
   const s = v.replace(/<[^>]*>/g, '').trim();
   return s ? s.slice(0, COPY_MAX) : undefined;
+}
+
+/**
+ * Timer copy, which may carry the same light emphasis as the other fields.
+ *
+ * It used to be forced to plain text. buildTimerDisplayHtml actually parses the
+ * stored HTML and swaps {timer} wherever it appears in a TEXT node, so markup
+ * around the token — <strong>Only</strong> {timer} left — renders fine; what it
+ * cannot survive is the token being mangled into an attribute or split by a
+ * tag. So: sanitize like any other copy, then insist the token is still there
+ * as text, and fall back to plain text if it isn't.
+ */
+function sanitizeTimerCopy(v: unknown): string | undefined {
+  const html = sanitizeCopy(v);
+  if (html === undefined) return plainText(v);
+  const plain = html.replace(/<[^>]*>/g, '');
+  const hadToken = typeof v === 'string' && v.includes('{timer}');
+  if (hadToken && !plain.includes('{timer}')) return plainText(v);
+  return html;
 }
 
 function sanitizeCopy(v: unknown): string | undefined {
@@ -260,7 +282,7 @@ export function parseAiPromo(raw: string): ParseResult {
   take('subtitle', sanitizeCopy(obj.subtitle));
   take('description', sanitizeCopy(obj.description));
   take('buttonText', sanitizeCopy(obj.buttonText));
-  take('timerText', plainText(obj.timerText));
+  take('timerText', sanitizeTimerCopy(obj.timerText));
 
   if (typeof obj.showTimer === 'boolean') take('showTimer', obj.showTimer);
   if (typeof obj.showButton === 'boolean') take('showButton', obj.showButton);
@@ -351,7 +373,9 @@ export function applyAiPromo(current: PromoCard, ai: AiPromo): PromoCard {
   if (ai.buttonText !== undefined) next.buttonText = ai.buttonText;
   if (ai.timerText !== undefined) {
     next.timerText = ai.timerText;
-    next.timerStateJson = undefined; // plain text is now the source of truth
+    // The AI's line is the source of truth now; the editor's saved timer state
+    // describes the old one, so keeping it would fight the new copy.
+    next.timerStateJson = undefined;
   }
 
   if (ai.showTimer !== undefined) next.showTimer = ai.showTimer;
@@ -429,9 +453,7 @@ export const AI_PROMO_SCHEMA_PROMPT = [
   'and use "showTimer": false to drop the timer or "showButton": false to drop',
   'the button. Design for how the card LOOKS — clean and uncluttered.',
   '',
-  "You may use light inline HTML in the copy: <strong>, <em>, and",
-  "<span style='font-size:1.2rem'> or <span style='color:#hex'> — use SINGLE",
-  'quotes for HTML attributes so the JSON stays valid.',
+  ...PROMO_COPY_STYLE_GUIDE,
   '',
   'COLOR RULES (important): choose a cohesive, on-brand palette, and make every',
   'text color clearly readable against its OWN section background. If a section',

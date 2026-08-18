@@ -167,7 +167,11 @@ interface PromoBuildPanelProps {
   config: CampaignConfig;
   setConfig: (config: CampaignConfig | ((prev: CampaignConfig) => CampaignConfig)) => void;
   markChanged: () => void;
-  toast: (message: string, isError?: boolean) => void;
+  toast: (
+    message: string,
+    isError?: boolean,
+    action?: { label: string; onClick: () => void },
+  ) => void;
   /** Fires once AI content lands, so the page can react to it. */
   onApplied?: () => void;
   onClose: () => void;
@@ -422,6 +426,10 @@ export function PromoBuildPanel({
         : mode === 'design'
           ? stripContentFields(result.data)
           : result.data;
+    // An AI reply replaces the card wholesale, so it needs the same one-tap way
+    // back as a template or a variant. Ctrl+Z doesn't reach it: this is a swap,
+    // not an edit, and the editor's history is cleared across swaps.
+    const before = JSON.parse(JSON.stringify(config.promoCard)) as PromoCard;
     setConfig((prev) => ({ ...prev, promoCard: applyAiPromo(prev.promoCard, data) }));
     markChanged();
     setApplied(true);
@@ -429,7 +437,14 @@ export function PromoBuildPanel({
     setShowPaste(false);
     setPasteText('');
     setPasteError('');
-    toast('Applied to your card.');
+    toast('Applied to your card.', false, {
+      label: 'Undo',
+      onClick: () => {
+        setConfig((prev) => ({ ...prev, promoCard: before }));
+        markChanged();
+        setApplied(false);
+      },
+    });
   }
 
   /** Numbered marker for the hand-off steps; fills in once that step is live. */
