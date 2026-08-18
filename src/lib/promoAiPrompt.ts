@@ -41,12 +41,31 @@ interface GuidedPromptOptions {
   card: PromoCard;
   templateName?: string;
   mode: AiMode;
+  /** Answers from the panel's interview, pasted into the prompt as a brief. */
+  brief?: PromoBrief;
+}
+
+/** Answers collected by the panel's own interview. */
+export interface PromoBrief {
+  /** What's being promoted — the offer and the product. */
+  offer?: string;
+  /** Who it's for and how it should sound. */
+  tone?: string;
+  /** Whether a countdown shows, and the wording around it. */
+  timer?: string;
+  /** What the button should do, if there is one. */
+  cta?: string;
+  /** Brand colors or a direction, when AI may restyle. */
+  colors?: string;
+  /** Anything else the user wanted to add. */
+  extra?: string;
 }
 
 export function buildGuidedPromoPrompt({
   card,
   templateName,
   mode,
+  brief,
 }: GuidedPromptOptions): string {
   const keepDesign = mode === 'copy';
   const keepContent = mode === 'design';
@@ -61,56 +80,43 @@ export function buildGuidedPromoPrompt({
             (new Date(`${card.endDate}T00:00:00`).getTime() -
               new Date(`${card.startDate}T00:00:00`).getTime()) /
               86_400_000,
-          ),
+          ) + 1,
         )
       : null;
 
-  // Design-only: the copy already exists, so asking about the offer or the CTA
-  // would be asking the user to repeat themselves.
-  const steps: string[][] = keepContent
-    ? [
-        ['The mood you want — the feeling the card should give off.'],
-        [
-          'Any colors you already have in mind — brand colors, a season, a',
-          'reference — or whether I should choose the palette for you.',
-        ],
-      ]
-    : [
-        ['The offer and the product.'],
-        ['The audience and the tone (bold, elegant, playful, urgent…).'],
-        [
-          'The countdown timer. The run dates are already fixed (below), so do NOT',
-          'ask for dates — remind me how long the campaign runs and ask only whether',
-          'to SHOW a countdown on the card, and what wording should sit around it',
-          '(e.g. "Ends in", "Hurry —"). The timer is optional.',
-        ],
-        [
-          'The call to action — the button is optional; if I want one, get a',
-          'WhatsApp number, a link, or plain text.',
-        ],
-      ];
-
-  if (!keepDesign && !keepContent) {
-    steps.push([
-      'The colors. Ask whether I already have something in mind — brand colors,',
-      'a mood, a season — or whether you should choose the palette for me. If I',
-      'give you colors or a direction, build the palette around them. If I leave',
-      'it to you, design a tasteful, cohesive one yourself and say briefly why it',
-      'suits the campaign.',
-    ]);
+  /**
+   * A finished brief, not an interview script.
+   *
+   * This prompt used to instruct the model to ask the user one question at a
+   * time — which handed our own guided flow to whichever chat tool they
+   * happened to open, and left them answering five messages there before
+   * getting anything back. The panel runs that interview itself now and pastes
+   * the answers in here, so one round trip produces the card.
+   */
+  const answered: string[] = [];
+  const add = (label: string, value?: string) => {
+    const v = (value ?? '').trim();
+    if (v) answered.push(`- ${label}: ${v}`);
+  };
+  if (!keepContent) {
+    add('What is being promoted', brief?.offer);
+    add('Audience and tone', brief?.tone);
+    add('Countdown', brief?.timer);
+    add('Call to action', brief?.cta);
   }
+  if (!keepDesign) add('Colors', brief?.colors);
+  add('Also worth knowing', brief?.extra);
 
-  const stepCount = steps.length;
   const lines: string[] = [
     'Act as my Head of Marketing for an ecommerce promo card — a small floating',
     'widget on my website with a title, subtitle, description, an optional',
     'countdown timer and an optional CTA button.',
     '',
-    `Ask me ONE QUESTION AT A TIME and wait for my answer. Keep it to ${stepCount}`,
-    `short steps, prefixed "Step 1 of ${stepCount}" and so on:`,
-    ...steps.flatMap((step, i) =>
-      step.map((line, j) => (j === 0 ? `${i + 1}. ${line}` : `   ${line}`)),
-    ),
+    'Do NOT ask me any questions. Everything you need is below; reply with the',
+    'JSON object described at the end and nothing else.',
+    '',
+    '── THE BRIEF ──',
+    ...(answered.length ? answered : ['- (no detail given — use your judgement)']),
     '',
     '── ALREADY DECIDED — do not ask me about these ──',
   ];
@@ -125,9 +131,19 @@ export function buildGuidedPromoPrompt({
     );
   }
 
+  /**
+   * The palette is only "already decided" when the design is being kept.
+   *
+   * It used to sit under ALREADY DECIDED in every mode, while the instruction
+   * further down told the model it could replace the design — a prompt that
+   * contradicts itself, which is why "Content and colors" came back with the
+   * old palette and new copy.
+   */
   lines.push(
     '',
-    `I have already chosen a design${templateName ? `: "${templateName}"` : ''}. Its palette is:`,
+    keepDesign
+      ? `I have already chosen a design${templateName ? `: "${templateName}"` : ''}. Its palette is:`
+      : '── THE CARD\'S CURRENT COLORS — you may replace these ──',
     `- Card background: ${describeBg(s.background)}`,
     `- Title band: ${describeBg(s.titleStyle.background)}, text ${s.titleStyle.textColor}`,
     `- Subtitle: ${describeBg(s.subheadingStyle.background)}, text ${s.subheadingStyle.textColor}`,
@@ -160,6 +176,8 @@ export function buildGuidedPromoPrompt({
     );
   } else {
     lines.push(
+      'Return BOTH the copy fields AND the color fields below — I want new words',
+      'and a new palette, not one or the other.',
       'You may REPLACE this design. Propose a cohesive palette that suits the',
       'campaign, returning the color fields below. Every text color must be',
       'clearly readable against its OWN section background; if a section',
@@ -182,8 +200,7 @@ export function buildGuidedPromoPrompt({
     "<span style='font-size:1.2rem'> — use SINGLE quotes in HTML attributes so",
     'the JSON stays valid.',
     '',
-    `When the ${stepCount} questions are done, reply with ONLY a JSON object (no`,
-    'prose, no code fences) using these keys:',
+    'Reply with ONLY a JSON object (no prose, no code fences) using these keys:',
     '{',
   );
 

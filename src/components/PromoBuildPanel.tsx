@@ -41,6 +41,7 @@ import {
   X,
 } from 'lucide-react';
 import { CampaignConfig, PromoCard } from '@/types/campaign';
+import type { PromoBrief } from '@/lib/promoAiPrompt';
 import { sampleTemplates } from '@/components/SamplePromoTemplates';
 import { PromoMiniPreview } from '@/components/PromoMiniPreview';
 import { parseAiPromo, applyAiPromo } from '@/lib/promoImport';
@@ -99,6 +100,67 @@ const MODES: {
   },
 ];
 
+/**
+ * One question per step. `chips` are one-tap answers that fill the field —
+ * most campaigns can be briefed without typing a word, and the field stays
+ * editable for anything the chips don't cover.
+ */
+interface BriefQuestion {
+  key: keyof PromoBrief;
+  title: string;
+  /** What a good answer contains — a vague question produces a vague brief. */
+  help: string;
+  placeholder: string;
+  chips?: string[];
+  optional?: boolean;
+}
+
+const CONTENT_QUESTIONS: BriefQuestion[] = [
+  {
+    key: 'offer',
+    title: 'What’s the offer, and what’s it on?',
+    help: 'The product or collection, plus the deal — a discount, a bundle, free delivery, a code.',
+    placeholder: '20% off all handwoven rugs, plus free UK delivery. Code RUGS20.',
+  },
+  {
+    key: 'tone',
+    title: 'Who are you selling to, and how should it read?',
+    help: 'Your shoppers, and the voice. Tone decides the words AI reaches for.',
+    placeholder: 'Returning customers who bought last winter. Warm, confident, not pushy.',
+    chips: ['Bold', 'Elegant', 'Playful', 'Urgent', 'Friendly', 'Premium'],
+  },
+  {
+    key: 'timer',
+    title: 'Should the card show a countdown?',
+    help: 'Your dates are already set — this is only the wording that sits around the timer.',
+    placeholder: 'Yes, with “Offer ends in”',
+    chips: ['Yes — “Ends in”', 'Yes — “Hurry, ends in”', 'No countdown'],
+  },
+  {
+    key: 'cta',
+    title: 'Where should the button send people?',
+    help: 'A shop link, a WhatsApp number, or plain text with no link. It can be left off.',
+    placeholder: 'My sale page: example.com/sale',
+    chips: ['Link to my shop', 'WhatsApp me', 'Text only, no link', 'No button'],
+  },
+];
+
+const COLOR_QUESTION: BriefQuestion = {
+  key: 'colors',
+  title: 'Which colors should it use?',
+  help: 'Brand colors (hex codes help), a season or a mood — or hand the palette to AI.',
+  placeholder: 'Brand green #0f766e with warm cream, dark text',
+  chips: ['You choose', 'Match my template', 'Warm tones', 'Cool tones', 'High contrast'],
+};
+
+const EXTRA_QUESTION: BriefQuestion = {
+  key: 'extra',
+  title: 'Anything it must say — or must avoid?',
+  help: 'Optional. Claims you can’t make, words to steer clear of, a phrase you want included.',
+  placeholder: 'Don’t say “cheap”. Do mention free 30-day returns.',
+  optional: true,
+};
+
 export type BuildStage = 'mode' | 'ai';
 
 interface PromoBuildPanelProps {
@@ -127,7 +189,16 @@ export function PromoBuildPanel({
 }: PromoBuildPanelProps) {
   const [stage, setStage] = useState<BuildStage>(initialStage);
   const pc = config.promoCard;
-  const [brief, setBrief] = useState('');
+  /**
+   * The interview WE run, instead of instructing the AI to run it.
+   *
+   * Handing the questions to ChatGPT meant five messages of back-and-forth in
+   * someone else's product before anything came back. Asking here means one
+   * copy, one paste, one result.
+   */
+  const [brief, setBrief] = useState<PromoBrief>({});
+  const setAnswer = (key: keyof PromoBrief, value: string) =>
+    setBrief((prev) => ({ ...prev, [key]: value }));
   const [promptCopied, setPromptCopied] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
   const [pasteText, setPasteText] = useState('');
@@ -143,6 +214,8 @@ export function PromoBuildPanel({
    * Always starts on the choice — it's what the user came here to decide.
    */
   const [aiStep, setAiStep] = useState<'what' | 'brief'>('what');
+  /** Which interview question is showing, and whether they're all answered. */
+  const [questionIndex, setQuestionIndex] = useState(0);
   // All three, always. "Colors only" used to be hidden on a new card because
   // there was no content to preserve — but choosing a palette before writing
   // is a legitimate way to start, and hiding an option makes the step look
@@ -172,6 +245,7 @@ export function PromoBuildPanel({
   /** Natural content height, used to lift the panel rather than scroll it. */
   const bodyRef = useRef<HTMLDivElement>(null);
   const [contentH, setContentH] = useState(0);
+
 
   useEffect(() => {
     let frame = 0;
@@ -268,16 +342,64 @@ export function PromoBuildPanel({
     return sampleTemplates.find((t) => JSON.stringify(t.promoCard.style) === cur)?.id ?? null;
   }, [pc.style]);
 
+  /** The questions this mode needs, in order, then the optional catch-all. */
+  const questions: BriefQuestion[] = [
+    ...(mode === 'design' ? [] : CONTENT_QUESTIONS),
+    ...(mode === 'copy' ? [] : [COLOR_QUESTION]),
+    EXTRA_QUESTION,
+  ];
+
+  /**
+   * Past the last question the interview is done and the prompt is ready.
+   * Clamped so the visible question never runs off the end of the list.
+   */
+  const briefDone = questionIndex >= questions.length;
+  const question = questions[Math.min(questionIndex, questions.length - 1)];
+  /** Answers already given, with their position so "Edit" can jump back. */
+  const answeredSoFar = questions
+    .map((q, index) => ({ q, index }))
+    .filter(({ q, index }) => index < questionIndex && (brief[q.key] ?? '').trim());
+
+  /** One question, used by both layouts. */
+  const renderQuestion = (q: BriefQuestion) => (
+    <div key={q.key} className="min-w-0">
+      <p className="text-sm font-semibold text-on-surface">{q.title}</p>
+      <p className="mt-0.5 text-xs leading-snug text-on-surface-variant">{q.help}</p>
+      {q.chips && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {q.chips.map((chip) => (
+            <button
+              key={chip}
+              type="button"
+              onClick={() => setAnswer(q.key, chip)}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-all ${
+                brief[q.key] === chip
+                  ? 'border-primary bg-primary text-on-primary'
+                  : 'border-border text-on-surface-variant hover:border-primary/70 hover:text-primary'
+              }`}
+            >
+              {chip}
+            </button>
+          ))}
+        </div>
+      )}
+      <textarea
+        value={brief[q.key] ?? ''}
+        onChange={(e) => setAnswer(q.key, e.target.value)}
+        rows={2}
+        placeholder={q.placeholder}
+        className="mt-1.5 w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm text-on-surface outline-none placeholder:text-on-surface-variant/70 focus:border-primary"
+      />
+    </div>
+  );
+
   function copyPrompt() {
-    if (!brief.trim()) {
-      toast('Describe your campaign first, then copy the prompt.', true);
-      return;
-    }
-    const prompt = `${buildGuidedPromoPrompt({
+    const prompt = buildGuidedPromoPrompt({
       card: pc,
       templateName: sampleTemplates.find((t) => t.id === activeTemplateId)?.name,
       mode,
-    })}\n\nThe campaign is about: ${brief.trim()}`;
+      brief,
+    });
     navigator.clipboard
       ?.writeText(prompt)
       .then(() => {
@@ -379,29 +501,72 @@ export function PromoBuildPanel({
           becomes reachable, so the panel also reports where you are. */}
       <ol className="flex flex-col gap-3">
         <li className="flex gap-2.5">
-          {stepBubble(1, true)}
+          {stepBubble(1, briefDone)}
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-on-surface">
-              {mode === 'design' ? 'Describe the look' : 'Describe the campaign'}
-            </p>
-            <textarea
-              value={brief}
-              onChange={(e) => setBrief(e.target.value)}
-              rows={expanded ? 4 : 3}
-              placeholder={
-                mode === 'design'
-                  ? 'e.g. warm autumn tones, premium, easy on the eye'
-                  : 'e.g. Monsoon clearance on rugs, up to 60% off, ends Sunday'
-              }
-              className="mt-1.5 w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 text-sm text-on-surface outline-none placeholder:text-on-surface-variant/70 focus:border-primary"
-            />
-            <button
-              type="button"
-              onClick={copyPrompt}
-              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary transition-opacity hover:opacity-95"
-            >
-              <Copy className="h-3.5 w-3.5" /> Copy prompt
-            </button>
+            {/* One question at a time, at every size. Showing all six at once
+                turned a guided flow into a form to fill in — the whole point
+                of asking is that you're led through it. */}
+            {renderQuestion(question)}
+            <div className="mt-3 flex items-center gap-2">
+              {questionIndex > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setQuestionIndex((i) => i - 1)}
+                  className="rounded-lg px-2 py-1.5 text-xs font-medium text-on-surface-variant transition-colors hover:text-primary"
+                >
+                  Back
+                </button>
+              )}
+              {!briefDone ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!question.optional && !(brief[question.key] ?? '').trim()) {
+                      toast('Answer this one first — it goes into the prompt.', true);
+                      return;
+                    }
+                    setQuestionIndex((i) => i + 1);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary transition-opacity hover:opacity-95"
+                >
+                  Next <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={copyPrompt}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary transition-opacity hover:opacity-95"
+                >
+                  <Copy className="h-3.5 w-3.5" /> Copy prompt
+                </button>
+              )}
+              <span className="ml-auto text-[10px] font-medium tabular-nums text-on-surface-variant">
+                {Math.min(questionIndex + 1, questions.length)} of {questions.length}
+              </span>
+            </div>
+
+            {/* What AI will be told, so far. Click a line to go back and fix it. */}
+            {expanded && answeredSoFar.length > 0 && (
+              <dl className="mt-3 space-y-1 border-t border-dashed border-border pt-2">
+                {answeredSoFar.map(({ q, index: qi }) => (
+                  <div key={q.key} className="flex gap-2 text-[11px] leading-snug">
+                    <dt className="w-24 shrink-0 font-semibold text-on-surface-variant">
+                      {q.key === 'extra' ? 'Notes' : q.key}
+                    </dt>
+                    <dd className="min-w-0 flex-1 truncate text-on-surface">
+                      {brief[q.key]}
+                    </dd>
+                    <button
+                      type="button"
+                      onClick={() => setQuestionIndex(qi)}
+                      className="shrink-0 font-semibold text-on-surface-variant transition-colors hover:text-primary"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ))}
+              </dl>
+            )}
           </div>
         </li>
 
