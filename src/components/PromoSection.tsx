@@ -159,22 +159,43 @@ interface PromoSectionProps {
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
 
-// Dialling codes for the WhatsApp CTA. `flag` is an emoji, which Windows has
-// no glyphs for at all — it renders as two letters or as boxes. We show a
-// derived ISO code instead (see isoFromFlag), which looks the same everywhere.
+// Dialling codes for the WhatsApp CTA. `flag` is an emoji, which macOS and iOS
+// draw as a flag and Windows draws as two letters or as boxes — its emoji font
+// ships no flag glyphs at all, and no CSS can conjure them.
+//
+// So the picker doesn't rely on the font: it renders an SVG we serve ourselves
+// from /public/flags, named by the ISO code derived from the emoji. Same flag
+// on every platform, no CDN, and it still works offline.
 /**
- * "🇬🇧" → "GB".
+ * "🇬🇧" → "gb", the name of its file in /public/flags.
  *
  * A flag emoji is two regional-indicator code points, each 0x1F1E6 above its
- * letter. Deriving the ISO code keeps one source of truth — the table doesn't
- * need a second column that can drift out of sync with the flag.
+ * letter. Deriving the code keeps one source of truth — the table doesn't need
+ * a second column that can drift out of sync with the flag.
  */
 function isoFromFlag(flag: string): string {
   const points = Array.from(flag).map((ch) => ch.codePointAt(0) ?? 0);
   if (points.length !== 2) return '';
   return points
     .map((cp) => String.fromCharCode(cp - 0x1f1e6 + 65))
-    .join('');
+    .join('')
+    .toLowerCase();
+}
+
+/** The picker's flag: an image, so it looks the same on Windows as on a Mac. */
+function CountryFlag({ flag, name }: { flag: string; name: string }) {
+  const code = isoFromFlag(flag);
+  if (!code) return null;
+  return (
+    <img
+      src={`/flags/${code}.svg`}
+      alt={name}
+      width={20}
+      height={15}
+      loading="lazy"
+      className="h-[15px] w-5 shrink-0 rounded-[2px] object-cover ring-1 ring-black/10"
+    />
+  );
 }
 
 const COUNTRY_CODES: { code: string; flag: string; name: string }[] = [
@@ -3684,9 +3705,10 @@ export function PromoSection({
                           const selected = COUNTRY_CODES.find((c) => c.code === selectedCode);
                           return (
                             <>
-                              <span className="rounded border border-border px-1 py-0.5 text-[10px] font-bold leading-none tracking-wide text-on-surface-variant">
-                                {isoFromFlag(selected?.flag ?? '')}
-                              </span>
+                              <CountryFlag
+                                flag={selected?.flag ?? ''}
+                                name={selected?.name ?? ''}
+                              />
                               <span className="text-[15px] font-semibold text-on-surface tabular-nums">
                                 {selectedCode}
                               </span>
@@ -3718,9 +3740,7 @@ export function PromoSection({
                                   : 'text-on-surface hover:bg-primary/10 hover:text-primary'
                               }`}
                             >
-                              <span className="shrink-0 rounded border border-border px-1 py-0.5 text-[10px] font-bold leading-none tracking-wide text-on-surface-variant">
-                                {isoFromFlag(flag)}
-                              </span>
+                              <CountryFlag flag={flag} name={name} />
                               <span className="flex-1 truncate">{name}</span>
                               <span className="shrink-0 tabular-nums text-on-surface-variant">{code}</span>
                             </button>
