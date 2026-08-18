@@ -3999,8 +3999,8 @@ export function PromoSection({
 
               Clear Canvas stays in the open on purpose: it is the reset, and a
               reset you cannot see is a reset you do not trust. */}
-          <div className="flex shrink-0 flex-col gap-2.5 border-t border-border pt-3">
-            <div className="flex flex-wrap items-center gap-1">
+          <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
+            <div className="flex flex-wrap items-center gap-2">
             {onUseAi && (
               <button
                 type="button"
@@ -4017,7 +4017,7 @@ export function PromoSection({
                 <span className="relative">Improve with AI</span>
               </button>
             )}
-            <span className="mx-2 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
+            <span className="h-6 w-px shrink-0 bg-border" aria-hidden="true" />
             <button
               type="button"
               onClick={() => {
@@ -4027,7 +4027,7 @@ export function PromoSection({
                 setTemplatesFromBuild(false);
                 setShowTemplatesPopup(true);
               }}
-              className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="Start again from a ready-made card — design and sample text"
             >
               <LayoutTemplate className="h-4 w-4" /> Template Hub
@@ -4035,7 +4035,7 @@ export function PromoSection({
             <button
               type="button"
               onClick={() => setShowVersionsPopup(true)}
-              className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="Saved variants of this promo card"
             >
               <History className="h-4 w-4" /> My Published
@@ -4044,7 +4044,7 @@ export function PromoSection({
               type="button"
               data-tour="promo-my-draft"
               onClick={openDraftPopup}
-              className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
+              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title={draftExists ? 'View your saved draft' : 'No saved draft yet'}
             >
               <FileText className="h-4 w-4" /> My Draft
@@ -4061,7 +4061,7 @@ export function PromoSection({
               type="button"
               onClick={confirmClearCanvas}
               disabled={canvasIsEmpty}
-              className="inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-medium text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-on-surface-variant"
+              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
               title={
                 canvasIsEmpty
                   ? 'Nothing to clear — the canvas is already blank.'
@@ -4076,7 +4076,7 @@ export function PromoSection({
                 content actions — they change where the card sits and what it
                 is made of, not what it says. */}
 
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex items-center justify-end gap-2">
               {/* The tip line that used to pulse above the header said exactly
                   two things — what Position does and what Style does. They sit
                   on the controls themselves now, read at the moment they
@@ -4137,7 +4137,7 @@ export function PromoSection({
               >
               <Palette className="h-4 w-4" />
               </button>
-              <span className="mx-2 h-5 w-px shrink-0 bg-border" aria-hidden="true" />
+              <span className="h-6 w-px shrink-0 bg-border" aria-hidden="true" />
             <button
               type="button"
               data-tour="promo-save-draft"
