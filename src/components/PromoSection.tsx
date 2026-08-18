@@ -4072,72 +4072,12 @@ export function PromoSection({
             </button>
             </div>
 
-            {/* Card settings sit with the primary action, away from the
-                content actions — they change where the card sits and what it
-                is made of, not what it says. */}
-
-            <div className="flex items-center justify-end gap-2">
-              {/* The tip line that used to pulse above the header said exactly
-                  two things — what Position does and what Style does. They sit
-                  on the controls themselves now, read at the moment they
-                  matter rather than at every moment. */}
-              <span title="Where the card sits on your website">
-              <PopupDropdown
-                // Kept for screen readers, hidden on screen: three stacked
-                // mini-headings above three controls were most of what made
-                // this strip feel busy, and "Bottom Right" names itself.
-                labelClassName="sr-only"
-                label="Position"
-                value={config.promoCard.style.position}
-                options={[
-                  { value: "bottom-right", label: "Bottom Right" },
-                  { value: "bottom-left", label: "Bottom Left" },
-                ]}
-                open={showCardPositionDropdown}
-                onOpen={() => {
-                  const next = !showCardPositionDropdown;
-                  closeAllPromoDropdowns();
-                  setShowCardPositionDropdown(next);
-                  setCardPositionPos(
-                    getDropdownPosition(cardPositionBtnRef.current),
-                  );
-                }}
-                onSelect={(v) => {
-                  pushPromoState();
-                  setConfig({
-                    ...config,
-                    promoCard: {
-                      ...config.promoCard,
-                      style: {
-                        ...config.promoCard.style,
-                        position: v as any,
-                      },
-                    },
-                  });
-                  markChanged();
-                  setShowCardPositionDropdown(false);
-                }}
-                buttonRef={cardPositionBtnRef}
-                menuRef={cardPositionMenuRef}
-                menuPosition={cardPositionPos}
-                compact={true}
-              />
-              </span>
-              <button
-                ref={cardBgPopupBtnRef}
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  closeAllPromoDropdowns();
-                  setShowPersistentScaffold(true);
-                  setShowCardBgPopup((prev) => !prev);
-                }}
-                className="inline-flex h-9 items-center justify-center rounded-md border border-white/10 bg-black/10 px-2 text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10"
-                title="Card background — click to edit the card’s own colours"
-              >
-              <Palette className="h-4 w-4" />
-              </button>
-              <span className="h-6 w-px shrink-0 bg-border" aria-hidden="true" />
+            {/* Position and card colour moved down to sit with Current in the
+                Themes strip — all three are "what this card looks like", so
+                they read as one group there instead of living apart from the
+                Current swatch they act on. Only the primary action stays up
+                here, pushed right. */}
+            <div className="flex items-center justify-end">
             <button
               type="button"
               data-tour="promo-save-draft"
@@ -5067,45 +5007,6 @@ export function PromoSection({
                 marked: yours when the card is on your design, the theme's only
                 while you're trying it. */}
             <div className="flex items-stretch gap-3">
-              <div className="shrink-0">
-                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
-                  Current
-                </p>
-                <div className="flex px-1.5 pb-3 pt-2">
-                  <button
-                  type="button"
-                  title="Back to the design you had before trying themes"
-                  onClick={() => {
-                    // A look change like any other, so Ctrl+Z can step back
-                    // over it — themes keep your words, so they belong with
-                    // ordinary styling, not with the swaps that clear history.
-                    pushPromoState({ replace: true });
-                    samplingThemeRef.current = true;
-                    setConfig({
-                      ...configRef.current,
-                      promoCard: { ...configRef.current.promoCard, style: themeBaseline },
-                    });
-                    markChanged();
-                    toast('Restored your original design');
-                  }}
-                  style={{ background: getBackgroundStyle(themeBaseline.background) }}
-                  className={`relative h-8 w-12 shrink-0 rounded-md ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
-                    onOwnDesign
-                      ? 'ring-2 ring-primary'
-                      : 'ring-1 ring-border hover:ring-primary/60'
-                  }`}
-                >
-                    <span className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-border bg-surface text-on-surface-variant">
-                      <RotateCcw className="h-2.5 w-2.5" />
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              {/* The rule is what makes "yours" read as a group of one rather
-                  than the first of thirteen. */}
-              <div className="my-auto h-10 w-px shrink-0 bg-border" />
-
               <div className="min-w-0 flex-1">
                 <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
                   Themes - Click any to change the look - Your text stays
@@ -5142,6 +5043,108 @@ export function PromoSection({
                       />
                     );
                   })}
+                </div>
+              </div>
+
+              {/* The rule is what makes "yours" read as a group of one rather
+                  than one of thirteen. */}
+              <div className="my-auto h-10 w-px shrink-0 bg-border" />
+
+              {/* Current, plus the two controls that act on it — where the
+                  card sits and what colours it uses. All three are "what this
+                  card looks like," moved down from the toolbar to sit beside
+                  the swatch they belong to, on the right where the eye lands
+                  after browsing themes to its left. */}
+              <div className="shrink-0">
+                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
+                  Current
+                </p>
+                <div className="flex flex-col gap-1.5 px-1.5 pb-3 pt-2">
+                  <button
+                  type="button"
+                  title="Back to the design you had before trying themes"
+                  onClick={() => {
+                    // A look change like any other, so Ctrl+Z can step back
+                    // over it — themes keep your words, so they belong with
+                    // ordinary styling, not with the swaps that clear history.
+                    pushPromoState({ replace: true });
+                    samplingThemeRef.current = true;
+                    setConfig({
+                      ...configRef.current,
+                      promoCard: { ...configRef.current.promoCard, style: themeBaseline },
+                    });
+                    markChanged();
+                    toast('Restored your original design');
+                  }}
+                  style={{ background: getBackgroundStyle(themeBaseline.background) }}
+                  className={`relative h-8 w-12 shrink-0 self-start rounded-md ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
+                    onOwnDesign
+                      ? 'ring-2 ring-primary'
+                      : 'ring-1 ring-border hover:ring-primary/60'
+                  }`}
+                >
+                    <span className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-border bg-surface text-on-surface-variant">
+                      <RotateCcw className="h-2.5 w-2.5" />
+                    </span>
+                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <span title="Where the card sits on your website">
+                      <PopupDropdown
+                        // Kept for screen readers, hidden on screen —
+                        // "Bottom Right" under a chevron names itself.
+                        labelClassName="sr-only"
+                        label="Position"
+                        value={config.promoCard.style.position}
+                        options={[
+                          { value: "bottom-right", label: "Bottom Right" },
+                          { value: "bottom-left", label: "Bottom Left" },
+                        ]}
+                        open={showCardPositionDropdown}
+                        onOpen={() => {
+                          const next = !showCardPositionDropdown;
+                          closeAllPromoDropdowns();
+                          setShowCardPositionDropdown(next);
+                          setCardPositionPos(
+                            getDropdownPosition(cardPositionBtnRef.current),
+                          );
+                        }}
+                        onSelect={(v) => {
+                          pushPromoState();
+                          setConfig({
+                            ...config,
+                            promoCard: {
+                              ...config.promoCard,
+                              style: {
+                                ...config.promoCard.style,
+                                position: v as any,
+                              },
+                            },
+                          });
+                          markChanged();
+                          setShowCardPositionDropdown(false);
+                        }}
+                        buttonRef={cardPositionBtnRef}
+                        menuRef={cardPositionMenuRef}
+                        menuPosition={cardPositionPos}
+                        compact={true}
+                        buttonClassName="flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-white/10 bg-black/10 px-2 text-left text-xs text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10"
+                      />
+                    </span>
+                    <button
+                      ref={cardBgPopupBtnRef}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        closeAllPromoDropdowns();
+                        setShowPersistentScaffold(true);
+                        setShowCardBgPopup((prev) => !prev);
+                      }}
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-white/10 bg-black/10 text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10"
+                      title="Card background — click to edit the card’s own colours"
+                    >
+                      <Palette className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
