@@ -1761,10 +1761,13 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                         labelClassName="sr-only"
                         label="Country code"
                         value={selectedCountryCode}
+                        // Same shape as the promo card's picker: the name
+                        // reads first because that is what people search by,
+                        // with the dialling code trailing as the detail.
                         options={COUNTRY_CODES.map(({ code, flag, name, aliases }) => ({
                           value: code,
-                          label: code,
-                          meta: name,
+                          label: name,
+                          meta: code,
                           searchText: `${name} ${aliases ?? ''}`,
                           icon: <CountryFlag flag={flag} name={name} />,
                         }))}
@@ -1792,8 +1795,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                         compact
                         flip
                         searchable
-                        searchPlaceholder="Search country or code"
-                        menuMaxHeight={220}
+                        searchPlaceholder="Search country"
+                        menuMaxHeight={260}
                         triggerContent={(() => {
                           const c = COUNTRY_CODES.find(
                             (x) => x.code === selectedCountryCode,

@@ -78,8 +78,16 @@ export function PopupDropdown({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const selectedLabel = options.find((option) => option.value === value)?.label ?? value;
   const popupWidth = menuPosition?.width ?? 260;
-  const [livePosition, setLivePosition] = useState<{ top: number; left: number; width: number } | null>(menuPosition);
+  const [livePosition, setLivePosition] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    /** Set instead of top for an upward menu — see placeVertically. */
+    bottom?: number;
+  } | null>(menuPosition);
   const initialButtonRectRef = useRef<{ top: number; left: number } | null>(null);
+  /** Which way this menu opened; null until the first placement decides. */
+  const opensUpwardRef = useRef<boolean | null>(null);
   const initialMenuPosRef = useRef<{ top: number; left: number; width: number } | null>(null);
 
   /**
@@ -92,12 +100,30 @@ export function PopupDropdown({
   function placeVertically(rect: DOMRect): number {
     const below = rect.bottom + 6;
     if (!flip) return below;
-    const height =
-      menuRef.current?.offsetHeight ?? menuMaxHeight ?? 0;
-    const room = window.innerHeight - rect.bottom - 12;
-    if (height && room < height) {
-      // Never push it off the top edge either.
-      return Math.max(8, rect.top - 6 - height);
+
+    const height = menuRef.current?.offsetHeight ?? menuMaxHeight ?? 0;
+
+    /**
+     * The side is chosen once, when the menu opens, and held for as long as
+     * it stays open.
+     *
+     * Re-deciding on every reflow made a filtered list jump: narrowing 66 rows
+     * to one freed up room below, so the menu that had opened upward flipped
+     * under the trigger mid-search — the list moving out from under the cursor
+     * while typing. Only the offset is recomputed after that, so an upward
+     * menu stays glued to the top of the trigger as it shrinks.
+     */
+    if (opensUpwardRef.current === null) {
+      const room = window.innerHeight - rect.bottom - 12;
+      opensUpwardRef.current = Boolean(height) && room < height;
+    }
+
+    if (opensUpwardRef.current) {
+      // Anchored by its bottom edge, not by top-minus-height: measuring the
+      // height means the menu shrinks away from the trigger when the list is
+      // filtered, leaving a gap the size of the rows that went. Pinning the
+      // bottom lets it grow and shrink upward, always touching the trigger.
+      return -1;
     }
     return below;
   }
@@ -111,6 +137,7 @@ export function PopupDropdown({
   useEffect(() => {
     if (!open) {
       setQuery('');
+      opensUpwardRef.current = null;
       return;
     }
     if (searchable) {
@@ -120,9 +147,15 @@ export function PopupDropdown({
   }, [open, searchable]);
 
   const needle = query.trim().toLowerCase();
+  /**
+   * `searchText` wins outright when a row supplies one: the country pickers
+   * want name-only matching, and the two of them disagree about which slot
+   * the name is in — one shows the name and the code in meta, the other the
+   * reverse. Matching label+meta would have made both searchable by code.
+   */
   const visibleOptions = needle
     ? options.filter((o) =>
-        `${o.label} ${o.meta ?? ''} ${o.searchText ?? ''}`
+        (o.searchText ?? `${o.label} ${o.meta ?? ''}`)
           .toLowerCase()
           .includes(needle),
       )
@@ -158,17 +191,37 @@ export function PopupDropdown({
       }
 
       // Fallback when no initial anchor info is provided.
-      setLivePosition({
-        top: placeVertically(rect),
-        left: rect.left,
-        width: menuPosition?.width ?? rect.width,
-      });
+      const top = placeVertically(rect);
+      setLivePosition(
+        top === -1
+          ? {
+              top: 0,
+              bottom: Math.max(8, window.innerHeight - rect.top + 6),
+              left: rect.left,
+              width: menuPosition?.width ?? rect.width,
+            }
+          : { top, left: rect.left, width: menuPosition?.width ?? rect.width },
+      );
     };
 
     updatePosition();
+
+    /**
+     * An upward menu is placed from its own height, so it has to be re-placed
+     * whenever that height changes. Filtering does exactly that: narrowing 66
+     * rows to one left the menu floating where the full list used to start,
+     * with a gap the size of the rows that had been filtered away.
+     */
+    const observer =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => updatePosition())
+        : null;
+    if (observer && menuRef.current) observer.observe(menuRef.current);
+
     window.addEventListener('scroll', updatePosition, true);
     window.addEventListener('resize', updatePosition);
     return () => {
+      observer?.disconnect();
       window.removeEventListener('scroll', updatePosition, true);
       window.removeEventListener('resize', updatePosition);
       initialButtonRectRef.current = null;
@@ -214,7 +267,9 @@ export function PopupDropdown({
           style={{
             position: 'fixed',
             zIndex: 9999,
-            top: livePosition?.top ?? menuPosition?.top ?? 0,
+            ...(livePosition?.bottom !== undefined
+              ? { bottom: livePosition.bottom }
+              : { top: livePosition?.top ?? menuPosition?.top ?? 0 }),
             left: livePosition?.left ?? menuPosition?.left ?? 0,
             minWidth: `${livePosition?.width ?? popupWidth}px`,
             width: 'auto',
@@ -225,7 +280,7 @@ export function PopupDropdown({
           className={`bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl rounded-xl ${menuMaxHeight ? 'p-1 campaign-custom-scrollbar' : 'p-3'}`}
         >
           {searchable && (
-            <div className="sticky top-0 z-10 mb-1 bg-surface-elevated p-1">
+            <div className="sticky top-0 z-10 mb-0.5 bg-surface-elevated">
               <input
                 ref={searchInputRef}
                 type="text"
@@ -241,7 +296,7 @@ export function PopupDropdown({
                   }
                 }}
                 placeholder={searchPlaceholder}
-                className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-on-surface outline-none placeholder:text-on-surface-variant focus:border-primary/70"
+                className="w-full rounded-md border border-border bg-surface px-2 py-1 text-sm text-on-surface outline-none placeholder:text-on-surface-variant focus:border-primary/70"
               />
             </div>
           )}
@@ -267,7 +322,7 @@ export function PopupDropdown({
                   onSelect(option.value);
                 }
               }}
-              className={`flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-3 py-2 text-left text-sm whitespace-nowrap transition-colors hover:bg-surface-subtle ${option.value === value ? 'text-primary font-semibold' : 'text-on-surface'}`}
+              className={`flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-sm whitespace-nowrap transition-colors hover:bg-surface-subtle ${option.value === value ? 'text-primary font-semibold' : 'text-on-surface'}`}
             >
               {option.icon}
               <span className="min-w-0 flex-1 truncate">{option.label}</span>
