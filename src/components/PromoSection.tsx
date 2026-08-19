@@ -31,6 +31,12 @@ import {
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
 import { applyTemplateFull, applyTemplateLook } from "@/lib/promoTemplate";
+import {
+  lookSignature,
+  ourLooks,
+  cardIsBlank,
+  cardIsUntouchedTemplate,
+} from "@/lib/promoAuthorship";
 import { UndoStack } from "@/lib/undoStack";
 import { SamplePromoTemplates, sampleTemplates } from "./SamplePromoTemplates";
 import { useRichTextEditor } from "@/hooks/useRichTextEditor";
@@ -828,37 +834,10 @@ export function PromoSection({
    * Published or sitting in the draft both count: My Published and My Draft
    * bring it back on demand, so it cannot be lost by being replaced.
    */
-  /**
-   * A card's look, with placement left out.
-   *
-   * Where the card sits is a setting, not a design: every built-in template
-   * ships bottom-right, so moving one to bottom-left made its look match no
-   * template at all. The card was then treated as the user's own work —
-   * Current Design appeared holding what was really just the template's
-   * colours, the active theme swatch stopped being marked, and the consent
-   * prompts came back for a card nobody had authored.
-   */
-  function lookSignature(style: PromoCard['style']): string {
-    const { position: _position, ...look } = style;
-    return JSON.stringify(look);
-  }
+  /** The template cards themselves, for the authorship checks below. */
+  const TEMPLATE_CARDS = sampleTemplates.map((t) => t.promoCard as PromoCard);
+  const OUR_LOOKS = ourLooks(TEMPLATE_CARDS);
 
-  /**
-   * Every look the app hands out: the templates, plus the default card's own.
-   *
-   * The default belongs here for the same reason the templates do — nobody
-   * chose it. Leaving it out meant typing a title onto a fresh card counted as
-   * designing one, and Current Design appeared offering a way back to a look
-   * the user had never left.
-   */
-  const OUR_LOOKS = [
-    ...sampleTemplates.map((t) => lookSignature((t.promoCard as PromoCard).style)),
-    lookSignature(defaultConfig.promoCard.style),
-  ];
-
-  function isOneOfOurLooks(style: PromoCard['style']): boolean {
-    return OUR_LOOKS.includes(lookSignature(style));
-  }
 
   function cardIsRecoverable(card: PromoCard | null | undefined): boolean {
     if (!card) return false;
@@ -879,59 +858,7 @@ export function PromoSection({
     );
   }
 
-  /**
-   * A card with nothing in it: no text in any field and the untouched default
-   * styling. Same test as canvasIsEmpty, but for an arbitrary card rather than
-   * the one on screen.
-   */
-  function cardIsBlank(card: PromoCard | null | undefined): boolean {
-    if (!card) return true;
-    return (
-      !hasVisibleContent(card.title) &&
-      !hasVisibleContent(card.subtitle) &&
-      !hasVisibleContent(card.description) &&
-      !hasVisibleContent(card.buttonText) &&
-      JSON.stringify(card.style) === JSON.stringify(getFreshPromoCard().style)
-    );
-  }
 
-  /** Everything a card says, with the look left out. */
-  function cardTextSignature(c: PromoCard): string {
-    return JSON.stringify({
-      title: stripHtmlText(c.title),
-      subtitle: stripHtmlText(c.subtitle),
-      description: stripHtmlText(c.description),
-      buttonText: stripHtmlText(c.buttonText),
-      timerText: stripHtmlText(c.timerText),
-      showTimer: c.showTimer,
-      showButton: c.showButton,
-      ctaType: c.ctaType,
-      buttonUrl: c.buttonUrl,
-      whatsappNumber: c.whatsappNumber,
-    });
-  }
-
-  /**
-   * Nothing on this card was authored — every part of it came from something
-   * we handed the user.
-   *
-   * Text and look are checked separately on purpose: applying a theme to a
-   * template changes only the look, and the result is still entirely ours.
-   * Comparing whole cards would have called that combination "edited" and
-   * started guarding it, which is the case the user hit.
-   *
-   * The schedule is excluded throughout: applying a template keeps the
-   * campaign's own dates, so those differ legitimately.
-   */
-  function cardIsUntouchedTemplate(card: PromoCard | null | undefined): boolean {
-    if (!card) return false;
-    const text = cardTextSignature(card);
-    const wordsAreOurs = sampleTemplates.some(
-      (t) => cardTextSignature(t.promoCard as PromoCard) === text,
-    );
-    if (!wordsAreOurs) return false;
-    return isOneOfOurLooks(card.style);
-  }
 
   /**
    * Would an Undo offer actually give the user anything back?
@@ -948,7 +875,7 @@ export function PromoSection({
     return (
       cardIsBlank(card) ||
       cardIsRecoverable(card) ||
-      cardIsUntouchedTemplate(card)
+      cardIsUntouchedTemplate(card, TEMPLATE_CARDS)
     );
   }
 
@@ -3400,7 +3327,7 @@ export function PromoSection({
    *
    * The themes take that space in either case.
    */
-  const baselineIsATheme = isOneOfOurLooks(themeBaseline);
+  const baselineIsATheme = OUR_LOOKS.includes(lookSignature(themeBaseline));
   const hasCurrentDesign = !canvasIsEmpty && !baselineIsATheme;
 
   /**
