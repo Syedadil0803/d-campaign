@@ -11,6 +11,8 @@ export type PopupDropdownOption = {
   icon?: React.ReactNode;
   /** Trailing detail, right-aligned: the dial code, a count, a hint. */
   meta?: string;
+  /** Extra text the filter should match but the row doesn't display. */
+  searchText?: string;
 };
 
 interface PopupDropdownProps {
@@ -40,6 +42,13 @@ interface PopupDropdownProps {
   menuMaxHeight?: number;
   /** Open upward when there isn't room below — long lists near the fold. */
   flip?: boolean;
+  /**
+   * Adds a filter box above the list. Matches label, meta and searchText, so a
+   * country picker can be searched by name as well as by dialling code.
+   * Worth showing only past a handful of rows.
+   */
+  searchable?: boolean;
+  searchPlaceholder?: string;
 }
 
 export function PopupDropdown({
@@ -62,7 +71,11 @@ export function PopupDropdown({
   buttonClassName,
   menuMaxHeight,
   flip = false,
+  searchable = false,
+  searchPlaceholder = 'Search…',
 }: PopupDropdownProps) {
+  const [query, setQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const selectedLabel = options.find((option) => option.value === value)?.label ?? value;
   const popupWidth = menuPosition?.width ?? 260;
   const [livePosition, setLivePosition] = useState<{ top: number; left: number; width: number } | null>(menuPosition);
@@ -92,6 +105,28 @@ export function PopupDropdown({
   useEffect(() => {
     setLivePosition(menuPosition);
   }, [menuPosition]);
+
+  // A filter that survives closing would silently hide most of the list the
+  // next time the menu opened.
+  useEffect(() => {
+    if (!open) {
+      setQuery('');
+      return;
+    }
+    if (searchable) {
+      const id = window.setTimeout(() => searchInputRef.current?.focus(), 0);
+      return () => window.clearTimeout(id);
+    }
+  }, [open, searchable]);
+
+  const needle = query.trim().toLowerCase();
+  const visibleOptions = needle
+    ? options.filter((o) =>
+        `${o.label} ${o.meta ?? ''} ${o.searchText ?? ''}`
+          .toLowerCase()
+          .includes(needle),
+      )
+    : options;
 
   useEffect(() => {
     if (!open) return;
@@ -189,7 +224,33 @@ export function PopupDropdown({
           }}
           className={`bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl rounded-xl ${menuMaxHeight ? 'p-1 campaign-custom-scrollbar' : 'p-3'}`}
         >
-          {options.map((option) => (
+          {searchable && (
+            <div className="sticky top-0 z-10 mb-1 bg-surface-elevated p-1">
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onMouseDown={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  // Enter on a single match picks it — the common case after
+                  // typing a country name.
+                  if (e.key === 'Enter' && visibleOptions.length === 1) {
+                    e.preventDefault();
+                    onSelect(visibleOptions[0].value);
+                  }
+                }}
+                placeholder={searchPlaceholder}
+                className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm text-on-surface outline-none placeholder:text-on-surface-variant focus:border-primary/70"
+              />
+            </div>
+          )}
+          {searchable && visibleOptions.length === 0 && (
+            <p className="px-3 py-2 text-sm text-on-surface-variant">
+              No matches for &ldquo;{query.trim()}&rdquo;
+            </p>
+          )}
+          {visibleOptions.map((option) => (
             <div
               key={option.value}
               role="button"

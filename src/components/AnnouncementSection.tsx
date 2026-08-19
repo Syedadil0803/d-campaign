@@ -1761,10 +1761,11 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                         labelClassName="sr-only"
                         label="Country code"
                         value={selectedCountryCode}
-                        options={COUNTRY_CODES.map(({ code, flag, name }) => ({
+                        options={COUNTRY_CODES.map(({ code, flag, name, aliases }) => ({
                           value: code,
                           label: code,
                           meta: name,
+                          searchText: `${name} ${aliases ?? ''}`,
                           icon: <CountryFlag flag={flag} name={name} />,
                         }))}
                         open={showAnnCountryDropdown}
@@ -1790,6 +1791,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                         menuPosition={annCountryPos}
                         compact
                         flip
+                        searchable
+                        searchPlaceholder="Search country or code"
                         menuMaxHeight={220}
                         triggerContent={(() => {
                           const c = COUNTRY_CODES.find(

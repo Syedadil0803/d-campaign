@@ -3731,10 +3731,11 @@ export function PromoSection({
                       labelClassName="sr-only"
                       label="Country dialling code"
                       value={config.promoCard.whatsappCountryCode || '+44'}
-                      options={COUNTRY_CODES.map(({ code, flag, name }) => ({
+                      options={COUNTRY_CODES.map(({ code, flag, name, aliases }) => ({
                         value: code,
                         label: name,
                         meta: code,
+                        searchText: `${code} ${aliases ?? ''}`,
                         icon: <CountryFlag flag={flag} name={name} />,
                       }))}
                       open={showCountryCodeDropdown}
@@ -3757,6 +3758,8 @@ export function PromoSection({
                       // column the menu has to open upward.
                       menuMaxHeight={260}
                       flip
+                      searchable
+                      searchPlaceholder="Search country or code"
                       buttonClassName="h-full px-3 border-r border-border text-on-surface flex items-center gap-1.5 hover:bg-surface-subtle transition-colors"
                       triggerContent={(() => {
                         const selectedCode = config.promoCard.whatsappCountryCode || '+44';
