@@ -238,7 +238,21 @@ export default function Home() {
   // in state, not a ref, so the "Save as draft" button can disable itself when
   // the editor already matches the draft — re-saving identical content only
   // produces a pointless "Replace saved draft?" prompt.
+  /**
+   * Marks the draft on disk as a rescue copy rather than one saved on purpose.
+   *
+   * Both land in the same single draft slot, but they mean opposite things: a
+   * rescue is work the user was in the middle of when the page went away, and
+   * they expect it back on screen; a deliberate save is work they parked, and
+   * reopening it uninvited overwrites whatever they came back to do. The
+   * difference is known when the draft is written but not when it is read, so
+   * it has to survive the reload — hence localStorage rather than a ref.
+   */
+  const DRAFT_IS_RESCUE_KEY = 'campaign-admin:draft-is-rescue';
+
   const [savedDraftSignature, setSavedDraftSignature] = useState<string | null>(null);
+  /** A draft found on load, waiting for the promo editor to be opened. */
+  const offeredDraftRef = useRef<CampaignConfig | null>(null);
   /**
    * The promo card as it exists in the saved draft.
    *
@@ -422,6 +436,34 @@ export default function Home() {
   }, []);
 
   /**
+   * Send the promo editor back to the default card.
+   *
+   * Runs once the work is safely somewhere else — published, or written to the
+   * draft. Leaving the finished card sitting in the editor made the next visit
+   * ambiguous: what is on screen looks like work in progress, but is really a
+   * copy of something already saved, and editing it silently diverges from what
+   * is live. Starting from the default card makes "this is new" unmistakable.
+   *
+   * The signatures are re-baselined at the same time, otherwise the reset would
+   * itself register as unsaved work — and the unload rescue would then write
+   * this blank card over the draft that was just saved.
+   */
+  function resetPromoEditorToDefault() {
+    const next: CampaignConfig = {
+      ...configRef.current,
+      promoCard: JSON.parse(JSON.stringify(defaultConfig.promoCard)),
+    };
+    setConfig(next);
+    savedPromoSignatureRef.current = getPromoSignature(next);
+    draftSignatureRef.current = getConfigSignature(next);
+    setHasPromoChanges(false);
+    setPromoEntryStep('build');
+    // Makes the editors re-read from config — without it the contentEditable
+    // fields keep showing the card that was just cleared.
+    setConfigLoadedSignal((n) => n + 1);
+  }
+
+  /**
    * Drafting is manual — except when the work is about to be lost.
    *
    * On tab close or refresh we take one rescue copy so unsaved work survives,
@@ -453,6 +495,23 @@ export default function Home() {
 
   useEffect(() => {
     mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeTab]);
+
+  /**
+   * Offer the saved draft once the promo editor is actually open.
+   *
+   * The ref is cleared as it fires, so switching tabs back and forth doesn't
+   * re-offer a draft the user has already passed on — declining leaves it
+   * saved, reachable from the My Draft chip.
+   */
+  useEffect(() => {
+    if (activeTab !== 'promo') return;
+    if (!offeredDraftRef.current) return;
+    offeredDraftRef.current = null;
+    // Plain notice, deliberately: it says the draft exists and nothing more.
+    // An action button here would be a second way to load a draft that the My
+    // Draft chip already opens, on a countdown that makes reading it a race.
+    toast('We saved a draft for you');
   }, [activeTab]);
 
   // Consent before discarding a draft (destructive).
@@ -737,6 +796,16 @@ export default function Home() {
     }).catch(() => {});
     setSavedDraftSignature(getConfigSignature(cfg));
     setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
+    try {
+      if (options.markHandled === false) {
+        localStorage.setItem(DRAFT_IS_RESCUE_KEY, '1');
+      } else {
+        localStorage.removeItem(DRAFT_IS_RESCUE_KEY);
+      }
+    } catch {
+      // Private mode or a full quota — the draft is still written, it just
+      // comes back offered rather than restored.
+    }
     if (options.markHandled !== false) {
       draftSignatureRef.current = getConfigSignature(cfg);
     }
@@ -801,7 +870,14 @@ export default function Home() {
           draftSignatureRef.current = getConfigSignature(cfg);
           setSavedDraftSignature(getConfigSignature(cfg));
           setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
+          try {
+            localStorage.removeItem(DRAFT_IS_RESCUE_KEY);
+          } catch {
+            /* see saveDraft */
+          }
           toast('Saved draft updated');
+          // Parked in My Draft — the editor is free for the next card.
+          resetPromoEditorToDefault();
         } else {
           toast('Couldn’t save your draft', true);
         }
@@ -947,6 +1023,9 @@ export default function Home() {
           else if (scope === 'promo') setHasPromoChanges(false);
           else { setHasAnnouncementChanges(false); setHasPromoChanges(false); }
           clearDraft();
+          // The card is live now, so the editor starts fresh for the next one.
+          // Undefined scope saves both, so it counts as a promo publish too.
+          if (scope !== 'announcement') resetPromoEditorToDefault();
         }
         toast(successMessage);
       } else {
@@ -1046,18 +1125,53 @@ export default function Home() {
         if (!draftHasRestorableWork(migrated, publishedCfg)) {
           clearDraft();
         } else if (publishedCfg && getConfigSignature(migrated) !== getConfigSignature(publishedCfg)) {
-          // Only show banner if the draft has content AND differs from published
-          setConfig(migrated);
-          draftSignatureRef.current = getConfigSignature(migrated);
+          /**
+           * A draft exists and differs from what's live. It used to be poured
+           * straight into the editor, which meant landing on half-finished work
+           * with no way to tell it apart from the published card.
+           *
+           * Now the canvas starts clear and the draft is offered: the toast
+           * says it's there, and taking it is a decision rather than a
+           * surprise. Declining leaves it saved — the My Draft dot still shows.
+           */
+          let wasRescue = false;
+          try {
+            wasRescue = localStorage.getItem(DRAFT_IS_RESCUE_KEY) === '1';
+            localStorage.removeItem(DRAFT_IS_RESCUE_KEY);
+          } catch {
+            /* treat as a deliberate save — offering is the safer default */
+          }
+
+          if (wasRescue) {
+            /**
+             * The page went away mid-edit and this is that work. Put it
+             * straight back: the user did not choose to stop, so anything
+             * other than finding it where they left it reads as data loss.
+             */
+            setConfig(migrated);
+            draftSignatureRef.current = getConfigSignature(migrated);
+            savedPromoSignatureRef.current = getPromoSignature(migrated);
+            setSavedDraftSignature(getConfigSignature(migrated));
+            setDraftPromoCard(JSON.parse(JSON.stringify(migrated.promoCard)));
+            setHasAnnouncementChanges(true);
+            setHasPromoChanges(true);
+            setReadyToPublishAnnouncement(true);
+            setPromoEntryStep('editor');
+            setConfigLoadedSignal((n) => n + 1);
+            return;
+          }
+
+          setConfig(publishedCfg);
+          draftSignatureRef.current = getConfigSignature(publishedCfg);
+          savedPromoSignatureRef.current = getPromoSignature(publishedCfg);
           setSavedDraftSignature(getConfigSignature(migrated));
-          setDraftPromoCard(JSON.parse(JSON.stringify(migrated.promoCard)));
-          savedPromoSignatureRef.current = getPromoSignature(migrated);
-          setHasAnnouncementChanges(true);
-          setHasPromoChanges(true);
-          setReadyToPublishAnnouncement(true);
-          // Work in progress exists, so the promo tab opens on it, not the picker.
-          setPromoEntryStep('editor');
+          setPromoEntryStep('build');
           setConfigLoadedSignal((n) => n + 1);
+          // Held, not announced: the draft is about the promo editor, so the
+          // offer waits until that is the screen being looked at. Raised on
+          // the dashboard it interrupts a page the draft has nothing to do
+          // with, and expires before the user reaches the editor.
+          offeredDraftRef.current = migrated;
           return;
         } else {
           // Draft matches published — discard it silently
@@ -1066,9 +1180,27 @@ export default function Home() {
       }
 
       if (publishedCfg) {
-        setConfig(publishedCfg);
-        draftSignatureRef.current = getConfigSignature(publishedCfg);
-        savedPromoSignatureRef.current = getPromoSignature(publishedCfg);
+        /**
+         * Nothing pending: the work is done and live, so the editor opens on
+         * the default card rather than a copy of what is already out there.
+         *
+         * Only the promo card is reset — the announcement bar keeps its
+         * published content, and the dashboard reads publishedConfig, so what
+         * is live is unaffected either way. The published card stays one click
+         * away under My Published.
+         *
+         * Loading the live card here was what made a cleared canvas come back
+         * as the published design after a refresh: the entry step opened the
+         * picker, but the card underneath was still the live one.
+         */
+        const forEditor: CampaignConfig = {
+          ...publishedCfg,
+          promoCard: JSON.parse(JSON.stringify(defaultConfig.promoCard)),
+        };
+        setConfig(forEditor);
+        draftSignatureRef.current = getConfigSignature(forEditor);
+        savedPromoSignatureRef.current = getPromoSignature(forEditor);
+        setPromoEntryStep('build');
         setConfigLoadedSignal((n) => n + 1);
       }
     } catch (error) {
