@@ -63,9 +63,51 @@ export function PromoFlow({
    */
   const [showTimerHint, setShowTimerHint] = useState(false);
 
-  const handleCardReplaced = () => {
+  /**
+   * Does the canvas hold a card the hint could point at?
+   *
+   * The hint says "the countdown is edited on the card itself". On a blank
+   * canvas there is no card on screen, so it describes something the user
+   * cannot see or act on.
+   */
+  const cardHasContent = () => {
+    const c = config.promoCard;
+    const written = (v?: string) => Boolean((v || '').replace(/<[^>]*>/g, '').trim());
+    return (
+      written(c.title) ||
+      written(c.subtitle) ||
+      written(c.description) ||
+      written(c.buttonText)
+    );
+  };
+
+  /**
+   * One way in for the hint, because there are three ways to reach a new
+   * card — a swap in the editor, the build signal, and mounting straight onto
+   * the build step — and each used to decide for itself whether to show it.
+   * Guarding only the first left the other two raising it over a blank canvas.
+   */
+  const revealTimerHint = () => {
+    if (!cardHasContent()) {
+      setShowTimerHint(false);
+      return;
+    }
     if (shouldShowTour(PROMO_TIMER_TOUR)) setShowTimerHint(true);
   };
+
+  const handleCardReplaced = () => {
+    revealTimerHint();
+  };
+
+  /**
+   * Clearing the canvas while the hint is up has to take it down too — it is
+   * anchored to a card that is no longer there, so it would sit pointing at
+   * empty space.
+   */
+  useEffect(() => {
+    if (showTimerHint && !cardHasContent()) setShowTimerHint(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.promoCard, showTimerHint]);
 
   const handleTimerEdited = () => {
     markTourSeen(PROMO_TIMER_TOUR);
@@ -93,7 +135,7 @@ export function PromoFlow({
     // Arriving straight on the build stage (dashboard → Create new) is a new
     // card too, and the signal above can't cover it: it's set in the same
     // batch as the tab switch, so this component mounts with it already raised.
-    if (initialStep === 'build' && shouldShowTour(PROMO_TIMER_TOUR)) setShowTimerHint(true);
+    if (initialStep === 'build') revealTimerHint();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
