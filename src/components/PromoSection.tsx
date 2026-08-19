@@ -105,6 +105,7 @@ interface PromoSectionProps {
    */
   draftPromoCard?: PromoCard | null;
   /** A different card just landed on the canvas (template, variant, fresh). */
+  /** A different card landed on the canvas. */
   onCardReplaced?: () => void;
   /** The user has actually edited the countdown — they know where it lives. */
   onTimerEdited?: () => void;
@@ -406,6 +407,15 @@ export function PromoSection({
     return `${y}-${m}-${d}`;
   }, []);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  /**
+   * Live copies of the stored cards, so checks running inside dialog handlers
+   * see the current values rather than the scope the handler was born in.
+   */
+  const livePromoCardRef = useRef<PromoCard | null | undefined>(livePromoCard);
+  livePromoCardRef.current = livePromoCard;
+  const draftPromoCardRef = useRef<PromoCard | null | undefined>(draftPromoCard);
+  draftPromoCardRef.current = draftPromoCard;
+
   const [currentField, setCurrentField] = useState<PromoField | null>(null);
   /**
    * Which control opened the style popup, so it can appear beside whatever was
@@ -561,6 +571,15 @@ export function PromoSection({
    * re-record it.
    */
   const samplingThemeRef = useRef(false);
+  /**
+   * Tracks whether the Current Design swatch was showing on the previous
+   * render, so the notice can fire on the moment it appears.
+   *
+   * Seeded with the value at mount: arriving on the tab with the swatch
+   * already there is not it appearing, and announcing it then made every
+   * visit to the Promo tab open with the same message.
+   */
+  const currentDesignWasVisibleRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     if (samplingThemeRef.current) {
@@ -769,6 +788,15 @@ export function PromoSection({
     selectedVersionId: string | null;
     isFreshCard: boolean;
     appliedBaseline: PromoSnapshot | null;
+    /**
+     * True when an Undo offer would give the user nothing back — the card was
+     * blank, or is stored somewhere it can be fetched from.
+     *
+     * Decided at capture time rather than at toast time: the snapshot folds
+     * the live editor's HTML into the card, so its signature drifts from the
+     * stored copy and a plainly recoverable card stops looking like one.
+     */
+    nothingToUndo: boolean;
   }
 
   function capturePromoRestorePoint(): PromoRestorePoint {
@@ -777,6 +805,7 @@ export function PromoSection({
       selectedVersionId,
       isFreshCard: isFreshCardRef.current,
       appliedBaseline: promoAppliedCardBaselineRef.current,
+      nothingToUndo: nothingToOfferBack(configRef.current.promoCard),
     };
   }
 
@@ -793,8 +822,150 @@ export function PromoSection({
     onCardReplaced?.();
   }
 
-  /** Confirmation toast that carries a one-tap way back. */
+  /**
+   * Is this card already stored somewhere the user can fetch it from?
+   *
+   * Published or sitting in the draft both count: My Published and My Draft
+   * bring it back on demand, so it cannot be lost by being replaced.
+   */
+  /**
+   * A card's look, with placement left out.
+   *
+   * Where the card sits is a setting, not a design: every built-in template
+   * ships bottom-right, so moving one to bottom-left made its look match no
+   * template at all. The card was then treated as the user's own work —
+   * Current Design appeared holding what was really just the template's
+   * colours, the active theme swatch stopped being marked, and the consent
+   * prompts came back for a card nobody had authored.
+   */
+  function lookSignature(style: PromoCard['style']): string {
+    const { position: _position, ...look } = style;
+    return JSON.stringify(look);
+  }
+
+  /**
+   * Every look the app hands out: the templates, plus the default card's own.
+   *
+   * The default belongs here for the same reason the templates do — nobody
+   * chose it. Leaving it out meant typing a title onto a fresh card counted as
+   * designing one, and Current Design appeared offering a way back to a look
+   * the user had never left.
+   */
+  const OUR_LOOKS = [
+    ...sampleTemplates.map((t) => lookSignature((t.promoCard as PromoCard).style)),
+    lookSignature(defaultConfig.promoCard.style),
+  ];
+
+  function isOneOfOurLooks(style: PromoCard['style']): boolean {
+    return OUR_LOOKS.includes(lookSignature(style));
+  }
+
+  function cardIsRecoverable(card: PromoCard | null | undefined): boolean {
+    if (!card) return false;
+    const sig = cardSignature(card);
+    /**
+     * Read through refs, not the props directly.
+     *
+     * These checks run from dialog confirm handlers, and a handler keeps the
+     * scope it was created in. Saving a draft from inside that dialog updates
+     * the prop but not the closure, so the card looked absent from the draft
+     * the moment after it had been written there — and Undo came back.
+     */
+    const live = livePromoCardRef.current;
+    const draft = draftPromoCardRef.current;
+    return (
+      (!!live && sig === cardSignature(live)) ||
+      (!!draft && sig === cardSignature(draft))
+    );
+  }
+
+  /**
+   * A card with nothing in it: no text in any field and the untouched default
+   * styling. Same test as canvasIsEmpty, but for an arbitrary card rather than
+   * the one on screen.
+   */
+  function cardIsBlank(card: PromoCard | null | undefined): boolean {
+    if (!card) return true;
+    return (
+      !hasVisibleContent(card.title) &&
+      !hasVisibleContent(card.subtitle) &&
+      !hasVisibleContent(card.description) &&
+      !hasVisibleContent(card.buttonText) &&
+      JSON.stringify(card.style) === JSON.stringify(getFreshPromoCard().style)
+    );
+  }
+
+  /** Everything a card says, with the look left out. */
+  function cardTextSignature(c: PromoCard): string {
+    return JSON.stringify({
+      title: stripHtmlText(c.title),
+      subtitle: stripHtmlText(c.subtitle),
+      description: stripHtmlText(c.description),
+      buttonText: stripHtmlText(c.buttonText),
+      timerText: stripHtmlText(c.timerText),
+      showTimer: c.showTimer,
+      showButton: c.showButton,
+      ctaType: c.ctaType,
+      buttonUrl: c.buttonUrl,
+      whatsappNumber: c.whatsappNumber,
+    });
+  }
+
+  /**
+   * Nothing on this card was authored — every part of it came from something
+   * we handed the user.
+   *
+   * Text and look are checked separately on purpose: applying a theme to a
+   * template changes only the look, and the result is still entirely ours.
+   * Comparing whole cards would have called that combination "edited" and
+   * started guarding it, which is the case the user hit.
+   *
+   * The schedule is excluded throughout: applying a template keeps the
+   * campaign's own dates, so those differ legitimately.
+   */
+  function cardIsUntouchedTemplate(card: PromoCard | null | undefined): boolean {
+    if (!card) return false;
+    const text = cardTextSignature(card);
+    const wordsAreOurs = sampleTemplates.some(
+      (t) => cardTextSignature(t.promoCard as PromoCard) === text,
+    );
+    if (!wordsAreOurs) return false;
+    return isOneOfOurLooks(card.style);
+  }
+
+  /**
+   * Would an Undo offer actually give the user anything back?
+   *
+   * No, in three cases. There was no card to begin with, so undoing restores
+   * blankness. The card is published or in the draft, so My Published and My
+   * Draft already hold it. Or it is a template exactly as it ships, which
+   * Template Hub will hand back in one click.
+   *
+   * What all three share: nothing of the user's own would be lost. Undo is
+   * for work, and none of these are work yet.
+   */
+  function nothingToOfferBack(card: PromoCard | null | undefined): boolean {
+    return (
+      cardIsBlank(card) ||
+      cardIsRecoverable(card) ||
+      cardIsUntouchedTemplate(card)
+    );
+  }
+
+  /**
+   * Confirmation toast, carrying a one-tap way back only when there is
+   * something to come back to.
+   *
+   * Undo is for work that would otherwise be gone. Offering it after replacing
+   * a card that is already published or already in the draft protects nothing
+   * — it just puts a countdown on screen after every template, variant and
+   * clear, training the user to ignore the one toast that will matter.
+   */
   function toastWithUndo(message: string, point: PromoRestorePoint) {
+    if (point.nothingToUndo) {
+      toast(message);
+      return;
+    }
     toast(message, false, {
       label: "Undo",
       onClick: () => restorePromoPoint(point),
@@ -2633,6 +2804,20 @@ export function PromoSection({
       return;
     }
 
+    /**
+     * Nothing of the user's own is on the canvas, so nothing can be lost:
+     * it's blank, it's already stored, or it is a template — with or without
+     * one of our themes over it — that Template Hub will hand straight back.
+     *
+     * Consent is for protecting work. Asking here made picking a second
+     * template feel like a commitment, and offered to spend the single draft
+     * slot on a card the user had merely glanced at.
+     */
+    if (nothingToOfferBack(pc)) {
+      action();
+      return;
+    }
+
     const hasContent =
       hasVisibleContent(pc.title) ||
       hasVisibleContent(pc.subtitle) ||
@@ -2731,6 +2916,11 @@ export function PromoSection({
           (onSaveDraftDirect ?? onSaveDraft)();
           action();
         },
+        // Saving is the safe default, not the only way through: the draft on
+        // disk may be the copy worth keeping, and forcing it to be overwritten
+        // to get past this dialog destroys the very thing it protects.
+        secondaryLabel: 'Continue anyway',
+        onSecondary: action,
       });
       return;
     }
@@ -2772,6 +2962,10 @@ export function PromoSection({
         (onSaveDraftDirect ?? onSaveDraft)();
         action();
       },
+      // Discards the current card without keeping a copy. Offered because
+      // some cards are not worth a draft slot, and the cap is five.
+      secondaryLabel: 'Continue anyway',
+      onSecondary: action,
     });
   }
 
@@ -3191,6 +3385,46 @@ export function PromoSection({
     !hasButtonText &&
     JSON.stringify(config.promoCard.style) ===
       JSON.stringify(getFreshPromoCard().style);
+  /**
+   * Is there a design of the user's OWN to hold on to?
+   *
+   * Two cases where there isn't, and both make the swatch noise:
+   *
+   * An empty canvas has nothing to return to — the button would restore
+   * blankness.
+   *
+   * A design taken straight from a template is already on screen as one of
+   * the theme swatches beside it, so showing it again under "Current Design"
+   * offers a trip back to somewhere the user never left, and reads as two
+   * different things that happen to look identical.
+   *
+   * The themes take that space in either case.
+   */
+  const baselineIsATheme = isOneOfOurLooks(themeBaseline);
+  const hasCurrentDesign = !canvasIsEmpty && !baselineIsATheme;
+
+  /**
+   * Point out the Current Design swatch the first time it appears.
+   *
+   * Tied to the swatch existing, not to a theme being clicked: the usual route
+   * is template then theme, and that leaves the design entirely ours, so no
+   * swatch appears and the old trigger never ran. It fires once — the message
+   * orients the user, and repeating it on every style tweak would nag.
+   *
+   * The control is named rather than pointed at: the toast surfaces at the top
+   * of the screen, nowhere near the swatch, so "here" would refer to nothing
+   * the user can see.
+   */
+  useEffect(() => {
+    const wasVisible = currentDesignWasVisibleRef.current;
+    currentDesignWasVisibleRef.current = hasCurrentDesign;
+    // First render only records the state; it has not appeared, it just is.
+    if (wasVisible === null) return;
+    if (!wasVisible && hasCurrentDesign) {
+      toast('Your design is saved under Current Design — tap it to come back');
+    }
+  }, [hasCurrentDesign, toast]);
+
   const showContentScaffold =
     showPersistentScaffold ||
     currentField === "title" ||
@@ -3735,7 +3969,7 @@ export function PromoSection({
                         value: code,
                         label: name,
                         meta: code,
-                        searchText: `${code} ${aliases ?? ''}`,
+                        searchText: `${name} ${aliases ?? ''}`,
                         icon: <CountryFlag flag={flag} name={name} />,
                       }))}
                       open={showCountryCodeDropdown}
@@ -3759,7 +3993,7 @@ export function PromoSection({
                       menuMaxHeight={260}
                       flip
                       searchable
-                      searchPlaceholder="Search country or code"
+                      searchPlaceholder="Search country"
                       buttonClassName="h-full px-3 border-r border-border text-on-surface flex items-center gap-1.5 hover:bg-surface-subtle transition-colors"
                       triggerContent={(() => {
                         const selectedCode = config.promoCard.whatsappCountryCode || '+44';
@@ -3981,7 +4215,7 @@ export function PromoSection({
                     toolbar stays still, and the one control that isn't a plain
                     command still announces itself. */}
                 <span aria-hidden="true" className="ai-sheen pointer-events-none absolute inset-0" />
-                <Sparkles className="relative h-4 w-4" />
+                <Sparkles className="ai-spark relative h-4 w-4" />
                 <span className="relative">Improve with AI</span>
               </button>
             )}
@@ -3995,17 +4229,19 @@ export function PromoSection({
                 setTemplatesFromBuild(false);
                 setShowTemplatesPopup(true);
               }}
-              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              className="tool-chip relative inline-flex h-9 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="Start again from a ready-made card — design and sample text"
             >
+              <span aria-hidden="true" className="ai-sheen pointer-events-none absolute inset-0" />
               <LayoutTemplate className="h-4 w-4" /> Template Hub
             </button>
             <button
               type="button"
               onClick={() => setShowVersionsPopup(true)}
-              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              className="tool-chip relative inline-flex h-9 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
               title="Saved variants of this promo card"
             >
+              <span aria-hidden="true" className="ai-sheen pointer-events-none absolute inset-0" />
               <History className="h-4 w-4" /> My Published
             </button>
 {/* My Draft moved to row 2 next to the save button */}
@@ -4013,13 +4249,14 @@ export function PromoSection({
               type="button"
               onClick={confirmClearCanvas}
               disabled={canvasIsEmpty}
-              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              className="tool-chip relative inline-flex h-9 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
               title={
                 canvasIsEmpty
                   ? 'Nothing to clear — the canvas is already blank.'
                   : 'Start from a blank promo card'
               }
             >
+              <span aria-hidden="true" className="ai-sheen pointer-events-none absolute inset-0" />
               <FilePlus2 className="h-4 w-4" /> Clear Canvas
             </button>
             </div>
@@ -5062,6 +5299,8 @@ export function PromoSection({
                 </p>
               </div>
 
+              {hasCurrentDesign && (
+                <>
               <div className="mt-4 h-10 w-px shrink-0 bg-border" />
 
               <div className="shrink-0">
@@ -5072,6 +5311,9 @@ export function PromoSection({
                   type="button"
                   title="Back to the design you had before trying themes"
                   onClick={() => {
+                    // Already on it: restoring would change nothing, so an
+                    // "undo" step and a toast claiming a restore both lie.
+                    if (onOwnDesign) return;
                     pushPromoState({ replace: true });
                     samplingThemeRef.current = true;
                     setConfig({
@@ -5082,7 +5324,7 @@ export function PromoSection({
                     toast('Restored your original design');
                   }}
                   style={{ background: getBackgroundStyle(themeBaseline.background) }}
-                  className={`relative h-10 w-14 shrink-0 rounded-lg ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
+                  className={`relative h-10 w-24 shrink-0 rounded-lg ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
                     onOwnDesign
                       ? 'ring-2 ring-primary'
                       : 'ring-1 ring-border hover:ring-primary/60'
@@ -5093,25 +5335,46 @@ export function PromoSection({
                   </span>
                 </button>
               </div>
+                </>
+              )}
 
-              <div className="mt-4 h-10 w-px shrink-0 bg-border" />
+              {hasCurrentDesign && (
+                <div className="mt-4 h-10 w-px shrink-0 bg-border" />
+              )}
 
               <div className="min-w-0 flex-1">
                 <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
                   Themes
                 </p>
-                <div className="campaign-custom-scrollbar flex gap-2 overflow-x-auto pb-1">
+                {/* Vertical padding is not decoration: overflow-x also clips the Y
+                    axis, and the selected swatch's ring sits 2px outside its
+                    box, so without room the marker is sliced off top and bottom. */}
+                <div className="campaign-custom-scrollbar flex gap-2 overflow-x-auto px-1 pb-2 pt-1.5">
                   {sampleTemplates.map((t) => {
+                    /**
+                     * Marked when the card is wearing this look — either
+                     * because it is being tried on, or because the design
+                     * simply is this template.
+                     *
+                     * `onOwnDesign` alone hid the mark in the second case:
+                     * an untouched template counts as "your design", so no
+                     * theme lit up, and with the Current swatch hidden for
+                     * exactly that case nothing in the strip was marked at all.
+                     */
                     const on =
-                      !onOwnDesign &&
-                      JSON.stringify((t.promoCard as PromoCard).style) ===
-                        JSON.stringify(config.promoCard.style);
+                      (!onOwnDesign || baselineIsATheme) &&
+                      lookSignature((t.promoCard as PromoCard).style) ===
+                        lookSignature(config.promoCard.style);
                     return (
                       <button
                         key={t.id}
                         type="button"
                         title={t.name}
                         onClick={() => {
+                          // This look is already applied — re-applying marks
+                          // the card changed and stacks an undo step that
+                          // steps back to the same picture.
+                          if (on) return;
                           pushPromoState({ replace: true });
                           samplingThemeRef.current = true;
                           setConfig({
@@ -5136,10 +5399,12 @@ export function PromoSection({
                 {/* Sits under Themes, not under the whole row: it explains the
                     swatches, and spanning the full width put a sentence about
                     themes directly beneath "Card Position". */}
-                <p className="mt-1.5 text-[11px] text-on-surface-variant">
-                  Reversible — your text stays, and your design waits under{' '}
-                  <span className="font-semibold text-on-surface">Current Design</span>.
-                </p>
+                {hasCurrentDesign && (
+                  <p className="mt-1.5 text-[11px] text-on-surface-variant">
+                    Reversible — your text stays, and your design waits under{' '}
+                    <span className="font-semibold text-on-surface">Current Design</span>.
+                  </p>
+                )}
               </div>
             </div>
           </div>

@@ -171,6 +171,10 @@
 
 .campaign-custom-scrollbar::-webkit-scrollbar {
   width: 8px;
+  /* Horizontal bars take their thickness from height, not width — without it
+     a sideways-scrolling row fell back to the browser's default bar, which is
+     roughly twice as tall as the swatches it sits under. */
+  height: 8px;
 }
 
 .campaign-custom-scrollbar::-webkit-scrollbar-track {
@@ -417,7 +421,8 @@ select {
  * sweep is clipped by the chip's own overflow-hidden. It runs on hover rather
  * than on a loop: a control that glitters at rest reads as a toy, and this
  * toolbar sits next to the card the user is actually reading. */
-.ai-chip .ai-sheen {
+.ai-chip .ai-sheen,
+.tool-chip .ai-sheen {
   background: linear-gradient(
     100deg,
     transparent 38%,
@@ -429,11 +434,26 @@ select {
   opacity: 0;
 }
 
-.ai-chip:hover .ai-sheen {
+.ai-chip:hover .ai-sheen,
+.tool-chip:hover .ai-sheen {
   animation: ai-sheen-sweep 900ms ease-out;
 }
 
-.dark .ai-chip .ai-sheen {
+/* The plain chips borrow the sweep but stay quieter than the AI one — it is
+   still the button meant to catch the eye. */
+.tool-chip .ai-sheen {
+  background: linear-gradient(
+    100deg,
+    transparent 38%,
+    rgb(var(--on-surface) / 0.10) 50%,
+    transparent 62%
+  );
+  background-size: 260% 100%;
+  background-position: 130% 0;
+}
+
+.dark .ai-chip .ai-sheen,
+.dark .tool-chip .ai-sheen {
   background: linear-gradient(
     100deg,
     transparent 38%,
@@ -458,8 +478,23 @@ select {
   }
 }
 
+/* The AI chip earns one extra beat the others don't: its icon lifts and
+   turns slightly on hover, so the button that writes your copy reads as the
+   active one without glittering at rest. */
+.ai-chip .ai-spark {
+  transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ai-chip:hover .ai-spark {
+  transform: rotate(-18deg) scale(1.18);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .ai-chip:hover .ai-sheen {
+  .ai-chip:hover .ai-sheen,
+  .tool-chip:hover .ai-sheen {
     animation: none;
+  }
+  .ai-chip:hover .ai-spark {
+    transform: none;
   }
 }
