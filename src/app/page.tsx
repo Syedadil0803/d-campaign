@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
 import { whatsAppUrl, whatsAppLooksShort } from '@/lib/whatsapp';
+import { cardIsNotUserWork } from '@/lib/promoAuthorship';
+import { sampleTemplates } from '@/components/SamplePromoTemplates';
 import { normalizeLegacyTimerTokens, TIMER_FIXED_TOKEN } from '@/lib/timerUtils';
 import { fieldOverflows } from '@/lib/promoFit';
 import { Header } from '@/components/Header';
@@ -1337,15 +1339,16 @@ export default function Home() {
     if (variantStatus.status === 'ready') {
       const savedId = await savePromoVariant(cfgToSave);
       await markVariantLive(savedId);
+      // persistConfig returns the editor to the default card on success, so
+      // there is deliberately no setConfig here: writing the published card
+      // back afterwards is what left the finished one sitting on the canvas.
       await persistConfig(cfgToSave, successMsg, 'promo');
-      setConfig(cfgToSave);
       return;
     }
 
     // 'skipped' — the card is already saved, so that entry is the live one.
     await markVariantLive(variantStatus.variantId ?? null);
     await persistConfig(cfgToSave, successMsg, 'promo');
-    setConfig(cfgToSave);
   }
 
   function validatePromo(): string[] {
@@ -1603,7 +1606,17 @@ export default function Home() {
     // My Published counts as saved. Matching any variant in there means the
     // card can be brought back, so there is nothing to protect.
     const differsFromSaved = !promoVariants.some((v) => sig(v.promoCard) === current);
-    return differsFromLive && differsFromDraft && differsFromSaved;
+    /**
+     * Differing from everything stored is not the same as being worth saving.
+     * A cleared canvas matches nothing, so the guard fired on the way to
+     * "Create new" offering to preserve a blank card; a freshly picked
+     * template did the same for words nobody wrote.
+     */
+    const worthProtecting = !cardIsNotUserWork(
+      config.promoCard,
+      sampleTemplates.map((t) => t.promoCard as CampaignConfig['promoCard']),
+    );
+    return worthProtecting && differsFromLive && differsFromDraft && differsFromSaved;
   })();
 
   return (
