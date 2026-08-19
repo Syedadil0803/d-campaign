@@ -8,11 +8,21 @@ export interface GradientStyle {
 
 export interface Announcement {
   text: string;
+  /**
+   * Where the message points. For a WhatsApp CTA this holds the derived
+   * wa.me link, so the website keeps reading one field no matter which kind
+   * of destination was chosen.
+   */
   url?: string;
   richText?: boolean;
   startDate?: string;
   endDate?: string;
   openInNewTab?: boolean;
+  /** Which kind of destination was authored. Absent means a plain link. */
+  ctaType?: 'link' | 'whatsapp';
+  /** Kept alongside the derived url so the editor can repopulate the picker. */
+  whatsappNumber?: string;
+  whatsappCountryCode?: string;
 }
 
 export interface PromoCard {

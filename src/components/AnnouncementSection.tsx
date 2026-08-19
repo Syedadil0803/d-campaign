@@ -10,6 +10,8 @@ import { wrapBareTextWithFontSize, rgbToHex, fontSizeToLabel } from '@/lib/richT
 import RichTextToolbar from './RichTextToolbar';
 import { Toast, TOAST_ACTION_MS, type ToastAction } from './Toast';
 import { PopupDropdown } from './PopupDropdown';
+import { CountryFlag, COUNTRY_CODES } from './CountryFlag';
+import { whatsAppUrl, whatsAppLooksShort, maxNationalDigits } from '@/lib/whatsapp';
 import { useEditorHistory } from '@/hooks/useEditorHistory';
 import { EditorSnapshot, LinkSnapshot } from '@/lib/historyManager';
 import {
@@ -108,6 +110,19 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const resetMenuRef = useRef<HTMLDivElement>(null);
   const [showLinkPopup, setShowLinkPopup] = useState(false);
+  // WhatsApp destination for the selected message: the same picker the promo
+  // card uses, so a number typed here behaves the same way there.
+  const [selectedCtaType, setSelectedCtaType] = useState<'link' | 'whatsapp'>('link');
+  const [selectedWhatsappNumber, setSelectedWhatsappNumber] = useState('');
+  const [selectedCountryCode, setSelectedCountryCode] = useState('+44');
+  const [showAnnCountryDropdown, setShowAnnCountryDropdown] = useState(false);
+  const [annCountryPos, setAnnCountryPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+  const annCountryBtnRef = useRef<HTMLButtonElement>(null);
+  const annCountryMenuRef = useRef<HTMLDivElement>(null);
   const [showSchedulePopup, setShowSchedulePopup] = useState(false);
   const [showStartDateCalendar, setShowStartDateCalendar] = useState(false);
   const [showEndDateCalendar, setShowEndDateCalendar] = useState(false);
@@ -517,12 +532,29 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     commitHistory(); // The editor moves on — its step history goes with it.
     const html = getNormalizedHTML();
     const updated = [...config.announcementBar.announcements];
+    // The destination as the popup currently has it. Add/Update rebuild the
+    // whole entry, so without this a WhatsApp number was dropped on the way
+    // in — the entry got the (empty) plain-link URL and rendered unlinked.
+    const destination =
+      selectedCtaType === 'whatsapp'
+        ? {
+            ctaType: 'whatsapp' as const,
+            url: whatsAppUrl(selectedCountryCode, selectedWhatsappNumber) || undefined,
+            whatsappNumber: selectedWhatsappNumber || undefined,
+            whatsappCountryCode: selectedCountryCode,
+          }
+        : {
+            ctaType: undefined,
+            url: selectedUrl || undefined,
+            whatsappNumber: undefined,
+            whatsappCountryCode: undefined,
+          };
 
     if (selectedIndex !== null) {
       updated[selectedIndex] = {
         ...updated[selectedIndex],
         text: html,
-        url: selectedUrl || undefined,
+        ...destination,
         openInNewTab: selectedOpenInNewTab || undefined,
         startDate: selectedStartDate || undefined,
         endDate: selectedEndDate || undefined,
@@ -531,7 +563,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     } else {
       updated.push({
         text: html,
-        url: selectedUrl || undefined,
+        ...destination,
         openInNewTab: selectedOpenInNewTab || undefined,
         startDate: selectedStartDate || undefined,
         endDate: selectedEndDate || undefined,
@@ -750,11 +782,51 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     window.getSelection()?.removeAllRanges();
   }
 
+  /**
+   * Write the selected message's destination.
+   *
+   * `url` stays the one field the website reads, so a WhatsApp CTA is stored
+   * as its derived wa.me link; the raw number and dialling code ride along
+   * only so reopening the popup can repopulate the picker.
+   */
+  function updateSelectedDestination(next: {
+    ctaType?: 'link' | 'whatsapp';
+    url?: string;
+    whatsappNumber?: string;
+    whatsappCountryCode?: string;
+  }) {
+    if (selectedIndex === null) return;
+    const ctaType = next.ctaType ?? selectedCtaType;
+    const number = next.whatsappNumber ?? selectedWhatsappNumber;
+    const code = next.whatsappCountryCode ?? selectedCountryCode;
+    const plainUrl = next.url ?? selectedUrl;
+
+    const updated = [...config.announcementBar.announcements];
+    const resolved =
+      ctaType === 'whatsapp' ? whatsAppUrl(code, number) : plainUrl || undefined;
+    updated[selectedIndex] = {
+      ...updated[selectedIndex],
+      richText: true,
+      ctaType: ctaType === 'whatsapp' ? 'whatsapp' : undefined,
+      url: resolved || undefined,
+      whatsappNumber: ctaType === 'whatsapp' ? number || undefined : undefined,
+      whatsappCountryCode: ctaType === 'whatsapp' ? code : undefined,
+    };
+    setConfig({
+      ...config,
+      announcementBar: { ...config.announcementBar, announcements: updated },
+    });
+    markChanged();
+  }
+
   // ── Select announcement (load into editor in edit mode) ──
   function selectAnnouncement(index: number) {
     const ann = config.announcementBar.announcements[index];
     setSelectedIndex(index);
     setSelectedUrl(ann.url || '');
+    setSelectedCtaType(ann.ctaType === 'whatsapp' ? 'whatsapp' : 'link');
+    setSelectedWhatsappNumber(ann.whatsappNumber || '');
+    setSelectedCountryCode(ann.whatsappCountryCode || '+44');
     setSelectedOpenInNewTab(ann.openInNewTab !== undefined ? ann.openInNewTab : true);
     setSelectedStartDate(ann.startDate || '');
     setSelectedEndDate(ann.endDate || '');
@@ -1653,6 +1725,118 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                 >
                   ×
                 </button>
+                {/* Two kinds of destination, one field on the website. */}
+                <div className="mb-3 flex gap-1 rounded-lg border border-border p-0.5">
+                  {(['link', 'whatsapp'] as const).map((kind) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // Switch the mode only. Writing here too would clear
+                        // the destination the moment you flipped the toggle —
+                        // the other mode has nothing entered yet — so a stray
+                        // click destroyed a link that was already set.
+                        setSelectedCtaType(kind);
+                      }}
+                      className={`flex-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                        selectedCtaType === kind
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-on-surface-variant hover:text-on-surface'
+                      }`}
+                    >
+                      {kind === 'link' ? 'Link' : 'WhatsApp'}
+                    </button>
+                  ))}
+                </div>
+
+                {selectedCtaType === 'whatsapp' ? (
+                  <>
+                    <p className="text-xs font-medium text-on-surface mb-2">
+                      WhatsApp number
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <PopupDropdown
+                        labelClassName="sr-only"
+                        label="Country code"
+                        value={selectedCountryCode}
+                        options={COUNTRY_CODES.map(({ code, flag, name }) => ({
+                          value: code,
+                          label: code,
+                          meta: name,
+                          icon: <CountryFlag flag={flag} name={name} />,
+                        }))}
+                        open={showAnnCountryDropdown}
+                        onOpen={() => {
+                          const btn = annCountryBtnRef.current;
+                          if (btn) {
+                            const r = btn.getBoundingClientRect();
+                            setAnnCountryPos({
+                              top: r.bottom + window.scrollY,
+                              left: r.left + window.scrollX,
+                              width: r.width,
+                            });
+                          }
+                          setShowAnnCountryDropdown((v) => !v);
+                        }}
+                        onSelect={(v) => {
+                          setSelectedCountryCode(v);
+                          updateSelectedDestination({ whatsappCountryCode: v });
+                          setShowAnnCountryDropdown(false);
+                        }}
+                        buttonRef={annCountryBtnRef}
+                        menuRef={annCountryMenuRef}
+                        menuPosition={annCountryPos}
+                        compact
+                        flip
+                        menuMaxHeight={220}
+                        triggerContent={(() => {
+                          const c = COUNTRY_CODES.find(
+                            (x) => x.code === selectedCountryCode,
+                          );
+                          return (
+                            <span className="flex items-center gap-1.5">
+                              {c ? <CountryFlag flag={c.flag} name={c.name} /> : null}
+                              <span>{selectedCountryCode}</span>
+                            </span>
+                          );
+                        })()}
+                        buttonClassName="flex h-9 w-[92px] shrink-0 items-center justify-between gap-1 rounded-md border border-border bg-surface px-2 text-sm text-on-surface transition-colors hover:border-primary/70"
+                      />
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        value={selectedWhatsappNumber}
+                        onChange={(e) => {
+                          const digits = e.target.value
+                            .replace(/\D/g, '')
+                            .slice(0, maxNationalDigits(selectedCountryCode));
+                          setSelectedWhatsappNumber(digits);
+                          updateSelectedDestination({ whatsappNumber: digits });
+                        }}
+                        className="block w-full rounded-md border border-border bg-surface p-2 text-sm text-on-surface"
+                        placeholder="7911123456"
+                        autoFocus
+                      />
+                    </div>
+                    {/* A short number still links — length is a warning, not a
+                        gate, matching how the promo card treats it. */}
+                    {whatsAppLooksShort(selectedCountryCode, selectedWhatsappNumber) && (
+                      <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-500">
+                        That looks short for {selectedCountryCode}. Double-check it
+                        before publishing.
+                      </p>
+                    )}
+                    {whatsAppUrl(selectedCountryCode, selectedWhatsappNumber) && (
+                      <p className="mt-1.5 break-all text-[11px] text-on-surface-variant">
+                        Opens{' '}
+                        {whatsAppUrl(selectedCountryCode, selectedWhatsappNumber)}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                <>
                 <p className="text-xs font-medium text-on-surface mb-2">Link URL</p>
                 <input
                   type="url"
@@ -1727,16 +1911,26 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                   <label htmlFor="openInNewTab" className="ml-2 text-xs text-on-surface cursor-pointer">Open in new tab</label>
                 </div>
                 <p className="text-[10px] text-on-surface-variant mt-1">In this editor, links always open in a new tab. <br /> This setting applies to your live site only.</p>
+                </>
+                )}
                 <div className="flex justify-between items-center mt-2">
-                  {selectedUrl && (
+                  {(selectedUrl || selectedWhatsappNumber) && (
                     <button
                       onMouseDown={(e) => {
                         e.preventDefault();
                         setSelectedUrl('');
+                        setSelectedWhatsappNumber('');
                         setSelectedOpenInNewTab(true);
                         if (selectedIndex !== null) {
                           const updated = [...config.announcementBar.announcements];
-                          updated[selectedIndex] = { ...updated[selectedIndex], url: undefined, openInNewTab: undefined, richText: true };
+                          updated[selectedIndex] = {
+                            ...updated[selectedIndex],
+                            url: undefined,
+                            openInNewTab: undefined,
+                            whatsappNumber: undefined,
+                            whatsappCountryCode: undefined,
+                            richText: true,
+                          };
                           setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
                           markChanged();
                         }
@@ -2286,6 +2480,9 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                               const ann = config.announcementBar.announcements[index];
                               setSelectedIndex(index);
                               setSelectedUrl(ann.url || '');
+                              setSelectedCtaType(ann.ctaType === 'whatsapp' ? 'whatsapp' : 'link');
+                              setSelectedWhatsappNumber(ann.whatsappNumber || '');
+                              setSelectedCountryCode(ann.whatsappCountryCode || '+44');
                               setSelectedOpenInNewTab(ann.openInNewTab !== undefined ? ann.openInNewTab : true);
                               setSelectedStartDate(ann.startDate || '');
                               setSelectedEndDate(ann.endDate || '');

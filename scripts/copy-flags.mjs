@@ -2,7 +2,7 @@
  * Refresh the country flags the WhatsApp picker serves from /public/flags.
  *
  * Windows ships no flag emoji glyphs, so the picker renders images instead of
- * the emoji. Run this after adding a country to COUNTRY_CODES:
+ * the emoji. Run this after adding a country to COUNTRY_CODES (src/components/CountryFlag.tsx):
  *
  *   npm run flags
  *
@@ -12,10 +12,10 @@
 
 import { readFileSync, mkdirSync, copyFileSync, existsSync } from 'node:fs';
 
-const src = readFileSync('src/components/PromoSection.tsx', 'utf8');
+const src = readFileSync('src/components/CountryFlag.tsx', 'utf8');
 const start = src.indexOf('const COUNTRY_CODES');
 if (start === -1) {
-  console.error('Could not find COUNTRY_CODES in PromoSection.tsx');
+  console.error('Could not find COUNTRY_CODES in CountryFlag.tsx');
   process.exit(1);
 }
 const table = src.slice(start, src.indexOf('];', start));
