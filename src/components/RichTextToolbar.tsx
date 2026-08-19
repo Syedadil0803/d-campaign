@@ -10,6 +10,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import PresetColorPicker from './PresetColorPicker';
+import { FONT_SIZE_DISPLAY_MAP } from '@/lib/richTextUtils';
 
 interface ActiveFormats {
   bold: boolean;
@@ -143,22 +144,64 @@ export default function RichTextToolbar({
         {/* Divider */}
         <div className="border-l border-gray-300 h-4 mx-1" />
 
-        {/* Size controls */}
+        {/* Size — one control showing the current size, the rest a click away.
+            Six buttons side by side made the toolbar read as a row of shouty
+            abbreviations, and five of them were always wrong for the text
+            selected. */}
         {!compact ? (
-          ['xs', 'sm', 'md', 'lg', 'xl', 'xxl'].map((size) => (
+          <div className="relative">
             <button
-              key={size}
+              ref={sizeBtnRef}
               onMouseDown={(e) => {
                 e.preventDefault();
-                handleFormat(`size-${size}`);
+                setShowSizeDropdown((v) => !v);
               }}
-              className={`${baseBtnClass} ${
-                activeFormats.size === size ? activeBtnClass : ''
-              }`}
+              className={`${baseBtnClass} flex w-[58px] items-center justify-between gap-1`}
+              title="Text size"
+              aria-haspopup="listbox"
+              aria-expanded={showSizeDropdown}
             >
-              {size.toUpperCase()}
+              <span>{FONT_SIZE_DISPLAY_MAP[activeFormats.size || 'md'] ?? 'MD'}</span>
+              <svg
+                className={`h-3 w-3 shrink-0 text-on-surface-variant transition-transform duration-200 ${
+                  showSizeDropdown ? 'rotate-180' : 'rotate-0'
+                }`}
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
-          ))
+            {showSizeDropdown && (
+              <div
+                ref={sizeMenuRef}
+                role="listbox"
+                className="absolute left-0 mt-1 z-50 min-w-[72px] rounded-lg border border-border bg-surface-elevated p-1.5 shadow-lg"
+              >
+                {Object.entries(FONT_SIZE_DISPLAY_MAP).map(([value, label]) => (
+                  <button
+                    key={value}
+                    role="option"
+                    aria-selected={(activeFormats.size || 'md') === value}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleFormat(`size-${value}`);
+                      setShowSizeDropdown(false);
+                    }}
+                    className={`block w-full rounded px-2 py-1 text-left text-xs transition-colors hover:bg-primary/10 ${
+                      (activeFormats.size || 'md') === value
+                        ? 'font-semibold text-primary'
+                        : 'text-on-surface'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         ) : null}
 
         {extraActions}
@@ -176,7 +219,9 @@ export default function RichTextToolbar({
               className="cursor-pointer h-6 w-[60px] px-1 py-1 text-[10px] rounded-md border border-white/10 bg-black/10 text-on-surface shadow-2xl backdrop-blur-md hover:border-primary/70 flex items-center justify-between"
               title="Font Size"
             >
-              <span>{(activeFormats.size || 'md').toUpperCase()}</span>
+              <span>
+                {FONT_SIZE_DISPLAY_MAP[activeFormats.size || 'md'] ?? '16'}
+              </span>
               <svg className={`h-3 w-3 flex-shrink-0 text-on-surface-variant transition-transform duration-200 ${showSizeDropdown ? 'rotate-180' : 'rotate-0'}`} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -186,14 +231,10 @@ export default function RichTextToolbar({
                 ref={sizeMenuRef}
                 className="absolute right-0 mt-1 z-50 min-w-[80px] bg-black/10 backdrop-blur-md border border-white/10 shadow-2xl p-1.5 rounded-lg"
               >
-                {[
-                  { value: 'xs', label: 'XS' },
-                  { value: 'sm', label: 'SM' },
-                  { value: 'md', label: 'MD' },
-                  { value: 'lg', label: 'LG' },
-                  { value: 'xl', label: 'XL' },
-                  { value: 'xxl', label: '2XL' },
-                ].map((size) => (
+                {Object.entries(FONT_SIZE_DISPLAY_MAP).map(([value, label]) => ({
+                  value,
+                  label,
+                })).map((size) => (
                     <button
                       key={size.value}
                       onMouseDown={(e) => {

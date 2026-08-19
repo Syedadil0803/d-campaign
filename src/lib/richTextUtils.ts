@@ -21,6 +21,20 @@ export const FONT_SIZE_MAP: Record<string, string> = {
   xxl: '1.5rem',
 };
 
+/**
+ * What the size control shows the user. One map so the trigger and the menu
+ * can't drift; the internal keys stay as-is because the stored markup and the
+ * format commands are keyed on them.
+ */
+export const FONT_SIZE_DISPLAY_MAP: Record<string, string> = {
+  xs: 'XS',
+  sm: 'SM',
+  md: 'MD',
+  lg: 'LG',
+  xl: 'XL',
+  xxl: '2XL',
+};
+
 export const FONT_SIZE_LABEL_MAP: Record<string, string> = {
   '0.75rem': 'xs',
   '0.875rem': 'sm',
