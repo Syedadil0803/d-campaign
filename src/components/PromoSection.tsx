@@ -19,7 +19,7 @@ import {
   Palette,
   History,
   FilePlus2,
-  FileText,
+  FileClock,
   Sparkles,
   LayoutTemplate,
   Power,
@@ -44,6 +44,7 @@ import {
 } from "@/lib/richTextUtils";
 import RichTextToolbar from "./RichTextToolbar";
 import { PopupDropdown } from "./PopupDropdown";
+import { CountryFlag, COUNTRY_CODES } from "./CountryFlag";
 import { whatsAppUrl, whatsAppLooksShort, maxNationalDigits } from "@/lib/whatsapp";
 import { PromoMiniPreview } from "./PromoMiniPreview";
 import {
@@ -159,114 +160,6 @@ interface PromoSectionProps {
 }
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
-
-// Dialling codes for the WhatsApp CTA. `flag` is an emoji, which macOS and iOS
-// draw as a flag and Windows draws as two letters or as boxes — its emoji font
-// ships no flag glyphs at all, and no CSS can conjure them.
-//
-// So the picker doesn't rely on the font: it renders an SVG we serve ourselves
-// from /public/flags, named by the ISO code derived from the emoji. Same flag
-// on every platform, no CDN, and it still works offline.
-/**
- * "🇬🇧" → "gb", the name of its file in /public/flags.
- *
- * A flag emoji is two regional-indicator code points, each 0x1F1E6 above its
- * letter. Deriving the code keeps one source of truth — the table doesn't need
- * a second column that can drift out of sync with the flag.
- */
-function isoFromFlag(flag: string): string {
-  const points = Array.from(flag).map((ch) => ch.codePointAt(0) ?? 0);
-  if (points.length !== 2) return '';
-  return points
-    .map((cp) => String.fromCharCode(cp - 0x1f1e6 + 65))
-    .join('')
-    .toLowerCase();
-}
-
-/** The picker's flag: an image, so it looks the same on Windows as on a Mac. */
-function CountryFlag({ flag, name }: { flag: string; name: string }) {
-  const code = isoFromFlag(flag);
-  if (!code) return null;
-  return (
-    <img
-      src={`/flags/${code}.svg`}
-      alt={name}
-      width={20}
-      height={15}
-      loading="lazy"
-      className="h-[15px] w-5 shrink-0 rounded-[2px] object-cover ring-1 ring-black/10"
-    />
-  );
-}
-
-const COUNTRY_CODES: { code: string; flag: string; name: string }[] = [
-  { code: '+1', flag: '🇺🇸', name: 'United States' },
-  { code: '+7', flag: '🇷🇺', name: 'Russia' },
-  { code: '+20', flag: '🇪🇬', name: 'Egypt' },
-  { code: '+27', flag: '🇿🇦', name: 'South Africa' },
-  { code: '+30', flag: '🇬🇷', name: 'Greece' },
-  { code: '+31', flag: '🇳🇱', name: 'Netherlands' },
-  { code: '+32', flag: '🇧🇪', name: 'Belgium' },
-  { code: '+33', flag: '🇫🇷', name: 'France' },
-  { code: '+34', flag: '🇪🇸', name: 'Spain' },
-  { code: '+36', flag: '🇭🇺', name: 'Hungary' },
-  { code: '+39', flag: '🇮🇹', name: 'Italy' },
-  { code: '+40', flag: '🇷🇴', name: 'Romania' },
-  { code: '+41', flag: '🇨🇭', name: 'Switzerland' },
-  { code: '+43', flag: '🇦🇹', name: 'Austria' },
-  { code: '+44', flag: '🇬🇧', name: 'United Kingdom' },
-  { code: '+45', flag: '🇩🇰', name: 'Denmark' },
-  { code: '+46', flag: '🇸🇪', name: 'Sweden' },
-  { code: '+47', flag: '🇳🇴', name: 'Norway' },
-  { code: '+48', flag: '🇵🇱', name: 'Poland' },
-  { code: '+49', flag: '🇩🇪', name: 'Germany' },
-  { code: '+51', flag: '🇵🇪', name: 'Peru' },
-  { code: '+52', flag: '🇲🇽', name: 'Mexico' },
-  { code: '+54', flag: '🇦🇷', name: 'Argentina' },
-  { code: '+55', flag: '🇧🇷', name: 'Brazil' },
-  { code: '+56', flag: '🇨🇱', name: 'Chile' },
-  { code: '+57', flag: '🇨🇴', name: 'Colombia' },
-  { code: '+58', flag: '🇻🇪', name: 'Venezuela' },
-  { code: '+60', flag: '🇲🇾', name: 'Malaysia' },
-  { code: '+61', flag: '🇦🇺', name: 'Australia' },
-  { code: '+62', flag: '🇮🇩', name: 'Indonesia' },
-  { code: '+63', flag: '🇵🇭', name: 'Philippines' },
-  { code: '+64', flag: '🇳🇿', name: 'New Zealand' },
-  { code: '+65', flag: '🇸🇬', name: 'Singapore' },
-  { code: '+66', flag: '🇹🇭', name: 'Thailand' },
-  { code: '+81', flag: '🇯🇵', name: 'Japan' },
-  { code: '+82', flag: '🇰🇷', name: 'South Korea' },
-  { code: '+84', flag: '🇻🇳', name: 'Vietnam' },
-  { code: '+86', flag: '🇨🇳', name: 'China' },
-  { code: '+90', flag: '🇹🇷', name: 'Turkey' },
-  { code: '+91', flag: '🇮🇳', name: 'India' },
-  { code: '+92', flag: '🇵🇰', name: 'Pakistan' },
-  { code: '+93', flag: '🇦🇫', name: 'Afghanistan' },
-  { code: '+94', flag: '🇱🇰', name: 'Sri Lanka' },
-  { code: '+95', flag: '🇲🇲', name: 'Myanmar' },
-  { code: '+98', flag: '🇮🇷', name: 'Iran' },
-  { code: '+212', flag: '🇲🇦', name: 'Morocco' },
-  { code: '+213', flag: '🇩🇿', name: 'Algeria' },
-  { code: '+234', flag: '🇳🇬', name: 'Nigeria' },
-  { code: '+254', flag: '🇰🇪', name: 'Kenya' },
-  { code: '+351', flag: '🇵🇹', name: 'Portugal' },
-  { code: '+353', flag: '🇮🇪', name: 'Ireland' },
-  { code: '+358', flag: '🇫🇮', name: 'Finland' },
-  { code: '+380', flag: '🇺🇦', name: 'Ukraine' },
-  { code: '+852', flag: '🇭🇰', name: 'Hong Kong' },
-  { code: '+880', flag: '🇧🇩', name: 'Bangladesh' },
-  { code: '+886', flag: '🇹🇼', name: 'Taiwan' },
-  { code: '+961', flag: '🇱🇧', name: 'Lebanon' },
-  { code: '+962', flag: '🇯🇴', name: 'Jordan' },
-  { code: '+965', flag: '🇰🇼', name: 'Kuwait' },
-  { code: '+966', flag: '🇸🇦', name: 'Saudi Arabia' },
-  { code: '+968', flag: '🇴🇲', name: 'Oman' },
-  { code: '+971', flag: '🇦🇪', name: 'UAE' },
-  { code: '+972', flag: '🇮🇱', name: 'Israel' },
-  { code: '+973', flag: '🇧🇭', name: 'Bahrain' },
-  { code: '+974', flag: '🇶🇦', name: 'Qatar' },
-  { code: '+977', flag: '🇳🇵', name: 'Nepal' },
-];
 
 /**
  * Split stored timer text into prefix/suffix plain-text parts for the panel
@@ -514,6 +407,13 @@ export function PromoSection({
   }, []);
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [currentField, setCurrentField] = useState<PromoField | null>(null);
+  /**
+   * Which control opened the style popup, so it can appear beside whatever was
+   * clicked. Opening it from the style icon next to an input on the left, then
+   * having the panel appear across the canvas next to the card, meant looking
+   * away from the thing just clicked.
+   */
+  const [stylePopupAnchor, setStylePopupAnchor] = useState<"card" | "input">("card");
   const [styleWarning, setStyleWarning] = useState<string | null>(null);
   const styleWarningTimer = useRef<NodeJS.Timeout | null>(null);
   const [fieldInfoPopup, setFieldInfoPopup] = useState<'title' | 'subtitle' | 'description' | null>(null);
@@ -1251,6 +1151,9 @@ export function PromoSection({
     ref: RefObject<HTMLDivElement | null>,
   ) {
     setShowPersistentScaffold(true);
+    // Focusing an input on the left is the second way into the style panel,
+    // and it belongs on the same side as the style icon beside it.
+    setStylePopupAnchor("input");
     setCurrentField(field);
     activeEditorRef.current = ref.current;
     if ((field === 'title' || field === 'subtitle' || field === 'description') && !hiddenFieldInfos.has(field)) {
@@ -1266,6 +1169,7 @@ export function PromoSection({
   function openFieldStylePopup(
     field: PromoField,
     ref: RefObject<HTMLDivElement | null>,
+    trigger?: HTMLElement | null,
   ) {
     const nextEditor = ref.current;
     const prevEditor = activeEditorRef.current;
@@ -1274,6 +1178,7 @@ export function PromoSection({
     }
     setShowPersistentScaffold(true);
     setShowCardBgPopup(false);
+    setStylePopupAnchor("input");
     setCurrentField(field);
     activeEditorRef.current = nextEditor;
     promoDeletingRef.current = false;
@@ -2235,10 +2140,14 @@ export function PromoSection({
   }
 
 
+  /** Popup width and its gap from the card — must match the JSX below. */
+  const STYLE_POPUP_WIDTH = 280;
+  const STYLE_POPUP_GAP = 40;
+
   function getPopupPositionStyle(
     field: PopupField,
     popupHeight = 320,
-  ): { top?: string; bottom?: string } {
+  ): { top?: string; bottom?: string; left?: string } {
     const card = promoCardRef.current;
     const refMap = {
       title: previewTitleRef,
@@ -2249,12 +2158,55 @@ export function PromoSection({
     } as const;
     const el = refMap[field].current;
     if (!card || !el) return { bottom: "8px" };
+
     const fieldTop = el.offsetTop;
     const spaceBelow = card.clientHeight - fieldTop;
-    if (spaceBelow >= popupHeight + 8) {
-      return { top: `${Math.max(8, fieldTop)}px` };
+    const vertical =
+      spaceBelow >= popupHeight + 8
+        ? { top: `${Math.max(8, fieldTop)}px` }
+        : { bottom: "8px" };
+
+    /**
+     * Horizontal: open beside whatever was clicked.
+     *
+     * From a field in the card, the popup sits next to the card, on whichever
+     * side has room — the canvas is ~838px, the card 400px and the popup
+     * 280px, so they only fit side by side, never both on the same side.
+     *
+     * From the style icon beside an input on the left, it instead hugs the
+     * canvas's left edge, next to the input that opened it. It can't go
+     * further left and sit truly beside the inputs: an ancestor of the
+     * preview column sets overflow-x: hidden, so anything past the canvas
+     * edge is clipped rather than floating over the panel.
+     */
+    const offset = STYLE_POPUP_WIDTH + STYLE_POPUP_GAP;
+
+    // Opened from a style icon beside an input: hug the canvas's left edge,
+    // the side those inputs are on. It stays inside the Website Content Area
+    // either way — the panel belongs to the preview, not to the page.
+    if (stylePopupAnchor === "input") {
+      const canvas = card.closest("[data-promo-canvas]") as HTMLElement | null;
+      if (canvas) {
+        const cardLeft = card.getBoundingClientRect().left;
+        const canvasLeft = canvas.getBoundingClientRect().left;
+        return { ...vertical, left: `${Math.round(canvasLeft + 8 - cardLeft)}px` };
+      }
     }
-    return { bottom: "8px" };
+
+    // Clicked a field in the card: open to its right, so the panel lands on
+    // the opposite side from the two left-hand routes and it stays obvious
+    // which one opened it. A card parked bottom-right leaves no room there,
+    // so that case falls back to the left rather than running off the canvas.
+    const canvas = card.closest("[data-promo-canvas]") as HTMLElement | null;
+    const rightEdge = card.getBoundingClientRect().right;
+    const roomOnRight = canvas
+      ? canvas.getBoundingClientRect().right - rightEdge
+      : 0;
+
+    if (roomOnRight >= STYLE_POPUP_WIDTH + STYLE_POPUP_GAP) {
+      return { ...vertical, left: `${card.clientWidth + STYLE_POPUP_GAP}px` };
+    }
+    return { ...vertical, left: `${-offset}px` };
   }
 
 
@@ -2677,7 +2629,7 @@ export function PromoSection({
     // Applying what's already on the canvas is a no-op: don't ask, don't apply
     // (applying would mark the card changed for no visible reason).
     if (opts.nextCard && cardSignature(opts.nextCard) === cardSignature(pc)) {
-      toast('That’s already the card you’re editing.');
+      toast("That's already the card you're editing.");
       return;
     }
 
@@ -3358,7 +3310,7 @@ export function PromoSection({
                 type="button"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  openFieldStylePopup("title", titleRef);
+                  openFieldStylePopup("title", titleRef, e.currentTarget as HTMLElement);
                 }}
                 className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
                 title="Open title style"
@@ -3419,7 +3371,7 @@ export function PromoSection({
                 type="button"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  openFieldStylePopup("subtitle", subtitleRef);
+                  openFieldStylePopup("subtitle", subtitleRef, e.currentTarget as HTMLElement);
                 }}
                 className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
                 title="Open subtitle style"
@@ -3483,7 +3435,7 @@ export function PromoSection({
                 type="button"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  openFieldStylePopup("description", descRef);
+                  openFieldStylePopup("description", descRef, e.currentTarget as HTMLElement);
                 }}
                 className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
                 title="Open description style"
@@ -3676,7 +3628,7 @@ export function PromoSection({
                 type="button"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  openFieldStylePopup("timer", timerRef);
+                  openFieldStylePopup("timer", timerRef, e.currentTarget as HTMLElement);
                 }}
                 className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
                 title="Open timer style"
@@ -3841,6 +3793,19 @@ export function PromoSection({
                       className="flex-1 h-full px-3 outline-none text-sm bg-transparent text-on-surface"
                     />
                   </div>
+                  {/* Same warning the announcement bar shows, and the same one
+                      the publish check raises — surfaced while typing so a
+                      short number is caught before you reach for Publish. */}
+                  {whatsAppLooksShort(
+                    config.promoCard.whatsappCountryCode,
+                    config.promoCard.whatsappNumber,
+                  ) && (
+                    <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-500">
+                      That looks short for{' '}
+                      {config.promoCard.whatsappCountryCode || '+44'}. Double-check
+                      it before publishing.
+                    </p>
+                  )}
                   <p className="mt-1 text-[11px] text-on-surface-variant">Select country code and enter number</p>
                   <p className="mt-1 text-[11px] text-on-surface-variant">The button is shown on the card and opens a WhatsApp chat when clicked.</p>
                 </div>
@@ -3884,7 +3849,7 @@ export function PromoSection({
                     type="button"
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      openFieldStylePopup("button", buttonRef);
+                      openFieldStylePopup("button", buttonRef, e.currentTarget as HTMLElement);
                     }}
                     className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
                     title="Open button style"
@@ -4040,23 +4005,7 @@ export function PromoSection({
             >
               <History className="h-4 w-4" /> My Published
             </button>
-            <button
-              type="button"
-              data-tour="promo-my-draft"
-              onClick={openDraftPopup}
-              className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
-              title={draftExists ? 'View your saved draft' : 'No saved draft yet'}
-            >
-              <FileText className="h-4 w-4" /> My Draft
-              {/* Replaces the old "welcome back" popup: a draft you saved on
-                  purpose gets a marker, not an interruption. */}
-              {draftExists && (
-                <span
-                  aria-label="You have a saved draft"
-                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
-                />
-              )}
-            </button>
+{/* My Draft moved to row 2 next to the save button */}
             <button
               type="button"
               onClick={confirmClearCanvas}
@@ -4077,7 +4026,27 @@ export function PromoSection({
                 they read as one group there instead of living apart from the
                 Current swatch they act on. Only the primary action stays up
                 here, pushed right. */}
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-end gap-2">
+            {/* Icon-only: it sits directly beside "Save draft", which already
+                names the subject, so repeating "My Draft" in full spent a
+                button's worth of width saying the same word twice. The dot
+                still marks that a draft exists. */}
+            <button
+              type="button"
+              data-tour="promo-my-draft"
+              onClick={openDraftPopup}
+              aria-label={draftExists ? "View your saved draft" : "No saved draft yet"}
+              className="relative grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-on-surface-variant/40 text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
+              title={draftExists ? "View your saved draft" : "No saved draft yet"}
+            >
+              <FileClock className="h-4 w-4" />
+              {draftExists && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-surface bg-primary"
+                />
+              )}
+            </button>
             <button
               type="button"
               data-tour="promo-save-draft"
@@ -4086,16 +4055,16 @@ export function PromoSection({
               className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
               title={
                 canvasIsEmpty
-                  ? 'Nothing to save yet — add some content first.'
+                  ? "Nothing to save yet - add some content first."
                   : draftUpToDate
-                  ? 'Your saved draft already matches this — make a change to save again.'
+                  ? "Your saved draft already matches this - make a change to save again."
                   : draftExists
-                  ? 'Replace your saved draft with what you’re editing now'
-                  : 'Store these edits as your saved draft'
+                  ? "Replace your saved draft with what you are editing now"
+                  : "Store these edits as your saved draft"
               }
             >
               {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {draftExists ? 'Update saved draft' : 'Save as draft'}
+              {draftExists ? "Update draft" : "Save draft"}
             </button>
             </div>
           </div>
@@ -4145,10 +4114,6 @@ export function PromoSection({
                     ),
                   }}
                 >
-                  <button className="absolute top-2 right-2 opacity-60 hover:opacity-100 p-1">
-                    <X className="w-4 h-4" />
-                  </button>
-
                   {showTitleInPreview && (
                     <div
                       ref={previewTitleRef}
@@ -4160,6 +4125,7 @@ export function PromoSection({
                       }}
                       onClick={() => {
                         setShowCardBgPopup(false);
+                        setStylePopupAnchor("card");
                         if (currentField !== "title") setCurrentField("title");
                         activeEditorRef.current = previewTitleRef.current;
                         setTimeout(
@@ -4206,6 +4172,7 @@ export function PromoSection({
                       }}
                       onClick={() => {
                         setShowCardBgPopup(false);
+                        setStylePopupAnchor("card");
                         // Plain click activates subtitle style mode.
                         if (currentField !== "subtitle")
                           setCurrentField("subtitle");
@@ -4255,6 +4222,7 @@ export function PromoSection({
                       }}
                       onClick={() => {
                         setShowCardBgPopup(false);
+                        setStylePopupAnchor("card");
                         if (currentField !== "description")
                           setCurrentField("description");
                         activeEditorRef.current = previewDescriptionRef.current;
@@ -4312,6 +4280,7 @@ export function PromoSection({
                       }}
                       onClick={(e) => {
                         setShowCardBgPopup(false);
+                        setStylePopupAnchor("card");
                         if (currentField !== "timer") setCurrentField("timer");
                         // Clicking ON the countdown targets a chip cell for
                         // styling (its own mousedown sets the target) — placing
@@ -4477,12 +4446,7 @@ export function PromoSection({
                       const fieldAngleNormalized = normalizeAngle(fieldAngle);
                       return (
                         <div
-                          className={`absolute z-30 w-[280px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 ${
-                            config.promoCard.style.position === "bottom-right" ||
-                            config.promoCard.style.position === "top-right"
-                              ? "right-full mr-10"
-                              : "left-full ml-10"
-                          }`}
+                          className="absolute z-30 w-[280px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3"
                           style={getPopupPositionStyle(field)}
                         >
                           <button
@@ -4780,17 +4744,29 @@ export function PromoSection({
                   {showCardBgPopup && (
                     <div
                       ref={cardBgPopupRef}
-                      className={`absolute z-30 w-[320px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 ${
-                        config.promoCard.style.position === "bottom-right" ||
-                        config.promoCard.style.position === "top-right"
-                          ? "right-full mr-10"
-                          : "left-full ml-10"
-                      }`}
+                      className="absolute z-30 w-[320px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3"
                       style={(() => {
                         const card = promoCardRef.current;
-                        if (!card || card.clientHeight >= 320 + 8 + 8)
-                          return { top: "8px" };
-                        return { bottom: "8px" };
+                        const vertical =
+                          !card || card.clientHeight >= 320 + 8 + 8
+                            ? { top: "8px" }
+                            : { bottom: "8px" };
+                        // Opened from "Edit Colors" down on the left, so it
+                        // opens on that side too.
+                        const canvas = card?.closest(
+                          "[data-promo-canvas]",
+                        ) as HTMLElement | null;
+                        if (!card || !canvas) return vertical;
+                        const cardRect = card.getBoundingClientRect();
+                        const canvasRect = canvas.getBoundingClientRect();
+                        // This panel is taller than the canvas, so it cannot
+                        // sit wholly inside it. Pin its top to the canvas so
+                        // the overspill falls downward, over the controls,
+                        // rather than upward across the toolbar and nav.
+                        return {
+                          top: `${Math.round(canvasRect.top + 8 - cardRect.top)}px`,
+                          left: `${Math.round(canvasRect.left + 8 - cardRect.left)}px`,
+                        };
                       })()}
                     >
                       <button
@@ -5006,67 +4982,93 @@ export function PromoSection({
                 the two, and exactly one swatch across both groups is ever
                 marked: yours when the card is on your design, the theme's only
                 while you're trying it. */}
-            <div className="flex items-stretch gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
-                  Themes - Click any to change the look - Your text stays
-                </p>
-                <div className="campaign-custom-scrollbar flex gap-2 overflow-x-auto px-1.5 pb-3 pt-2">
-                  {sampleTemplates.map((t) => {
-                const on =
-                  !onOwnDesign &&
-                  JSON.stringify((t.promoCard as PromoCard).style) ===
-                    JSON.stringify(config.promoCard.style);
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    title={t.name}
-                    onClick={() => {
-                      pushPromoState({ replace: true });
-                      samplingThemeRef.current = true;
+            <div className="flex items-start gap-4">
+              {/* Position and colour share one explainer: both describe the
+                  card itself, so a line under each would say the same thing
+                  twice. */}
+              <div className="shrink-0">
+                <div className="flex items-start gap-4">
+                  <div className="shrink-0">
+                    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
+                      Card Position
+                    </p>
+                    <span title="Where the card sits on your website">
+                  <PopupDropdown
+                    labelClassName="sr-only"
+                    label="Position"
+                    value={config.promoCard.style.position}
+                    options={[
+                      { value: "bottom-right", label: "Bottom Right" },
+                      { value: "bottom-left", label: "Bottom Left" },
+                    ]}
+                    open={showCardPositionDropdown}
+                    onOpen={() => {
+                      const next = !showCardPositionDropdown;
+                      closeAllPromoDropdowns();
+                      setShowCardPositionDropdown(next);
+                      setCardPositionPos(
+                        getDropdownPosition(cardPositionBtnRef.current),
+                      );
+                    }}
+                    onSelect={(v) => {
+                      pushPromoState();
                       setConfig({
-                        ...configRef.current,
-                        promoCard: applyTemplateLook(
-                          configRef.current.promoCard,
-                          t.promoCard as PromoCard,
-                        ),
+                        ...config,
+                        promoCard: {
+                          ...config.promoCard,
+                          style: {
+                            ...config.promoCard.style,
+                            position: v as any,
+                          },
+                        },
                       });
                       markChanged();
+                      setShowCardPositionDropdown(false);
                     }}
-                    style={{
-                      background: getBackgroundStyle((t.promoCard as PromoCard).style.background),
-                    }}
-                    className={`h-8 w-12 shrink-0 rounded-md ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
-                      on ? "ring-2 ring-primary" : "ring-1 ring-border hover:ring-primary/60"
-                    }`}
+                    buttonRef={cardPositionBtnRef}
+                    menuRef={cardPositionMenuRef}
+                    menuPosition={cardPositionPos}
+                    compact={true}
+                    buttonClassName="flex h-10 items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-surface px-3 text-left text-sm font-medium text-on-surface shadow-sm transition-colors hover:border-primary/70 hover:text-primary"
                       />
-                    );
-                  })}
+                    </span>
+                  </div>
+
+                  <div className="shrink-0">
+                    <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
+                      Card Color
+                    </p>
+                    <button
+                      ref={cardBgPopupBtnRef}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        closeAllPromoDropdowns();
+                        setShowPersistentScaffold(true);
+                        setShowCardBgPopup((prev) => !prev);
+                      }}
+                      className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-surface px-3 text-sm font-medium text-on-surface shadow-sm transition-colors hover:border-primary/70 hover:text-primary"
+                      title="The card's own background colors"
+                    >
+                      <Palette className="h-4 w-4" /> Edit Colors
+                    </button>
+                  </div>
                 </div>
+                <p className="mt-1.5 text-[11px] text-on-surface-variant">
+                  Card sits on website, and the colors it uses there.
+                </p>
               </div>
 
-              {/* The rule is what makes "yours" read as a group of one rather
-                  than one of thirteen. */}
-              <div className="my-auto h-10 w-px shrink-0 bg-border" />
+              <div className="mt-4 h-10 w-px shrink-0 bg-border" />
 
-              {/* Current, plus the two controls that act on it — where the
-                  card sits and what colours it uses. All three are "what this
-                  card looks like," moved down from the toolbar to sit beside
-                  the swatch they belong to, on the right where the eye lands
-                  after browsing themes to its left. */}
               <div className="shrink-0">
-                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
-                  Current
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
+                  Current Design
                 </p>
-                <div className="flex flex-col gap-1.5 px-1.5 pb-3 pt-2">
-                  <button
+                <button
                   type="button"
                   title="Back to the design you had before trying themes"
                   onClick={() => {
-                    // A look change like any other, so Ctrl+Z can step back
-                    // over it — themes keep your words, so they belong with
-                    // ordinary styling, not with the swaps that clear history.
                     pushPromoState({ replace: true });
                     samplingThemeRef.current = true;
                     setConfig({
@@ -5077,85 +5079,66 @@ export function PromoSection({
                     toast('Restored your original design');
                   }}
                   style={{ background: getBackgroundStyle(themeBaseline.background) }}
-                  className={`relative h-8 w-12 shrink-0 self-start rounded-md ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
+                  className={`relative h-10 w-14 shrink-0 rounded-lg ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
                     onOwnDesign
                       ? 'ring-2 ring-primary'
                       : 'ring-1 ring-border hover:ring-primary/60'
                   }`}
                 >
-                    <span className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-border bg-surface text-on-surface-variant">
-                      <RotateCcw className="h-2.5 w-2.5" />
-                    </span>
-                  </button>
-                  <div className="flex items-center gap-1.5">
-                    <span title="Where the card sits on your website">
-                      <PopupDropdown
-                        // Kept for screen readers, hidden on screen —
-                        // "Bottom Right" under a chevron names itself.
-                        labelClassName="sr-only"
-                        label="Position"
-                        value={config.promoCard.style.position}
-                        options={[
-                          { value: "bottom-right", label: "Bottom Right" },
-                          { value: "bottom-left", label: "Bottom Left" },
-                        ]}
-                        open={showCardPositionDropdown}
-                        onOpen={() => {
-                          const next = !showCardPositionDropdown;
-                          closeAllPromoDropdowns();
-                          setShowCardPositionDropdown(next);
-                          setCardPositionPos(
-                            getDropdownPosition(cardPositionBtnRef.current),
-                          );
-                        }}
-                        onSelect={(v) => {
-                          pushPromoState();
+                  <span className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-border bg-surface text-on-surface-variant">
+                    <RotateCcw className="h-2.5 w-2.5" />
+                  </span>
+                </button>
+              </div>
+
+              <div className="mt-4 h-10 w-px shrink-0 bg-border" />
+
+              <div className="min-w-0 flex-1">
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
+                  Themes
+                </p>
+                <div className="campaign-custom-scrollbar flex gap-2 overflow-x-auto pb-1">
+                  {sampleTemplates.map((t) => {
+                    const on =
+                      !onOwnDesign &&
+                      JSON.stringify((t.promoCard as PromoCard).style) ===
+                        JSON.stringify(config.promoCard.style);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        title={t.name}
+                        onClick={() => {
+                          pushPromoState({ replace: true });
+                          samplingThemeRef.current = true;
                           setConfig({
-                            ...config,
-                            promoCard: {
-                              ...config.promoCard,
-                              style: {
-                                ...config.promoCard.style,
-                                position: v as any,
-                              },
-                            },
+                            ...configRef.current,
+                            promoCard: applyTemplateLook(
+                              configRef.current.promoCard,
+                              t.promoCard as PromoCard,
+                            ),
                           });
                           markChanged();
-                          setShowCardPositionDropdown(false);
                         }}
-                        buttonRef={cardPositionBtnRef}
-                        menuRef={cardPositionMenuRef}
-                        menuPosition={cardPositionPos}
-                        compact={true}
-                        buttonClassName="flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border border-white/10 bg-black/10 px-2 text-left text-xs text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10"
+                        style={{
+                          background: getBackgroundStyle((t.promoCard as PromoCard).style.background),
+                        }}
+                        className={`h-10 w-14 shrink-0 rounded-lg ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
+                          on ? "ring-2 ring-primary" : "ring-1 ring-border hover:ring-primary/60"
+                        }`}
                       />
-                    </span>
-                    <button
-                      ref={cardBgPopupBtnRef}
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        closeAllPromoDropdowns();
-                        setShowPersistentScaffold(true);
-                        setShowCardBgPopup((prev) => !prev);
-                      }}
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-white/10 bg-black/10 text-on-surface shadow-2xl backdrop-blur-md transition-colors hover:border-primary/70 hover:bg-black/10"
-                      title="Card background — click to edit the card’s own colours"
-                    >
-                      <Palette className="h-4 w-4" />
-                    </button>
-                  </div>
+                    );
+                  })}
                 </div>
+                {/* Sits under Themes, not under the whole row: it explains the
+                    swatches, and spanning the full width put a sentence about
+                    themes directly beneath "Card Position". */}
+                <p className="mt-1.5 text-[11px] text-on-surface-variant">
+                  Reversible — your text stays, and your design waits under{' '}
+                  <span className="font-semibold text-on-surface">Current Design</span>.
+                </p>
               </div>
             </div>
-            {/* Says the quiet part out loud: trying a theme is reversible until
-                you commit to a new design. Without it the row reads as thirteen
-                one-way doors, which is exactly what made the swatch confusing. */}
-            <p className="px-1.5 text-[11px] text-on-surface-variant">
-              Trying a theme is reversible — your design waits under{' '}
-              <span className="font-semibold text-on-surface">Current</span> until
-              you pick a new one.
-            </p>
           </div>
         </div>
       </div>
@@ -5380,7 +5363,7 @@ export function PromoSection({
                   </div>
                 ) : (
                   <div className="p-8 text-center text-sm text-on-surface-variant">
-                    No saved draft yet. Use “Save as draft” to store the card you’re editing here.
+                    No saved draft yet. Use “Save as draft” to store the card you're editing here.
                   </div>
                 )}
               </div>
@@ -5597,11 +5580,11 @@ export function PromoSection({
                             {isLive ? (
                               <p className="-mt-1 text-[11px] font-medium text-red-500">
                                 This card is live. Deleting it removes it from your
-                                website right away. This can’t be undone.
+                                website right away. This can't be undone.
                               </p>
                             ) : (
                               <p className="-mt-1 text-[11px] text-on-surface-variant">
-                                You’ll have a few seconds to undo this.
+                                You'll have a few seconds to undo this.
                               </p>
                             )}
                             <div className="flex items-center gap-2">
