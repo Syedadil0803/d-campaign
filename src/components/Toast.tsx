@@ -24,7 +24,7 @@ interface ToastProps {
 }
 
 /** How long an Undo offer stays up. The dismiss timer and the ring share it. */
-export const TOAST_ACTION_MS = 5000;
+export const TOAST_ACTION_MS = 10000;
 
 const RING_RADIUS = 7;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
