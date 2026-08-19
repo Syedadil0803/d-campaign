@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { ServiceWorkerGuard } from '@/components/ServiceWorkerGuard';
 
 export const metadata: Metadata = {
   title: 'Campaign Admin Panel',
@@ -13,7 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="antialiased" suppressHydrationWarning>{children}</body>
+      <body className="antialiased" suppressHydrationWarning>
+        <ServiceWorkerGuard />
+        {children}
+      </body>
     </html>
   );
 }
