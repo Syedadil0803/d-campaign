@@ -4,8 +4,8 @@
     {
       "name": "campaign-admin",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "-p", "3017"],
-      "port": 3017
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
     }
   ]
 }
