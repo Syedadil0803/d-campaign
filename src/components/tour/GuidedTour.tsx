@@ -269,17 +269,10 @@ export function GuidedTour({
 
   return createPortal(
     <div className="pointer-events-none fixed inset-0 z-[80]">
-      {/* Ring around the real control. Two layers: a steady outline so the
-          element stays readable, and a pulsing halo that draws the eye. */}
-      <div
-        className="absolute rounded-lg ring-2 ring-primary transition-all duration-200"
-        style={{
-          top: anchor.top - 4,
-          left: anchor.left - 4,
-          width: anchor.width + 8,
-          height: anchor.height + 8,
-        }}
-      />
+      {/* The target is marked by a soft pulsing halo alone. A hard ring was
+          drawn around it as well, which boxed in the control the user was
+          being asked to look at and read as an error state rather than a
+          pointer. The pulse still moves, so the eye finds it. */}
       <div
         className="absolute animate-ping rounded-lg bg-primary/20"
         style={{
