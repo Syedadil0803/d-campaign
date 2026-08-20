@@ -16,7 +16,12 @@ function summarize(config: CampaignConfig): string {
 // The live/published config is stored under id='default'; the single saved
 // draft (scratchpad) is stored under id='draft' in the same table.
 const DEFAULT_ID = 'default';
-const DRAFT_ID = 'draft';
+
+// The published config is genuinely shared — it is the live website, and there
+// is one of those. A draft is not: it is one person's parked work, so it is
+// keyed by account. Both live in the same table because the row shape is
+// identical and the id already distinguishes them.
+const draftId = (userId: string) => `draft:${userId}`;
 
 export const campaignRepository = {
   async getConfig(id: string = DEFAULT_ID): Promise<CampaignConfig | null> {
@@ -76,18 +81,18 @@ export const campaignRepository = {
   },
 
   // ── Draft (single scratchpad, id='draft') ────────────────────────────────
-  getDraft(): Promise<CampaignConfig | null> {
-    return this.getConfig(DRAFT_ID);
+  getDraft(userId: string): Promise<CampaignConfig | null> {
+    return this.getConfig(draftId(userId));
   },
 
-  saveDraft(config: CampaignConfig): Promise<boolean> {
-    return this.saveConfig(config, DRAFT_ID);
+  saveDraft(userId: string, config: CampaignConfig): Promise<boolean> {
+    return this.saveConfig(config, draftId(userId));
   },
 
-  async deleteDraft(): Promise<boolean> {
+  async deleteDraft(userId: string): Promise<boolean> {
     const start = Date.now();
     try {
-      await getDb().delete(campaignConfig).where(eq(campaignConfig.id, DRAFT_ID));
+      await getDb().delete(campaignConfig).where(eq(campaignConfig.id, draftId(userId)));
       console.log(`[DB] deleteDraft -> OK (${Date.now() - start}ms)`);
       return true;
     } catch (error) {

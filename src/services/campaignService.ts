@@ -27,23 +27,26 @@ export const campaignService = {
   },
 
   // ── Draft (single scratchpad) ──────────────────────────────────────────
-  async getDraft(): Promise<CampaignConfig | null> {
-    return campaignRepository.getDraft();
+  async getDraft(userId: string): Promise<CampaignConfig | null> {
+    return campaignRepository.getDraft(userId);
   },
 
-  async saveDraft(config: CampaignConfig): Promise<{ success: boolean; message: string }> {
+  async saveDraft(
+    userId: string,
+    config: CampaignConfig,
+  ): Promise<{ success: boolean; message: string }> {
     if (!config.announcementBar || !config.promoCard) {
       return { success: false, message: 'Invalid config structure' };
     }
     config.lastUpdated = new Date().toISOString();
-    const success = await campaignRepository.saveDraft(config);
+    const success = await campaignRepository.saveDraft(userId, config);
     return success
       ? { success: true, message: 'Draft saved' }
       : { success: false, message: 'Failed to save draft' };
   },
 
-  async clearDraft(): Promise<{ success: boolean }> {
-    const success = await campaignRepository.deleteDraft();
+  async clearDraft(userId: string): Promise<{ success: boolean }> {
+    const success = await campaignRepository.deleteDraft(userId);
     return { success };
   },
 
