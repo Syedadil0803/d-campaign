@@ -16,6 +16,12 @@ import { PromoSetupDialog } from '@/components/PromoSetupDialog';
 import { Toast, ToastAction, TOAST_ACTION_MS } from '@/components/Toast';
 import { getISODateWithOffset, toLocalISODate } from '@/lib/utils';
 import {
+  describeWhen,
+  fetchPresence,
+  isElsewhere,
+  reportUnsaved,
+} from '@/lib/presenceClient';
+import {
   listVersions,
   MAX_VERSIONS,
   markLiveVersion,
@@ -23,6 +29,14 @@ import {
   updateVersion,
   type PromoVersion,
 } from '@/lib/promoVersions';
+
+/**
+ * How long the editor sits untouched before signing itself out.
+ *
+ * A minute while this is being tried out. It wants raising well before anyone
+ * relies on it — the flow it exercises is the interesting part, not the number.
+ */
+const IDLE_LIMIT_MS = 180_000;
 
 // Migration functions
 function migrateAnnouncements(config: any): CampaignConfig['announcementBar']['announcements'] {
@@ -180,8 +194,6 @@ export default function Home() {
   const [pendingDraftAction, setPendingDraftAction] = useState<
     | { type: 'tab'; tab: 'dashboard' | 'announcement' | 'promo' }
     | { type: 'logout' }
-    /** They tried to close, then chose to stay. Nothing follows either answer. */
-    | { type: 'stayed' }
     | null
   >(null);
   const [pendingVariantSave, setPendingVariantSave] = useState<{
@@ -278,8 +290,6 @@ export default function Home() {
   const mainScrollRef = useRef<HTMLElement>(null);
   const configRef = useRef(config);
   configRef.current = config;
-  /** Pending "did they stay?" check, cancelled if the page really unloads. */
-  const stayTimerRef = useRef<number | null>(null);
   const hasChangesRef = useRef(hasChanges);
   hasChangesRef.current = hasChanges;
   const hasAnnouncementChangesRef = useRef(hasAnnouncementChanges);
@@ -519,69 +529,176 @@ export default function Home() {
     return () => window.clearTimeout(id);
   }, [config, hasAnnouncementChanges]);
 
+  /**
+   * Keep the account's one-bit answer to "is work sitting unsaved somewhere?"
+   * current.
+   *
+   * This is the only thing the server is told about unsaved work. Not the
+   * card — that is the point of it being unsaved, and copying it up on every
+   * edit would both cost a round trip per keystroke and quietly keep something
+   * the user never asked us to keep. A boolean, the browser it is in, and when:
+   * enough for another device to explain itself, and nothing more.
+   *
+   * Sent on the change, never on a timer, and `false` only when this browser
+   * was the one that said `true`. Reporting "all clear" unconditionally would
+   * let a second device wipe out the first device's claim just by loading the
+   * editor, which is exactly the warning this exists to give.
+   */
   useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      const promoAtRisk = promoWorkNotInDraftRef.current;
-      const announcementAtRisk =
-        hasAnnouncementChangesRef.current &&
-        draftSignatureRef.current !== getConfigSignature(configRef.current);
-      if (!promoAtRisk && !announcementAtRisk) return;
-      e.preventDefault();
-      e.returnValue = '';
+    const atRisk =
+      promoWorkNotInDraftRef.current ||
+      (hasAnnouncementChanges && draftSignatureRef.current !== getConfigSignature(config));
+    if (reportedUnsavedRef.current === atRisk) return;
 
-      /**
-       * Offer to save, but only to someone who stayed.
-       *
-       * The browser will not say which button was pressed, so this waits and
-       * watches instead: if the page is really going, `pagehide` fires and
-       * cancels this before it can run. Leaving on the timer alone was not
-       * enough — the tab lives for a moment after the choice is made, long
-       * enough for the dialog to flash up on the way out.
-       */
-      stayTimerRef.current = window.setTimeout(() => {
-        // Still here, and still the page being looked at. A tab on its way out
-        // is hidden before it is discarded, so this second check catches the
-        // close that `pagehide` has not reported yet — the dialog was painting
-        // during the teardown frames and flashing up as the tab vanished.
-        if (document.visibilityState !== 'visible') return;
-        setPendingDraftAction({ type: 'stayed' });
-      }, 1200);
+    const id = window.setTimeout(() => {
+      reportedUnsavedRef.current = atRisk;
+      reportUnsaved(atRisk);
+    }, 1000);
+    return () => window.clearTimeout(id);
+  }, [config, hasAnnouncementChanges]);
+
+  /**
+   * Sign out after a spell of inactivity — and treat it as an accident, not a
+   * decision.
+   *
+   * Someone who walks away has not chosen to stop working, so the order here
+   * matters: the local copy is written first, while the page is still ours,
+   * and only then does anything that can fail get attempted. If the logout
+   * request never lands, the work is still on disk and the next visit restores
+   * it; if it were the other way round, a flaky network would cost the work.
+   */
+  useEffect(() => {
+    let timer: number | undefined;
+
+    const signOutIdle = () => {
+      const atRisk =
+        promoWorkNotInDraftRef.current ||
+        (hasAnnouncementChangesRef.current &&
+          draftSignatureRef.current !== getConfigSignature(configRef.current));
+
+      if (atRisk) {
+        writeRecovery(configRef.current);
+        // Raised now rather than left to the effect above, which debounces and
+        // will not get another turn before this page is gone.
+        reportUnsaved(true);
+      }
+
+      exitReasonRef.current = 'timeout';
+      fetch('/api/auth/logout', { method: 'POST', keepalive: true })
+        .catch(() => {})
+        .finally(() => {
+          window.location.href = '/login?reason=timeout';
+        });
+    };
+
+    const restart = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(signOutIdle, IDLE_LIMIT_MS);
+    };
+
+    // Real input only. A mousemove listener would keep the session alive under
+    // a sleeping cursor, and scroll fires from the page's own animations.
+    const events: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
+    events.forEach((event) => window.addEventListener(event, restart, { passive: true }));
+    restart();
+
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach((event) => window.removeEventListener(event, restart));
+    };
+  }, []);
+
+  /**
+   * Is this account's unsaved work in some other browser?
+   *
+   * Asked once, on the way in. A device holding unsaved work cannot hand it
+   * over — that is what "unsaved" means — so the answer never changes anything
+   * on screen except to explain why the work is not here.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    fetchPresence().then((presence) => {
+      if (cancelled || !presence) return;
+
+      if (isElsewhere(presence)) {
+        setElsewhereNotice({
+          deviceLabel: presence.lastUnsavedDeviceLabel || 'another browser',
+          at: presence.lastUnsavedAt,
+        });
+        return;
+      }
+
+      // The flag is ours. Remember that, so saving from here takes it back
+      // down instead of being mistaken for a no-op.
+      if (presence.hasUnsavedLocalChanges) reportedUnsavedRef.current = true;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /**
+   * Leaving is never a question any more.
+   *
+   * The browser's "Leave site?" prompt used to guard this, with the tool
+   * offering a draft to anyone who cancelled. It went because it was answering
+   * the wrong question. Closing a tab is not a decision about the work — most
+   * of the time it is a machine going to sleep, a window being tidied, or a
+   * shutdown — and a prompt there asks people to make a call about something
+   * they were not thinking about, at the one moment they are trying to be
+   * elsewhere. Worse, it could only ever be a warning: the browser will not
+   * say which button was pressed, so the tool had to guess, and answering
+   * Leave threw the work away on the strength of that guess.
+   *
+   * What replaces it is the same thing that already handles a crash: the work
+   * is on disk before the page goes, and it comes back on the way in. Nothing
+   * is asked, and nothing is lost.
+   */
+  useEffect(() => {
+    const preserveWork = () => {
+      const atRisk =
+        promoWorkNotInDraftRef.current ||
+        (hasAnnouncementChangesRef.current &&
+          draftSignatureRef.current !== getConfigSignature(configRef.current));
+      if (!atRisk) return;
+
+      // Synchronous, so it completes while the page still exists — the
+      // debounced autosave may have up to 800ms of edits still pending.
+      writeRecovery(configRef.current);
+      // Raised now rather than left to the debounced reporter, which will not
+      // get another turn. keepalive carries it past the page's death.
+      if (!reportedUnsavedRef.current) reportUnsaved(true);
     };
 
     /**
-     * The page is actually going.
+     * The page is going.
      *
-     * Two jobs. Cancel the offer above, so it never appears to someone who is
-     * already gone. And drop the local copy — the user was told the work might
-     * be lost and left anyway, so keeping it would make the warning a lie and
-     * bring the work back uninvited on their next visit.
+     * `persisted` means it is being frozen for back/forward cache rather than
+     * closed — it will be resumed with everything still in memory, so there is
+     * nothing to save and no visit to restore on.
      *
-     * `persisted` means the page is being frozen for back/forward cache rather
-     * than closed — the user is coming back to it, so nothing is discarded. A
-     * crash fires neither event, which is what leaves crash recovery intact.
+     * Signing out is the one exit that still discards: it is a deliberate act,
+     * and the user was offered the draft slot on the way. Everything else —
+     * closing, timing out, the lid shutting — keeps the copy.
      */
     const handlePageHide = (e: PageTransitionEvent) => {
-      if (stayTimerRef.current) window.clearTimeout(stayTimerRef.current);
       if (e.persisted) return;
-      clearRecovery();
+      if (exitReasonRef.current === 'logout') return;
+      preserveWork();
     };
 
     /**
-     * A tab being closed is hidden before it is unloaded, and `pagehide` can
-     * arrive too late to stop a timer that has already fired. This gets there
-     * first and cancels the offer.
+     * A tab is hidden before it is discarded, and on mobile a page can be
+     * killed while hidden without `pagehide` ever firing. Saving here as well
+     * costs a localStorage write on a tab switch and buys the phone case.
      */
     const handleVisibility = () => {
-      if (document.visibilityState === 'hidden' && stayTimerRef.current) {
-        window.clearTimeout(stayTimerRef.current);
-      }
+      if (document.visibilityState === 'hidden' && !exitReasonRef.current) preserveWork();
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('pagehide', handlePageHide);
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('pagehide', handlePageHide);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
@@ -663,6 +780,86 @@ export default function Home() {
   // defaultConfig, so anything the editor seeds from the card at mount time
   // would otherwise freeze on the default template's look.
   const [configLoadedSignal, setConfigLoadedSignal] = useState(0);
+
+  /**
+   * The session ended without the user ending it — a timeout, or the machine
+   * going away — and their work was put back.
+   *
+   * Shown after the fact, never as a question. They did not choose to stop, so
+   * the editor restores what they had and then says so; asking "want it back?"
+   * makes an accident into a decision they have to get right.
+   */
+  const [restoreNotice, setRestoreNotice] = useState<{
+    /** When the local copy was taken. Empty for copies written before it was recorded. */
+    localSavedAt: string | null;
+    /** When the parked draft was saved, if there is one. Null means there isn't. */
+    draftSavedAt: string | null;
+    /**
+     * The draft is newer than the work being restored.
+     *
+     * Which means it was saved after this browser stopped — from somewhere
+     * else, by definition, since this browser was gone. Worth saying before
+     * they replace it, because the usual assumption is the opposite: that the
+     * draft is the older thing and these edits move it forward.
+     */
+    draftIsNewer: boolean;
+  } | null>(null);
+
+  /**
+   * Unsaved work is sitting in a different browser.
+   *
+   * There is nothing to restore here — that is the whole message. Work that was
+   * never saved as a draft stays in the browser that made it, so the only
+   * honest thing to say is where it is and how to get it back.
+   */
+  const [elsewhereNotice, setElsewhereNotice] = useState<{
+    deviceLabel: string;
+    at: string | null;
+  } | null>(null);
+
+  /**
+   * Why the page is leaving, when the app is the one making it leave.
+   *
+   * Both cases have to skip the browser's leave prompt — it is meant for a
+   * user closing a tab, not for the app navigating on their behalf. They then
+   * split on the local copy: signing out is a decision, and follows the same
+   * rule as answering Leave to the close prompt, so the copy goes. Timing out
+   * is not a decision at all, so the copy stays and is what gets restored on
+   * the way back in.
+   */
+  const exitReasonRef = useRef<'logout' | 'timeout' | null>(null);
+
+  /** What we last told the server, so a save clears only a flag we raised. */
+  const reportedUnsavedRef = useRef(false);
+
+  /**
+   * Which return-visit message applies, if any.
+   *
+   * Rescued edits win over a parked draft when both exist: the edits are what
+   * is on the canvas, so they are what the user is looking at, and the draft
+   * gets named inside that same message rather than queued behind it as a
+   * second dialog.
+   */
+  const welcomeBack:
+    | {
+        mode: 'restored';
+        localSavedAt: string | null;
+        draftSavedAt: string | null;
+        draftIsNewer: boolean;
+      }
+    | { mode: 'draft'; draftSavedAt: string | null }
+    | null =
+    restoreNotice && activeTab === 'promo'
+      ? { mode: 'restored', ...restoreNotice }
+      : draftOffer && activeTab === 'promo'
+        ? { mode: 'draft', draftSavedAt: draftOffer.lastUpdated ?? null }
+        : null;
+
+  function dismissWelcomeBack() {
+    setRestoreNotice(null);
+    setDraftOffer(null);
+  }
+
   // A picker the editor should open as soon as it mounts, set by the
   // dashboard's "Edit published". Cleared by the editor once acted on.
   const [pendingPromoPopup, setPendingPromoPopup] = useState<'published' | 'draft' | null>(null);
@@ -973,22 +1170,52 @@ export default function Home() {
    */
   const RECOVERY_KEY = 'campaign-admin:recovery';
 
+  /**
+   * Stored with the moment it was taken, not just the config.
+   *
+   * The config's own `lastUpdated` is when it was last published, which says
+   * nothing about when this copy was made — and without that, a draft saved
+   * from another device in the meantime cannot be told from one saved before
+   * the user ever walked away.
+   */
+  interface RecoveryEnvelope {
+    savedAt: string;
+    config: CampaignConfig;
+  }
+
   function writeRecovery(cfg: CampaignConfig) {
     try {
-      localStorage.setItem(RECOVERY_KEY, JSON.stringify(cfg));
+      const envelope: RecoveryEnvelope = { savedAt: new Date().toISOString(), config: cfg };
+      localStorage.setItem(RECOVERY_KEY, JSON.stringify(envelope));
     } catch {
       // Private mode or quota — nothing to fall back to, and the close must
       // not be blocked by it.
     }
   }
 
-  function readRecovery(): CampaignConfig | null {
+  /**
+   * Reads either shape.
+   *
+   * Copies written before this carried the bare config. They belong to someone
+   * who is mid-edit right now, so the change must not throw their work away —
+   * it reads as a recovery with an unknown time, which is exactly what it is.
+   */
+  function readRecoveryEnvelope(): RecoveryEnvelope | null {
     try {
       const raw = localStorage.getItem(RECOVERY_KEY);
-      return raw ? (JSON.parse(raw) as CampaignConfig) : null;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.savedAt === 'string' && parsed.config) {
+        return parsed as RecoveryEnvelope;
+      }
+      return { savedAt: '', config: parsed as CampaignConfig };
     } catch {
       return null;
     }
+  }
+
+  function readRecovery(): CampaignConfig | null {
+    return readRecoveryEnvelope()?.config ?? null;
   }
 
   function clearRecovery() {
@@ -1098,9 +1325,7 @@ export default function Home() {
       setActiveTab(action.tab);
       return;
     }
-    // Cancelling a close is not a request to go anywhere — declining here just
-    // returns the user to what they were doing.
-    if (action.type === 'stayed') return;
+    // Only 'logout' is left, and it means what it says.
     performLogout();
   }
 
@@ -1334,7 +1559,8 @@ export default function Home() {
        * one accident, one restore — and a draft parked in My Draft is left
        * exactly where it is, still on its chip.
        */
-      const recovered = readRecovery();
+      const recoveredEnvelope = readRecoveryEnvelope();
+      const recovered = recoveredEnvelope?.config ?? null;
       if (recovered && publishedCfg) {
         const restored = migrateConfig(recovered, recovered.version);
         if (getConfigSignature(restored) !== getConfigSignature(publishedCfg)) {
@@ -1365,11 +1591,38 @@ export default function Home() {
           );
           setPromoEntryStep('editor');
           setConfigLoadedSignal((n) => n + 1);
+
+          /**
+           * A parked draft is left exactly where it is.
+           *
+           * The restored work goes on the canvas and the draft stays on its
+           * chip, because they are two different things: one is where the user
+           * was, the other is what they last decided to keep. Overwriting the
+           * draft with the rescue would spend a deliberate save on an accident.
+           * The notice then has to name both, or the user is looking at a
+           * canvas and a draft chip that disagree with no explanation.
+           */
+          let draftSavedAt: string | null = null;
+          let draftIsNewer = false;
           if (draft) {
             const migratedDraft = migrateConfig(draft, draft.version);
             setSavedDraftSignature(getConfigSignature(migratedDraft));
             setDraftPromoCard(JSON.parse(JSON.stringify(migratedDraft.promoCard)));
+            draftSavedAt = migratedDraft.lastUpdated ?? null;
+
+            // Only claimable when both times are known: a recovery written
+            // before copies carried a timestamp has nothing to compare, and
+            // guessing would put a warning in front of the wrong person.
+            const takenAt = recoveredEnvelope?.savedAt;
+            if (takenAt && draftSavedAt) {
+              draftIsNewer = new Date(draftSavedAt).getTime() > new Date(takenAt).getTime();
+            }
           }
+          setRestoreNotice({
+            localSavedAt: recoveredEnvelope?.savedAt || null,
+            draftSavedAt,
+            draftIsNewer,
+          });
           return;
         }
         // Identical to what is live — nothing was lost, so drop it quietly.
@@ -1768,11 +2021,23 @@ export default function Home() {
   }
 
   function performLogout() {
-    // Clear any user session data
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userEmail');
-    // Redirect to login page or handle logout logic
-    window.location.href = '/login';
+    /**
+     * Signing out on purpose, so the local copy goes with the session — the
+     * same rule as answering Leave to the close prompt. Anything worth keeping
+     * was offered a draft slot before this ran.
+     */
+    exitReasonRef.current = 'logout';
+    clearRecovery();
+    if (reportedUnsavedRef.current) reportUnsaved(false);
+
+    // The session is a signed cookie, so only the server can end it. Navigate
+    // either way: a failed request must not strand someone on a page they have
+    // asked to leave, and the cookie expires on its own.
+    fetch('/api/auth/logout', { method: 'POST', keepalive: true })
+      .catch(() => {})
+      .finally(() => {
+        window.location.href = '/login';
+      });
   }
 
   async function discardDraft() {
@@ -2041,53 +2306,154 @@ export default function Home() {
         </div>
       )}
 
-      {/* Welcome back. Asked as a question because it is one — and because a
-          draft the user has to notice in three seconds is a draft they lose. */}
-      {draftOffer && activeTab === 'promo' && (
+      {/* One dialog for one moment.
+          Coming back to work in progress has three shapes — edits rescued from
+          a session that ended, those edits alongside a parked draft, or a
+          draft on its own — and they were being told by two different dialogs
+          with two different voices. They describe the same situation from
+          different angles, so they are one thing that reads its state.
+          Held until the promo tab: it talks about the canvas and My Draft,
+          which are that editor's. Announcement work is still restored, just
+          not announced here — this message has nowhere to say it. */}
+      {welcomeBack && (
         <div data-modal className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
-          <div className="absolute inset-0" onClick={() => setDraftOffer(null)} />
-          {/* Sized like its sibling above: same shape of message — long
-              heading, an explanation, then a caveat — so it needs the same
-              room rather than being squeezed into a one-line confirm box. */}
-          <div className="relative z-10 w-full max-w-lg rounded-xl border border-white/10 bg-black/10 p-6 text-on-surface shadow-2xl backdrop-blur-md">
+          {/* Blocks what is behind it, but does not dismiss.
+              These arrive once, on the way in, and closing one is final — the
+              draft offer does not come back until the next load. A click
+              landing on the canvas is far more likely to be someone reaching
+              for their work than a decision to dismiss, and the buttons are
+              right there. */}
+          <div className="absolute inset-0" />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-6 text-on-surface shadow-2xl backdrop-blur-md">
+            {welcomeBack.mode === 'restored' ? (
+              <>
+                {/* Told, not asked: the work is already on the canvas behind
+                    this. The session ended without the user ending it, so
+                    there was no decision to put to them. */}
+                <h2 className="text-base font-semibold">
+                  We&apos;ve restored your unsaved changes
+                </h2>
+                <p className="mt-2 text-sm text-on-surface-variant">
+                  Unsaved edits
+                  {welcomeBack.localSavedAt
+                    ? ` from ${describeWhen(welcomeBack.localSavedAt)}`
+                    : ''}{' '}
+                  are back on the canvas.
+                  {welcomeBack.draftSavedAt && (
+                    <>
+                      {' '}Your draft from{' '}
+                      <span className="font-semibold text-on-surface">
+                        {describeWhen(welcomeBack.draftSavedAt)}
+                      </span>{' '}
+                      is untouched in{' '}
+                      <span className="font-semibold text-on-surface">My Draft</span>.
+                      {welcomeBack.draftIsNewer && ' It was saved after these edits.'}
+                    </>
+                  )}
+                </p>
+                {/* The same warning either way, because the risk is the same
+                    either way: these edits are not saved anywhere but here.
+                    An earlier version explained the single draft slot and what
+                    saving would overwrite — plumbing, and not what this moment
+                    is for. Saving already asks "Replace saved draft?" at the
+                    point it would happen, which is where a warning about
+                    destroying something belongs. What is left is the thing the
+                    user cannot find out any other way: this can be lost again. */}
+                <p className="mt-3 text-xs text-amber-600 dark:text-amber-500">
+                  These edits are on this browser only. Save them to My Draft
+                  when you&apos;re done — otherwise you could lose them again.
+                </p>
+                <div className="mt-5 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={dismissWelcomeBack}
+                    className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+                  >
+                    Continue editing
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Asked, because here it is a question: nothing was rescued,
+                    and the draft was parked on purpose. */}
+                <h2 className="text-base font-semibold">
+                  Welcome back — your draft is waiting
+                </h2>
+                <p className="mt-2 text-sm text-on-surface-variant">
+                  Your promo card from{' '}
+                  <span className="font-semibold text-on-surface">
+                    {describeWhen(welcomeBack.draftSavedAt)}
+                  </span>{' '}
+                  is still in{' '}
+                  <span className="font-semibold text-on-surface">My Draft</span>,
+                  just as you left it.
+                </p>
+                {/* What declining costs depends on what is already on screen.
+                    Arriving with edits in progress makes taking the draft
+                    destructive, and saying "either way it stays saved" there
+                    promises the opposite of what happens. */}
+                {hasChanges ? (
+                  <p className="mt-3 text-xs text-amber-600 dark:text-amber-500">
+                    The editor has unsaved changes. Opening the draft replaces them.
+                  </p>
+                ) : (
+                  <p className="mt-3 text-xs text-on-surface-variant/80">
+                    Either way it stays saved — open it from My Draft whenever you like.
+                  </p>
+                )}
+                <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={dismissWelcomeBack}
+                    className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+                  >
+                    {hasChanges ? 'Keep my unsaved changes' : 'Start something new'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => draftOffer && acceptOfferedDraft(draftOffer)}
+                    className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+                  >
+                    Continue my draft
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* The one case where there is nothing to restore, and saying so IS the
+          point. Unsaved work never leaves the browser that made it, so this
+          names that browser and what to do there. */}
+      {elsewhereNotice && activeTab === 'promo' && (
+        <div data-modal className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
+          {/* Blocks, does not dismiss — see the note on the dialog above. */}
+          <div className="absolute inset-0" />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-6 text-on-surface shadow-2xl backdrop-blur-md">
             <h2 className="text-base font-semibold">
-              Hello again — we saved a draft for you
+              You have unsaved work on another device
             </h2>
             <p className="mt-2 text-sm text-on-surface-variant">
-              Your promo card is still in{' '}
-              <span className="font-semibold text-on-surface">My Draft</span>,
-              just as you left it. Want to pick up where you stopped?
+              You were editing on{' '}
+              <span className="font-semibold text-on-surface">
+                {elsewhereNotice.deviceLabel}
+              </span>{' '}
+              {describeWhen(elsewhereNotice.at)} and didn&apos;t save it as a
+              draft, so it stayed on that browser.
             </p>
-            {/* What declining costs depends on what is already on screen, so
-                the dialog says which it is. Arriving with edits in progress —
-                announcements edited before opening this tab, say — makes
-                taking the draft destructive, and the old copy promised the
-                opposite: that nothing would be lost either way. */}
-            {hasChanges ? (
-              <p className="mt-3 text-xs text-amber-600 dark:text-amber-500">
-                The editor has unsaved changes. Opening the draft replaces them.
-              </p>
-            ) : (
-              <p className="mt-3 text-xs text-on-surface-variant/80">
-                Either way it stays saved — you can open it from{' '}
-                <span className="font-semibold text-on-surface">My Draft</span>{' '}
-                whenever you like.
-              </p>
-            )}
-            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <p className="mt-3 text-xs text-on-surface-variant/80">
+              Open the tool there and save it as a draft to bring it here.
+              Anything already saved is ready to use.
+            </p>
+            <div className="mt-5 flex justify-end">
               <button
                 type="button"
-                onClick={() => setDraftOffer(null)}
-                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
-              >
-                {hasChanges ? 'Keep my unsaved changes' : 'Start something new'}
-              </button>
-              <button
-                type="button"
-                onClick={() => acceptOfferedDraft(draftOffer)}
+                onClick={() => setElsewhereNotice(null)}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
               >
-                Continue my draft
+                Continue here
               </button>
             </div>
           </div>
@@ -2103,11 +2469,7 @@ export default function Home() {
           <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-base font-semibold">
-                  {pendingDraftAction.type === 'stayed'
-                    ? 'Save this to My Draft?'
-                    : 'Save before you sign out?'}
-                </h2>
+                <h2 className="text-base font-semibold">Save before you sign out?</h2>
                 {/* With a draft already parked, the two cards have to be named
                     separately — they are different work, and "save" silently
                     overwrote the one on disk without ever mentioning it. */}
@@ -2155,41 +2517,23 @@ export default function Home() {
               </button>
             </div>
 
-            {/* Two buttons, not three. Having stayed, "cancel" and "continue
-                without saving" both just close this — one of them was a third
-                door to the same room, and the one that said "continue" signed
-                the user out of a session they had chosen to keep. */}
+            {/* Named for what each button does. Signing out is the one exit
+                that still drops the local copy, so leaving without saving has
+                to say so on the button rather than in small print. */}
             <div className="mt-1 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={
-                  pendingDraftAction.type === 'stayed'
-                    ? () => setPendingDraftAction(null)
-                    : continueWithoutDraft
-                }
+                onClick={continueWithoutDraft}
                 className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
               >
-                {/* Named for what the button does, not for which card it
-                    favours. "Keep my draft" described a choice between two
-                    cards — but staying changes nothing at all, and on the way
-                    out it also signed the user out, which the label never
-                    said. */}
-                {pendingDraftAction.type === 'stayed'
-                  ? 'Not now'
-                  : 'Sign out without saving'}
+                Sign out without saving
               </button>
               <button
                 type="button"
                 onClick={saveDraftAndContinue}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
               >
-                {pendingDraftAction.type === 'stayed'
-                  ? savedDraftSignature !== null
-                    ? 'Replace my draft'
-                    : 'Save as draft'
-                  : savedDraftSignature !== null
-                    ? 'Replace draft & sign out'
-                    : 'Save & sign out'}
+                {savedDraftSignature !== null ? 'Replace draft & sign out' : 'Save & sign out'}
               </button>
             </div>
           </div>
