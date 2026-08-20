@@ -2432,20 +2432,28 @@ export default function Home() {
           {/* Blocks, does not dismiss — see the note on the dialog above. */}
           <div className="absolute inset-0" />
           <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-6 text-on-surface shadow-2xl backdrop-blur-md">
+            {/* "Unsaved changes", the same words the restore dialog uses, so
+                the two messages are plainly about the same thing.
+
+                It does not say the user failed to save. Everywhere else the
+                tool now treats not-saving as normal — it rescues work rather
+                than asking about it — and "you didn't save it as a draft" puts
+                the blame back on them for the one case it cannot rescue. What
+                is left is where the changes are and how to reach them. */}
             <h2 className="text-base font-semibold">
-              You have unsaved work on another device
+              Your unsaved changes are on another device
             </h2>
             <p className="mt-2 text-sm text-on-surface-variant">
               You were editing on{' '}
               <span className="font-semibold text-on-surface">
                 {elsewhereNotice.deviceLabel}
               </span>{' '}
-              {describeWhen(elsewhereNotice.at)} and didn&apos;t save it as a
-              draft, so it stayed on that browser.
+              {describeWhen(elsewhereNotice.at)}. Those changes never made it to
+              a draft, so they&apos;re on that browser only.
             </p>
             <p className="mt-3 text-xs text-on-surface-variant/80">
-              Open the tool there and save it as a draft to bring it here.
-              Anything already saved is ready to use.
+              Sign in there and save them to My Draft — then they&apos;ll open
+              anywhere.
             </p>
             <div className="mt-5 flex justify-end">
               <button

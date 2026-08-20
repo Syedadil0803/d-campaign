@@ -65,8 +65,14 @@ function LoginForm() {
         {timedOut && (
           <div className="mb-5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3.5 py-3 text-sm text-on-surface">
             <p className="font-medium">You were signed out after a while away.</p>
+            {/* Names the place. "Still here" pointed at the login screen, which
+                is not where the work is and not somewhere it could be. It says
+                "anything" because this shows on every timeout, including ones
+                where nothing was left unsaved — promising work back to someone
+                who had none is worse than saying nothing. */}
             <p className="mt-1 text-on-surface-variant">
-              Anything you were working on is still here — sign back in and we&apos;ll put it back.
+              Anything you hadn&apos;t saved is kept on this browser — sign back
+              in and it goes straight back on the canvas.
             </p>
           </div>
         )}
