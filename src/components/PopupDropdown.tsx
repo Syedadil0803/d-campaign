@@ -114,8 +114,16 @@ export function PopupDropdown({
      * menu stays glued to the top of the trigger as it shrinks.
      */
     if (opensUpwardRef.current === null) {
-      const room = window.innerHeight - rect.bottom - 12;
-      opensUpwardRef.current = Boolean(height) && room < height;
+      /**
+       * Nothing to measure yet — the menu has not rendered. Place it below for
+       * now and decide when it has a real height.
+       *
+       * Locking the side here defaulted every menu without a menuMaxHeight to
+       * downward and kept it there, so a short list opened off the bottom of
+       * the window and stayed hidden.
+       */
+      if (!height) return below;
+      opensUpwardRef.current = window.innerHeight - rect.bottom - 12 < height;
     }
 
     if (opensUpwardRef.current) {
