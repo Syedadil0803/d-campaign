@@ -180,6 +180,8 @@ export default function Home() {
   const [pendingDraftAction, setPendingDraftAction] = useState<
     | { type: 'tab'; tab: 'dashboard' | 'announcement' | 'promo' }
     | { type: 'logout' }
+    /** They tried to close, then chose to stay. Nothing follows either answer. */
+    | { type: 'stayed' }
     | null
   >(null);
   const [pendingVariantSave, setPendingVariantSave] = useState<{
@@ -276,6 +278,8 @@ export default function Home() {
   const mainScrollRef = useRef<HTMLElement>(null);
   const configRef = useRef(config);
   configRef.current = config;
+  /** Pending "did they stay?" check, cancelled if the page really unloads. */
+  const stayTimerRef = useRef<number | null>(null);
   const hasChangesRef = useRef(hasChanges);
   hasChangesRef.current = hasChanges;
   const hasAnnouncementChangesRef = useRef(hasAnnouncementChanges);
@@ -485,9 +489,36 @@ export default function Home() {
    * A prompt that fires when there is nothing to lose is one people learn to
    * click through without reading, which costs more than it saves.
    *
-   * The copy goes to the recovery slot, never the draft: the user did not ask
-   * for this write, so it must not disturb something they did ask for.
+   * Nothing is written on the way out. The local copy is for moving around
+   * inside the tool, not for closing it: if the user is told their work may be
+   * lost and leaves anyway, quietly keeping it makes the warning a lie.
    */
+  /**
+   * Keep a local copy of work in progress, continuously.
+   *
+   * The unload handler below covers a deliberate close, but it is not a
+   * guarantee: a crash, a killed tab, a battery running out or a phone
+   * switching apps never fire it. Writing as the user works means the copy is
+   * already there whatever happens next.
+   *
+   * Debounced because this runs on every keystroke's worth of state, and
+   * localStorage writes are synchronous — doing it eagerly would stutter the
+   * editor it is meant to protect.
+   *
+   * Only real work is kept: the same at-risk test the close prompt uses, so a
+   * blank canvas, a stock template or the published card unedited never
+   * displaces something worth recovering.
+   */
+  useEffect(() => {
+    const promoAtRisk = promoWorkNotInDraftRef.current;
+    const announcementAtRisk =
+      hasAnnouncementChanges &&
+      draftSignatureRef.current !== getConfigSignature(config);
+    if (!promoAtRisk && !announcementAtRisk) return;
+    const id = window.setTimeout(() => writeRecovery(config), 800);
+    return () => window.clearTimeout(id);
+  }, [config, hasAnnouncementChanges]);
+
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       const promoAtRisk = promoWorkNotInDraftRef.current;
@@ -495,13 +526,65 @@ export default function Home() {
         hasAnnouncementChangesRef.current &&
         draftSignatureRef.current !== getConfigSignature(configRef.current);
       if (!promoAtRisk && !announcementAtRisk) return;
-      // Its own slot, so it can never compete with a draft the user parked.
-      writeRecovery(configRef.current);
       e.preventDefault();
       e.returnValue = '';
+
+      /**
+       * Offer to save, but only to someone who stayed.
+       *
+       * The browser will not say which button was pressed, so this waits and
+       * watches instead: if the page is really going, `pagehide` fires and
+       * cancels this before it can run. Leaving on the timer alone was not
+       * enough — the tab lives for a moment after the choice is made, long
+       * enough for the dialog to flash up on the way out.
+       */
+      stayTimerRef.current = window.setTimeout(() => {
+        // Still here, and still the page being looked at. A tab on its way out
+        // is hidden before it is discarded, so this second check catches the
+        // close that `pagehide` has not reported yet — the dialog was painting
+        // during the teardown frames and flashing up as the tab vanished.
+        if (document.visibilityState !== 'visible') return;
+        setPendingDraftAction({ type: 'stayed' });
+      }, 1200);
     };
+
+    /**
+     * The page is actually going.
+     *
+     * Two jobs. Cancel the offer above, so it never appears to someone who is
+     * already gone. And drop the local copy — the user was told the work might
+     * be lost and left anyway, so keeping it would make the warning a lie and
+     * bring the work back uninvited on their next visit.
+     *
+     * `persisted` means the page is being frozen for back/forward cache rather
+     * than closed — the user is coming back to it, so nothing is discarded. A
+     * crash fires neither event, which is what leaves crash recovery intact.
+     */
+    const handlePageHide = (e: PageTransitionEvent) => {
+      if (stayTimerRef.current) window.clearTimeout(stayTimerRef.current);
+      if (e.persisted) return;
+      clearRecovery();
+    };
+
+    /**
+     * A tab being closed is hidden before it is unloaded, and `pagehide` can
+     * arrive too late to stop a timer that has already fired. This gets there
+     * first and cancels the offer.
+     */
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden' && stayTimerRef.current) {
+        window.clearTimeout(stayTimerRef.current);
+      }
+    };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   useEffect(() => {
@@ -628,7 +711,22 @@ export default function Home() {
         // marks Campaign Duration REQUIRED and Publish refuses without it.
         // Ask here too, so the date step can't be missed whichever door is used.
         const pc = configRef.current.promoCard;
-        if (!pc.startDate || !pc.endDate) {
+        /**
+         * Only worth asking once there is a card to schedule.
+         *
+         * A cleared canvas deliberately has no end date — the user sets it in
+         * the panel, and that is what switches the countdown on. Forcing the
+         * dialog on the way back into the tab took that decision off them and
+         * refilled the field they had just been left to fill.
+         *
+         * Publish still refuses without dates, so nothing escapes unscheduled;
+         * the ask simply waits until there is something to schedule.
+         */
+        const nothingToSchedule = cardIsNotUserWork(
+          pc,
+          sampleTemplates.map((t) => t.promoCard as CampaignConfig['promoCard']),
+        );
+        if (!nothingToSchedule && (!pc.startDate || !pc.endDate)) {
           setCreateIntent('schedule');
           setCreateStart(pc.startDate || getISODateWithOffset(0));
           setCreateEnd(pc.endDate || '');
@@ -1000,6 +1098,9 @@ export default function Home() {
       setActiveTab(action.tab);
       return;
     }
+    // Cancelling a close is not a request to go anywhere — declining here just
+    // returns the user to what they were doing.
+    if (action.type === 'stayed') return;
     performLogout();
   }
 
@@ -1649,7 +1750,17 @@ export default function Home() {
   }
 
   function handleLogout() {
-    if (hasChangesSinceDraft()) {
+    /**
+     * The same at-risk test the close prompt uses, rather than "differs from
+     * the draft" — a card already sitting in My Published is not work about to
+     * be lost, and stopping someone on the way out for it teaches them to
+     * click through the one time it matters.
+     */
+    const promoAtRisk = promoWorkNotInDraftRef.current;
+    const announcementAtRisk =
+      hasAnnouncementChanges &&
+      draftSignatureRef.current !== getConfigSignature(configRef.current);
+    if (promoAtRisk || announcementAtRisk) {
       setPendingDraftAction({ type: 'logout' });
       return;
     }
@@ -1993,11 +2104,46 @@ export default function Home() {
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold">
-                  Save changes as draft?
+                  {pendingDraftAction.type === 'stayed'
+                    ? 'Save this to My Draft?'
+                    : 'Save before you sign out?'}
                 </h2>
-                <p className="mt-1 text-sm text-on-surface-variant">
-                  These edits aren&apos;t in your saved draft yet.
-                </p>
+                {/* With a draft already parked, the two cards have to be named
+                    separately — they are different work, and "save" silently
+                    overwrote the one on disk without ever mentioning it. */}
+                {savedDraftSignature !== null ? (
+                  <>
+                    {/* Says only what is known. Earlier wording called the
+                        saved card "different" — but nothing here establishes
+                        that. The signatures differ, which is as true of an
+                        older version of the same card as it is of separate
+                        work, and the user is left deciding what "different"
+                        was supposed to mean. */}
+                    <p className="mt-1 text-sm text-on-surface-variant">
+                      One card is already saved in{' '}
+                      <span className="font-semibold text-on-surface">My Draft</span>{' '}
+                      and there is only one slot, so saving these edits
+                      permanently replaces it.
+                    </p>
+                    <p className="mt-3 text-xs text-on-surface-variant/80">
+                      Edits you don&apos;t save stay on this browser only.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-1 text-sm text-on-surface-variant">
+                      These edits aren&apos;t in{' '}
+                      <span className="font-semibold text-on-surface">My Draft</span>{' '}
+                      yet. Saving keeps them with your account, so they are
+                      waiting wherever you sign in next.
+                    </p>
+                    <p className="mt-3 text-xs text-on-surface-variant/80">
+                      Until then they stay on this browser — sign in from
+                      another browser or another device and they won&apos;t be
+                      there.
+                    </p>
+                  </>
+                )}
               </div>
               <button
                 type="button"
@@ -2009,27 +2155,41 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            {/* Two buttons, not three. Having stayed, "cancel" and "continue
+                without saving" both just close this — one of them was a third
+                door to the same room, and the one that said "continue" signed
+                the user out of a session they had chosen to keep. */}
+            <div className="mt-1 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={continueWithoutDraft}
+                onClick={
+                  pendingDraftAction.type === 'stayed'
+                    ? () => setPendingDraftAction(null)
+                    : continueWithoutDraft
+                }
                 className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
               >
-                Continue without saving
-              </button>
-              <button
-                type="button"
-                onClick={() => setPendingDraftAction(null)}
-                className="rounded-md border border-white/10 bg-black/10 px-4 py-2 text-sm font-medium text-on-surface transition-colors hover:border-primary/70"
-              >
-                Cancel
+                {/* Named for what the button does, not for which card it
+                    favours. "Keep my draft" described a choice between two
+                    cards — but staying changes nothing at all, and on the way
+                    out it also signed the user out, which the label never
+                    said. */}
+                {pendingDraftAction.type === 'stayed'
+                  ? 'Not now'
+                  : 'Sign out without saving'}
               </button>
               <button
                 type="button"
                 onClick={saveDraftAndContinue}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
               >
-                Save as draft
+                {pendingDraftAction.type === 'stayed'
+                  ? savedDraftSignature !== null
+                    ? 'Replace my draft'
+                    : 'Save as draft'
+                  : savedDraftSignature !== null
+                    ? 'Replace draft & sign out'
+                    : 'Save & sign out'}
               </button>
             </div>
           </div>
