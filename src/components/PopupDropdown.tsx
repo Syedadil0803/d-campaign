@@ -154,26 +154,37 @@ export function PopupDropdown({
     }
   }, [open, searchable]);
 
-  const needle = query.trim().toLowerCase();
+  /** Lowercased, punctuation flattened, runs of spaces collapsed. */
+  function normalise(value: string): string {
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9+]+/g, ' ')
+      .trim();
+  }
+
+  const needle = normalise(query);
 
   /**
-   * Matches at the start of any word, not anywhere in the string.
+   * Matches from the start of any word, and the query may run across words.
    *
-   * A substring match made the first keystroke useless: "a" appears somewhere
-   * inside Canada, Japan, Malaysia and most of the rest, so the list barely
-   * moved and the search looked broken until three or four letters had
-   * narrowed it by accident. Anchoring to word starts makes one letter a real
-   * shortlist — "a" gives Argentina, Australia, Austria — and "new" still
-   * finds New Zealand, "arab" still finds United Arab Emirates.
+   * Two things this is not. Not a plain substring match: "a" appears inside
+   * Canada, Japan and Malaysia, so the first keystroke barely moved the list
+   * and the search read as broken until three or four letters narrowed it by
+   * accident. And not a word-by-word test either — that was the fix for the
+   * first problem, but it compared the query against one word at a time, so
+   * anything containing a space could never match. "united ki" found nothing,
+   * because no single word begins with it.
+   *
+   * Testing the whole name instead, anchored at a word boundary, gives both:
+   * "s" lists the countries starting with S, and "united ki" narrows to the
+   * United Kingdom.
    *
    * Runs on every keystroke over a few dozen rows, so there is nothing to
    * debounce and no reason to wait for a minimum length.
    */
   function matchesQuery(text: string): boolean {
-    return text
-      .toLowerCase()
-      .split(/[^a-z0-9+]+/)
-      .some((word) => word.startsWith(needle));
+    const haystack = normalise(text);
+    return haystack.startsWith(needle) || haystack.includes(` ${needle}`);
   }
 
   /**

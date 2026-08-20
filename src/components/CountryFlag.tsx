@@ -44,23 +44,21 @@ export function CountryFlag({ flag, name }: { flag: string; name: string }) {
 }
 
 /**
- * `aliases` is search-only — never shown. Some rows are abbreviated or known
- * by another name locally, so typing the obvious thing found nothing: UAE is
- * not "Emirates", and nobody searches for "United States" when "USA" is what
- * they type.
+ * Searched on the displayed name alone.
+ *
+ * There were hidden alias words too — "USA" for United States, "Scotland" for
+ * the United Kingdom — so that typing a familiar name still found the row.
+ * They made the list lie: typing "s" returned United Kingdom, a country whose
+ * name does not start with an S, and no explanation was on screen. A result
+ * the user cannot connect to what they typed is worse than no result.
  */
-export const COUNTRY_CODES: {
-  code: string;
-  flag: string;
-  name: string;
-  aliases?: string;
-}[] = [
-  { code: '+1', flag: '🇺🇸', name: 'United States', aliases: 'USA US America' },
+export const COUNTRY_CODES: { code: string; flag: string; name: string }[] = [
+  { code: '+1', flag: '🇺🇸', name: 'United States' },
   { code: '+7', flag: '🇷🇺', name: 'Russia' },
   { code: '+20', flag: '🇪🇬', name: 'Egypt' },
   { code: '+27', flag: '🇿🇦', name: 'South Africa' },
   { code: '+30', flag: '🇬🇷', name: 'Greece' },
-  { code: '+31', flag: '🇳🇱', name: 'Netherlands', aliases: 'Holland Dutch' },
+  { code: '+31', flag: '🇳🇱', name: 'Netherlands' },
   { code: '+32', flag: '🇧🇪', name: 'Belgium' },
   { code: '+33', flag: '🇫🇷', name: 'France' },
   { code: '+34', flag: '🇪🇸', name: 'Spain' },
@@ -69,7 +67,7 @@ export const COUNTRY_CODES: {
   { code: '+40', flag: '🇷🇴', name: 'Romania' },
   { code: '+41', flag: '🇨🇭', name: 'Switzerland' },
   { code: '+43', flag: '🇦🇹', name: 'Austria' },
-  { code: '+44', flag: '🇬🇧', name: 'United Kingdom', aliases: 'UK GB Britain England Scotland Wales' },
+  { code: '+44', flag: '🇬🇧', name: 'United Kingdom' },
   { code: '+45', flag: '🇩🇰', name: 'Denmark' },
   { code: '+46', flag: '🇸🇪', name: 'Sweden' },
   { code: '+47', flag: '🇳🇴', name: 'Norway' },
@@ -90,8 +88,8 @@ export const COUNTRY_CODES: {
   { code: '+65', flag: '🇸🇬', name: 'Singapore' },
   { code: '+66', flag: '🇹🇭', name: 'Thailand' },
   { code: '+81', flag: '🇯🇵', name: 'Japan' },
-  { code: '+82', flag: '🇰🇷', name: 'South Korea', aliases: 'Korea' },
-  { code: '+84', flag: '🇻🇳', name: 'Vietnam', aliases: 'Viet Nam' },
+  { code: '+82', flag: '🇰🇷', name: 'South Korea' },
+  { code: '+84', flag: '🇻🇳', name: 'Vietnam' },
   { code: '+86', flag: '🇨🇳', name: 'China' },
   { code: '+90', flag: '🇹🇷', name: 'Turkey' },
   { code: '+91', flag: '🇮🇳', name: 'India' },
@@ -114,9 +112,9 @@ export const COUNTRY_CODES: {
   { code: '+961', flag: '🇱🇧', name: 'Lebanon' },
   { code: '+962', flag: '🇯🇴', name: 'Jordan' },
   { code: '+965', flag: '🇰🇼', name: 'Kuwait' },
-  { code: '+966', flag: '🇸🇦', name: 'Saudi Arabia', aliases: 'KSA Saudi' },
+  { code: '+966', flag: '🇸🇦', name: 'Saudi Arabia' },
   { code: '+968', flag: '🇴🇲', name: 'Oman' },
-  { code: '+971', flag: '🇦🇪', name: 'UAE', aliases: 'United Arab Emirates Dubai Abu Dhabi' },
+  { code: '+971', flag: '🇦🇪', name: 'UAE' },
   { code: '+972', flag: '🇮🇱', name: 'Israel' },
   { code: '+973', flag: '🇧🇭', name: 'Bahrain' },
   { code: '+974', flag: '🇶🇦', name: 'Qatar' },

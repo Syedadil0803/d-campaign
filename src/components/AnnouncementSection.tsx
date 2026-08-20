@@ -1764,11 +1764,11 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                         // Same shape as the promo card's picker: the name
                         // reads first because that is what people search by,
                         // with the dialling code trailing as the detail.
-                        options={COUNTRY_CODES.map(({ code, flag, name, aliases }) => ({
+                        options={COUNTRY_CODES.map(({ code, flag, name }) => ({
                           value: code,
                           label: name,
                           meta: code,
-                          searchText: `${name} ${aliases ?? ''}`,
+                          searchText: name,
                           icon: <CountryFlag flag={flag} name={name} />,
                         }))}
                         open={showAnnCountryDropdown}
@@ -1796,7 +1796,10 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                         flip
                         searchable
                         searchPlaceholder="Search country"
-                        menuMaxHeight={260}
+                        // Five rows and the search box. Sixty-six countries behind a tall
+                        // menu is a wall of names to read past; five is enough to show the
+                        // list scrolls and that typing is the faster way through it.
+                        menuMaxHeight={200}
                         triggerContent={(() => {
                           const c = COUNTRY_CODES.find(
                             (x) => x.code === selectedCountryCode,

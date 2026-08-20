@@ -3962,11 +3962,12 @@ export function PromoSection({
                       labelClassName="sr-only"
                       label="Country dialling code"
                       value={config.promoCard.whatsappCountryCode || '+44'}
-                      options={COUNTRY_CODES.map(({ code, flag, name, aliases }) => ({
+                      options={COUNTRY_CODES.map(({ code, flag, name }) => ({
                         value: code,
                         label: name,
                         meta: code,
-                        searchText: `${name} ${aliases ?? ''}`,
+                        // The name as shown, and nothing else — see below.
+                        searchText: name,
                         icon: <CountryFlag flag={flag} name={name} />,
                       }))}
                       open={showCountryCodeDropdown}
@@ -3987,7 +3988,10 @@ export function PromoSection({
                       menuPosition={countryCodePos}
                       // 66 rows have to scroll, and near the bottom of this
                       // column the menu has to open upward.
-                      menuMaxHeight={260}
+                      // Five rows and the search box. Sixty-six countries behind a tall
+                      // menu is a wall of names to read past; five is enough to show the
+                      // list scrolls and that typing is the faster way through it.
+                      menuMaxHeight={200}
                       flip
                       searchable
                       searchPlaceholder="Search country"
