@@ -433,6 +433,9 @@ export function PromoSection({
    */
   const ownSwatchWasVisibleRef = useRef<boolean | null>(null);
 
+  /** Measured height of the field style panel, for keeping it in the canvas. */
+  const fieldPopupHeightRef = useRef(0);
+
   const [currentField, setCurrentField] = useState<PromoField | null>(null);
   /**
    * Which control opened the style popup, so it can appear beside whatever was
@@ -2264,7 +2267,7 @@ export function PromoSection({
 
   function getPopupPositionStyle(
     field: PopupField,
-    popupHeight = 320,
+    popupHeight = 260,
   ): { top?: string; bottom?: string; left?: string } {
     const card = promoCardRef.current;
     const refMap = {
@@ -2277,12 +2280,33 @@ export function PromoSection({
     const el = refMap[field].current;
     if (!card || !el) return { bottom: "8px" };
 
-    const fieldTop = el.offsetTop;
-    const spaceBelow = card.clientHeight - fieldTop;
-    const vertical =
-      spaceBelow >= popupHeight + 8
-        ? { top: `${Math.max(8, fieldTop)}px` }
-        : { bottom: "8px" };
+    /**
+     * Line the panel up with the field it edits, then keep it inside the
+     * canvas.
+     *
+     * It used to ask whether the panel fitted below the field and pin it to
+     * the card's bottom when it did not. The height it asked with was a
+     * hardcoded 320 against a panel that is nearer 250, so the test almost
+     * always failed — and pinning the bottom of a ~250px panel inside a ~244px
+     * card pushed it up past the card entirely. Editing the timer, at the
+     * bottom of the card, opened its panel at the top of the preview.
+     *
+     * The real height is measured once the panel has rendered; the constant
+     * only covers the first frame.
+     */
+    const height = fieldPopupHeightRef.current || popupHeight;
+    const canvas = card.closest("[data-promo-canvas]") as HTMLElement | null;
+    const cardTop = card.getBoundingClientRect().top;
+    let desiredTop = el.getBoundingClientRect().top;
+    if (canvas) {
+      const canvasRect = canvas.getBoundingClientRect();
+      const lowest = canvasRect.bottom - height - 8;
+      desiredTop = Math.min(
+        Math.max(desiredTop, canvasRect.top + 8),
+        Math.max(canvasRect.top + 8, lowest),
+      );
+    }
+    const vertical = { top: `${Math.round(desiredTop - cardTop)}px` };
 
     /**
      * Horizontal: open beside whatever was clicked.
@@ -2315,7 +2339,6 @@ export function PromoSection({
      * which opens on whichever side the card actually leaves open.
      */
     if (stylePopupAnchor === "input" && !cardIsOnTheLeft) {
-      const canvas = card.closest("[data-promo-canvas]") as HTMLElement | null;
       if (canvas) {
         const cardLeft = card.getBoundingClientRect().left;
         const canvasLeft = canvas.getBoundingClientRect().left;
@@ -2327,7 +2350,6 @@ export function PromoSection({
     // the opposite side from the two left-hand routes and it stays obvious
     // which one opened it. A card parked bottom-right leaves no room there,
     // so that case falls back to the left rather than running off the canvas.
-    const canvas = card.closest("[data-promo-canvas]") as HTMLElement | null;
     const rightEdge = card.getBoundingClientRect().right;
     const roomOnRight = canvas
       ? canvas.getBoundingClientRect().right - rightEdge
@@ -3490,7 +3512,12 @@ export function PromoSection({
             </div>
           )}
 
-          <div className="!mt-8">
+          {/* More room than the other sections get, because this is the only
+              one that follows a heading rather than body text. "Promo Card" at
+              28px and "Content" at 24px are close enough in size to compete,
+              and the standard gap left them reading as two titles stacked
+              rather than a section beneath a page. */}
+          <div className="!mt-12">
             <h4 className="text-2xl font-semibold leading-8 text-on-surface">
               Content
             </h4>
@@ -4209,11 +4236,24 @@ export function PromoSection({
               <History className="h-4 w-4" /> My Published
             </button>
 {/* My Draft moved to row 2 next to the save button */}
+
+            {/* Everything to the left brings a card IN — AI writes one, the Hub
+                and My Published fetch one. This one takes it away, and nothing
+                in the row said so: same size, same colour, sitting fourth in
+                the run, it read as a fourth source.
+
+                It stays visible on purpose — a reset you cannot see is a reset
+                you do not trust — so the separation is weight, not distance:
+                the rule marks the seam and it is the quietest control in the
+                row until you reach for it. Pushing it to the far edge instead
+                left it stranded, reading as unrelated to anything and sitting
+                directly above the primary save button. */}
+            <span className="h-6 w-px shrink-0 bg-border" aria-hidden="true" />
             <button
               type="button"
               onClick={confirmClearCanvas}
               disabled={canvasIsEmpty}
-              className="tool-chip relative inline-flex h-9 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              className="tool-chip relative inline-flex h-8 shrink-0 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-lg border border-on-surface-variant/25 px-2.5 text-xs font-medium text-on-surface-variant/80 transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
               title={
                 canvasIsEmpty
                   ? 'Nothing to clear — the canvas is already blank.'
@@ -4221,7 +4261,7 @@ export function PromoSection({
               }
             >
               <span aria-hidden="true" className="ai-sheen pointer-events-none absolute inset-0" />
-              <FilePlus2 className="h-4 w-4" /> Clear Canvas
+              <FilePlus2 className="h-3.5 w-3.5" /> Clear
             </button>
             </div>
 
@@ -4650,6 +4690,9 @@ export function PromoSection({
                       const fieldAngleNormalized = normalizeAngle(fieldAngle);
                       return (
                         <div
+                          ref={(node) => {
+                            if (node) fieldPopupHeightRef.current = node.offsetHeight;
+                          }}
                           className="absolute z-30 w-[280px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3"
                           style={getPopupPositionStyle(field)}
                         >
