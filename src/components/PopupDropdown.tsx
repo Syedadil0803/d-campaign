@@ -155,6 +155,27 @@ export function PopupDropdown({
   }, [open, searchable]);
 
   const needle = query.trim().toLowerCase();
+
+  /**
+   * Matches at the start of any word, not anywhere in the string.
+   *
+   * A substring match made the first keystroke useless: "a" appears somewhere
+   * inside Canada, Japan, Malaysia and most of the rest, so the list barely
+   * moved and the search looked broken until three or four letters had
+   * narrowed it by accident. Anchoring to word starts makes one letter a real
+   * shortlist — "a" gives Argentina, Australia, Austria — and "new" still
+   * finds New Zealand, "arab" still finds United Arab Emirates.
+   *
+   * Runs on every keystroke over a few dozen rows, so there is nothing to
+   * debounce and no reason to wait for a minimum length.
+   */
+  function matchesQuery(text: string): boolean {
+    return text
+      .toLowerCase()
+      .split(/[^a-z0-9+]+/)
+      .some((word) => word.startsWith(needle));
+  }
+
   /**
    * `searchText` wins outright when a row supplies one: the country pickers
    * want name-only matching, and the two of them disagree about which slot
@@ -162,11 +183,7 @@ export function PopupDropdown({
    * reverse. Matching label+meta would have made both searchable by code.
    */
   const visibleOptions = needle
-    ? options.filter((o) =>
-        (o.searchText ?? `${o.label} ${o.meta ?? ''}`)
-          .toLowerCase()
-          .includes(needle),
-      )
+    ? options.filter((o) => matchesQuery(o.searchText ?? `${o.label} ${o.meta ?? ''}`))
     : options;
 
   useEffect(() => {
@@ -308,6 +325,11 @@ export function PopupDropdown({
               />
             </div>
           )}
+          {/* A translucent tint, not surface-subtle: that token is opaque, and
+              the menu behind it is bg-black/10 with a blur, so an opaque row
+              painted a solid grey block over the blur instead of highlighting
+              through it. This also matches how every other control in the app
+              answers a hover. */}
           {searchable && visibleOptions.length === 0 && (
             <p className="px-3 py-2 text-sm text-on-surface-variant">
               No matches for &ldquo;{query.trim()}&rdquo;
@@ -330,7 +352,7 @@ export function PopupDropdown({
                   onSelect(option.value);
                 }
               }}
-              className={`flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-sm whitespace-nowrap transition-colors hover:bg-surface-subtle ${option.value === value ? 'text-primary font-semibold' : 'text-on-surface'}`}
+              className={`flex w-full cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-sm whitespace-nowrap transition-colors hover:bg-primary/10 hover:text-primary ${option.value === value ? 'text-primary font-semibold' : 'text-on-surface'}`}
             >
               {option.icon}
               <span className="min-w-0 flex-1 truncate">{option.label}</span>
