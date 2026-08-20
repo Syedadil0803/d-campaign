@@ -253,8 +253,16 @@ export default function Home() {
   const DRAFT_IS_RESCUE_KEY = 'campaign-admin:draft-is-rescue';
 
   const [savedDraftSignature, setSavedDraftSignature] = useState<string | null>(null);
+  /**
+   * Mirrors savedDraftSignature for the unload handler, which is registered
+   * once and would otherwise read whatever the value was at mount.
+   */
+  const savedDraftSignatureRef = useRef<string | null>(null);
+  savedDraftSignatureRef.current = savedDraftSignature;
   /** A draft found on load, waiting for the promo editor to be opened. */
   const offeredDraftRef = useRef<CampaignConfig | null>(null);
+  /** The draft currently being offered in the welcome-back dialog. */
+  const [draftOffer, setDraftOffer] = useState<CampaignConfig | null>(null);
   /**
    * The promo card as it exists in the saved draft.
    *
@@ -280,6 +288,8 @@ export default function Home() {
   configRef.current = config;
   const hasChangesRef = useRef(hasChanges);
   hasChangesRef.current = hasChanges;
+  const hasAnnouncementChangesRef = useRef(hasAnnouncementChanges);
+  hasAnnouncementChangesRef.current = hasAnnouncementChanges;
   // Any pending draft work (unsaved edits OR a staged-but-unpublished
   // announcement) — a live on-air toggle must preserve this, not discard it.
   const pendingDraft = hasChanges || readyToPublishAnnouncement;
@@ -469,16 +479,32 @@ export default function Home() {
    * Drafting is manual — except when the work is about to be lost.
    *
    * On tab close or refresh we take one rescue copy so unsaved work survives,
-   * and warn with the native prompt. saveDraft's own guard keeps this from
-   * creating phantom drafts: nothing is written unless there's restorable
-   * work, and a blank card clears the slot instead.
+   * and warn with the native prompt.
+   *
+   * The test is whether anything would actually be lost, which is a narrower
+   * question than "has anything changed".
+   *
+   * Comparing against the published card alone was wrong, and so was
+   * comparing against the saved draft alone: a card can equally be sitting in
+   * My Published, and one the user never authored — a blank canvas, an
+   * untouched template — is not worth stopping anybody over. The promo half
+   * reuses the check the dashboard already makes, which weighs all three
+   * places a card can be recovered from and whether it is the user's work at
+   * all.
+   *
+   * A prompt that fires when there is nothing to lose is one people learn to
+   * click through without reading, which costs more than it saves.
    *
    * markHandled: false so this never counts as the user having decided —
    * they'll still be offered the draft on return.
    */
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!hasChangesRef.current) return;
+      const promoAtRisk = promoWorkNotInDraftRef.current;
+      const announcementAtRisk =
+        hasAnnouncementChangesRef.current &&
+        draftSignatureRef.current !== getConfigSignature(configRef.current);
+      if (!promoAtRisk && !announcementAtRisk) return;
       saveDraft(configRef.current, { markHandled: false });
       e.preventDefault();
       e.returnValue = '';
@@ -502,19 +528,36 @@ export default function Home() {
   /**
    * Offer the saved draft once the promo editor is actually open.
    *
-   * The ref is cleared as it fires, so switching tabs back and forth doesn't
-   * re-offer a draft the user has already passed on — declining leaves it
-   * saved, reachable from the My Draft chip.
+   * A dialog rather than a toast: this is a question, and a toast is a poor
+   * place to ask one — it times out while the user is still reading, and
+   * answering it means hitting a target that is about to disappear.
+   *
+   * The ref is cleared as it opens, so switching tabs back and forth doesn't
+   * re-ask about a draft already passed on. Declining leaves it saved and
+   * reachable from the My Draft chip.
    */
   useEffect(() => {
     if (activeTab !== 'promo') return;
     if (!offeredDraftRef.current) return;
+    setDraftOffer(offeredDraftRef.current);
     offeredDraftRef.current = null;
-    // Plain notice, deliberately: it says the draft exists and nothing more.
-    // An action button here would be a second way to load a draft that the My
-    // Draft chip already opens, on a countdown that makes reading it a race.
-    toast('We saved a draft for you');
   }, [activeTab]);
+
+  /** Take up the offered draft — what the old silent restore did, on request. */
+  function acceptOfferedDraft(draft: CampaignConfig) {
+    setDraftOffer(null);
+    setConfig(draft);
+    draftSignatureRef.current = getConfigSignature(draft);
+    setSavedDraftSignature(getConfigSignature(draft));
+    setDraftPromoCard(JSON.parse(JSON.stringify(draft.promoCard)));
+    savedPromoSignatureRef.current = getPromoSignature(draft);
+    setHasAnnouncementChanges(true);
+    setHasPromoChanges(true);
+    setReadyToPublishAnnouncement(true);
+    setPromoEntryStep('editor');
+    setConfigLoadedSignal((n) => n + 1);
+    toast('Picked up where you left off');
+  }
 
   // Consent before discarding a draft (destructive).
   const [confirmDiscardDraft, setConfirmDiscardDraft] = useState(false);
@@ -803,6 +846,28 @@ export default function Home() {
     if (!draftHasRestorableWork(cfg, publishedConfigObjRef.current)) {
       return false;
     }
+
+    /**
+     * A rescue must never overwrite a draft the user saved on purpose.
+     *
+     * Both share the single slot, and this one runs unattended on every close.
+     * So parking a card in My Draft, carrying on with something else, and
+     * shutting the tab wrote whatever happened to be on the canvas over the
+     * thing that had been deliberately kept — the user did not ask for either
+     * write, and lost the one they had asked for.
+     *
+     * A rescue may replace an earlier rescue: that is the same accident twice,
+     * and the later one is the better copy.
+     */
+    if (options.markHandled === false && savedDraftSignatureRef.current !== null) {
+      let existingIsDeliberate = true;
+      try {
+        existingIsDeliberate = localStorage.getItem(DRAFT_IS_RESCUE_KEY) !== '1';
+      } catch {
+        // Cannot tell — leave the saved draft alone, which is the safe half.
+      }
+      if (existingIsDeliberate) return false;
+    }
     fetch('/api/draft', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -1031,13 +1096,23 @@ export default function Home() {
         setPublishedConfig(guaranteed);
         publishedConfigRef.current = getConfigSignature(guaranteed);
         publishedConfigObjRef.current = guaranteed;
-        // A live on-air toggle (preserveDraft) must not clear the pending draft
-        // or reset the "unpublished changes" flags — only a real publish does.
+        // A live on-air toggle (preserveDraft) must not reset the "unpublished
+        // changes" flags — only a real publish does.
         if (!options.preserveDraft) {
           if (scope === 'announcement') setHasAnnouncementChanges(false);
           else if (scope === 'promo') setHasPromoChanges(false);
           else { setHasAnnouncementChanges(false); setHasPromoChanges(false); }
-          clearDraft();
+          /**
+           * The saved draft is left alone.
+           *
+           * Publishing used to delete it, on the reasoning that going live
+           * supersedes the parked copy. But the two are not necessarily the
+           * same card: a draft is whatever the user put aside, often work on
+           * something else, and publishing says nothing about wanting it gone.
+           *
+           * Deleting a draft now happens only where the user can see it — the
+           * My Draft popup, and discarding it outright.
+           */
           // The card is live now, so the editor starts fresh for the next one.
           // Undefined scope saves both, so it counts as a promo publish too.
           if (scope !== 'announcement') resetPromoEditorToDefault();
@@ -1135,10 +1210,14 @@ export default function Home() {
 
       if (draft) {
         const migrated = migrateConfig(draft, draft.version);
-        // A draft with no restorable work (e.g. a blank promo from Start Fresh,
-        // announcements unchanged) isn't worth a banner — discard it silently.
+        /**
+         * Nothing worth restoring in it — so do not offer it. It is left on
+         * disk rather than deleted: this runs on every load, with no user
+         * action behind it, and the test is a heuristic. Getting it wrong
+         * should cost a missing prompt, not the user's saved work.
+         */
         if (!draftHasRestorableWork(migrated, publishedCfg)) {
-          clearDraft();
+          // deliberately nothing
         } else if (publishedCfg && getConfigSignature(migrated) !== getConfigSignature(publishedCfg)) {
           /**
            * A draft exists and differs from what's live. It used to be poured
@@ -1189,8 +1268,15 @@ export default function Home() {
           offeredDraftRef.current = migrated;
           return;
         } else {
-          // Draft matches published — discard it silently
-          clearDraft();
+          /**
+           * The draft is identical to what is live, so there is nothing to
+           * offer — but it is not deleted either.
+           *
+           * Nothing here is a user action, and the app should not be removing
+           * saved things on its own. Keeping it costs a dot on the My Draft
+           * chip; deleting it costs the user something they chose to save,
+           * every time this heuristic is wrong.
+           */
         }
       }
 
@@ -1740,6 +1826,45 @@ export default function Home() {
           </div>
         </main>
       </div>
+
+      {/* Welcome back. Asked as a question because it is one — and because a
+          draft the user has to notice in three seconds is a draft they lose. */}
+      {draftOffer && (
+        <div data-modal className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
+          <div className="absolute inset-0" onClick={() => setDraftOffer(null)} />
+          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
+            <h2 className="text-base font-semibold">
+              Hello again — we saved a draft for you
+            </h2>
+            <p className="mt-2 text-sm text-on-surface-variant">
+              Your promo card is still in{' '}
+              <span className="font-semibold text-on-surface">My Draft</span>,
+              just as you left it. Want to pick up where you stopped?
+            </p>
+            <p className="mt-2 text-xs text-on-surface-variant/80">
+              Either way it stays saved — you can open it from{' '}
+              <span className="font-semibold text-on-surface">My Draft</span>{' '}
+              whenever you like.
+            </p>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setDraftOffer(null)}
+                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                Start something new
+              </button>
+              <button
+                type="button"
+                onClick={() => acceptOfferedDraft(draftOffer)}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+              >
+                Continue my draft
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingDraftAction && (
         <div data-modal className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
