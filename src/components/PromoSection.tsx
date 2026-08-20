@@ -3946,6 +3946,12 @@ export function PromoSection({
                   <label className="block text-sm font-semibold text-on-surface mb-2">
                     WhatsApp Number
                   </label>
+                  {/* The dial-code trigger sits inside this field rather than
+                      beside it, so it takes no background of its own on hover:
+                      any fill reads as a band laid across the field, whatever
+                      the colour. The chevron and label shifting to the accent
+                      is enough to show it is live, and the shell already
+                      answers the pointer with its own border. */}
                   <div className="flex items-center h-[44px] rounded-md border border-border bg-surface overflow-visible transition-colors hover:border-primary/70 focus-within:border-primary/80">
                     {/* The shared dropdown, not a second one built by hand.
                         This picker used to roll its own absolute panel: it was
@@ -3985,7 +3991,7 @@ export function PromoSection({
                       flip
                       searchable
                       searchPlaceholder="Search country"
-                      buttonClassName="h-full px-3 border-r border-border text-on-surface flex items-center gap-1.5 hover:bg-surface-subtle transition-colors"
+                      buttonClassName="h-full rounded-l-md px-3 border-r border-border text-on-surface flex items-center gap-1.5 transition-colors hover:text-primary"
                       triggerContent={(() => {
                         const selectedCode = config.promoCard.whatsappCountryCode || '+44';
                         const selected = COUNTRY_CODES.find((c) => c.code === selectedCode);
