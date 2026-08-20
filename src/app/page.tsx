@@ -786,8 +786,21 @@ export default function Home() {
     cfg: CampaignConfig,
     options: { markHandled?: boolean } = {},
   ): boolean {
+    /**
+     * Nothing worth keeping in the editor — so write nothing. It must NOT
+     * clear the slot.
+     *
+     * This used to delete the draft, on the reasoning that a blank card should
+     * not leave a stale one behind. But the two are unrelated: the draft is
+     * whatever was parked there earlier, and an empty canvas says nothing
+     * about it. The unload rescue runs this on every close, so closing the tab
+     * with a cleared canvas silently destroyed a draft the user had saved
+     * days before and never touched in that session.
+     *
+     * Deleting a draft stays where the user can see it: the My Draft popup,
+     * and publishing, which supersedes it.
+     */
     if (!draftHasRestorableWork(cfg, publishedConfigObjRef.current)) {
-      clearDraft();
       return false;
     }
     fetch('/api/draft', {
@@ -1454,7 +1467,18 @@ export default function Home() {
    * longer life than a plain confirmation — long enough to read and reach, and
    * still short enough that the offer clearly expires with the toast.
    */
-  function toast(message: string, isError = false, action?: ToastAction) {
+  /**
+   * `durationMs` overrides the default dwell for a message that takes longer
+   * to act on than to read — one that names a control the user then has to go
+   * and find. Ignored when an action is present: that timer belongs to the
+   * Undo countdown and the ring drawn from it, and the two must agree.
+   */
+  function toast(
+    message: string,
+    isError = false,
+    action?: ToastAction,
+    durationMs?: number,
+  ) {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMessage(message);
     setToastIsError(isError);
@@ -1470,7 +1494,10 @@ export default function Home() {
         : null,
     );
     setShowToast(true);
-    toastTimerRef.current = setTimeout(dismissToast, action ? TOAST_ACTION_MS : 3000);
+    toastTimerRef.current = setTimeout(
+      dismissToast,
+      action ? TOAST_ACTION_MS : durationMs ?? 3000,
+    );
   }
 
   function toggleDarkMode() {

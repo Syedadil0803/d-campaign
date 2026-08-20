@@ -83,6 +83,7 @@ interface PromoSectionProps {
     message: string,
     isError?: boolean,
     action?: { label: string; onClick: () => void },
+    durationMs?: number,
   ) => void;
   onSelectedVersionChange?: (versionId: string | null) => void;
   /**
@@ -422,6 +423,16 @@ export function PromoSection({
   const draftPromoCardRef = useRef<PromoCard | null | undefined>(draftPromoCard);
   draftPromoCardRef.current = draftPromoCard;
 
+  /**
+   * Whether the user's own swatch was in the themes row on the previous
+   * render, so the notice fires the moment it appears.
+   *
+   * Seeded at mount rather than false: arriving on the tab with the swatch
+   * already there is not it appearing, and announcing it then greeted every
+   * visit to the Promo tab with the same message.
+   */
+  const ownSwatchWasVisibleRef = useRef<boolean | null>(null);
+
   const [currentField, setCurrentField] = useState<PromoField | null>(null);
   /**
    * Which control opened the style popup, so it can appear beside whatever was
@@ -548,6 +559,16 @@ export function PromoSection({
   const [showCardBgTypeDropdown, setShowCardBgTypeDropdown] = useState(false);
   const [showFieldBgTypeDropdown, setShowFieldBgTypeDropdown] = useState(false);
   const [showCardBgPopup, setShowCardBgPopup] = useState(false);
+  /**
+   * Where the panel's top edge sits, decided once when it opens.
+   *
+   * Recomputing it as the panel resizes moves the heading under the user's
+   * cursor: switching Type between Solid and a gradient adds or removes
+   * controls, and an edge that follows the content makes the whole panel jump.
+   * Fixed at open, the panel grows and shrinks downward from a stationary
+   * heading.
+   */
+  const [cardBgPopupTop, setCardBgPopupTop] = useState<number | null>(null);
   const [showPersistentScaffold, setShowPersistentScaffold] = useState(true);
   // Action popups launched from the buttons under the Promo Card heading.
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
@@ -577,15 +598,7 @@ export function PromoSection({
    * re-record it.
    */
   const samplingThemeRef = useRef(false);
-  /**
-   * Tracks whether the Current Design swatch was showing on the previous
-   * render, so the notice can fire on the moment it appears.
-   *
-   * Seeded with the value at mount: arriving on the tab with the swatch
-   * already there is not it appearing, and announcing it then made every
-   * visit to the Promo tab open with the same message.
-   */
-  const currentDesignWasVisibleRef = useRef<boolean | null>(null);
+
 
   useEffect(() => {
     if (samplingThemeRef.current) {
@@ -1249,6 +1262,13 @@ export function PromoSection({
     ref: RefObject<HTMLDivElement | null>,
   ) {
     setShowPersistentScaffold(true);
+    // Two panels cannot both be the one being edited. Focusing a field means
+    // its styles are what the user wants next, so the card's own background
+    // panel and any open dropdown step aside — they were staying open on top
+    // of the field panel, leaving two style surfaces on screen at once with
+    // no way to tell which the controls belonged to.
+    closeAllPromoDropdowns();
+    setShowCardBgPopup(false);
     // Focusing an input on the left is the second way into the style panel,
     // and it belongs on the same side as the style icon beside it.
     setStylePopupAnchor("input");
@@ -2279,10 +2299,22 @@ export function PromoSection({
      */
     const offset = STYLE_POPUP_WIDTH + STYLE_POPUP_GAP;
 
-    // Opened from a style icon beside an input: hug the canvas's left edge,
-    // the side those inputs are on. It stays inside the Website Content Area
-    // either way — the panel belongs to the preview, not to the page.
-    if (stylePopupAnchor === "input") {
+    const cardIsOnTheLeft =
+      config.promoCard.style.position === "bottom-left" ||
+      config.promoCard.style.position === "top-left";
+
+    /**
+     * Opened from a style icon beside an input: hug the canvas's left edge,
+     * the side those inputs are on.
+     *
+     * Unless the card is parked there. The left of the canvas is only free
+     * real estate while the card sits on the right — move the card to
+     * bottom-left and that same placement drops the panel straight on top of
+     * the thing it is restyling, hiding the preview the user is watching.
+     * In that case it falls through to the card-relative placement below,
+     * which opens on whichever side the card actually leaves open.
+     */
+    if (stylePopupAnchor === "input" && !cardIsOnTheLeft) {
       const canvas = card.closest("[data-promo-canvas]") as HTMLElement | null;
       if (canvas) {
         const cardLeft = card.getBoundingClientRect().left;
@@ -3331,26 +3363,31 @@ export function PromoSection({
   const hasCurrentDesign = !canvasIsEmpty && !baselineIsATheme;
 
   /**
-   * Point out the Current Design swatch the first time it appears.
+   * Say where the design went, the moment it becomes a swatch.
    *
-   * Tied to the swatch existing, not to a theme being clicked: the usual route
-   * is template then theme, and that leaves the design entirely ours, so no
-   * swatch appears and the old trigger never ran. It fires once — the message
-   * orients the user, and repeating it on every style tweak would nag.
-   *
-   * The control is named rather than pointed at: the toast surfaces at the top
-   * of the screen, nowhere near the swatch, so "here" would refer to nothing
-   * the user can see.
+   * The line under the themes row explains the same thing and stays put, but
+   * it only helps someone already looking there. The toast is what tells a
+   * user who is watching the card that their design was kept rather than
+   * overwritten.
    */
   useEffect(() => {
-    const wasVisible = currentDesignWasVisibleRef.current;
-    currentDesignWasVisibleRef.current = hasCurrentDesign;
+    const wasVisible = ownSwatchWasVisibleRef.current;
+    ownSwatchWasVisibleRef.current = hasCurrentDesign;
     // First render only records the state; it has not appeared, it just is.
     if (wasVisible === null) return;
     if (!wasVisible && hasCurrentDesign) {
-      toast('Your design is saved under Current Design — tap it to come back');
+      toast(
+        'Your design is saved as the first swatch — tap it to come back',
+        false,
+        undefined,
+        // Longer than the default: this asks the user to go and find
+        // something, and three seconds is gone before the eye has left the
+        // toast to look for it.
+        8000,
+      );
     }
   }, [hasCurrentDesign, toast]);
+
 
   const showContentScaffold =
     showPersistentScaffold ||
@@ -4914,26 +4951,19 @@ export function PromoSection({
                       className="absolute z-30 w-[320px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3"
                       style={(() => {
                         const card = promoCardRef.current;
-                        const vertical =
-                          !card || card.clientHeight >= 320 + 8 + 8
-                            ? { top: "8px" }
-                            : { bottom: "8px" };
-                        // Opened from "Edit Colors" down on the left, so it
-                        // opens on that side too.
                         const canvas = card?.closest(
                           "[data-promo-canvas]",
                         ) as HTMLElement | null;
-                        if (!card || !canvas) return vertical;
-                        const cardRect = card.getBoundingClientRect();
-                        const canvasRect = canvas.getBoundingClientRect();
-                        // This panel is taller than the canvas, so it cannot
-                        // sit wholly inside it. Pin its top to the canvas so
-                        // the overspill falls downward, over the controls,
-                        // rather than upward across the toolbar and nav.
-                        return {
-                          top: `${Math.round(canvasRect.top + 8 - cardRect.top)}px`,
-                          left: `${Math.round(canvasRect.left + 8 - cardRect.left)}px`,
-                        };
+                        const left =
+                          card && canvas
+                            ? `${Math.round(
+                                canvas.getBoundingClientRect().left +
+                                  8 -
+                                  card.getBoundingClientRect().left,
+                              )}px`
+                            : "8px";
+                        // Top fixed at open — see cardBgPopupTop.
+                        return { top: `${cardBgPopupTop ?? 8}px`, left };
                       })()}
                     >
                       <button
@@ -5196,6 +5226,9 @@ export function PromoSection({
                     menuRef={cardPositionMenuRef}
                     menuPosition={cardPositionPos}
                     compact={true}
+                    // Sits low in the panel, so there is often no room beneath
+                    // it — without this the menu opened past the fold.
+                    flip
                     buttonClassName="flex h-10 items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-surface px-3 text-left text-sm font-medium text-on-surface shadow-sm transition-colors hover:border-primary/70 hover:text-primary"
                       />
                     </span>
@@ -5212,7 +5245,21 @@ export function PromoSection({
                         e.preventDefault();
                         closeAllPromoDropdowns();
                         setShowPersistentScaffold(true);
-                        setShowCardBgPopup((prev) => !prev);
+                        setShowCardBgPopup((prev) => {
+                          if (prev) return false;
+                          const card = promoCardRef.current;
+                          const canvas = card?.closest(
+                            '[data-promo-canvas]',
+                          ) as HTMLElement | null;
+                          if (card && canvas) {
+                            const cardRect = card.getBoundingClientRect();
+                            const canvasRect = canvas.getBoundingClientRect();
+                            setCardBgPopupTop(
+                              Math.round(canvasRect.top + 8 - cardRect.top),
+                            );
+                          }
+                          return true;
+                        });
                       }}
                       className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-surface px-3 text-sm font-medium text-on-surface shadow-sm transition-colors hover:border-primary/70 hover:text-primary"
                       title="The card's own background colors"
@@ -5226,48 +5273,7 @@ export function PromoSection({
                 </p>
               </div>
 
-              {hasCurrentDesign && (
-                <>
               <div className="mt-4 h-10 w-px shrink-0 bg-border" />
-
-              <div className="shrink-0">
-                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
-                  Current Design
-                </p>
-                <button
-                  type="button"
-                  title="Back to the design you had before trying themes"
-                  onClick={() => {
-                    // Already on it: restoring would change nothing, so an
-                    // "undo" step and a toast claiming a restore both lie.
-                    if (onOwnDesign) return;
-                    pushPromoState({ replace: true });
-                    samplingThemeRef.current = true;
-                    setConfig({
-                      ...configRef.current,
-                      promoCard: { ...configRef.current.promoCard, style: themeBaseline },
-                    });
-                    markChanged();
-                    toast('Restored your original design');
-                  }}
-                  style={{ background: getBackgroundStyle(themeBaseline.background) }}
-                  className={`relative h-10 w-24 shrink-0 rounded-lg ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
-                    onOwnDesign
-                      ? 'ring-2 ring-primary'
-                      : 'ring-1 ring-border hover:ring-primary/60'
-                  }`}
-                >
-                  <span className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-border bg-surface text-on-surface-variant">
-                    <RotateCcw className="h-2.5 w-2.5" />
-                  </span>
-                </button>
-              </div>
-                </>
-              )}
-
-              {hasCurrentDesign && (
-                <div className="mt-4 h-10 w-px shrink-0 bg-border" />
-              )}
 
               <div className="min-w-0 flex-1">
                 <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
@@ -5277,6 +5283,41 @@ export function PromoSection({
                     axis, and the selected swatch's ring sits 2px outside its
                     box, so without room the marker is sliced off top and bottom. */}
                 <div className="campaign-custom-scrollbar flex gap-2 overflow-x-auto px-1 pb-2 pt-1.5">
+                  {/* Your own design leads the row rather than sitting in a
+                      group of its own. It is chosen the same way a theme is,
+                      so it belongs among them; the separate section made the
+                      one design you cannot lose look like a different kind of
+                      thing, and cost a label and two rules to say so. The
+                      revert badge marks it as yours. */}
+                  {hasCurrentDesign && (
+                    <button
+                      type="button"
+                      title="Your own design — back to how the card looked before you tried a theme"
+                      onClick={() => {
+                        // Already on it: restoring would change nothing, so an
+                        // "undo" step and a toast claiming a restore both lie.
+                        if (onOwnDesign) return;
+                        pushPromoState({ replace: true });
+                        samplingThemeRef.current = true;
+                        setConfig({
+                          ...configRef.current,
+                          promoCard: { ...configRef.current.promoCard, style: themeBaseline },
+                        });
+                        markChanged();
+                        toast('Restored your original design');
+                      }}
+                      style={{ background: getBackgroundStyle(themeBaseline.background) }}
+                      className={`relative h-10 w-14 shrink-0 rounded-lg ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
+                        onOwnDesign
+                          ? 'ring-2 ring-primary'
+                          : 'ring-1 ring-border hover:ring-primary/60'
+                      }`}
+                    >
+                      <span className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-border bg-surface text-on-surface-variant">
+                        <RotateCcw className="h-2.5 w-2.5" />
+                      </span>
+                    </button>
+                  )}
                   {sampleTemplates.map((t) => {
                     /**
                      * Marked when the card is wearing this look — either
@@ -5326,10 +5367,18 @@ export function PromoSection({
                 {/* Sits under Themes, not under the whole row: it explains the
                     swatches, and spanning the full width put a sentence about
                     themes directly beneath "Card Position". */}
+                {/* Said here rather than in a toast: it explains a control
+                    that is on screen, so it should be readable while the user
+                    is looking at it — and still there the second time they
+                    wonder, which a toast never is. */}
                 {hasCurrentDesign && (
                   <p className="mt-1.5 text-[11px] text-on-surface-variant">
-                    Reversible — your text stays, and your design waits under{' '}
-                    <span className="font-semibold text-on-surface">Current Design</span>.
+                    Trying a theme keeps your text. Your own design is saved as
+                    the{' '}
+                    <span className="font-semibold text-on-surface">
+                      first swatch
+                    </span>{' '}
+                    — tap it to come back.
                   </p>
                 )}
               </div>
