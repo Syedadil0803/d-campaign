@@ -15,12 +15,7 @@ import { PromoFlow } from '@/components/PromoFlow';
 import { PromoSetupDialog } from '@/components/PromoSetupDialog';
 import { Toast, ToastAction, TOAST_ACTION_MS } from '@/components/Toast';
 import { getISODateWithOffset, toLocalISODate } from '@/lib/utils';
-import {
-  describeWhen,
-  fetchPresence,
-  isElsewhere,
-  reportUnsaved,
-} from '@/lib/presenceClient';
+import { describeWhen, fetchUnsavedElsewhere, reportUnsaved } from '@/lib/presenceClient';
 import {
   listVersions,
   MAX_VERSIONS,
@@ -609,28 +604,19 @@ export default function Home() {
   }, []);
 
   /**
-   * Is this account's unsaved work in some other browser?
+   * Is any OTHER browser holding unsaved work for this account?
    *
-   * Asked once, on the way in. A device holding unsaved work cannot hand it
-   * over — that is what "unsaved" means — so the answer never changes anything
-   * on screen except to explain why the work is not here.
+   * This browser names itself so the server can leave it out — its own flag is
+   * still up while it holds work, and reporting that back would tell someone
+   * their edits are elsewhere while they are looking at them. A device holding
+   * unsaved work cannot hand it over either, so the answer only ever explains
+   * why that work is not here.
    */
   useEffect(() => {
     let cancelled = false;
-    fetchPresence().then((presence) => {
-      if (cancelled || !presence) return;
-
-      if (isElsewhere(presence)) {
-        setElsewhereNotice({
-          deviceLabel: presence.lastUnsavedDeviceLabel || 'another browser',
-          at: presence.lastUnsavedAt,
-        });
-        return;
-      }
-
-      // The flag is ours. Remember that, so saving from here takes it back
-      // down instead of being mistaken for a no-op.
-      if (presence.hasUnsavedLocalChanges) reportedUnsavedRef.current = true;
+    fetchUnsavedElsewhere().then((elsewhere) => {
+      if (cancelled || !elsewhere) return;
+      setElsewhereNotice({ deviceLabel: elsewhere.deviceLabel, at: elsewhere.at });
     });
     return () => {
       cancelled = true;
@@ -833,31 +819,34 @@ export default function Home() {
   const reportedUnsavedRef = useRef(false);
 
   /**
-   * Which return-visit message applies, if any.
+   * Everything worth saying about arriving, gathered into one answer.
    *
-   * Rescued edits win over a parked draft when both exist: the edits are what
-   * is on the canvas, so they are what the user is looking at, and the draft
-   * gets named inside that same message rather than queued behind it as a
-   * second dialog.
+   * Three facts can be true at once: this browser rescued edits from a session
+   * that ended, a draft is parked, and another device is holding unsaved work
+   * of its own. They were up to three dialogs queued behind one another, so
+   * the second device — the awkward case, where all three apply — greeted
+   * people with a stack of boxes describing one situation from three angles.
+   *
+   * The lead is whichever fact needs acting on soonest: rescued edits first,
+   * because they are already on the canvas; then a parked draft, which is a
+   * real question; then work stranded on another device, which is only ever
+   * news. The others become lines underneath.
    */
-  const welcomeBack:
-    | {
-        mode: 'restored';
-        localSavedAt: string | null;
-        draftSavedAt: string | null;
-        draftIsNewer: boolean;
-      }
-    | { mode: 'draft'; draftSavedAt: string | null }
-    | null =
-    restoreNotice && activeTab === 'promo'
-      ? { mode: 'restored', ...restoreNotice }
-      : draftOffer && activeTab === 'promo'
-        ? { mode: 'draft', draftSavedAt: draftOffer.lastUpdated ?? null }
-        : null;
+  const welcomeBack = (() => {
+    if (activeTab !== 'promo') return null;
+    const elsewhere = elsewhereNotice;
+    if (restoreNotice) return { mode: 'restored' as const, ...restoreNotice, elsewhere };
+    if (draftOffer) {
+      return { mode: 'draft' as const, draftSavedAt: draftOffer.lastUpdated ?? null, elsewhere };
+    }
+    if (elsewhere) return { mode: 'elsewhere' as const, elsewhere };
+    return null;
+  })();
 
   function dismissWelcomeBack() {
     setRestoreNotice(null);
     setDraftOffer(null);
+    setElsewhereNotice(null);
   }
 
   // A picker the editor should open as soon as it mounts, set by the
@@ -2324,7 +2313,7 @@ export default function Home() {
               for their work than a decision to dismiss, and the buttons are
               right there. */}
           <div className="absolute inset-0" />
-          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-6 text-on-surface shadow-2xl backdrop-blur-md">
+          <div className="relative z-10 w-full max-w-lg rounded-xl border border-white/10 bg-black/10 p-6 text-on-surface shadow-2xl backdrop-blur-md">
             {welcomeBack.mode === 'restored' ? (
               <>
                 {/* Told, not asked: the work is already on the canvas behind
@@ -2333,45 +2322,28 @@ export default function Home() {
                 <h2 className="text-base font-semibold">
                   We&apos;ve restored your unsaved changes
                 </h2>
-                <p className="mt-2 text-sm text-on-surface-variant">
-                  Unsaved edits
-                  {welcomeBack.localSavedAt
-                    ? ` from ${describeWhen(welcomeBack.localSavedAt)}`
-                    : ''}{' '}
-                  are back on the canvas.
-                  {welcomeBack.draftSavedAt && (
-                    <>
-                      {' '}Your draft from{' '}
-                      <span className="font-semibold text-on-surface">
-                        {describeWhen(welcomeBack.draftSavedAt)}
-                      </span>{' '}
-                      is untouched in{' '}
-                      <span className="font-semibold text-on-surface">My Draft</span>.
-                      {welcomeBack.draftIsNewer && ' It was saved after these edits.'}
-                    </>
-                  )}
+                <p className="mt-1.5 text-sm text-on-surface-variant">
+                  Your edits from {describeWhen(welcomeBack.localSavedAt)} are back
+                  on the canvas — pick up where you left off.
                 </p>
-                {/* The same warning either way, because the risk is the same
-                    either way: these edits are not saved anywhere but here.
-                    An earlier version explained the single draft slot and what
-                    saving would overwrite — plumbing, and not what this moment
-                    is for. Saving already asks "Replace saved draft?" at the
-                    point it would happen, which is where a warning about
-                    destroying something belongs. What is left is the thing the
-                    user cannot find out any other way: this can be lost again. */}
-                <p className="mt-3 text-xs text-amber-600 dark:text-amber-500">
-                  These edits are on this browser only. Save them to My Draft
-                  when you&apos;re done — otherwise you could lose them again.
+              </>
+            ) : welcomeBack.mode === 'elsewhere' ? (
+              <>
+                {/* Nothing rescued and nothing parked, so where the work is IS
+                    the message. Not phrased as a failure to save: everywhere
+                    else the tool treats not-saving as normal, because it
+                    rescues work rather than asking about it. */}
+                <h2 className="text-base font-semibold">
+                  Your unsaved changes are on another device
+                </h2>
+                <p className="mt-1.5 text-sm text-on-surface-variant">
+                  You were editing on{' '}
+                  <span className="font-medium text-on-surface">
+                    {welcomeBack.elsewhere.deviceLabel}
+                  </span>{' '}
+                  {describeWhen(welcomeBack.elsewhere.at)}. Those changes never
+                  made it to a draft, so they&apos;re on that browser only.
                 </p>
-                <div className="mt-5 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={dismissWelcomeBack}
-                    className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
-                  >
-                    Continue editing
-                  </button>
-                </div>
               </>
             ) : (
               <>
@@ -2380,29 +2352,72 @@ export default function Home() {
                 <h2 className="text-base font-semibold">
                   Welcome back — your draft is waiting
                 </h2>
-                <p className="mt-2 text-sm text-on-surface-variant">
-                  Your promo card from{' '}
-                  <span className="font-semibold text-on-surface">
-                    {describeWhen(welcomeBack.draftSavedAt)}
-                  </span>{' '}
-                  is still in{' '}
-                  <span className="font-semibold text-on-surface">My Draft</span>,
-                  just as you left it.
+                <p className="mt-1.5 text-sm text-on-surface-variant">
+                  Your promo card from {describeWhen(welcomeBack.draftSavedAt)} is
+                  still in My Draft, just as you left it.
                 </p>
-                {/* What declining costs depends on what is already on screen.
-                    Arriving with edits in progress makes taking the draft
-                    destructive, and saying "either way it stays saved" there
-                    promises the opposite of what happens. */}
-                {hasChanges ? (
-                  <p className="mt-3 text-xs text-amber-600 dark:text-amber-500">
-                    The editor has unsaved changes. Opening the draft replaces them.
-                  </p>
-                ) : (
-                  <p className="mt-3 text-xs text-on-surface-variant/80">
-                    Either way it stays saved — open it from My Draft whenever you like.
-                  </p>
+              </>
+            )}
+
+            {/* The other places the work lives, in one sentence each.
+                A bordered list of rows was tried here and read as a settings
+                panel — boxes and right-aligned timestamps make facts look like
+                controls, and none of these are. Prose keeps them as what they
+                are: context, on the way to the canvas. */}
+            {(welcomeBack.mode === 'restored' && welcomeBack.draftSavedAt) ||
+            ((welcomeBack.mode === 'restored' || welcomeBack.mode === 'draft') &&
+              welcomeBack.elsewhere) ? (
+              <p className="mt-2.5 text-sm text-on-surface-variant">
+                {welcomeBack.mode === 'restored' && welcomeBack.draftSavedAt && (
+                  <>
+                    Your draft from{' '}
+                    <span className="font-medium text-on-surface">
+                      {describeWhen(welcomeBack.draftSavedAt)}
+                    </span>{' '}
+                    is untouched in My Draft
+                    {welcomeBack.draftIsNewer && ', and was saved after these edits'}.{' '}
+                  </>
                 )}
-                <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                {welcomeBack.elsewhere && (
+                  <>
+                    You also have unsaved changes on{' '}
+                    <span className="font-medium text-on-surface">
+                      {welcomeBack.elsewhere.deviceLabel}
+                    </span>{' '}
+                    from {describeWhen(welcomeBack.elsewhere.at)}, which stay on
+                    that browser.
+                  </>
+                )}
+              </p>
+            ) : null}
+
+            {/* The one thing that cannot be found out any other way. */}
+            {welcomeBack.mode === 'restored' && (
+              <p className="mt-4 text-xs text-amber-600 dark:text-amber-500">
+                These edits are on this browser only — save them to My Draft
+                when you&apos;re done.
+              </p>
+            )}
+            {welcomeBack.mode === 'elsewhere' && (
+              <p className="mt-4 text-xs text-on-surface-variant/80">
+                Sign in there and save them to My Draft — then they&apos;ll open
+                anywhere.
+              </p>
+            )}
+            {welcomeBack.mode === 'draft' &&
+              (hasChanges ? (
+                <p className="mt-4 text-xs text-amber-600 dark:text-amber-500">
+                  The editor has unsaved changes. Opening the draft replaces them.
+                </p>
+              ) : (
+                <p className="mt-4 text-xs text-on-surface-variant/80">
+                  Either way it stays saved — open it from My Draft whenever you like.
+                </p>
+              ))}
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              {welcomeBack.mode === 'draft' ? (
+                <>
                   <button
                     type="button"
                     onClick={dismissWelcomeBack}
@@ -2417,52 +2432,16 @@ export default function Home() {
                   >
                     Continue my draft
                   </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* The one case where there is nothing to restore, and saying so IS the
-          point. Unsaved work never leaves the browser that made it, so this
-          names that browser and what to do there. */}
-      {elsewhereNotice && activeTab === 'promo' && (
-        <div data-modal className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
-          {/* Blocks, does not dismiss — see the note on the dialog above. */}
-          <div className="absolute inset-0" />
-          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-6 text-on-surface shadow-2xl backdrop-blur-md">
-            {/* "Unsaved changes", the same words the restore dialog uses, so
-                the two messages are plainly about the same thing.
-
-                It does not say the user failed to save. Everywhere else the
-                tool now treats not-saving as normal — it rescues work rather
-                than asking about it — and "you didn't save it as a draft" puts
-                the blame back on them for the one case it cannot rescue. What
-                is left is where the changes are and how to reach them. */}
-            <h2 className="text-base font-semibold">
-              Your unsaved changes are on another device
-            </h2>
-            <p className="mt-2 text-sm text-on-surface-variant">
-              You were editing on{' '}
-              <span className="font-semibold text-on-surface">
-                {elsewhereNotice.deviceLabel}
-              </span>{' '}
-              {describeWhen(elsewhereNotice.at)}. Those changes never made it to
-              a draft, so they&apos;re on that browser only.
-            </p>
-            <p className="mt-3 text-xs text-on-surface-variant/80">
-              Sign in there and save them to My Draft — then they&apos;ll open
-              anywhere.
-            </p>
-            <div className="mt-5 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setElsewhereNotice(null)}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
-              >
-                Continue here
-              </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={dismissWelcomeBack}
+                  className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+                >
+                  {welcomeBack.mode === 'restored' ? 'Continue editing' : 'Continue here'}
+                </button>
+              )}
             </div>
           </div>
         </div>

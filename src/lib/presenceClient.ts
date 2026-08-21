@@ -9,11 +9,10 @@ import { getDeviceId, getDeviceLabel } from '@/lib/device';
  * would spend a request a minute to repeat something the server already knows.
  */
 
-export interface Presence {
-  hasUnsavedLocalChanges: boolean;
-  lastUnsavedDeviceId: string | null;
-  lastUnsavedDeviceLabel: string | null;
-  lastUnsavedAt: string | null;
+/** Unsaved work in a browser that is not this one. */
+export interface ElsewhereUnsaved {
+  deviceLabel: string;
+  at: string;
 }
 
 export function reportUnsaved(hasUnsaved: boolean): void {
@@ -33,26 +32,28 @@ export function reportUnsaved(hasUnsaved: boolean): void {
   });
 }
 
-export async function fetchPresence(): Promise<Presence | null> {
+/**
+ * Unsaved work on some other device, or null.
+ *
+ * This browser names itself so the server can leave it out. Its own flag is
+ * still up while it is holding work, and reporting that back would tell people
+ * their edits are somewhere else while they are looking at them.
+ */
+export async function fetchUnsavedElsewhere(): Promise<ElsewhereUnsaved | null> {
+  const deviceId = getDeviceId();
+  if (!deviceId) return null;
   try {
-    const response = await fetch('/api/presence');
+    const response = await fetch(`/api/presence?deviceId=${encodeURIComponent(deviceId)}`);
     if (!response.ok) return null;
     const data = await response.json();
-    return (data?.presence as Presence | null) ?? null;
+    return (data?.elsewhere as ElsewhereUnsaved | null) ?? null;
   } catch {
     return null;
   }
 }
 
-/** True when the flag is up and it was raised by some browser other than this one. */
-export function isElsewhere(presence: Presence | null): boolean {
-  if (!presence?.hasUnsavedLocalChanges) return false;
-  const mine = getDeviceId();
-  return !!presence.lastUnsavedDeviceId && presence.lastUnsavedDeviceId !== mine;
-}
-
 /** "Today at 2:15 PM", "Yesterday at 9:04 AM", or a dated form for older work. */
-export function describeWhen(iso: string | null): string {
+export function describeWhen(iso: string | null | undefined): string {
   if (!iso) return 'recently';
   const when = new Date(iso);
   if (Number.isNaN(when.getTime())) return 'recently';

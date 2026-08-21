@@ -1,6 +1,6 @@
 import { getDb } from '@/lib/db';
-import { users, userPresence } from '@/lib/schema';
-import { eq } from 'drizzle-orm';
+import { users, userDevicePresence } from '@/lib/schema';
+import { and, desc, eq, ne } from 'drizzle-orm';
 
 export interface UserRow {
   id: string;
@@ -10,12 +10,10 @@ export interface UserRow {
   passwordHash: string | null;
 }
 
-/** What another device needs to know about work it cannot see. */
-export interface Presence {
-  hasUnsavedLocalChanges: boolean;
-  lastUnsavedDeviceId: string | null;
-  lastUnsavedDeviceLabel: string | null;
-  lastUnsavedAt: string | null;
+/** Unsaved work sitting in a browser that is not the one asking. */
+export interface ElsewhereUnsaved {
+  deviceLabel: string;
+  at: string;
 }
 
 export const userRepository = {
@@ -34,56 +32,59 @@ export const userRepository = {
     return rows[0] ?? null;
   },
 
-  async getPresence(userId: string): Promise<Presence> {
+  /**
+   * The most recent OTHER device holding unsaved work, or null.
+   *
+   * Excluding the caller is what makes this answerable: this browser already
+   * knows what it is holding, and its own flag is still up while it holds it.
+   * Newest first, because with several stale devices the useful one to name is
+   * the machine they were last sitting at.
+   */
+  async findUnsavedElsewhere(userId: string, deviceId: string): Promise<ElsewhereUnsaved | null> {
     const rows = await getDb()
       .select()
-      .from(userPresence)
-      .where(eq(userPresence.userId, userId))
+      .from(userDevicePresence)
+      .where(
+        and(
+          eq(userDevicePresence.userId, userId),
+          eq(userDevicePresence.hasUnsavedLocalChanges, true),
+          ne(userDevicePresence.deviceId, deviceId),
+        ),
+      )
+      .orderBy(desc(userDevicePresence.lastUnsavedAt))
       .limit(1);
 
     const row = rows[0];
-    // No row means nothing was ever left unsaved — the same answer as a row
-    // saying so, and worth not making every caller handle both shapes.
-    if (!row) {
-      return {
-        hasUnsavedLocalChanges: false,
-        lastUnsavedDeviceId: null,
-        lastUnsavedDeviceLabel: null,
-        lastUnsavedAt: null,
-      };
-    }
-    return {
-      hasUnsavedLocalChanges: row.hasUnsavedLocalChanges,
-      lastUnsavedDeviceId: row.lastUnsavedDeviceId,
-      lastUnsavedDeviceLabel: row.lastUnsavedDeviceLabel,
-      lastUnsavedAt: row.lastUnsavedAt ? row.lastUnsavedAt.toISOString() : null,
-    };
+    if (!row) return null;
+    return { deviceLabel: row.deviceLabel, at: row.lastUnsavedAt.toISOString() };
   },
 
   /**
-   * Record — or retract — the claim that a browser is holding unsaved work.
+   * Record — or retract — this device's claim.
    *
-   * Retracting keeps the device columns rather than nulling them, so "you saved
-   * it from the laptop" stays answerable after the flag itself is down.
+   * Only ever touches the calling device's own row, so one browser saving its
+   * work can no longer clear another's claim.
    */
-  async setPresence(
+  async setDevicePresence(
     userId: string,
     presence: { hasUnsaved: boolean; deviceId: string; deviceLabel: string },
   ): Promise<boolean> {
     try {
       const values = {
+        deviceLabel: presence.deviceLabel,
         hasUnsavedLocalChanges: presence.hasUnsaved,
-        lastUnsavedDeviceId: presence.deviceId,
-        lastUnsavedDeviceLabel: presence.deviceLabel,
         lastUnsavedAt: new Date(),
       };
       await getDb()
-        .insert(userPresence)
-        .values({ userId, ...values })
-        .onConflictDoUpdate({ target: userPresence.userId, set: values });
+        .insert(userDevicePresence)
+        .values({ userId, deviceId: presence.deviceId, ...values })
+        .onConflictDoUpdate({
+          target: [userDevicePresence.userId, userDevicePresence.deviceId],
+          set: values,
+        });
       return true;
     } catch (error) {
-      console.error('[DB] setPresence failed:', error);
+      console.error('[DB] setDevicePresence failed:', error);
       return false;
     }
   },

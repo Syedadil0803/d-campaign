@@ -6,22 +6,28 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * GET → does this account have unsaved work sitting in some browser, and which?
+ * GET ?deviceId=… → unsaved work sitting in a browser other than this one.
  *
- * The editor asks once on load. If the answer names a device that is not this
- * one, the work is unreachable from here and the user is told so plainly
- * rather than being left to wonder why their edits are missing.
+ * The caller names itself so the query can exclude it. Asking "does this
+ * account have unsaved work anywhere" would answer yes to a browser about its
+ * own edits, which it can already see on screen.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const userId = await getSessionUserId();
     if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
-    return NextResponse.json({ presence: await userRepository.getPresence(userId) });
+
+    const deviceId = request.nextUrl.searchParams.get('deviceId');
+    if (!deviceId) return NextResponse.json({ error: 'Missing deviceId' }, { status: 400 });
+
+    return NextResponse.json({
+      elsewhere: await userRepository.findUnsavedElsewhere(userId, deviceId),
+    });
   } catch (error) {
     console.error('[PRESENCE] GET -> FAILED:', error);
     // A failure here must not break the editor: the notice is an extra, and
     // "we don't know" is safely reported as "nothing outstanding".
-    return NextResponse.json({ presence: null });
+    return NextResponse.json({ elsewhere: null });
   }
 }
 
@@ -45,7 +51,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid presence update' }, { status: 400 });
     }
 
-    const saved = await userRepository.setPresence(userId, {
+    const saved = await userRepository.setDevicePresence(userId, {
       hasUnsaved: body.hasUnsaved,
       deviceId: body.deviceId,
       deviceLabel: body.deviceLabel || 'an unrecognized browser',

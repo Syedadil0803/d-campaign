@@ -1,4 +1,4 @@
-import { text, timestamp, jsonb, boolean, pgSchema } from 'drizzle-orm/pg-core';
+import { text, timestamp, jsonb, boolean, pgSchema, primaryKey } from 'drizzle-orm/pg-core';
 
 // Define the campaign schema
 export const campaignSchema = pgSchema('campaign');
@@ -32,21 +32,30 @@ export const users = campaignSchema.table('users', {
 });
 
 /**
- * Whether some browser is holding work this account never saved as a draft.
+ * Whether a given browser is holding work this account never saved as a draft.
  *
- * The card itself is never stored here. Work that has not been saved on
- * purpose lives in the browser that made it, and copying it to the server on
- * every edit would both cost a round trip per keystroke and quietly keep
- * something the user did not ask us to keep. What another device actually
- * needs to know is far smaller: that unsaved work exists, where it is, and how
- * old it is — which is what these four columns say and nothing more.
+ * One row per device, because which device is the entire point of the record.
+ * Keyed on the account alone, a second browser raising its own flag erased the
+ * first one's, and the account was then pointed at a machine whose work had
+ * already been picked up.
+ *
+ * The card itself is never stored. Copying work to the server on every edit
+ * would cost a round trip per keystroke and quietly keep something the user
+ * never asked us to keep. What another device needs is far smaller: that
+ * unsaved work exists, whose browser has it, and how old it is.
  */
-export const userPresence = campaignSchema.table('user_presence', {
-  userId: text('user_id')
-    .primaryKey()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  hasUnsavedLocalChanges: boolean('has_unsaved_local_changes').notNull().default(false),
-  lastUnsavedDeviceId: text('last_unsaved_device_id'),
-  lastUnsavedDeviceLabel: text('last_unsaved_device_label'),
-  lastUnsavedAt: timestamp('last_unsaved_at'),
-});
+export const userDevicePresence = campaignSchema.table(
+  'user_device_presence',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    deviceId: text('device_id').notNull(),
+    deviceLabel: text('device_label').notNull(),
+    hasUnsavedLocalChanges: boolean('has_unsaved_local_changes').notNull().default(false),
+    lastUnsavedAt: timestamp('last_unsaved_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.userId, table.deviceId] }),
+  }),
+);
