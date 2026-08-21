@@ -2669,20 +2669,6 @@ export default function Home() {
                   </p>
                 )}
 
-                <p className="mt-3 text-xs text-amber-600 dark:text-amber-500">
-                  Save it to My Draft when you&apos;re done — otherwise you could
-                  lose it again.
-                </p>
-
-                <div className="mt-5 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={dismissWelcomeBack}
-                    className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
-                  >
-                    Continue editing
-                  </button>
-                </div>
               </>
             ) : welcomeBack.mode === 'elsewhere' ? (
               <>
@@ -2721,38 +2707,25 @@ export default function Home() {
                 panel — boxes and right-aligned timestamps make facts look like
                 controls, and none of these are. Prose keeps them as what they
                 are: context, on the way to the canvas. */}
-            {(welcomeBack.mode === 'restored' && welcomeBack.draftSavedAt) ||
-            ((welcomeBack.mode === 'restored' || welcomeBack.mode === 'draft') &&
-              welcomeBack.elsewhere) ? (
+            {/* Only the draft offer needs this. The restored branch above
+                carries its own lines, and duplicating them here was rendering
+                the same situation twice in one dialog — the very thing the
+                rewrite was meant to stop. */}
+            {welcomeBack.mode === 'draft' && welcomeBack.elsewhere && (
               <p className="mt-2.5 text-sm text-on-surface-variant">
-                {welcomeBack.mode === 'restored' && welcomeBack.draftSavedAt && (
-                  <>
-                    Your draft from{' '}
-                    <span className="font-medium text-on-surface">
-                      {describeWhen(welcomeBack.draftSavedAt)}
-                    </span>{' '}
-                    is untouched in My Draft
-                    {welcomeBack.draftIsNewer && ', and was saved after these edits'}.{' '}
-                  </>
-                )}
-                {welcomeBack.elsewhere && (
-                  <>
-                    You also have unsaved changes on{' '}
-                    <span className="font-medium text-on-surface">
-                      {welcomeBack.elsewhere.deviceLabel}
-                    </span>{' '}
-                    from {describeWhen(welcomeBack.elsewhere.at)}, which stay on
-                    that browser.
-                  </>
-                )}
+                You were also editing on{' '}
+                <span className="font-medium text-on-surface">
+                  {welcomeBack.elsewhere.deviceLabel}
+                </span>
+                . Those changes stay on that browser whatever you choose here.
               </p>
-            ) : null}
+            )}
 
             {/* The one thing that cannot be found out any other way. */}
             {welcomeBack.mode === 'restored' && (
               <p className="mt-4 text-xs text-amber-600 dark:text-amber-500">
-                These edits are on this browser only — save them to My Draft
-                when you&apos;re done.
+                Save it to My Draft when you&apos;re done — otherwise you could
+                lose it again.
               </p>
             )}
             {welcomeBack.mode === 'elsewhere' && (
