@@ -2640,23 +2640,28 @@ export default function Home() {
                     way in is smaller: their work was not saved, unsaved work
                     stays on the browser that made it, and here is what that
                     means for them right now. */}
+                {/* Enough to explain itself, in one block of prose.
+                    Trimmed to a bare heading it stopped saying what had
+                    actually happened; opening with the rule — "unsaved work
+                    stays on the browser that made it" — made the reader decode
+                    policy first. This says what was done, then the one thing
+                    left to do, as two sentences rather than two paragraphs so
+                    it reads as a single message. */}
                 <h2 className="text-base font-semibold">
-                  We&apos;ve put your unsaved work back
+                  Your unsaved work is back
                 </h2>
                 <p className="mt-1.5 text-sm text-on-surface-variant">
-                  It was never saved as a draft, so it stays on the browser that
-                  made it — and what was on this one is back on the canvas.
+                  We kept what you hadn&apos;t saved and put it back on the canvas.
+                  {welcomeBack.elsewhere && (
+                    <>
+                      {' '}You were also editing on{' '}
+                      <span className="font-medium text-on-surface">
+                        {welcomeBack.elsewhere.deviceLabel}
+                      </span>{' '}
+                      — open the tool there to pick that up.
+                    </>
+                  )}
                 </p>
-
-                {welcomeBack.elsewhere && (
-                  <p className="mt-2.5 text-sm text-on-surface-variant">
-                    You were also editing on{' '}
-                    <span className="font-medium text-on-surface">
-                      {welcomeBack.elsewhere.deviceLabel}
-                    </span>
-                    . Sign in there to pick that up, or carry on here.
-                  </p>
-                )}
 
                 {welcomeBack.draftSavedAt && !welcomeBack.elsewhere && (
                   <p className="mt-2.5 text-sm text-on-surface-variant">
@@ -2664,11 +2669,9 @@ export default function Home() {
                     <span className="font-medium text-on-surface">
                       {describeWhen(welcomeBack.draftSavedAt)}
                     </span>{' '}
-                    is untouched in My Draft
-                    {welcomeBack.draftIsNewer && ', and was saved after these edits'}.
+                    is untouched in My Draft.
                   </p>
                 )}
-
               </>
             ) : welcomeBack.mode === 'elsewhere' ? (
               <>
@@ -2724,8 +2727,7 @@ export default function Home() {
             {/* The one thing that cannot be found out any other way. */}
             {welcomeBack.mode === 'restored' && (
               <p className="mt-4 text-xs text-amber-600 dark:text-amber-500">
-                Save it to My Draft when you&apos;re done — otherwise you could
-                lose it again.
+                Save it to My Draft so it opens anywhere.
               </p>
             )}
             {welcomeBack.mode === 'elsewhere' && (
