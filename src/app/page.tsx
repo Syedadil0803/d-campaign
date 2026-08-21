@@ -731,6 +731,16 @@ export default function Home() {
       idleSecondsLeftRef.current = null;
       setIdleSecondsLeft(null);
       standDown();
+      /**
+       * No clock at all while the tab is on screen.
+       *
+       * The guard lives here rather than at each caller because there are
+       * three — the visibility change, any real input, and the "I'm still
+       * here" button — and two of them fire while the page is visible. Without
+       * it, typing would start a countdown that then interrupted the person
+       * typing.
+       */
+      if (document.visibilityState === 'visible') return;
       warnTimer = window.setTimeout(beginWarning, IDLE_LIMIT_MS - IDLE_WARNING_LEAD_MS);
       idleTimer = window.setTimeout(signOutIdle, IDLE_LIMIT_MS);
     }
