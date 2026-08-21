@@ -540,12 +540,32 @@ export default function Home() {
    * blank canvas, a stock template or the published card unedited never
    * displaces something worth recovering.
    */
+  /** True once a card has been loaded — see the recovery effect below. */
+  const hasLoadedOnceRef = useRef(false);
+
   useEffect(() => {
     const promoAtRisk = promoWorkNotInDraftRef.current;
     const announcementAtRisk =
       hasAnnouncementChanges &&
       draftSignatureRef.current !== getConfigSignature(config);
-    if (!promoAtRisk && !announcementAtRisk) return;
+
+    if (!promoAtRisk && !announcementAtRisk) {
+      /**
+       * Nothing at risk means nothing to recover — so the copy goes.
+       *
+       * Leaving it was the bug behind "Clear doesn't clear": clearing the
+       * canvas puts the card beyond risk, this effect returned without writing
+       * anything, and the copy taken a moment earlier stayed on disk. The next
+       * visit dutifully restored the card the user had just thrown away.
+       *
+       * Guarded on a load having happened, because on first mount the config
+       * is the default and nothing is at risk yet — clearing here would delete
+       * the very copy loadConfig is about to read.
+       */
+      if (hasLoadedOnceRef.current) clearRecovery();
+      return;
+    }
+
     const id = window.setTimeout(() => writeRecovery(config), 800);
     return () => window.clearTimeout(id);
   }, [config, hasAnnouncementChanges]);
@@ -725,12 +745,37 @@ export default function Home() {
 
     const events: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
     events.forEach((event) => window.addEventListener(event, onActivity, { passive: true }));
-    restart();
+
+    /**
+     * The clock only runs while the user is somewhere else.
+     *
+     * Sitting on the tool reading your own card was enough to be counted idle,
+     * because idleness was measured by input alone — so a modal countdown
+     * interrupted someone who was plainly present and looking straight at it.
+     * Being on the page IS the activity.
+     *
+     * So the timer starts when the tab is hidden and stops when it comes back,
+     * which also means the warning can only ever reach someone who has left —
+     * exactly who it is for.
+     */
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        restart();
+      } else {
+        clearAll();
+        idleSecondsLeftRef.current = null;
+        setIdleSecondsLeft(null);
+        standDown();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    if (document.visibilityState === 'hidden') restart();
     idleRestartRef.current = restart;
 
     return () => {
       clearAll();
       standDown();
+      document.removeEventListener('visibilitychange', onVisibility);
       events.forEach((event) => window.removeEventListener(event, onActivity));
     };
   }, []);
@@ -969,6 +1014,7 @@ export default function Home() {
       plain(card.title) || plain(card.subtitle) || plain(card.description) || plain(card.buttonText),
     );
     setPromoBlankStart(wearingBlank && !hasWords);
+    hasLoadedOnceRef.current = true;
     // Only armed while the end date is still the missing piece. A restored
     // card that already has one must not have its countdown switched on for it.
     setPromoTimerAutoArmed(wearingBlank && !card.endDate);
@@ -2577,13 +2623,56 @@ export default function Home() {
                 {/* Told, not asked: the work is already on the canvas behind
                     this. The session ended without the user ending it, so
                     there was no decision to put to them. */}
+                {/* One message, whatever is true.
+                    With edits rescued here AND work stranded on another
+                    device, this listed both with a timestamp each and left the
+                    reader matching times to places. What someone needs on the
+                    way in is smaller: their work was not saved, unsaved work
+                    stays on the browser that made it, and here is what that
+                    means for them right now. */}
                 <h2 className="text-base font-semibold">
-                  We&apos;ve restored your unsaved changes
+                  We&apos;ve put your unsaved work back
                 </h2>
                 <p className="mt-1.5 text-sm text-on-surface-variant">
-                  Your edits from {describeWhen(welcomeBack.localSavedAt)} are back
-                  on the canvas — pick up where you left off.
+                  It was never saved as a draft, so it stays on the browser that
+                  made it — and what was on this one is back on the canvas.
                 </p>
+
+                {welcomeBack.elsewhere && (
+                  <p className="mt-2.5 text-sm text-on-surface-variant">
+                    You were also editing on{' '}
+                    <span className="font-medium text-on-surface">
+                      {welcomeBack.elsewhere.deviceLabel}
+                    </span>
+                    . Sign in there to pick that up, or carry on here.
+                  </p>
+                )}
+
+                {welcomeBack.draftSavedAt && !welcomeBack.elsewhere && (
+                  <p className="mt-2.5 text-sm text-on-surface-variant">
+                    Your draft from{' '}
+                    <span className="font-medium text-on-surface">
+                      {describeWhen(welcomeBack.draftSavedAt)}
+                    </span>{' '}
+                    is untouched in My Draft
+                    {welcomeBack.draftIsNewer && ', and was saved after these edits'}.
+                  </p>
+                )}
+
+                <p className="mt-3 text-xs text-amber-600 dark:text-amber-500">
+                  Save it to My Draft when you&apos;re done — otherwise you could
+                  lose it again.
+                </p>
+
+                <div className="mt-5 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={dismissWelcomeBack}
+                    className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+                  >
+                    Continue editing
+                  </button>
+                </div>
               </>
             ) : welcomeBack.mode === 'elsewhere' ? (
               <>

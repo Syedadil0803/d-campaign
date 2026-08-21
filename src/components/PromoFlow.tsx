@@ -70,16 +70,17 @@ export function PromoFlow({
    * canvas there is no card on screen, so it describes something the user
    * cannot see or act on.
    */
-  const cardHasContent = () => {
-    const c = config.promoCard;
-    const written = (v?: string) => Boolean((v || '').replace(/<[^>]*>/g, '').trim());
-    return (
-      written(c.title) ||
-      written(c.subtitle) ||
-      written(c.description) ||
-      written(c.buttonText)
-    );
-  };
+  /**
+   * Is there a countdown on the card to point at?
+   *
+   * This used to ask whether the card had any COPY, which is a different
+   * question and the wrong one: the hint is anchored to the countdown. Setting
+   * an end date on a cleared canvas switches the countdown on before a word
+   * has been written, so the hint was suppressed at exactly the moment it had
+   * something to explain — and the moment the user is most likely to wonder
+   * what that black bar is.
+   */
+  const timerOnCard = () => Boolean(config.promoCard.showTimer);
 
   /**
    * One way in for the hint, because there are three ways to reach a new
@@ -88,7 +89,7 @@ export function PromoFlow({
    * Guarding only the first left the other two raising it over a blank canvas.
    */
   const revealTimerHint = () => {
-    if (!cardHasContent()) {
+    if (!timerOnCard()) {
       setShowTimerHint(false);
       return;
     }
@@ -100,12 +101,13 @@ export function PromoFlow({
   };
 
   /**
-   * Clearing the canvas while the hint is up has to take it down too — it is
-   * anchored to a card that is no longer there, so it would sit pointing at
-   * empty space.
+   * Turning the countdown off while the hint is up has to take it down too —
+   * it is anchored to a countdown that is no longer there, so it would sit
+   * pointing at empty space. Clearing the canvas does this by the same route,
+   * since a cleared card switches the timer off.
    */
   useEffect(() => {
-    if (showTimerHint && !cardHasContent()) setShowTimerHint(false);
+    if (showTimerHint && !timerOnCard()) setShowTimerHint(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.promoCard, showTimerHint]);
 
