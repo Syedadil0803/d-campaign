@@ -11,6 +11,7 @@ import { getDeviceId, getDeviceLabel } from '@/lib/device';
 
 /** Unsaved work in a browser that is not this one. */
 export interface ElsewhereUnsaved {
+  deviceId: string;
   deviceLabel: string;
   at: string;
 }
@@ -46,10 +47,55 @@ export async function fetchUnsavedElsewhere(): Promise<ElsewhereUnsaved | null> 
     const response = await fetch(`/api/presence?deviceId=${encodeURIComponent(deviceId)}`);
     if (!response.ok) return null;
     const data = await response.json();
-    return (data?.elsewhere as ElsewhereUnsaved | null) ?? null;
+    const elsewhere = (data?.elsewhere as ElsewhereUnsaved | null) ?? null;
+    // Raised once per batch of work, not once per visit. The browser holding
+    // it is normally the only thing that can clear the flag, and it may never
+    // be opened again — so without this the notice repeats forever and the
+    // only way out is a destructive button nobody should have to press.
+    if (elsewhere && alreadySeen(elsewhere)) return null;
+    return elsewhere;
   } catch {
     return null;
   }
+}
+
+/**
+ * Notices already seen, so the same one is not raised twice.
+ *
+ * Kept per device and stamped with the moment that device last had unsaved
+ * work. Acknowledging is therefore not "never tell me about this machine
+ * again" — it is "I have seen this". If that machine produces newer work, the
+ * timestamp moves past the acknowledgement and it is raised again.
+ *
+ * Local, because it is about what this browser has shown its user. Nothing on
+ * the other device is touched, and nothing is deleted anywhere — which is what
+ * makes dismissing it safe enough to need no warning.
+ */
+const SEEN_KEY = 'campaign-admin:seen-elsewhere';
+
+function readSeen(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}') as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+export function markElsewhereSeen(deviceId: string, at: string | null): void {
+  if (!deviceId) return;
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify({ ...readSeen(), [deviceId]: at || '' }));
+  } catch {
+    // Private mode — the notice will simply appear again next visit.
+  }
+}
+
+function alreadySeen(elsewhere: ElsewhereUnsaved): boolean {
+  const seenAt = readSeen()[elsewhere.deviceId];
+  if (seenAt === undefined) return false;
+  // No timestamp either side means there is nothing newer to report.
+  if (!elsewhere.at || !seenAt) return true;
+  return new Date(elsewhere.at).getTime() <= new Date(seenAt).getTime();
 }
 
 /** "Today at 2:15 PM", "Yesterday at 9:04 AM", or a dated form for older work. */

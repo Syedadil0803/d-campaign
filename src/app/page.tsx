@@ -16,7 +16,12 @@ import { PromoFlow } from '@/components/PromoFlow';
 import { PromoSetupDialog } from '@/components/PromoSetupDialog';
 import { Toast, ToastAction, TOAST_ACTION_MS } from '@/components/Toast';
 import { getISODateWithOffset, toLocalISODate } from '@/lib/utils';
-import { describeWhen, fetchUnsavedElsewhere, reportUnsaved } from '@/lib/presenceClient';
+import {
+  describeWhen,
+  fetchUnsavedElsewhere,
+  markElsewhereSeen,
+  reportUnsaved,
+} from '@/lib/presenceClient';
 import {
   askNotificationPermission,
   closeIdleNotification,
@@ -819,7 +824,11 @@ export default function Home() {
     let cancelled = false;
     fetchUnsavedElsewhere().then((elsewhere) => {
       if (cancelled || !elsewhere) return;
-      setElsewhereNotice({ deviceLabel: elsewhere.deviceLabel, at: elsewhere.at });
+      setElsewhereNotice({
+        deviceId: elsewhere.deviceId,
+        deviceLabel: elsewhere.deviceLabel,
+        at: elsewhere.at,
+      });
     });
     return () => {
       cancelled = true;
@@ -1062,6 +1071,7 @@ export default function Home() {
    * honest thing to say is where it is and how to get it back.
    */
   const [elsewhereNotice, setElsewhereNotice] = useState<{
+    deviceId: string;
     deviceLabel: string;
     at: string | null;
   } | null>(null);
@@ -1145,6 +1155,15 @@ export default function Home() {
   })();
 
   function dismissWelcomeBack() {
+    /**
+     * Closing it counts as having read it.
+     *
+     * The other device's flag stays exactly as it is — only this browser
+     * records that it has shown this particular batch of work. If that machine
+     * produces newer work the notice returns; otherwise it does not repeat on
+     * every visit, which it did, with nothing the user could do about it.
+     */
+    if (elsewhereNotice) markElsewhereSeen(elsewhereNotice.deviceId, elsewhereNotice.at);
     setRestoreNotice(null);
     setDraftOffer(null);
     setElsewhereNotice(null);
@@ -2794,13 +2813,15 @@ export default function Home() {
                   </button>
                 </>
               ) : (
-                <button
-                  type="button"
-                  onClick={dismissWelcomeBack}
-                  className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
-                >
-                  {welcomeBack.mode === 'restored' ? 'Continue editing' : 'Continue here'}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={dismissWelcomeBack}
+                    className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+                  >
+                    {welcomeBack.mode === 'restored' ? 'Continue editing' : 'Continue here'}
+                  </button>
+                </>
               )}
             </div>
           </div>

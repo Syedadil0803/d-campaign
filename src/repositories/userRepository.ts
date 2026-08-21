@@ -15,6 +15,7 @@ const STALE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
 
 /** Unsaved work sitting in a browser that is not the one asking. */
 export interface ElsewhereUnsaved {
+  deviceId: string;
   deviceLabel: string;
   at: string;
 }
@@ -72,7 +73,35 @@ export const userRepository = {
 
     const row = rows[0];
     if (!row) return null;
-    return { deviceLabel: row.deviceLabel, at: row.lastUnsavedAt.toISOString() };
+    return {
+      deviceId: row.deviceId,
+      deviceLabel: row.deviceLabel,
+      at: row.lastUnsavedAt.toISOString(),
+    };
+  },
+
+  /**
+   * Drop a device's claim on the account's behalf.
+   *
+   * Normally only the browser holding unsaved work lowers its own flag, by
+   * saving or by discarding. But that browser may be gone — data cleared, a
+   * borrowed laptop, a machine reinstalled — and then the claim outlives the
+   * work and the notice repeats on every visit with nothing the user can do
+   * about it. This is that escape: the row belongs to their account, and they
+   * are allowed to say it no longer matters.
+   */
+  async forgetDevice(userId: string, deviceId: string): Promise<boolean> {
+    try {
+      await getDb()
+        .delete(userDevicePresence)
+        .where(
+          and(eq(userDevicePresence.userId, userId), eq(userDevicePresence.deviceId, deviceId)),
+        );
+      return true;
+    } catch (error) {
+      console.error('[DB] forgetDevice failed:', error);
+      return false;
+    }
   },
 
   /**
