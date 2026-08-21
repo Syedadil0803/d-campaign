@@ -1,6 +1,6 @@
 import { getDb } from '@/lib/db';
 import { users, userDevicePresence } from '@/lib/schema';
-import { and, desc, eq, gt, ne } from 'drizzle-orm';
+import { and, desc, eq, gt, ne, sql } from 'drizzle-orm';
 
 export interface UserRow {
   id: string;
@@ -105,19 +105,37 @@ export const userRepository = {
   },
 
   /**
-   * Record — or retract — this device's claim.
+   * Record a device's claim, or drop it.
    *
-   * Only ever touches the calling device's own row, so one browser saving its
-   * work can no longer clear another's claim.
+   * Only devices actually holding unsaved work have a row. Retracting used to
+   * write `false` into the row and keep it, which stored nothing anybody
+   * reads — every query filters on the flag being true, and the upsert would
+   * recreate the row the moment it mattered again. All it produced was a
+   * lengthening trail of dead rows per account.
+   *
+   * Deleting instead makes the table say exactly one thing: these devices are
+   * holding work that was never saved. An empty table means nobody is.
    */
   async setDevicePresence(
     userId: string,
     presence: { hasUnsaved: boolean; deviceId: string; deviceLabel: string },
   ): Promise<boolean> {
     try {
+      if (!presence.hasUnsaved) {
+        await getDb()
+          .delete(userDevicePresence)
+          .where(
+            and(
+              eq(userDevicePresence.userId, userId),
+              eq(userDevicePresence.deviceId, presence.deviceId),
+            ),
+          );
+        return true;
+      }
+
       const values = {
         deviceLabel: presence.deviceLabel,
-        hasUnsavedLocalChanges: presence.hasUnsaved,
+        hasUnsavedLocalChanges: true,
         lastUnsavedAt: new Date(),
       };
       await getDb()
@@ -127,6 +145,29 @@ export const userRepository = {
           target: [userDevicePresence.userId, userDevicePresence.deviceId],
           set: values,
         });
+
+      /**
+       * A backstop on rows nobody will ever retract.
+       *
+       * A device id lives in localStorage, so clearing site data abandons a
+       * claim rather than lowering it — the old row stays, insisting work
+       * waits on a machine that is really this one under a previous identity.
+       * Six is past any real device count; the tidy-up is swallowed on failure
+       * because it must not fail the write that mattered.
+       */
+      await getDb()
+        .execute(
+          sql`DELETE FROM campaign.user_device_presence
+               WHERE user_id = ${userId}
+                 AND device_id NOT IN (
+                   SELECT device_id FROM campaign.user_device_presence
+                    WHERE user_id = ${userId}
+                    ORDER BY last_unsaved_at DESC
+                    LIMIT 6
+                 )`,
+        )
+        .catch(() => {});
+
       return true;
     } catch (error) {
       console.error('[DB] setDevicePresence failed:', error);
