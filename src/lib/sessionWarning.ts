@@ -27,6 +27,37 @@ export function describeDuration(ms: number): string {
 
 let current: Notification | null = null;
 
+/** The page's real title, kept so the countdown can hand it back. */
+let titleBeforeCountdown: string | null = null;
+
+/**
+ * Put the countdown in the tab title.
+ *
+ * The one warning that needs no permission and cannot be muted. A hidden tab
+ * still shows its title, and a title that changes every second is caught by
+ * the same peripheral vision that notices a new message in a chat app — which
+ * matters, because desktop notifications are three gates deep and any of them
+ * can be shut without us knowing.
+ *
+ * The alternation is deliberate. A number quietly counting down is easy to
+ * mistake for part of the page; a title that flips between two strings reads
+ * as something demanding an answer.
+ */
+export function setTitleCountdown(seconds: number): void {
+  if (typeof document === 'undefined') return;
+  if (titleBeforeCountdown === null) titleBeforeCountdown = document.title;
+  document.title =
+    seconds % 2 === 0
+      ? `${seconds}s — are you still there?`
+      : `⚠ Signing you out in ${seconds}s`;
+}
+
+export function restoreTitle(): void {
+  if (typeof document === 'undefined' || titleBeforeCountdown === null) return;
+  document.title = titleBeforeCountdown;
+  titleBeforeCountdown = null;
+}
+
 export function notificationsSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window;
 }
@@ -183,4 +214,73 @@ export function osNotificationHint(): string | null {
     return 'Settings → System → Notifications → your browser.';
   }
   return null;
+}
+
+/**
+ * The alarm signals that survive where the title cannot.
+ *
+ * A title is the first thing a crowded tab strip throws away — past a dozen
+ * tabs each one is barely wider than its icon — and a PWA has no tab strip at
+ * all. Neither needs permission, which is what makes them worth having: the
+ * desktop notification sits behind three separate gates, any of which can be
+ * shut without the page ever finding out.
+ */
+
+const ALERT_ICON = '/favicon-alert.png';
+let iconBefore: string | null = null;
+
+function iconLink(): HTMLLinkElement | null {
+  if (typeof document === 'undefined') return null;
+  let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
+  if (!link) {
+    // Next generates one from src/app/icon.png, but not on every route — and
+    // without an element there is nothing to swap.
+    link = document.createElement('link');
+    link.rel = 'icon';
+    document.head.appendChild(link);
+  }
+  return link;
+}
+
+/**
+ * Swap the tab icon for one wearing a red dot.
+ *
+ * Held for the whole countdown rather than flashed. The title alternates
+ * because text needs movement to be noticed; an icon that was orange a moment
+ * ago and now has red on it is already the change, and blinking it would only
+ * make it harder to read at sixteen pixels.
+ */
+export function setFaviconAlert(on: boolean): void {
+  const link = iconLink();
+  if (!link) return;
+  if (on) {
+    if (iconBefore === null) iconBefore = link.href;
+    if (link.href !== new URL(ALERT_ICON, location.origin).href) link.href = ALERT_ICON;
+    return;
+  }
+  if (iconBefore !== null) {
+    link.href = iconBefore;
+    iconBefore = null;
+  }
+}
+
+/**
+ * The number on the dock or taskbar icon, for an installed PWA.
+ *
+ * The only one of these that reaches someone who is not looking at a browser
+ * at all. Ignored by browsers that do not support it and by tabs that are not
+ * installed, so it costs nothing to always attempt.
+ */
+export function setAppBadge(count: number | null): void {
+  const nav = navigator as Navigator & {
+    setAppBadge?: (n?: number) => Promise<void>;
+    clearAppBadge?: () => Promise<void>;
+  };
+  try {
+    if (count === null) void nav.clearAppBadge?.();
+    else void nav.setAppBadge?.(count);
+  } catch {
+    // Unsupported, or the page is not an installed app. Not a failure —
+    // the title and the icon are still doing their work.
+  }
 }

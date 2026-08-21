@@ -23,6 +23,10 @@ import {
   notificationPermission,
   notificationsSupported,
   osNotificationHint,
+  restoreTitle,
+  setAppBadge,
+  setFaviconAlert,
+  setTitleCountdown,
   showIdleNotification,
   unblockSteps,
 } from '@/lib/sessionWarning';
@@ -605,7 +609,7 @@ export default function Home() {
         reportUnsaved(true);
       }
 
-      closeIdleNotification();
+      standDown();
       exitReasonRef.current = 'timeout';
       fetch('/api/auth/logout', { method: 'POST', keepalive: true })
         .catch(() => {})
@@ -623,23 +627,42 @@ export default function Home() {
      * desktop notification is what reaches them when they are elsewhere, and
      * is suppressed while the tab is visible because the dialog has it covered.
      */
+    /**
+     * Take every alarm back down.
+     *
+     * Gathered into one call because there are now four of them — dialog,
+     * notification, tab title, icon, dock badge — and each exit from the
+     * countdown used to remember them individually. Forgetting one leaves a
+     * tab wearing a red dot over a session that is perfectly fine.
+     */
+    const standDown = () => {
+      closeIdleNotification();
+      restoreTitle();
+      setFaviconAlert(false);
+      setAppBadge(null);
+    };
+
     const reachUser = () => {
       // Only while a countdown is actually running. Without this, a listener
       // outliving its warning — clicking the notification restarts the timer,
       // and the next tab switch arrives before the teardown has settled —
       // posts a notification for a warning that is already over.
       if (idleSecondsLeftRef.current === null) {
-        closeIdleNotification();
+        standDown();
         return;
       }
       if (document.visibilityState === 'hidden') {
+        setTitleCountdown(idleSecondsLeftRef.current);
+        setFaviconAlert(true);
+        setAppBadge(idleSecondsLeftRef.current);
         showIdleNotification(describeDuration(IDLE_LIMIT_MS - IDLE_WARNING_LEAD_MS), () =>
           restart(),
         );
       } else {
         // Back on the page, where the dialog speaks for itself. Leaving the
-        // notification up would have them dismissing the same warning twice.
-        closeIdleNotification();
+        // notification or the title alarm up would have them dismissing the
+        // same warning twice.
+        standDown();
       }
     };
 
@@ -659,7 +682,19 @@ export default function Home() {
       document.addEventListener('visibilitychange', reachUser);
 
       tick = window.setInterval(() => {
-        setIdleSecondsLeft((left) => (left === null ? null : Math.max(0, left - 1)));
+        setIdleSecondsLeft((left) => {
+          if (left === null) return null;
+          const next = Math.max(0, left - 1);
+          idleSecondsLeftRef.current = next;
+          // Only while they are elsewhere. Rewriting the title of a tab
+          // somebody is looking at changes nothing they can see and leaves the
+          // window chrome flickering behind the dialog.
+          if (document.visibilityState === 'hidden') {
+            setTitleCountdown(next);
+            setAppBadge(next);
+          }
+          return next;
+        });
       }, 1000);
     };
 
@@ -674,7 +709,7 @@ export default function Home() {
       clearAll();
       idleSecondsLeftRef.current = null;
       setIdleSecondsLeft(null);
-      closeIdleNotification();
+      standDown();
       warnTimer = window.setTimeout(beginWarning, IDLE_LIMIT_MS - IDLE_WARNING_LEAD_MS);
       idleTimer = window.setTimeout(signOutIdle, IDLE_LIMIT_MS);
     }
@@ -694,7 +729,7 @@ export default function Home() {
 
     return () => {
       clearAll();
-      closeIdleNotification();
+      standDown();
       events.forEach((event) => window.removeEventListener(event, onActivity));
     };
   }, []);
