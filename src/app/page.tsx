@@ -53,6 +53,37 @@ import {
  * relies on them — the flow they exercise is the interesting part, not the
  * numbers.
  */
+/**
+ * Is this the first load of this visit?
+ *
+ * The arrival messages — work restored, work waiting on another device — are
+ * about coming back to the tool, so they should be said once and not again on
+ * every refresh.
+ *
+ * Asking the browser whether the load was a "reload" was the first attempt and
+ * was too blunt: plenty of people return to work by refreshing a tab they left
+ * open, and those people would never have been told about the other device at
+ * all. sessionStorage draws the line where it belongs — it survives refreshes
+ * within a tab and is empty again when the tool is opened afresh.
+ *
+ * Memoised because both messages ask, and the first ask is what marks the
+ * visit as seen.
+ */
+let arrivalChecked: boolean | null = null;
+
+function isFirstLoadOfVisit(): boolean {
+  if (arrivalChecked !== null) return arrivalChecked;
+  try {
+    const KEY = 'campaign-admin:arrival-shown';
+    arrivalChecked = !sessionStorage.getItem(KEY);
+    sessionStorage.setItem(KEY, '1');
+  } catch {
+    // Private mode: better to say it than to swallow it.
+    arrivalChecked = true;
+  }
+  return arrivalChecked;
+}
+
 const IDLE_LIMIT_MS = 60_000;
 
 /**
@@ -822,6 +853,9 @@ export default function Home() {
    */
   useEffect(() => {
     let cancelled = false;
+    // Said once a visit — see isFirstLoadOfVisit.
+    if (!isFirstLoadOfVisit()) return;
+
     fetchUnsavedElsewhere().then((elsewhere) => {
       if (cancelled || !elsewhere) return;
       setElsewhereNotice({
@@ -1948,13 +1982,7 @@ export default function Home() {
            * while reopening the tool is a 'navigate'. Restoring still happens
            * either way — only the announcement is held back.
            */
-          const wasReload =
-            typeof performance !== 'undefined' &&
-            (performance.getEntriesByType('navigation')[0] as
-              | PerformanceNavigationTiming
-              | undefined)?.type === 'reload';
-
-          if (!wasReload) {
+          if (isFirstLoadOfVisit()) {
             setRestoreNotice({
               localSavedAt: recoveredEnvelope?.savedAt || null,
               draftSavedAt,
