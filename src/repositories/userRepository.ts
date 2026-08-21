@@ -1,6 +1,6 @@
 import { getDb } from '@/lib/db';
 import { users, userDevicePresence } from '@/lib/schema';
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, desc, eq, gt, ne } from 'drizzle-orm';
 
 export interface UserRow {
   id: string;
@@ -9,6 +9,9 @@ export interface UserRow {
   provider: string;
   passwordHash: string | null;
 }
+
+/** How long a device's claim is believed before it is treated as abandoned. */
+const STALE_AFTER_MS = 14 * 24 * 60 * 60 * 1000;
 
 /** Unsaved work sitting in a browser that is not the one asking. */
 export interface ElsewhereUnsaved {
@@ -41,6 +44,18 @@ export const userRepository = {
    * the machine they were last sitting at.
    */
   async findUnsavedElsewhere(userId: string, deviceId: string): Promise<ElsewhereUnsaved | null> {
+    /**
+     * Old claims are ignored rather than trusted forever.
+     *
+     * A device id lives in localStorage, so clearing browser data does not
+     * retract the claim — it abandons it, and a new id takes its place. The
+     * orphaned row keeps insisting that work is waiting on a browser that no
+     * longer has it, and the notice becomes permanent furniture nobody can
+     * clear. A fortnight is well past the point where anyone is going back for
+     * unsaved edits, and the row costs nothing left in place.
+     */
+    const cutoff = new Date(Date.now() - STALE_AFTER_MS);
+
     const rows = await getDb()
       .select()
       .from(userDevicePresence)
@@ -49,6 +64,7 @@ export const userRepository = {
           eq(userDevicePresence.userId, userId),
           eq(userDevicePresence.hasUnsavedLocalChanges, true),
           ne(userDevicePresence.deviceId, deviceId),
+          gt(userDevicePresence.lastUnsavedAt, cutoff),
         ),
       )
       .orderBy(desc(userDevicePresence.lastUnsavedAt))

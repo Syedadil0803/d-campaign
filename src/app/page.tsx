@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, SlidersHorizontal, Clock } from 'lucide-react';
 import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
 import { whatsAppUrl, whatsAppLooksShort } from '@/lib/whatsapp';
 import { cardIsNotUserWork } from '@/lib/promoAuthorship';
@@ -17,6 +17,16 @@ import { Toast, ToastAction, TOAST_ACTION_MS } from '@/components/Toast';
 import { getISODateWithOffset, toLocalISODate } from '@/lib/utils';
 import { describeWhen, fetchUnsavedElsewhere, reportUnsaved } from '@/lib/presenceClient';
 import {
+  askNotificationPermission,
+  closeIdleNotification,
+  describeDuration,
+  notificationPermission,
+  notificationsSupported,
+  osNotificationHint,
+  showIdleNotification,
+  unblockSteps,
+} from '@/lib/sessionWarning';
+import {
   listVersions,
   MAX_VERSIONS,
   markLiveVersion,
@@ -28,10 +38,21 @@ import {
 /**
  * How long the editor sits untouched before signing itself out.
  *
- * A minute while this is being tried out. It wants raising well before anyone
- * relies on it — the flow it exercises is the interesting part, not the number.
+ * Deliberately tiny while this is being tried out: thirty seconds of quiet,
+ * then thirty seconds of countdown. Both want raising well before anyone
+ * relies on them — the flow they exercise is the interesting part, not the
+ * numbers.
  */
-const IDLE_LIMIT_MS = 180_000;
+const IDLE_LIMIT_MS = 60_000;
+
+/**
+ * How much of that is spent counting down in front of the user.
+ *
+ * A lead time rather than a second absolute figure, so raising the limit can
+ * never leave the warning firing after the sign-out it is warning about.
+ */
+const IDLE_WARNING_LEAD_MS = 30_000;
+
 
 // Migration functions
 function migrateAnnouncements(config: any): CampaignConfig['announcementBar']['announcements'] {
@@ -556,14 +577,20 @@ export default function Home() {
    * Sign out after a spell of inactivity — and treat it as an accident, not a
    * decision.
    *
-   * Someone who walks away has not chosen to stop working, so the order here
+   * Someone who walks away has not chosen to stop working, so the order
    * matters: the local copy is written first, while the page is still ours,
-   * and only then does anything that can fail get attempted. If the logout
-   * request never lands, the work is still on disk and the next visit restores
-   * it; if it were the other way round, a flaky network would cost the work.
+   * and only then is anything attempted that can fail. If the logout request
+   * never lands, the work is still on disk and the next visit restores it.
+   *
+   * A minute before that, the countdown appears. It is a dialog in the page,
+   * which everyone gets, plus a desktop notification for anyone who granted
+   * permission and has switched to another window — the case where the dialog
+   * alone would be invisible and the sign-out would arrive unexplained.
    */
   useEffect(() => {
-    let timer: number | undefined;
+    let idleTimer: number | undefined;
+    let warnTimer: number | undefined;
+    let tick: number | undefined;
 
     const signOutIdle = () => {
       const atRisk =
@@ -573,11 +600,12 @@ export default function Home() {
 
       if (atRisk) {
         writeRecovery(configRef.current);
-        // Raised now rather than left to the effect above, which debounces and
-        // will not get another turn before this page is gone.
+        // Raised now rather than left to the debounced reporter, which will not
+        // get another turn before this page is gone.
         reportUnsaved(true);
       }
 
+      closeIdleNotification();
       exitReasonRef.current = 'timeout';
       fetch('/api/auth/logout', { method: 'POST', keepalive: true })
         .catch(() => {})
@@ -586,21 +614,105 @@ export default function Home() {
         });
     };
 
-    const restart = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(signOutIdle, IDLE_LIMIT_MS);
+    /**
+     * Put the warning wherever the user actually is.
+     *
+     * The dialog is always rendered — it costs nothing in a tab nobody is
+     * looking at, and it means someone coming back mid-countdown finds the
+     * warning already there instead of being signed out mid-glance. The
+     * desktop notification is what reaches them when they are elsewhere, and
+     * is suppressed while the tab is visible because the dialog has it covered.
+     */
+    const reachUser = () => {
+      // Only while a countdown is actually running. Without this, a listener
+      // outliving its warning — clicking the notification restarts the timer,
+      // and the next tab switch arrives before the teardown has settled —
+      // posts a notification for a warning that is already over.
+      if (idleSecondsLeftRef.current === null) {
+        closeIdleNotification();
+        return;
+      }
+      if (document.visibilityState === 'hidden') {
+        showIdleNotification(describeDuration(IDLE_LIMIT_MS - IDLE_WARNING_LEAD_MS), () =>
+          restart(),
+        );
+      } else {
+        // Back on the page, where the dialog speaks for itself. Leaving the
+        // notification up would have them dismissing the same warning twice.
+        closeIdleNotification();
+      }
     };
 
-    // Real input only. A mousemove listener would keep the session alive under
-    // a sleeping cursor, and scroll fires from the page's own animations.
+    const beginWarning = () => {
+      const seconds = Math.round(IDLE_WARNING_LEAD_MS / 1000);
+      // The ref is written here as well as during render, because what reads
+      // it is an event handler that can fire before React has re-rendered —
+      // clicking the notification and switching tabs in the same breath.
+      idleSecondsLeftRef.current = seconds;
+      setIdleSecondsLeft(seconds);
+      reachUser();
+
+      // Watched for the whole countdown, not just its first moment. Switching
+      // away after the dialog appeared used to mean no notification at all —
+      // the warning sat in a tab the user could not see, and the sign-out
+      // arrived unannounced.
+      document.addEventListener('visibilitychange', reachUser);
+
+      tick = window.setInterval(() => {
+        setIdleSecondsLeft((left) => (left === null ? null : Math.max(0, left - 1)));
+      }, 1000);
+    };
+
+    const clearAll = () => {
+      window.clearTimeout(idleTimer);
+      window.clearTimeout(warnTimer);
+      window.clearInterval(tick);
+      document.removeEventListener('visibilitychange', reachUser);
+    };
+
+    function restart() {
+      clearAll();
+      idleSecondsLeftRef.current = null;
+      setIdleSecondsLeft(null);
+      closeIdleNotification();
+      warnTimer = window.setTimeout(beginWarning, IDLE_LIMIT_MS - IDLE_WARNING_LEAD_MS);
+      idleTimer = window.setTimeout(signOutIdle, IDLE_LIMIT_MS);
+    }
+
+    // Real input only, and only while nothing is being asked. A mousemove
+    // listener would keep the session alive under a sleeping cursor, and once
+    // the countdown is up it wants an answer rather than a twitch.
+    const onActivity = () => {
+      if (idleSecondsLeftRef.current !== null) return;
+      restart();
+    };
+
     const events: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
-    events.forEach((event) => window.addEventListener(event, restart, { passive: true }));
+    events.forEach((event) => window.addEventListener(event, onActivity, { passive: true }));
     restart();
+    idleRestartRef.current = restart;
 
     return () => {
-      window.clearTimeout(timer);
-      events.forEach((event) => window.removeEventListener(event, restart));
+      clearAll();
+      closeIdleNotification();
+      events.forEach((event) => window.removeEventListener(event, onActivity));
     };
+  }, []);
+
+  /**
+   * Raise the notification card, once per visit.
+   *
+   * Silent only when the permission is already granted. Denied still gets a
+   * card, because the way it usually happens is someone accepting here and
+   * then hitting Block in the browser's prompt — they wanted this and ended up
+   * without it. What it says changes, though: an Allow button against a denied
+   * permission is a button that does nothing.
+   */
+  useEffect(() => {
+    if (!notificationsSupported()) return;
+    const permission = notificationPermission();
+    if (permission === 'granted') return; // Nothing to ask for.
+    setAskNotifications(permission === 'denied' ? 'blocked' : 'ask');
   }, []);
 
   /**
@@ -819,6 +931,39 @@ export default function Home() {
   const reportedUnsavedRef = useRef(false);
 
   /**
+   * Seconds left before an idle sign-out, or null when nothing is pending.
+   *
+   * Only the button clears it. Ordinary activity resets the timer right up
+   * until the warning appears, but once it is on screen it wants an answer —
+   * a stray scroll from a cat on the keyboard is not somebody saying they are
+   * still there, and the dialog blocks the editor anyway.
+   */
+  const [idleSecondsLeft, setIdleSecondsLeft] = useState<number | null>(null);
+
+  /**
+   * The notification card, and which of two things it has to say.
+   *
+   * 'ask' is the offer, shown before the browser's own prompt so that "Not
+   * now" costs nothing — it dismisses ours and returns next visit, and the
+   * real prompt is only ever reached by someone who chose Allow.
+   *
+   * 'blocked' is the awkward middle: they chose Allow here and then Block in
+   * the browser. They asked for this and do not have it, so staying silent
+   * would strand them — but the offer cannot be repeated either, because a
+   * denied permission makes requestPermission() resolve instantly without
+   * prompting. All that is left to do is say where the switch is.
+   */
+  const [askNotifications, setAskNotifications] = useState<
+    'ask' | 'blocked' | 'enabled' | null
+  >(null);
+
+  /** Mirrors the countdown for the activity listener, which is bound once. */
+  const idleSecondsLeftRef = useRef<number | null>(null);
+  idleSecondsLeftRef.current = idleSecondsLeft;
+  /** Lets the dialog's button reach the timer that owns the countdown. */
+  const idleRestartRef = useRef<(() => void) | null>(null);
+
+  /**
    * Everything worth saying about arriving, gathered into one answer.
    *
    * Three facts can be true at once: this browser rescued edits from a session
@@ -834,6 +979,11 @@ export default function Home() {
    */
   const welcomeBack = (() => {
     if (activeTab !== 'promo') return null;
+    // Stands down while the sign-out countdown is up. Two glass panels stacked
+    // on each other read as one broken thing, and arriving is not the pressing
+    // matter when the session is about to end. It comes straight back when the
+    // countdown is answered, since none of its state has been touched.
+    if (idleSecondsLeft !== null) return null;
     const elsewhere = elsewhereNotice;
     if (restoreNotice) return { mode: 'restored' as const, ...restoreNotice, elsewhere };
     if (draftOffer) {
@@ -2444,6 +2594,178 @@ export default function Home() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* The countdown.
+          Always a dialog in the page, because that is the only warning
+          everyone gets — permission may never have been granted, and a desktop
+          notification is suppressed while the tab is visible anyway. It blocks
+          the editor on purpose: the point is to be answered. */}
+      {idleSecondsLeft !== null && (
+        <div data-modal className="fixed inset-0 z-[60] flex items-center justify-center bg-transparent p-4">
+          <div className="absolute inset-0" />
+          <div className="relative z-10 w-full max-w-sm rounded-xl border border-white/10 bg-black/10 p-6 text-center text-on-surface shadow-2xl backdrop-blur-md">
+            {/* Centred, with the count as the largest thing on it. The question
+                is rhetorical — what the reader needs is how long they have, so
+                that is what the eye should land on first. */}
+            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-amber-500/15">
+              <Clock className="h-5 w-5 text-amber-600 dark:text-amber-500" />
+            </div>
+
+            <h2 className="mt-3.5 text-base font-semibold">Are you still there?</h2>
+            <p className="mt-1 text-sm text-on-surface-variant">
+              No activity for {describeDuration(IDLE_LIMIT_MS - IDLE_WARNING_LEAD_MS)}.
+            </p>
+
+            <p className="mt-4 text-3xl font-semibold tabular-nums text-amber-600 dark:text-amber-500">
+              {idleSecondsLeft}s
+            </p>
+
+            {/* Draining, not filling. Something running out is read without
+                being read — the bar says how long is left before the number
+                has been focused on. The transition is linear and matches the
+                tick, so it slides smoothly rather than stepping. */}
+            <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-amber-500 transition-[width] duration-1000 ease-linear"
+                style={{
+                  width: `${(idleSecondsLeft / Math.round(IDLE_WARNING_LEAD_MS / 1000)) * 100}%`,
+                }}
+              />
+            </div>
+
+            {/* Says the quiet part, because a countdown reads as a threat
+                otherwise. Nothing is lost either way — which is the point of
+                everything else in this file. */}
+            <p className="mt-4 text-xs text-on-surface-variant/80">
+              Your work is saved. It will be back on the canvas when you sign in again.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => idleRestartRef.current?.()}
+              className="mt-5 w-full rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+            >
+              I&apos;m still here
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Our ask, in front of the browser's.
+          The browser's own prompt is a one-shot: decline it and no code can
+          raise it again. So "Not now" closes only this, and the real prompt is
+          reached solely by someone who chose Allow.
+
+          A corner card rather than a modal. This is an offer, not a decision
+          the editor should be held up for — a full dialog gave a small
+          convenience the same weight as losing work, and it was the first
+          thing people met on the way in. */}
+      {askNotifications && !welcomeBack && idleSecondsLeft === null && (
+        <div className="animate-slide-in-corner fixed right-4 bottom-4 z-40 w-72 rounded-lg border border-white/10 bg-black/20 p-3.5 text-on-surface shadow-xl backdrop-blur-md">
+          {askNotifications === 'ask' ? (
+            <>
+              {/* Two short lines. The second is the only thing that justifies
+                  the permission at all — the in-page countdown already covers
+                  the case where you are looking at the tab. */}
+              {/* Warns about the third gate before consent, not after.
+                  Someone who allows here and then sees nothing has no reason
+                  to suspect their system is muting the browser — so the
+                  clause goes in upfront, while the exact path waits for the
+                  confirmation card, where it is actually actionable. */}
+              <p className="text-sm font-medium">Notify you before signing out?</p>
+              <p className="mt-1 text-xs text-on-surface-variant">
+                Works even when this tab is hidden. Your system must allow
+                browser notifications too.
+              </p>
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAskNotifications(null)}
+                  className="rounded-md px-2.5 py-1.5 text-xs font-medium text-on-surface-variant transition-colors hover:text-primary"
+                >
+                  Not now
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    // Inside the click on purpose: Chrome ignores a permission
+                    // request that is not tied to a gesture.
+                    const result = await askNotificationPermission();
+                    // Blocked at the browser's prompt after accepting ours —
+                    // switch to saying where the switch is rather than
+                    // vanishing, since they did ask for this.
+                    if (result === 'denied') return setAskNotifications('blocked');
+                    // Granted: confirm it, and name the one gate left that
+                    // nothing can check on their behalf.
+                    if (result === 'granted') return setAskNotifications('enabled');
+                    setAskNotifications(null);
+                  }}
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+                >
+                  Allow
+                </button>
+              </div>
+            </>
+          ) : askNotifications === 'enabled' ? (
+            <>
+              {/* Shown once, straight after granting.
+                  Two gates are now open and a third is not readable from here,
+                  so this is the only chance to mention it before someone
+                  concludes the feature is broken. Phrased as a condition, not
+                  an instruction — for most people nothing more is needed. */}
+              <p className="text-sm font-medium">Notifications are on</p>
+              <p className="mt-1 text-xs text-on-surface-variant">
+                Not seeing them? Your system may be muting the browser:{' '}
+                {osNotificationHint() ?? 'check your notification settings.'}
+              </p>
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setAskNotifications(null)}
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+                >
+                  Got it
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* No Allow button: only the user can undo a block, from browser
+                  settings, so offering one here would be theatre. */}
+              <p className="text-sm font-medium">Notifications are blocked</p>
+              {/* The icon is drawn, not described. Someone scanning a toolbar
+                  should be matching a shape, not decoding "padlock or sliders"
+                  — and no single word for it is right across Chrome versions. */}
+              <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">
+                {(() => {
+                  const hint = unblockSteps();
+                  if (hint.kind === 'menu') return hint.text;
+                  return (
+                    <>
+                      {hint.before}{' '}
+                      <SlidersHorizontal className="mx-0.5 inline-block h-3.5 w-3.5 -translate-y-px align-middle text-on-surface" />{' '}
+                      {hint.after}
+                    </>
+                  );
+                })()}
+              </p>
+              {/* A solid button, not the quiet text one the offer uses for
+                  "Not now". There is no choice on this card — dismissing is
+                  the only thing to do — so the single action should look like
+                  one rather than like the lesser of two options. */}
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setAskNotifications(null)}
+                  className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+                >
+                  Got it
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 

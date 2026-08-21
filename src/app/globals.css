@@ -498,3 +498,46 @@ select {
     transform: none;
   }
 }
+
+/*
+ * The idle-notification offer, arriving.
+ *
+ * It sits in a corner, away from where anyone is looking. Appearing instantly
+ * there is easy to miss entirely — movement is what peripheral vision picks
+ * up, so it slides in from the edge it lives on rather than materialising.
+ *
+ * Slow on purpose — a quick slide is over before the eye has found it, which
+ * defeats the point.
+ *
+ * The delay before it starts does as much work as the duration. Arriving while the
+ * editor is still painting means competing with everything else moving; once
+ * the page has settled, a single thing sliding in is the only motion on
+ * screen and impossible to miss.
+ *
+ * No fade. Travelling in from off-screen, the card is already hidden before it
+ * starts, and dimming it on the way would only make the arrival look uncertain.
+ */
+@keyframes slideInCorner {
+  from {
+    /* Its own width, plus the gap it sits in from the edge — so the whole card
+       starts outside the viewport rather than nudging into place. A fixed
+       distance here was the bug: 4rem against a 18rem card only ever moved a
+       fifth of it, which reads as a twitch, not an entrance. */
+    transform: translateX(calc(100% + 1rem));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-corner {
+  animation: slideInCorner 1800ms cubic-bezier(0.4, 0.9, 0.5, 1) 600ms both;
+}
+
+/* Motion here is an attention-getter, which is exactly what this setting is
+   asking us not to do. The card still appears — it just does not travel. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-in-corner {
+    animation: none;
+  }
+}
