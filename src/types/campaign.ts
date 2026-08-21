@@ -142,64 +142,83 @@ export const defaultConfig: CampaignConfig = {
     buttonFullWidth: true,
     startDate: '',
     endDate: '',
-    showTimer: true,
-    showButton: true,
+    /**
+     * Both off, because this is the blank card.
+     *
+     * Every path that resets the editor — Clear, create new, and the return to
+     * a fresh canvas after saving a draft or publishing — rebuilds from here.
+     * Shipping them on meant each of those handed back a card with a countdown
+     * already running and a button already placed: two decisions made before
+     * the user had seen anything. Turning either on is one click.
+     */
+    showTimer: false,
+    showButton: false,
     timerText: 'Ends in {timer}',
+    /**
+     * The skeleton every card starts from.
+     *
+     * This used to be a teal-into-green gradient with a coloured plate behind
+     * every field — a finished design nobody had chosen, which meant the first
+     * thing anyone did was undo it. It is now the same look Clear produces, so
+     * a fresh card and a cleared card are the same card, and the authorship
+     * checks that ask "is this the user's own work?" have one answer instead
+     * of two.
+     */
     style: {
       position: 'bottom-right',
       background: {
         type: 'linear',
-        startColor: '#2c8da0',
-        endColor: '#4d9a52',
-        direction: 'to right',
+        startColor: '#a5b4fc',
+        endColor: '#f0abfc',
+        direction: 'to bottom right',
         midpoint: 50,
       },
-      textColor: '#ffffff',
+      textColor: '#3b0764',
       titleStyle: {
         background: {
           type: 'solid',
-          startColor: '#1f7a8c',
-          endColor: '#1f7a8c',
+          startColor: 'transparent',
+          endColor: 'transparent',
           midpoint: 50,
         },
-        textColor: '#ffffff',
-        textAlign: 'center',
+        textColor: '#312e81',
+        textAlign: 'left',
       },
       subheadingStyle: {
         background: {
           type: 'solid',
-          startColor: '#2c8da0',
-          endColor: '#2c8da0',
+          startColor: 'transparent',
+          endColor: 'transparent',
           midpoint: 50,
         },
-        textColor: '#ffffff',
-        textAlign: 'center',
+        textColor: '#4c1d95',
+        textAlign: 'left',
       },
       descriptionStyle: {
         background: {
           type: 'solid',
-          startColor: '#4d9a52',
-          endColor: '#4d9a52',
+          startColor: 'transparent',
+          endColor: 'transparent',
           midpoint: 50,
         },
-        textColor: '#ffffff',
+        textColor: '#581c87',
         textAlign: 'left',
       },
       dateStyle: {
         background: {
           type: 'solid',
-          startColor: '#aed136',
-          endColor: '#aed136',
+          startColor: 'transparent',
+          endColor: 'transparent',
           midpoint: 50,
         },
-        textColor: '#1f2937',
-        textAlign: 'center',
+        textColor: '#581c87',
+        textAlign: 'left',
       },
       buttonStyle: {
         background: {
           type: 'solid',
-          startColor: '#3f8f47',
-          endColor: '#3f8f47',
+          startColor: '#6d28d9',
+          endColor: '#6d28d9',
           midpoint: 50,
         },
         textColor: '#ffffff',

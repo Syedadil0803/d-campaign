@@ -146,6 +146,10 @@ export function PromoFlow({
         onUseAi={() => setPanelStage('ai')}
         onCardReplaced={handleCardReplaced}
         onTimerEdited={handleTimerEdited}
+        // The countdown has just appeared, and it is the one field edited on
+        // the card rather than on the left — exactly the moment the hint is
+        // worth showing.
+        onTimerAutoEnabled={revealTimerHint}
         openTemplatesSignal={openTemplatesSignal}
         // Back out of the templates popup returns to the question that sent
         // the user there, rather than dumping them on the editor.

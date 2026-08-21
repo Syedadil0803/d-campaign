@@ -407,11 +407,25 @@ select {
   }
 }
 
-/* Custom placeholder styling for rich text editors in Promo + Announcement panels */
+/*
+ * Placeholder styling for the rich text editors in the Promo + Announcement
+ * panels.
+ *
+ * `currentColor` rather than a fixed beige. The old #dbc1b2 was picked for one
+ * background and sat at barely any contrast on the light surface these fields
+ * actually use — a placeholder nobody can read is the same as no placeholder,
+ * which is how three fields ended up looking identical and empty.
+ *
+ * Inheriting means it follows the theme into dark mode instead of needing a
+ * second colour maintained alongside it.
+ */
 .rich-editor[contenteditable="true"]:empty::before {
   content: attr(data-placeholder);
-  color: #dbc1b2;
-  opacity: 0.6;
+  color: var(--ph, currentColor);
+  /* Higher than a placeholder would normally sit. These fields take the card's
+     own background, so on a dark design the text is light-on-dark, where the
+     same value that reads as "muted" over white reads as "barely there". */
+  opacity: 0.72;
   pointer-events: none;
 }
 
@@ -539,5 +553,54 @@ select {
 @media (prefers-reduced-motion: reduce) {
   .animate-slide-in-corner {
     animation: none;
+  }
+}
+
+/*
+ * Placeholders inside the promo preview card.
+ *
+ * `color: inherit` rather than a fixed grey, so each one takes the colour the
+ * field itself is set to. The card already carries a considered ramp — near
+ * black for the headline, softer for the subtitle, softer again for the body —
+ * and the generic placeholder rule was flattening all three to one theme grey,
+ * throwing away the only part of the design an empty card can show.
+ *
+ * Opacity, not a lighter colour, keeps it unmistakably a placeholder on any
+ * background a design later brings — including dark ones, where a pale grey
+ * would read as real text.
+ */
+.promo-ghost:empty::before {
+  content: attr(data-placeholder);
+  color: inherit;
+  /* Nearly full strength. Every palette tried here read as dull, and the
+     cause was this value rather than any of them: a card whose type is at
+     60% arrives pre-greyed, so the colours underneath never got a fair
+     hearing. It stays legible as a placeholder because the words say so —
+     "Your headline" is not something anyone mistakes for real copy. */
+  opacity: 0.88;
+  pointer-events: none;
+}
+
+/*
+ * A field's box, shown only on approach.
+ *
+ * A promo card's text areas need to be discoverable as editable, but painting
+ * a permanent plate behind each one turns the card into a stack of rectangles
+ * — the design disappears behind its own scaffolding. Revealing it under the
+ * cursor answers "can I click this?" at the moment the question is asked, and
+ * leaves the card clean the rest of the time.
+ *
+ * !important because each field carries its own background inline from the
+ * card's style, which a plain rule cannot reach past.
+ */
+.promo-ghost:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+  transition: background 140ms ease;
+}
+
+/* On a dark card, white would glare. This one darkens instead. */
+@media (prefers-color-scheme: dark) {
+  .promo-ghost:hover {
+    background: rgba(255, 255, 255, 0.14) !important;
   }
 }

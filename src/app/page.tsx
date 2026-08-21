@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Loader2, SlidersHorizontal, Clock } from 'lucide-react';
 import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
 import { whatsAppUrl, whatsAppLooksShort } from '@/lib/whatsapp';
-import { cardIsNotUserWork } from '@/lib/promoAuthorship';
+import { cardIsNotUserWork, lookSignature } from '@/lib/promoAuthorship';
+import { BLANK_LOOK } from '@/lib/promoTemplate';
 import { sampleTemplates } from '@/components/SamplePromoTemplates';
 import { normalizeLegacyTimerTokens, TIMER_FIXED_TOKEN } from '@/lib/timerUtils';
 import { fieldOverflows } from '@/lib/promoFit';
@@ -915,6 +916,65 @@ export default function Home() {
   const [configLoadedSignal, setConfigLoadedSignal] = useState(0);
 
   /**
+   * The promo canvas was cleared and nothing has been chosen since.
+   *
+   * Held here rather than inside the editor because the editor unmounts every
+   * time the user visits another tab. It went with it, so a cleared card came
+   * back without its countdown and button outlines and looked like it had
+   * quietly lost half of itself. The flag describes the card, and the card
+   * lives here.
+   */
+  const [promoBlankStart, setPromoBlankStart] = useState(false);
+
+  /**
+   * May the countdown switch itself on once both dates exist?
+   *
+   * Only after Clear, where the end date is genuinely missing and supplying it
+   * is the user finishing the schedule. Create new collects both dates before
+   * the card has been seen, so the same behaviour there is the app deciding
+   * for them — which is why this is a separate flag and not `promoBlankStart`.
+   */
+  const [promoTimerAutoArmed, setPromoTimerAutoArmed] = useState(false);
+
+  /**
+   * Rebuild both flags from the card whenever one is loaded.
+   *
+   * They are React state, so a reload wipes them — and a reload is exactly
+   * when work comes back. Typing a title, closing the tool and returning
+   * restored the card but not the fact that its canvas had been cleared, so
+   * the countdown and button outlines were missing from a card that plainly
+   * still needed them.
+   *
+   * Both are readable from the card, which is the real record: a card still
+   * wearing the blank look has had no design chosen, and one with no end date
+   * has a schedule left to finish. Deriving them here means every path that
+   * loads a card — recovery, draft, published, a fresh page — gets the same
+   * answer without having to remember to set anything.
+   */
+  useEffect(() => {
+    if (!configLoadedSignal) return;
+    const card = configRef.current.promoCard;
+    const wearingBlank = lookSignature(card.style) === lookSignature(BLANK_LOOK);
+    /**
+     * A blank start needs an empty card, not just an unstyled one.
+     *
+     * Publishing a card with only a headline and opening it again showed
+     * "A supporting line" and "A little more about the offer" in the fields
+     * left empty — placeholders, but indistinguishable from the tool having
+     * written copy nobody asked for. Whatever was empty when it was saved has
+     * to be empty when it comes back.
+     */
+    const plain = (html?: string) => String(html ?? '').replace(/<[^>]*>/g, '').trim();
+    const hasWords = Boolean(
+      plain(card.title) || plain(card.subtitle) || plain(card.description) || plain(card.buttonText),
+    );
+    setPromoBlankStart(wearingBlank && !hasWords);
+    // Only armed while the end date is still the missing piece. A restored
+    // card that already has one must not have its countdown switched on for it.
+    setPromoTimerAutoArmed(wearingBlank && !card.endDate);
+  }, [configLoadedSignal]);
+
+  /**
    * The session ended without the user ending it — a timeout, or the machine
    * going away — and their work was put back.
    *
@@ -1216,6 +1276,15 @@ export default function Home() {
         : { ...prev.promoCard, startDate: createStart, endDate: createEnd },
     }));
     markPromoChanged();
+    if (startingFresh) {
+      // A blank card, so the skeleton outlines belong here too...
+      setPromoBlankStart(true);
+      // ...but the dates were answered in the dialog a moment ago, so the
+      // countdown stays off until the user asks for it. Without this the
+      // auto-on rule sees a blank card with a complete schedule and switches
+      // it on before they have even seen the card.
+      setPromoTimerAutoArmed(false);
+    }
     // Remount so the contentEditable fields re-read the blank card; without it
     // the old text stays visible even though state has been replaced.
     if (startingFresh) setEditorResetKey((k) => k + 1);
@@ -2397,6 +2466,10 @@ export default function Home() {
                   onAiApplied={handleAiApplied}
                   openBuildSignal={openBuildSignal}
                   configLoadedSignal={configLoadedSignal}
+                  blankStart={promoBlankStart}
+                  onBlankStartChange={setPromoBlankStart}
+                  timerAutoArmed={promoTimerAutoArmed}
+                  onTimerAutoArmedChange={setPromoTimerAutoArmed}
                   pendingPopup={pendingPromoPopup}
                   onPendingPopupHandled={() => setPendingPromoPopup(null)}
                   initialStep={promoEntryStep}

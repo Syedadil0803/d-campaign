@@ -7,7 +7,7 @@
  * are split, so "change template" restyles the card and leaves the words alone.
  */
 
-import { PromoCard } from '@/types/campaign';
+import { PromoCard, defaultConfig } from '@/types/campaign';
 
 /** Fields that carry the card's look. Everything else is content or scheduling. */
 type PromoStyle = PromoCard['style'];
@@ -64,3 +64,39 @@ export function isCardEmpty(card: PromoCard): boolean {
     blank(card.buttonText)
   );
 }
+
+/**
+ * The look a card wears before anyone has chosen one.
+ *
+ * Clear Canvas used to leave the default template's teal gradient behind, so
+ * "clear" cleared the words and kept the design — and the card that came back
+ * looked like a decision somebody had made. This is the absence of a choice:
+ * plain surface, readable text, no gradient, nothing to un-pick.
+ *
+ * Exported rather than inlined because two things must agree on it. The editor
+ * applies it, and the authorship check has to recognise it as one of ours —
+ * otherwise a freshly cleared canvas would count as the user's own design and
+ * bring back every consent dialog it is supposed to be free of.
+ */
+/**
+ * The look a card wears before anyone has chosen one.
+ *
+ * The same object the default card ships with, not a second copy of it. They
+ * were maintained separately and the authorship checks compare against both —
+ * so the moment they drifted, a freshly created card and a cleared one would
+ * have counted differently, and one of them would have started asking to be
+ * saved as though the user had designed it.
+ *
+ * Cloned rather than aliased so a caller mutating a card's style cannot reach
+ * back and rewrite what "blank" means for everyone else.
+ */
+export const BLANK_LOOK: PromoStyle = JSON.parse(
+  JSON.stringify(defaultConfig.promoCard.style),
+) as PromoStyle;
+
+
+
+
+
+
+

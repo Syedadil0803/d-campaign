@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
-import { applyTemplateFull, applyTemplateLook } from "@/lib/promoTemplate";
+import { applyTemplateFull, applyTemplateLook, BLANK_LOOK } from "@/lib/promoTemplate";
 import {
   lookSignature,
   ourLooks,
@@ -116,6 +116,36 @@ interface PromoSectionProps {
   onCardReplaced?: () => void;
   /** The user has actually edited the countdown — they know where it lives. */
   onTimerEdited?: () => void;
+  /**
+   * The timer just switched itself on because a schedule was entered. Lets the
+   * flow point at the countdown, which has only now appeared and is the one
+   * field edited on the card rather than on the left.
+   */
+  onTimerAutoEnabled?: () => void;
+  /**
+   * "The canvas was cleared and nothing has been chosen since" — owned above
+   * this component.
+   *
+   * It lived here as local state until switching tabs unmounted the editor and
+   * took it with it: coming back, a cleared card lost its countdown and button
+   * outlines and appeared to shrink. The flag describes the card, which
+   * outlives this component, so it belongs where the card does.
+   */
+  blankStart: boolean;
+  onBlankStartChange: (value: boolean) => void;
+  /**
+   * May the countdown switch itself on once the schedule is complete?
+   *
+   * Separate from `blankStart` because the two answer different questions.
+   * Clearing the canvas leaves the end date missing, so filling it in later is
+   * the user supplying the one fact the countdown needs — switching it on
+   * there is a convenience. Create new asks for both dates up front, before
+   * the card has been seen, so the same rule would decide for them.
+   *
+   * Both flows produce a blank card, which is why one flag cannot serve both.
+   */
+  timerAutoArmed: boolean;
+  onTimerAutoArmedChange: (value: boolean) => void;
   // Immediate on/off (no Save → Publish) — the page persists the status change.
   onStop: () => void;
   onGoOnAir: () => void;
@@ -267,12 +297,56 @@ function measureOverflow(html: string, field: 'title' | 'subtitle' | 'descriptio
 /**
  * Returns the required card width (400–440) based on content across all fields.
  */
-function getRequiredCardWidth(fields: { html: string; field: 'title' | 'subtitle' | 'description' }[]): number {
+/**
+ * Does the countdown line exceed the card's content width?
+ *
+ * It needs its own measurement because it renders `white-space: pre` — the
+ * numbers must never break mid-chip — so the usual test, "does this need a
+ * second line?", answers no however long it grows. It simply runs off the
+ * edge instead, which is what "Private window closes in 3 days : 5 hours :
+ * 7 mins" does at 400px.
+ */
+function timerOverflowsAtWidth(html: string, width: number): boolean {
+  if (!html || typeof document === 'undefined') return false;
+  const plain = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim();
+  if (!plain) return false;
+
+  const ghost = document.createElement('div');
+  ghost.style.cssText = `
+    position:absolute;visibility:hidden;pointer-events:none;
+    white-space:pre;padding:0;
+    font-family:inherit;line-height:1.5;letter-spacing:normal;
+  `;
+  ghost.innerHTML = html;
+  // Same reason as the wrapping measurement: old configs carry inline
+  // letter-spacing the live preview strips, which would measure too wide.
+  ghost.querySelectorAll('*').forEach((el) => {
+    (el as HTMLElement).style.letterSpacing = 'normal';
+  });
+  document.body.appendChild(ghost);
+  const lineWidth = ghost.offsetWidth;
+  document.body.removeChild(ghost);
+
+  return lineWidth > width;
+}
+
+function getRequiredCardWidth(
+  fields: { html: string; field: 'title' | 'subtitle' | 'description' }[],
+  timerHtml = '',
+): number {
   for (const { html, field } of fields) {
     if (!html) continue;
     if (measureOverflowAtWidth(html, field, MIRROR_MIN_WIDTH)) {
       return 440;
     }
+  }
+  // The countdown was never measured, so a card whose only long line was the
+  // timer stayed at 400 and let it run off the edge. Templates with wordy
+  // timer text — "Private window closes in", "Countdown to midnight:" — were
+  // broken from the moment they were applied; switching between templates hid
+  // it, because a previous long title had already pushed the card to 440.
+  if (timerHtml && timerOverflowsAtWidth(timerHtml, MIRROR_MIN_WIDTH)) {
+    return 440;
   }
   return 400;
 }
@@ -386,6 +460,11 @@ export function PromoSection({
   draftPromoCard,
   onCardReplaced,
   onTimerEdited,
+  onTimerAutoEnabled,
+  blankStart,
+  onBlankStartChange,
+  timerAutoArmed,
+  onTimerAutoArmedChange,
   onStop,
   onGoOnAir,
   dateErrorPing,
@@ -435,6 +514,29 @@ export function PromoSection({
 
   /** Measured height of the field style panel, for keeping it in the canvas. */
   const fieldPopupHeightRef = useRef(0);
+
+  /**
+   * When the user last did something — a pointer press or a key.
+   *
+   * Focus alone does not mean intent. The browser restores focus to whatever
+   * held it when a native dialog closes, so dismissing the "Leave site?" prompt
+   * put the cursor back in the title and opened its style panel, as though the
+   * user had clicked into it. A real click or Tab always has an interaction
+   * immediately before the focus; a restored one has none.
+   */
+  const lastInteractionAtRef = useRef(0);
+
+  useEffect(() => {
+    const mark = () => {
+      lastInteractionAtRef.current = Date.now();
+    };
+    document.addEventListener('pointerdown', mark, true);
+    document.addEventListener('keydown', mark, true);
+    return () => {
+      document.removeEventListener('pointerdown', mark, true);
+      document.removeEventListener('keydown', mark, true);
+    };
+  }, []);
 
   const [currentField, setCurrentField] = useState<PromoField | null>(null);
   /**
@@ -573,6 +675,15 @@ export function PromoSection({
    */
   const [cardBgPopupTop, setCardBgPopupTop] = useState<number | null>(null);
   const [showPersistentScaffold, setShowPersistentScaffold] = useState(true);
+  /**
+   * Renaming only: the flag itself is a prop now (see the interface above).
+   *
+   * Revealing the fields one at a time as they were filled was tried and
+   * dropped — it left the user unable to see the shape of the card they were
+   * building. What it still governs is the schedule: a cleared card has no end
+   * date, so the countdown stays off until the user sets one.
+   */
+  const setBlankStart = onBlankStartChange;
   // Action popups launched from the buttons under the Promo Card heading.
   const [showVersionsPopup, setShowVersionsPopup] = useState(false);
   const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
@@ -970,33 +1081,63 @@ export function PromoSection({
     };
   }
 
+  /**
+   * The card a cleared canvas starts from: no words, no design, no end date,
+   * and both optional parts switched off.
+   *
+   * The schedule used to carry over, on the reasoning that dates were chosen
+   * when the campaign was created and clearing a card is not a decision to
+   * re-plan. That still holds when a card is being replaced — a template or a
+   * variant keeps the user's dates — but clearing is a fresh start, and the
+   * countdown switching itself on before anyone has said when the campaign
+   * runs is what gave that away.
+   */
   function getFreshPromoCard(): PromoCard {
-    // Inherits the green/blue style from defaultConfig (single source of truth
-    // for the default look) — only the empty text fields differ from default.
-    //
-    // The SCHEDULE carries over: it was chosen when the campaign was created,
-    // and clearing the card's content is not a decision to re-plan when it
-    // runs. Same rule as applying a template or a variant — content and design
-    // are replaceable, the schedule is the user's.
-    const current = configRef.current.promoCard;
     return {
       ...clonePromoCard(defaultConfig.promoCard),
+      // No design either. Keeping the default gradient meant "clear" cleared
+      // the words and left a look nobody had chosen, which then had to be
+      // undone before any other could be picked.
+      style: JSON.parse(JSON.stringify(BLANK_LOOK)) as PromoCard["style"],
       active: false,
       title: "",
       subtitle: "",
       description: "",
       buttonText: "",
       buttonUrl: "",
-      showTimer: true,
-      showButton: true,
+      /**
+       * Both switches off, not just hidden.
+       *
+       * A countdown with no dates behind it is a number nobody can act on,
+       * and a CTA with no words on it is a coloured bar. Leaving the toggles
+       * on and suppressing the output would have made the panel disagree with
+       * the card — the switch saying the card has a button while the card
+       * shows none. Off is the honest state, and turning either on is then a
+       * decision the user makes rather than one they have to undo.
+       */
+      showTimer: false,
+      showButton: false,
+      /**
+       * Starts today, ends whenever the user decides.
+       *
+       * "From today" is the safe assumption — a campaign being built now is
+       * one meant to run now — while the end is a real decision nobody can
+       * make on the user's behalf. Leaving it blank is also what keeps the
+       * countdown off: it switches on once the schedule is complete, so the
+       * end date is both the missing fact and the trigger.
+       */
+      startDate: getISODateWithOffset(0),
+      endDate: "",
       timerText: "Ends In {timer}",
-      startDate: current.startDate,
-      endDate: current.endDate,
     };
   }
 
   function startFreshPromoCard(options: { silent?: boolean } = {}) {
-    const freshCard = withDefaultDates(getFreshPromoCard());
+    // Not withDefaultDates: that fills today/tomorrow into any card missing a
+    // schedule, which put the dates straight back the moment they were
+    // cleared — and a complete schedule is exactly what switches the countdown
+    // on. Clearing has to leave them empty for the user to set.
+    const freshCard = getFreshPromoCard();
     // If the card is already fresh, do nothing — no toast, no "unsaved changes"
     // flip. "Already fresh" = no visible text in any field AND the style matches
     // the fresh style. We deliberately ignore dates, live flags, and the exact
@@ -1018,6 +1159,10 @@ export function PromoSection({
     const before = capturePromoRestorePoint();
     // Mark as a fresh card: leaving it later, undo should land on its edited state.
     isFreshCardRef.current = true;
+    setBlankStart(true);
+    // Cleared by hand, so the end date is genuinely missing and filling it in
+    // is the user completing the schedule rather than the app guessing.
+    onTimerAutoArmedChange(true);
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
     setConfig({ ...configRef.current, promoCard: freshCard });
@@ -1064,13 +1209,21 @@ export function PromoSection({
       subtitle: config.promoCard.subtitle || '',
       description: config.promoCard.description || '',
     };
-    setCardWidth(config.promoCard.cardWidth || getRequiredCardWidth([
-      { html: config.promoCard.title || '', field: 'title' },
-      { html: config.promoCard.subtitle || '', field: 'subtitle' },
-      { html: config.promoCard.description || '', field: 'description' },
-    ]));
+    setCardWidth(config.promoCard.cardWidth || getRequiredCardWidth(
+      [
+        { html: config.promoCard.title || '', field: 'title' },
+        { html: config.promoCard.subtitle || '', field: 'subtitle' },
+        { html: config.promoCard.description || '', field: 'description' },
+      ],
+      config.promoCard.showTimer
+        ? buildTimerDisplayHtml(
+            config.promoCard.timerText ?? '',
+            calcTimerRemaining(config.promoCard.endDate || ''),
+          )
+        : '',
+    ));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config.promoCard.title, config.promoCard.subtitle, config.promoCard.description, config.promoCard.buttonText, config.promoCard.cardWidth]);
+  }, [config.promoCard.title, config.promoCard.subtitle, config.promoCard.description, config.promoCard.buttonText, config.promoCard.cardWidth, config.promoCard.timerText, config.promoCard.showTimer, config.promoCard.endDate]);
 
   // The preview renders at the local `cardWidth`, but only `config.promoCard.cardWidth`
   // gets persisted and published to R2 (and read by the live widget). Those can drift:
@@ -1179,19 +1332,30 @@ export function PromoSection({
     setShowPersistentScaffold(true);
   }, [config.promoCard.active]);
 
+  /**
+   * Fill in a missing schedule — except on a canvas the user just cleared.
+   *
+   * This exists so a card that arrives without dates still has a valid range.
+   * But it watches the whole config, so it also fired the instant Clear
+   * emptied the end date and wrote a new one straight back — which completed
+   * the schedule, which switched the countdown on. Three separate fixes to
+   * clearing the dates were all undone here, one render later.
+   *
+   * A blank start is the one case where an empty end date is the point: it is
+   * the decision being asked for, and the thing the countdown waits on.
+   */
   useEffect(() => {
-    const nextStart = config.promoCard.startDate || getISODateWithOffset(0);
-    const nextEnd = config.promoCard.endDate || getISODateWithOffset(3);
+    if (blankStart) return;
     if (config.promoCard.startDate && config.promoCard.endDate) return;
     setConfig({
       ...config,
       promoCard: {
         ...config.promoCard,
-        startDate: nextStart,
-        endDate: nextEnd,
+        startDate: config.promoCard.startDate || getISODateWithOffset(0),
+        endDate: config.promoCard.endDate || getISODateWithOffset(3),
       },
     });
-  }, [config, setConfig, getISODateWithOffset]);
+  }, [config, setConfig, blankStart]);
 
   function syncEditorsFromConfig(pc: PromoCard) {
     setTimeout(() => {
@@ -1264,6 +1428,10 @@ export function PromoSection({
     field: PromoField,
     ref: RefObject<HTMLDivElement | null>,
   ) {
+    activeEditorRef.current = ref.current;
+    // Focus the browser handed back rather than focus the user asked for —
+    // keep the field editable, but do not act as though they opened it.
+    if (Date.now() - lastInteractionAtRef.current > 1000) return;
     setShowPersistentScaffold(true);
     // Two panels cannot both be the one being edited. Focusing a field means
     // its styles are what the user wants next, so the card's own background
@@ -2278,7 +2446,7 @@ export function PromoSection({
       timer: previewTimerRef,
     } as const;
     const el = refMap[field].current;
-    if (!card || !el) return { bottom: "8px" };
+    if (!card) return { bottom: "8px" };
 
     /**
      * Line the panel up with the field it edits, then keep it inside the
@@ -2297,7 +2465,16 @@ export function PromoSection({
     const height = fieldPopupHeightRef.current || popupHeight;
     const canvas = card.closest("[data-promo-canvas]") as HTMLElement | null;
     const cardTop = card.getBoundingClientRect().top;
-    let desiredTop = el.getBoundingClientRect().top;
+    /**
+     * The field may not be on the card yet — during a blank start the preview
+     * only draws what has been written, so styling a field before typing in it
+     * means there is nothing to line up with. The card's own top stands in.
+     *
+     * Bailing out here instead returned a vertical offset and no horizontal
+     * one, which left the panel at the card's left edge — sitting on top of
+     * the card it was meant to sit beside.
+     */
+    let desiredTop = (el ?? card).getBoundingClientRect().top;
     if (canvas) {
       const canvasRect = canvas.getBoundingClientRect();
       const lowest = canvasRect.bottom - height - 8;
@@ -2701,6 +2878,7 @@ export function PromoSection({
    */
   function applyTemplate(template: PromoCard, templateName: string) {
     const before = capturePromoRestorePoint();
+    setBlankStart(false);
     isFreshCardRef.current = false;
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
@@ -3411,6 +3589,49 @@ export function PromoSection({
   }, [hasCurrentDesign, toast]);
 
 
+  /**
+   * A schedule is what makes a countdown mean something, so setting both dates
+   * on a freshly cleared card turns the timer on.
+   *
+   * It starts off after a clear because a countdown with no dates behind it is
+   * a number nobody can act on. Once the dates exist the timer has something
+   * to count to, and switching it on is what the user was going to do next
+   * anyway.
+   *
+   * Only while blank-starting: on any other card the toggle is the user's, and
+   * flipping it under them because they edited a date would be the app
+   * overruling a choice they already made.
+   */
+  useEffect(() => {
+    if (!blankStart || !timerAutoArmed) return;
+    const { startDate, endDate, showTimer } = config.promoCard;
+    if (showTimer || !startDate || !endDate) return;
+    // Fires once. Turning the countdown back off by hand afterwards is a
+    // decision, and re-arming would overrule it on the next date edit.
+    onTimerAutoArmedChange(false);
+    setConfig({
+      ...configRef.current,
+      promoCard: { ...configRef.current.promoCard, showTimer: true },
+    });
+    markChanged();
+    onTimerAutoEnabled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blankStart, timerAutoArmed, config.promoCard.startDate, config.promoCard.endDate]);
+
+  /**
+   * The blank start ends the moment a design arrives, whatever brought it —
+   * a template, a variant, a draft, My Published. Watching the card rather
+   * than patching each of those routes means a new one cannot forget to.
+   *
+   * Typing keeps the mode: words alone are what the progressive reveal is for.
+   */
+  useEffect(() => {
+    if (!blankStart) return;
+    if (lookSignature(config.promoCard.style) !== lookSignature(BLANK_LOOK)) {
+      setBlankStart(false);
+    }
+  }, [blankStart, config.promoCard.style]);
+
   const showContentScaffold =
     showPersistentScaffold ||
     currentField === "title" ||
@@ -3559,7 +3780,7 @@ export function PromoSection({
               ref={titleRef}
               contentEditable
               spellCheck={true}
-              data-placeholder="Enter text here"
+              data-placeholder="Your headline"
               suppressContentEditableWarning
               onInput={() => onFieldInput("title")}
               onFocus={() => onFieldFocus("title", titleRef)}
@@ -3571,6 +3792,17 @@ export function PromoSection({
                 currentField === "title" ? "border-primary/70" : "border-border"
               } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
               style={{
+                /**
+                 * The placeholder wears the colour its field paints on the
+                 * card, so panel and card agree at a glance: the box labelled
+                 * "Your headline" is the same warm near-brown as the headline
+                 * beside it.
+                 *
+                 * Safe in dark mode without a second value, because these
+                 * fields already take the card's own background — the contrast
+                 * here is whatever the contrast is over there.
+                 */
+                ['--ph' as string]: config.promoCard.style.titleStyle.textColor,
                 background: getBackgroundStyle(
                   config.promoCard.style.background,
                 ),
@@ -3620,7 +3852,7 @@ export function PromoSection({
               ref={subtitleRef}
               contentEditable
               spellCheck={true}
-              data-placeholder="Enter text here"
+              data-placeholder="A supporting line"
               suppressContentEditableWarning
               onInput={() => onFieldInput("subtitle")}
               onFocus={() => onFieldFocus("subtitle", subtitleRef)}
@@ -3634,6 +3866,7 @@ export function PromoSection({
                   : "border-border"
               } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
               style={{
+                ['--ph' as string]: config.promoCard.style.subheadingStyle.textColor,
                 background: getBackgroundStyle(
                   config.promoCard.style.background,
                 ),
@@ -3685,7 +3918,7 @@ export function PromoSection({
               contentEditable
               spellCheck={true}
               suppressContentEditableWarning
-              data-placeholder="Enter text here"
+              data-placeholder="A little more about the offer"
               onInput={() => onFieldInput("description")}
               onFocus={() => onFieldFocus("description", descRef)}
               onKeyDown={onPromoEditorKeyDown}
@@ -3698,6 +3931,7 @@ export function PromoSection({
                   : "border-border"
               } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
               style={{
+                ['--ph' as string]: config.promoCard.style.descriptionStyle.textColor,
                 background: getBackgroundStyle(
                   config.promoCard.style.background,
                 ),
@@ -4101,7 +4335,7 @@ export function PromoSection({
                   contentEditable
                   spellCheck={true}
                   suppressContentEditableWarning
-                  data-placeholder="Enter text here"
+                  data-placeholder="Your button text"
                   onInput={() => onFieldInput("button")}
                   onFocus={() => onFieldFocus("button", buttonRef)}
                   onKeyDown={onPromoEditorKeyDown}
@@ -4373,7 +4607,23 @@ export function PromoSection({
                       ref={previewTitleRef}
                       contentEditable
                       suppressContentEditableWarning
-                      className={`text-base font-normal mb-1 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === "title" ? "ring-1 ring-primary/70" : ""}`}
+                      /**
+                       * Names the region rather than saying "Enter text here".
+                       *
+                       * The card was rendering as a bare white box: these
+                       * fields are always present so the shape stays visible,
+                       * but with nothing in them and no placeholder attribute
+                       * the CSS resolved attr(data-placeholder) to an empty
+                       * string and drew nothing — the skeleton existed and was
+                       * invisible.
+                       *
+                       * Each names what belongs there, because someone who is
+                       * not a designer looking at an empty card needs to know
+                       * which part is the headline and which is the small
+                       * print, not to be told three times that text goes in.
+                       */
+                      data-placeholder="Your headline"
+                      className={`${blankStart ? "promo-ghost" : ""} ${hasTitle ? "text-base font-normal" : "text-xl font-semibold"} mb-1 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === "title" ? "ring-1 ring-primary/70" : ""}`}
                       onMouseDown={() => {
                         activeEditorRef.current = previewTitleRef.current;
                       }}
@@ -4419,7 +4669,8 @@ export function PromoSection({
                       ref={previewSubtitleRef}
                       contentEditable
                       suppressContentEditableWarning
-                      className={`text-base font-normal mb-2 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === "subtitle" ? "ring-1 ring-primary/70" : ""}`}
+                      data-placeholder="A supporting line"
+                      className={`${blankStart ? "promo-ghost" : ""} ${hasSubtitle ? "text-base font-normal" : "text-sm font-medium"} mb-2 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === "subtitle" ? "ring-1 ring-primary/70" : ""}`}
                       onMouseDown={() => {
                         // Don't trigger state updates while dragging selection.
                         activeEditorRef.current = previewSubtitleRef.current;
@@ -4470,7 +4721,8 @@ export function PromoSection({
                       ref={previewDescriptionRef}
                       contentEditable
                       suppressContentEditableWarning
-                      className={`text-base font-normal mb-2 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === "description" ? "ring-1 ring-primary/70" : ""}`}
+                      data-placeholder="A little more about the offer"
+                      className={`${blankStart ? "promo-ghost" : ""} ${hasDescription ? "text-base font-normal" : "text-xs"} mb-2 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === "description" ? "ring-1 ring-primary/70" : ""}`}
                       onMouseDown={() => {
                         activeEditorRef.current = previewDescriptionRef.current;
                       }}
@@ -4619,6 +4871,59 @@ export function PromoSection({
                         // show the shared "field limit reached" warning.
                         onLineOverflow={warnTimerLimit}
                       />
+                    </div>
+                  )}
+
+                  {/* Ghosts for the two parts that are switched off.
+                      A cleared card has no countdown and no button, so the
+                      skeleton stopped after the description and the lower half
+                      of the card was blank — someone who has never built one
+                      had no way to know a countdown or a button were even
+                      possible, which is the whole reason the skeleton exists.
+
+                      Inert on purpose. They are dashed outlines that render
+                      nothing real: showTimer and showButton stay false, so
+                      nothing here can switch the countdown back on behind the
+                      user, and they disappear the moment a design arrives or
+                      the toggle is turned on for real. */}
+                  {blankStart && !showTimerInPreview && (
+                    <div
+                      className="mb-2 rounded border border-dashed px-2 py-1.5 text-center text-xs"
+                      style={{
+                        borderColor: `${config.promoCard.style.textColor}33`,
+                        color: `${config.promoCard.style.textColor}66`,
+                      }}
+                    >
+                      {/* Says the step that is actually outstanding.
+                          Fixed text told people to set an end date they may
+                          have already set — the countdown turns itself on when
+                          a cleared card gets its dates, so the only way to be
+                          looking at this ghost WITH dates in place is to have
+                          switched the timer off by hand. Repeating the first
+                          instruction there is telling someone to redo work
+                          they have done. */}
+                      {config.promoCard.endDate
+                        ? 'Countdown — turn on Countdown Timer Display'
+                        : 'Countdown — set an end date to switch it on'}
+                    </div>
+                  )}
+
+                  {blankStart && !showButtonInPreview && (
+                    <div className="flex justify-center">
+                      {/* A dashed outline again, not a filled button.
+                          Filling it made the card look finished — a real call
+                          to action sitting on a real design — which is exactly
+                          what a skeleton must not look like. Dashed says
+                          "something goes here", which is the whole message. */}
+                      <div
+                        className="rounded border border-dashed px-4 py-1.5 text-xs"
+                        style={{
+                          borderColor: `${config.promoCard.style.textColor}55`,
+                          color: `${config.promoCard.style.textColor}aa`,
+                        }}
+                      >
+                        Button — turn on Call to Action
+                      </div>
                     </div>
                   )}
 
