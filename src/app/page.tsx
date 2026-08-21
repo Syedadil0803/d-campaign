@@ -1917,11 +1917,31 @@ export default function Home() {
               draftIsNewer = new Date(draftSavedAt).getTime() > new Date(takenAt).getTime();
             }
           }
-          setRestoreNotice({
-            localSavedAt: recoveredEnvelope?.savedAt || null,
-            draftSavedAt,
-            draftIsNewer,
-          });
+          /**
+           * Announced only when the work was genuinely away.
+           *
+           * A refresh restores through this same path, so every reload was
+           * telling the user their work had been rescued — from a page they
+           * had just reloaded themselves, with the card already in front of
+           * them. Nothing was at stake and nothing needed saying.
+           *
+           * The browser distinguishes the two: a reload reports 'reload',
+           * while reopening the tool is a 'navigate'. Restoring still happens
+           * either way — only the announcement is held back.
+           */
+          const wasReload =
+            typeof performance !== 'undefined' &&
+            (performance.getEntriesByType('navigation')[0] as
+              | PerformanceNavigationTiming
+              | undefined)?.type === 'reload';
+
+          if (!wasReload) {
+            setRestoreNotice({
+              localSavedAt: recoveredEnvelope?.savedAt || null,
+              draftSavedAt,
+              draftIsNewer,
+            });
+          }
           return;
         }
         // Identical to what is live — nothing was lost, so drop it quietly.
