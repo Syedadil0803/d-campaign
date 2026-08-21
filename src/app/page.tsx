@@ -2646,7 +2646,14 @@ export default function Home() {
                     stays on the browser that made it" — made the reader decode
                     policy first. This says what was done, then the one thing
                     left to do, as two sentences rather than two paragraphs so
-                    it reads as a single message. */}
+                    it reads as a single message.
+
+                    One timestamp, on the other device only. Three of them —
+                    the rescued edits, the parked draft and the other machine —
+                    was what made this unreadable: the reader ended up matching
+                    times to places to work out what had happened. A single
+                    time answers the one question worth asking here, which is
+                    how recent that other work is. */}
                 <h2 className="text-base font-semibold">
                   Your unsaved work is back
                 </h2>
@@ -2658,7 +2665,8 @@ export default function Home() {
                       <span className="font-medium text-on-surface">
                         {welcomeBack.elsewhere.deviceLabel}
                       </span>{' '}
-                      — open the tool there to pick that up.
+                      {describeWhen(welcomeBack.elsewhere.at)} — open the tool
+                      there to pick that up.
                     </>
                   )}
                 </p>
