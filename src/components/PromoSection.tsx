@@ -3792,17 +3792,6 @@ export function PromoSection({
                 currentField === "title" ? "border-primary/70" : "border-border"
               } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
               style={{
-                /**
-                 * The placeholder wears the colour its field paints on the
-                 * card, so panel and card agree at a glance: the box labelled
-                 * "Your headline" is the same warm near-brown as the headline
-                 * beside it.
-                 *
-                 * Safe in dark mode without a second value, because these
-                 * fields already take the card's own background — the contrast
-                 * here is whatever the contrast is over there.
-                 */
-                ['--ph' as string]: config.promoCard.style.titleStyle.textColor,
                 background: getBackgroundStyle(
                   config.promoCard.style.background,
                 ),
@@ -3866,7 +3855,6 @@ export function PromoSection({
                   : "border-border"
               } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
               style={{
-                ['--ph' as string]: config.promoCard.style.subheadingStyle.textColor,
                 background: getBackgroundStyle(
                   config.promoCard.style.background,
                 ),
@@ -3931,7 +3919,6 @@ export function PromoSection({
                   : "border-border"
               } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
               style={{
-                ['--ph' as string]: config.promoCard.style.descriptionStyle.textColor,
                 background: getBackgroundStyle(
                   config.promoCard.style.background,
                 ),

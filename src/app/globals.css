@@ -421,11 +421,11 @@ select {
  */
 .rich-editor[contenteditable="true"]:empty::before {
   content: attr(data-placeholder);
-  color: var(--ph, currentColor);
-  /* Higher than a placeholder would normally sit. These fields take the card's
-     own background, so on a dark design the text is light-on-dark, where the
-     same value that reads as "muted" over white reads as "barely there". */
-  opacity: 0.72;
+  /* The panel's own muted tone, not the card's. These are input fields, and a
+     field's placeholder should look like a placeholder whatever the card it
+     edits happens to be wearing. */
+  color: currentColor;
+  opacity: 0.45;
   pointer-events: none;
 }
 
