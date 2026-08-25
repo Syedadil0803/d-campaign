@@ -34,6 +34,14 @@ export const config = {
    * Everything except Next's own assets, the public files, and the auth
    * endpoints themselves — the login POST has to be reachable while signed
    * out, and guarding it would make signing in impossible.
+   *
+   * `webmanifest` is in that list for a reason worth keeping. The browser
+   * fetches /manifest.webmanifest itself, before and outside any signed-in
+   * page, and it does not send it through a login redirect — it just records
+   * the manifest as unreadable and silently withholds the install prompt. No
+   * error, no console warning, and the app is simply never installable. The
+   * extension is not covered by `json`, so it was landing on the redirect
+   * until it was named here.
    */
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth|flags|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico|css|js|json|txt|xml)$).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/auth|flags|.*\\.(?:png|jpg|jpeg|svg|gif|webp|webmanifest|ico|css|js|json|txt|xml)$).*)'],
 };

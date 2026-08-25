@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { LayoutDashboard, Megaphone, Gift, LayoutGrid, Save, Upload, Sun, Moon, LogOut, Loader2, Check } from 'lucide-react';
+import { LayoutDashboard, Megaphone, Gift, LayoutGrid, Save, Upload, Sun, Moon, LogOut, Loader2, Check, MonitorDown } from 'lucide-react';
+import { useInstallPrompt } from '@/hooks/useInstallPrompt';
 
 interface HeaderProps {
   activeTab: 'dashboard' | 'announcement' | 'promo';
@@ -39,6 +40,11 @@ export function Header({
   handleLogout,
 }: HeaderProps) {
   const [saving, setSaving] = useState(false);
+
+  // Only ever true on a browser that can actually install, and only until it
+  // has been installed — so this adds a control to the header rarely and
+  // temporarily, rather than parking a permanent one there.
+  const { canInstall, install } = useInstallPrompt();
 
   // Announcement: three states (unsaved → Save; ready → Publish; published).
   // Promo: two states only — editing goes straight to "ready to Publish",
@@ -109,6 +115,29 @@ export function Header({
         </nav>
 
         <div className="flex items-center space-x-2">
+          {/*
+            Sits with the theme and sign-out icons rather than beside Publish.
+            Publish is the primary action on this screen and installing is a
+            once-ever aside; giving it equal weight would make the header argue
+            with itself about what matters.
+
+            MonitorDown is the same shape Chrome shows in its address bar, so
+            the two read as the same offer rather than two different ones.
+          */}
+          {canInstall && (
+            <button
+              onClick={install}
+              title="Opens in its own window, without the browser bar"
+              className="group inline-flex items-center rounded-md border border-primary/25 bg-primary/5 px-3 py-2 text-sm font-semibold text-primary shadow-sm transition-all hover:border-primary/40 hover:bg-primary/10"
+            >
+              <MonitorDown className="h-4 w-4 transition-transform group-hover:translate-y-px sm:mr-2" />
+              {/* The label is the whole point — an unexplained icon in a
+                  toolbar is a guess, and nobody guesses twice. It folds away
+                  below `sm`, where the header is already tight and the icon
+                  has room to be the only thing there. */}
+              <span className="hidden sm:inline">Install app</span>
+            </button>
+          )}
           <button
             onClick={toggleDarkMode}
             className="rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-elevated hover:text-on-surface"
