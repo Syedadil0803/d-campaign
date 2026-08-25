@@ -124,7 +124,17 @@ export function Header({
             MonitorDown is the same shape Chrome shows in its address bar, so
             the two read as the same offer rather than two different ones.
           */}
-          {canInstall && (
+          {/*
+            Dashboard only.
+
+            The other two tabs are working screens — the status badge and
+            Save/Publish live there, and Publish is the action that matters.
+            An install offer sitting beside it competes for attention with the
+            one control someone came to press. The dashboard is where you
+            arrive and look around, which is the moment an aside like this is
+            welcome rather than in the way.
+          */}
+          {canInstall && activeTab === 'dashboard' && (
             <button
               onClick={install}
               title="Opens in its own window, without the browser bar"
