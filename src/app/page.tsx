@@ -5,7 +5,7 @@ import { X, Loader2, SlidersHorizontal, Clock } from 'lucide-react';
 import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
 import { whatsAppUrl, whatsAppLooksShort } from '@/lib/whatsapp';
 import { cardIsNotUserWork, lookSignature } from '@/lib/promoAuthorship';
-import { BLANK_LOOK } from '@/lib/promoTemplate';
+import { blankLookForVisit, currentBlankLook, forgetVisit, isBlankLook } from '@/lib/blankLooks';
 import { sampleTemplates } from '@/components/SamplePromoTemplates';
 import { normalizeLegacyTimerTokens, TIMER_FIXED_TOKEN } from '@/lib/timerUtils';
 import { fieldOverflows } from '@/lib/promoFit';
@@ -524,7 +524,7 @@ export default function Home() {
   function resetPromoEditorToDefault() {
     const next: CampaignConfig = {
       ...configRef.current,
-      promoCard: JSON.parse(JSON.stringify(defaultConfig.promoCard)),
+      promoCard: blankPromoCard(),
     };
     setConfig(next);
     savedPromoSignatureRef.current = getPromoSignature(next);
@@ -1025,6 +1025,22 @@ export default function Home() {
   const [promoBlankStart, setPromoBlankStart] = useState(false);
 
   /**
+   * A blank promo card wearing this visit's palette.
+   *
+   * Every route that starts from nothing goes through here — opening the tool,
+   * creating a campaign, the reset after saving or publishing. They used to
+   * copy defaultConfig directly, which is always palette one, so the rotation
+   * was invisible everywhere except Clear and closing the tool changed nothing.
+   */
+  function blankPromoCard(): CampaignConfig['promoCard'] {
+    const card = JSON.parse(
+      JSON.stringify(defaultConfig.promoCard),
+    ) as CampaignConfig['promoCard'];
+    card.style = JSON.parse(JSON.stringify(currentBlankLook())) as CampaignConfig['promoCard']['style'];
+    return card;
+  }
+
+  /**
    * May the countdown switch itself on once both dates exist?
    *
    * Only after Clear, where the end date is genuinely missing and supplying it
@@ -1052,7 +1068,7 @@ export default function Home() {
   useEffect(() => {
     if (!configLoadedSignal) return;
     const card = configRef.current.promoCard;
-    const wearingBlank = lookSignature(card.style) === lookSignature(BLANK_LOOK);
+    const wearingBlank = isBlankLook(card.style);
     /**
      * A blank start needs an empty card, not just an unstyled one.
      *
@@ -1374,7 +1390,7 @@ export default function Home() {
       ...prev,
       promoCard: startingFresh
         ? {
-            ...(JSON.parse(JSON.stringify(defaultConfig.promoCard)) as CampaignConfig['promoCard']),
+            ...blankPromoCard(),
             // On-air state belongs to the website, not the card being drafted;
             // creating a new one must never take the live campaign down.
             active: prev.promoCard.active,
@@ -1879,6 +1895,16 @@ export default function Home() {
   }
 
   async function loadConfig() {
+    /**
+     * Move the blank-canvas rotation on, once for this visit.
+     *
+     * Has to happen before anything builds a blank card below, so every route
+     * in this load agrees on the colour. It advances at most once per visit —
+     * a refresh keeps the palette it already had, or the canvas would change
+     * under someone mid-edit.
+     */
+    blankLookForVisit();
+
     try {
       // Always fetch the published config + the saved draft from the DB.
       const [response, draftResponse] = await Promise.all([
@@ -2029,7 +2055,7 @@ export default function Home() {
            */
           const forEditor: CampaignConfig = {
             ...publishedCfg,
-            promoCard: JSON.parse(JSON.stringify(defaultConfig.promoCard)),
+            promoCard: blankPromoCard(),
           };
           setConfig(forEditor);
           draftSignatureRef.current = getConfigSignature(forEditor);
@@ -2072,7 +2098,7 @@ export default function Home() {
          */
         const forEditor: CampaignConfig = {
           ...publishedCfg,
-          promoCard: JSON.parse(JSON.stringify(defaultConfig.promoCard)),
+          promoCard: blankPromoCard(),
         };
         setConfig(forEditor);
         draftSignatureRef.current = getConfigSignature(forEditor);
@@ -2082,6 +2108,10 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Failed to load config:', error);
+      // Still a finished load. The editor waits on this signal before it paints,
+      // so leaving it unset after a failure would hold the panel empty for good
+      // rather than showing the default card.
+      setConfigLoadedSignal((n) => n + 1);
     }
   }
 
@@ -2393,6 +2423,8 @@ export default function Home() {
      * was offered a draft slot before this ran.
      */
     exitReasonRef.current = 'logout';
+    // Signing back in is a new visit, so the blank canvas should move on.
+    forgetVisit();
     clearRecovery();
     if (reportedUnsavedRef.current) reportUnsaved(false);
 

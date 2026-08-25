@@ -39,6 +39,7 @@ import {
 } from "@/lib/promoAuthorship";
 import { UndoStack } from "@/lib/undoStack";
 import { SamplePromoTemplates, sampleTemplates } from "./SamplePromoTemplates";
+import { advanceBlankLook, isBlankLook } from "@/lib/blankLooks";
 import { useRichTextEditor } from "@/hooks/useRichTextEditor";
 import { useSignalEffect } from "@/hooks/useSignalEffect";
 import {
@@ -1098,7 +1099,8 @@ export function PromoSection({
       // No design either. Keeping the default gradient meant "clear" cleared
       // the words and left a look nobody had chosen, which then had to be
       // undone before any other could be picked.
-      style: JSON.parse(JSON.stringify(BLANK_LOOK)) as PromoCard["style"],
+      // The next palette in the rotation — see src/lib/blankLooks.ts.
+      style: JSON.parse(JSON.stringify(advanceBlankLook())) as PromoCard["style"],
       active: false,
       title: "",
       subtitle: "",
@@ -1345,7 +1347,28 @@ export function PromoSection({
    * the decision being asked for, and the thing the countdown waits on.
    */
   useEffect(() => {
-    if (blankStart) return;
+    /**
+     * The prop cannot be trusted on the first render after a load.
+     *
+     * `blankStart` is decided in page.tsx and arrives here as a prop, so on the
+     * commit where a card is loaded this effect can still see `false` while the
+     * card on screen is plainly blank. It then filled in an end date, which
+     * completed the schedule, which armed the countdown — and a blank canvas
+     * came back from a login with a timer running.
+     *
+     * Asking the card directly removes the timing from the question: a card
+     * with no words wearing a blank palette is a blank start, whatever the
+     * prop currently says.
+     */
+    const plain = (html?: string) => String(html ?? '').replace(/<[^>]*>/g, '').trim();
+    const looksBlank =
+      isBlankLook(config.promoCard.style) &&
+      !plain(config.promoCard.title) &&
+      !plain(config.promoCard.subtitle) &&
+      !plain(config.promoCard.description) &&
+      !plain(config.promoCard.buttonText);
+
+    if (blankStart || looksBlank) return;
     if (config.promoCard.startDate && config.promoCard.endDate) return;
     setConfig({
       ...config,
@@ -3542,8 +3565,10 @@ export function PromoSection({
     !hasSubtitle &&
     !hasDescription &&
     !hasButtonText &&
-    JSON.stringify(config.promoCard.style) ===
-      JSON.stringify(getFreshPromoCard().style);
+    // Any blank palette, not this visit's. The palettes rotate per visit, so
+    // comparing against today's would say a canvas cleared last week is not
+    // empty — leaving Clear enabled on an empty card and treating it as work.
+    isBlankLook(config.promoCard.style);
   /**
    * Is there a design of the user's OWN to hold on to?
    *
@@ -3627,7 +3652,7 @@ export function PromoSection({
    */
   useEffect(() => {
     if (!blankStart) return;
-    if (lookSignature(config.promoCard.style) !== lookSignature(BLANK_LOOK)) {
+    if (!isBlankLook(config.promoCard.style)) {
       setBlankStart(false);
     }
   }, [blankStart, config.promoCard.style]);
@@ -4571,6 +4596,22 @@ export function PromoSection({
                   }`}
                   style={{
                     width: `${cardWidth}px`,
+                    /**
+                     * Held back until the first load, then faded in.
+                     *
+                     * The editor paints from defaultConfig — always palette one
+                     * — before the real card arrives, so the card appeared in
+                     * the wrong colours and swapped a moment later, outlines
+                     * arriving after that. Gating the whole tab fixed the swap
+                     * and replaced it with a blank page, which is worse: the
+                     * panel and controls are correct from the first frame and
+                     * have no reason to wait.
+                     *
+                     * Only the card waits, and it holds its space while it
+                     * does, so nothing moves when it appears.
+                     */
+                    opacity: (configLoadedSignal ?? 0) > 0 ? 1 : 0,
+                    transition: 'opacity 160ms ease-out',
                     // Auto-fit: scale the whole card down (layout included, via
                     // `zoom`) when it's taller than the frame, so the full card is
                     // always visible — no clip, no scroll — at any window/zoom.

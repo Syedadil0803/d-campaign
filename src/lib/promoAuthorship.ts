@@ -12,7 +12,7 @@
  */
 
 import { PromoCard, defaultConfig } from '@/types/campaign';
-import { BLANK_LOOK } from '@/lib/promoTemplate';
+import { blankLookSignatures, isBlankLook } from '@/lib/blankLooks';
 
 /** Text with the markup taken off, for asking whether anything was written. */
 function plain(html?: string): string {
@@ -61,10 +61,11 @@ export function ourLooks(templates: PromoCard[]): string[] {
   return [
     ...templates.map((t) => lookSignature(t.style)),
     lookSignature(defaultConfig.promoCard.style),
-    // A cleared canvas wears no design at all, which is as much "not the
-    // user's choice" as a template is. Without it here, clearing would count
-    // as authoring and bring back the consent dialogs it exists to avoid.
-    lookSignature(BLANK_LOOK),
+    // Every blank palette, not only the one this visit happens to use. A card
+    // cleared last week wears last week's colours; if that stopped counting as
+    // blank, the tool would decide the user had designed it and start guarding
+    // a card nobody has touched.
+    ...blankLookSignatures(),
   ];
 }
 
@@ -77,7 +78,7 @@ export function cardIsBlank(card: PromoCard | null | undefined): boolean {
     !plain(card.description) &&
     !plain(card.buttonText) &&
     (lookSignature(card.style) === lookSignature(defaultConfig.promoCard.style) ||
-      lookSignature(card.style) === lookSignature(BLANK_LOOK))
+      isBlankLook(card.style))
   );
 }
 

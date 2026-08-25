@@ -1,3 +1,5 @@
+import { FIRST_BLANK_LOOK } from '@/lib/blankLooks';
+
 export interface GradientStyle {
   type: 'solid' | 'linear' | 'radial';
   startColor: string;
@@ -155,75 +157,18 @@ export const defaultConfig: CampaignConfig = {
     showButton: false,
     timerText: 'Ends in {timer}',
     /**
-     * The skeleton every card starts from.
+     * The skeleton every card starts from — palette one, taken from the list.
      *
-     * This used to be a teal-into-green gradient with a coloured plate behind
-     * every field — a finished design nobody had chosen, which meant the first
-     * thing anyone did was undo it. It is now the same look Clear produces, so
-     * a fresh card and a cleared card are the same card, and the authorship
-     * checks that ask "is this the user's own work?" have one answer instead
-     * of two.
+     * This used to be written out by hand alongside src/lib/blankLooks.ts, and
+     * the two drifted twice within a day: first two text colours, then a
+     * missing `direction` key on the field backgrounds. Neither was visible on
+     * screen, because both cards looked identical — but isBlankLook compares
+     * whole style objects, so a single absent key meant a freshly loaded card
+     * matched no palette. The skeleton lost its countdown and button outlines,
+     * and Clear stayed enabled on an empty canvas.
+     *
+     * One definition now. To change these colours, edit blankLooks.ts.
      */
-    style: {
-      position: 'bottom-right',
-      background: {
-        type: 'linear',
-        startColor: '#a5b4fc',
-        endColor: '#f0abfc',
-        direction: 'to bottom right',
-        midpoint: 50,
-      },
-      textColor: '#3b0764',
-      titleStyle: {
-        background: {
-          type: 'solid',
-          startColor: 'transparent',
-          endColor: 'transparent',
-          midpoint: 50,
-        },
-        textColor: '#312e81',
-        textAlign: 'left',
-      },
-      subheadingStyle: {
-        background: {
-          type: 'solid',
-          startColor: 'transparent',
-          endColor: 'transparent',
-          midpoint: 50,
-        },
-        textColor: '#4c1d95',
-        textAlign: 'left',
-      },
-      descriptionStyle: {
-        background: {
-          type: 'solid',
-          startColor: 'transparent',
-          endColor: 'transparent',
-          midpoint: 50,
-        },
-        textColor: '#581c87',
-        textAlign: 'left',
-      },
-      dateStyle: {
-        background: {
-          type: 'solid',
-          startColor: 'transparent',
-          endColor: 'transparent',
-          midpoint: 50,
-        },
-        textColor: '#581c87',
-        textAlign: 'left',
-      },
-      buttonStyle: {
-        background: {
-          type: 'solid',
-          startColor: '#6d28d9',
-          endColor: '#6d28d9',
-          midpoint: 50,
-        },
-        textColor: '#ffffff',
-        textAlign: 'center',
-      },
-    },
+    style: JSON.parse(JSON.stringify(FIRST_BLANK_LOOK)) as PromoCard['style'],
   },
 };

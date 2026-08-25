@@ -7,7 +7,8 @@
  * are split, so "change template" restyles the card and leaves the words alone.
  */
 
-import { PromoCard, defaultConfig } from '@/types/campaign';
+import { PromoCard } from '@/types/campaign';
+import { FIRST_BLANK_LOOK } from '@/lib/blankLooks';
 
 /** Fields that carry the card's look. Everything else is content or scheduling. */
 type PromoStyle = PromoCard['style'];
@@ -91,7 +92,7 @@ export function isCardEmpty(card: PromoCard): boolean {
  * back and rewrite what "blank" means for everyone else.
  */
 export const BLANK_LOOK: PromoStyle = JSON.parse(
-  JSON.stringify(defaultConfig.promoCard.style),
+  JSON.stringify(FIRST_BLANK_LOOK),
 ) as PromoStyle;
 
 
