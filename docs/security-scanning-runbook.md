@@ -46,25 +46,68 @@ gitleaks version
 
 ## Run
 
-Full history, readable output:
+Three commands, one per question. Every one of them has been run against this
+repository, and the timings below are what it actually took.
+
+**Have we ever committed a secret?** This is the one that matters — it sees
+every commit anyone could pull.
 
 ```bash
-gitleaks detect --source . --verbose
+gitleaks git . -c .git/gitleaks.toml --no-banner --redact --verbose
 ```
 
-Save a report to work through:
+298 commits in about 15 seconds. Currently clean.
+
+**Is there a secret in what I am about to commit?** Run it after `git add`.
 
 ```bash
-gitleaks detect --source . --report-format json --report-path gitleaks-report.json
+gitleaks git . --staged -c .git/gitleaks.toml --no-banner --redact --verbose
 ```
 
-Only the files you are about to commit — useful as a habit:
+About 30ms, because it reads the staged diff rather than the history.
+
+**Is there a secret sitting in a file on disk?** Includes untracked files.
 
 ```bash
-gitleaks protect --staged --verbose
+gitleaks dir . -c .git/gitleaks.toml --no-banner --redact --verbose
 ```
+
+About 300ms. **This one reports 2 findings and that is the correct result** —
+both are in `.env.local`, which is gitignored and has never been committed. See
+"Silencing false positives" below for why they are deliberately not hidden.
 
 Exit code `0` means clean, `1` means findings.
+
+The flags are not decoration. `--verbose` prints the file and line; without it
+you get `leaks found: 2` and nothing to act on. `--redact` masks the secret so
+running the scan does not paste it into your terminal scrollback. `-c` points at
+the config, which lives inside `.git/` rather than the repository root.
+
+### If you see `detect` or `protect` in older guides
+
+`gitleaks detect --source .` and `gitleaks protect --staged` were the old
+spellings. They still work in 8.30 as deprecated aliases, so nothing you find
+online is broken — but `git` and `dir` are the current commands, and mixing the
+two spellings across a team is how people end up unsure which one is real. Use
+the three above.
+
+## The pre-commit hook
+
+`.git/hooks/pre-commit` runs the staged scan automatically on every
+`git commit`. Findings block the commit before the commit object exists, which
+is the whole point: a secret that never gets committed never needs rotating.
+
+Hooks live in `.git/`, so this one is local to this machine — it is not in the
+repository and does not follow a clone. That is deliberate, but it means it
+protects whoever installed it and nobody else.
+
+`git commit --no-verify` skips it. That does not make the finding wrong.
+
+To remove it entirely and rely only on running the commands by hand:
+
+```bash
+rm .git/hooks/pre-commit
+```
 
 ## Reading the output
 
@@ -98,7 +141,9 @@ is nearly always the better answer.
 
 ## Silencing false positives
 
-Create `.gitleaks.toml` in the repository root:
+The config is at `.git/gitleaks.toml` — inside `.git/`, not the repository
+root. It therefore never appears in `git status` and cannot be committed by
+accident. The trade is that it is local to this machine, like the hook.
 
 ```toml
 [extend]
@@ -111,6 +156,20 @@ regex = '''generate-with-openssl-rand-base64-32'''
 
 Allowlist a **specific value or path**, never a whole rule. Disabling a rule
 hides the real findings it would have caught later.
+
+The current config excludes `.next/`, `node_modules/` and `.git/` — generated
+output, which produced seven false findings, all of them Next.js build keys that
+are regenerated on every build.
+
+`.env.local` is deliberately **not** excluded. It holds real secrets and the dir
+scan flags two of them every time. That is the point: those two lines are the
+proof the rules still fire on this machine. Silence them and a genuinely leaked
+key looks identical to a clean run.
+
+A caveat worth knowing, found by testing rather than assuming: gitleaks
+allowlists well-known example credentials, so AWS's documented sample key
+(`AKIAIOSFODNN7EXAMPLE`) passes straight through. A realistic key is caught
+immediately. The tool has blind spots by design.
 
 ## Specific to this repository
 
