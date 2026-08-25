@@ -5,6 +5,39 @@ measured from the repository at commit `a2a4645`, not estimated.
 
 ---
 
+## What was asked for
+
+Recorded verbatim, because the document should be answerable against the
+request rather than against someone's memory of it:
+
+> 1. **The Code we Used** — explain the tech stack, and also the advantages of
+>    using Next.js
+> 2. **The Objective of quality check** — what exactly are we checking, and by
+>    fixing it what are we achieving?
+> 3. **How did we Design (HLD)**
+> 4. **How are we planning to check the code quality**
+>    1. Architecture level or component level?
+> 5. **How do we generate a report**
+
+The sections below map one-to-one onto those five points, in that order.
+
+Two of them cannot be fully answered yet, and the document says so where it
+matters rather than filling the gap:
+
+| Point | Status |
+|---|---|
+| 1. The code we used | Answerable now — measured from `package.json` |
+| 2. Objective of the quality check | Answerable now — a decision, not a measurement |
+| 3. How we designed it (HLD) | Answerable now, with the diagram marked as read from the code rather than generated from it |
+| 4. How we plan to check quality | The **method** is settled. The **findings** do not exist until the tools have been run |
+| 5. How we generate a report | The **format** is settled and the **baseline** is captured. There is no "after" column until a slice is complete |
+
+The distinction between a settled method and an absent result is the thing to
+protect. A plan presented as a result is the one failure this document cannot
+recover from, because the next question is always "show me".
+
+---
+
 ## 1. The code we used
 
 ### Stack
