@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { PromoCard } from '@/types/campaign';
 import { getBackgroundStyle, getISODateWithOffset } from '@/lib/utils';
 import { getTemplateTimerPreviewText } from '@/lib/timerUtils';
+import { INDUSTRIES, withIndustryCopy } from '@/lib/industryCopy';
 
 interface SamplePromoTemplatesProps {
   onApplyTemplate: (template: PromoCard, templateName: string) => void;
@@ -208,7 +210,7 @@ export const sampleTemplates = [
     name: 'Autumn Sale',
     promoCard: {
       active: false,
-      title: '<strong>Autumn Harvest Sale</strong> <span style="font-size:0.8rem;">FALL EDIT</span>',
+      title: '<strong>Autumn Harvest Sale</strong> <span style="font-size:0.8rem;">AUTUMN EDIT</span>',
       subtitle: '<span style="font-size:0.85rem;">Up to</span> <span style="font-size:1.35rem;"><strong>40% OFF</strong></span> warm-tone rugs',
       description: 'Wrap your home in the colors of the season — rust, amber, and deep berry weaves crafted for cozy autumn evenings.',
       buttonText: 'Shop Autumn Edit',
@@ -593,6 +595,23 @@ export const sampleTemplates = [
 
 export function SamplePromoTemplates({ onApplyTemplate }: SamplePromoTemplatesProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  /**
+   * Which trade's sample wording the cards are showing.
+   *
+   * It changes the words and nothing else — every template keeps its own
+   * colours, and none are hidden. Calling it a filter would promise a shorter
+   * grid that never arrives, so the heading asks a question instead.
+   */
+  const [industryId, setIndustryId] = useState<string | null>(null);
+  /**
+   * Open on arrival, deliberately.
+   *
+   * Collapsed, the row was tidy and nobody knew the trades were there — a
+   * feature that exists to be noticed cannot start hidden behind a chevron.
+   * It collapses once a choice is made, so it costs a moment rather than a
+   * permanent band across the top.
+   */
+  const [pickerOpen, setPickerOpen] = useState(true);
   const [visibleTemplateIds, setVisibleTemplateIds] = useState<Set<string>>(new Set());
   const REVEAL_DURATION_MS = 350;
   const STAGGER_DELAY_MS = 60;
@@ -625,15 +644,78 @@ export function SamplePromoTemplates({ onApplyTemplate }: SamplePromoTemplatesPr
 
   return (
     <div ref={containerRef}>
+      {/* Open on arrival, then out of the way.
+          Ten pills in a row wrapped onto a second line and read as a paragraph
+          rather than a set of choices. A dropdown would have hidden the trades
+          behind a click, which defeats the point — someone should SEE their
+          trade without going looking. So: stated in words, shown as a grid that
+          scans in columns, and folded away once it has been used. */}
+      <div className="mb-6">
+        <button
+          type="button"
+          onClick={() => setPickerOpen((v) => !v)}
+          aria-expanded={pickerOpen}
+          className="group flex items-baseline gap-2"
+        >
+          {/* The word the team uses for these, and the word a business owner
+              would pick themselves. Earlier attempts described the mechanism
+              instead — "showing examples for" and "sample wording" both explain
+              what the control does to the page, when the only thing the reader
+              needs to answer is which trade they are in. */}
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">
+            Industry
+          </span>
+          <span className="text-sm font-semibold text-primary">
+            {INDUSTRIES.find((i) => i.id === industryId)?.label ?? 'Default'}
+          </span>
+          <ChevronDown
+            className={`h-3.5 w-3.5 self-center text-on-surface-variant transition-transform group-hover:text-primary ${
+              pickerOpen ? 'rotate-180' : ''
+            }`}
+          />
+        </button>
+
+        {pickerOpen && (
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            {[{ id: null, label: 'Default' }, ...INDUSTRIES].map((option) => {
+              const active = option.id === industryId;
+              return (
+                <button
+                  key={option.id ?? 'all'}
+                  type="button"
+                  onClick={() => {
+                    setIndustryId(option.id);
+                    setPickerOpen(false);
+                  }}
+                  aria-pressed={active}
+                  /* A card each, rather than text on a grey panel. The border
+                     is what makes ten items read as ten choices instead of a
+                     paragraph, and it survives both themes without a fill. */
+                  className={`rounded-lg border px-3 py-2.5 text-left text-xs font-medium transition-all ${
+                    active
+                      ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                      : 'border-border bg-surface text-on-surface-variant hover:-translate-y-0.5 hover:border-primary/60 hover:text-primary hover:shadow-sm'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {sampleTemplates.map((template, index) => (
           (() => {
             const isVisible = visibleTemplateIds.has(template.id);
+            // The look is the template's; the words are the trade's.
+            const card = withIndustryCopy(template.promoCard as PromoCard, template.id, industryId);
             return (
           <div
             key={template.id}
             data-template-id={template.id}
-            onClick={() => onApplyTemplate(template.promoCard, template.name)}
+            onClick={() => onApplyTemplate(card, template.name)}
             className={`group rounded-xl border border-gray-200 hover:border-primary hover:ring-1 hover:ring-primary bg-white p-3 shadow-sm hover:shadow-lg cursor-pointer dark:border-gray-700 dark:bg-gray-900 [transition:border-color_150ms_ease,box-shadow_150ms_ease,opacity_var(--reveal-ms)_ease-out_var(--reveal-delay),transform_var(--reveal-ms)_ease-out_var(--reveal-delay)] ${
               isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
             }`}
@@ -659,7 +741,7 @@ export function SamplePromoTemplates({ onApplyTemplate }: SamplePromoTemplatesPr
                   color: template.promoCard.style.titleStyle.textColor,
                   textAlign: template.promoCard.style.titleStyle.textAlign || 'center',
                 }}
-                dangerouslySetInnerHTML={{ __html: template.promoCard.title }}
+                dangerouslySetInnerHTML={{ __html: card.title }}
               />
               <h4
                 className="text-sm mb-2 px-2 py-1 rounded break-words"
@@ -668,7 +750,7 @@ export function SamplePromoTemplates({ onApplyTemplate }: SamplePromoTemplatesPr
                   color: template.promoCard.style.subheadingStyle.textColor,
                   textAlign: template.promoCard.style.subheadingStyle.textAlign || 'center',
                 }}
-                dangerouslySetInnerHTML={{ __html: template.promoCard.subtitle }}
+                dangerouslySetInnerHTML={{ __html: card.subtitle }}
               />
               <p
                 className="text-sm mb-2 px-2 py-1 rounded break-words"
@@ -677,7 +759,7 @@ export function SamplePromoTemplates({ onApplyTemplate }: SamplePromoTemplatesPr
                   color: template.promoCard.style.descriptionStyle.textColor,
                   textAlign: template.promoCard.style.descriptionStyle.textAlign || 'left',
                 }}
-                dangerouslySetInnerHTML={{ __html: template.promoCard.description }}
+                dangerouslySetInnerHTML={{ __html: card.description }}
               />
               <div
                 className="text-xs mb-4 px-2 py-1 rounded break-words"
@@ -686,7 +768,7 @@ export function SamplePromoTemplates({ onApplyTemplate }: SamplePromoTemplatesPr
                   color: template.promoCard.style.dateStyle.textColor,
                   textAlign: template.promoCard.style.dateStyle.textAlign || 'center',
                 }}
-                dangerouslySetInnerHTML={{ __html: getTemplateTimerPreviewText(template.promoCard.timerText) }}
+                dangerouslySetInnerHTML={{ __html: getTemplateTimerPreviewText(card.timerText) }}
               />
               <div className={template.promoCard.buttonFullWidth ? '' : 'flex justify-center'}>
                 <button
@@ -695,7 +777,7 @@ export function SamplePromoTemplates({ onApplyTemplate }: SamplePromoTemplatesPr
                     background: getBackgroundStyle(template.promoCard.style.buttonStyle.background),
                     color: template.promoCard.style.buttonStyle.textColor,
                   }}
-                  dangerouslySetInnerHTML={{ __html: template.promoCard.buttonText }}
+                  dangerouslySetInnerHTML={{ __html: card.buttonText }}
                 />
               </div>
             </div>
