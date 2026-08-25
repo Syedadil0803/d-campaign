@@ -110,13 +110,33 @@ Browser
          users, presence)            read by the customer's website)
 ```
 
+**This diagram is drawn from reading the code, not generated from it.** The
+import chains beneath it were verified individually, but the picture as a whole
+has not been checked against the real dependency graph. Running `madge` replaces
+it with one derived from actual imports; until then it should be read as an
+accurate summary rather than as evidence.
+
 The published artefact is the point of the whole system: the editor writes a
 JSON file to R2, and a widget on the customer's own website reads it. **That
 widget lives in a different repository and is out of scope here.**
 
 ### Front end, back end, or both
 
-Measured, at `a2a4645`:
+Measured at `a2a4645` by `scripts/feature-inventory.mjs`, which is committed
+alongside this document so the table can be reproduced and argued with:
+
+```bash
+node scripts/feature-inventory.mjs
+```
+
+The file-to-feature mapping in that script is a human judgement — it has to be,
+because the codebase has no module boundaries to read — so it is written down
+as code rather than described in prose. Anyone who disagrees with a placement
+can move one line and re-run.
+
+Note that the totals move as the code does: the same script at `ad9cdc5`
+reports 27,943, ten lines more, from a change committed after the baseline.
+This is why the "before" must be pinned to a commit rather than to a date.
 
 | Feature | Layer | Files | Lines | Share |
 |---|---|---|---|---|
@@ -138,6 +158,14 @@ Measured, at `a2a4645`:
 
 **The back end is already well structured. The front end is not.**
 
+One qualification, because the distinction matters and a reader will make it
+anyway: what follows shows that the *layering holds*. It does not show that the
+service and repository code is itself free of duplication, dead branches or
+oversized functions — the same four questions being asked of the front end.
+Layering is not quality. A well-layered service can still be a 400-line
+function. The back end is small enough that checking it properly is cheap, and
+it should be checked rather than assumed.
+
 Every API route goes through a service or a repository — verified, no route
 touches the database directly:
 
@@ -146,8 +174,22 @@ touches the database directly:
 /api/auth/*, /api/presence              →  userRepository                          →  db
 ```
 
-That is a clean layered design, and it is only about **1,479 lines**, roughly
-5% of the codebase.
+That is a clean layered design. **The server code is 1,081 lines across 16
+files — 3.9% of the codebase.**
+
+An earlier draft of this document said 1,479 lines. That figure was wrong, and
+the way it was wrong is worth recording. It came from adding the three
+"front + back" feature rows (729 + 509 + 241), which are *feature* totals and
+include each feature's client-side code. A feature row is not a layer count.
+The corrected figure counts server code only:
+
+| | Lines |
+|---|---|
+| `src/app/api` | 399 |
+| `src/repositories` | 314 |
+| `src/services` | 63 |
+| Server-side lib and middleware | 305 |
+| **Backend total** | **1,081** |
 
 The other 95% is front end, and **44% of the entire codebase sits in three
 files**:
@@ -226,6 +268,34 @@ So today the only automated quality gate is the compiler. That eliminates a
 whole class of bugs and says nothing at all about structure, duplication or
 dead code — which is precisely what is being asked about.
 
+### The gap this plan has to answer for: there are no tests
+
+**Zero test files. No test framework in `package.json`.** Not Jest, not Vitest,
+not Playwright, not Testing Library.
+
+This is the most serious finding in the document, and it is about the *plan*
+rather than the code. The method above proposes moving code across a 27,933-line
+codebase with `tsc --noEmit` and manual checking as the only safety net. Types
+catch a renamed field. They do not catch a reordered effect, a lost early
+return, or a condition that used to be inverted — which is precisely the class
+of mistake a large refactor makes.
+
+There is no honest way to present a restructuring plan of this size without
+saying what catches a regression. Three options, and the choice is a decision
+to be taken rather than assumed:
+
+1. **Characterisation tests before each slice** — write tests that capture what
+   the code does *now*, refactor, and require them to still pass. Cheapest per
+   slice, and it targets exactly the code being moved.
+2. **A small end-to-end suite** over the critical paths — sign in, edit, save
+   draft, publish. Fewer tests, catches whole-flow breakage, slower to write.
+3. **Neither, explicitly** — accept manual verification, and say so, with the
+   risk stated rather than left for someone to discover.
+
+Option 1 is the recommendation: it scales with the work instead of preceding
+all of it, and each slice arrives with its own evidence that behaviour did not
+change. Whichever is chosen, the refactor should not start before it is decided.
+
 ### Proposed toolchain
 
 Four tools, each answering a different question:
@@ -242,7 +312,9 @@ the code* rather than drawn from memory, and it shows exactly which features
 reach into `page.tsx`.
 
 `jscpd` has an obvious first target: Announcement (2,961 lines) and Promo
-(9,962 lines) do similar jobs and were built at different times.
+(9,962 lines) do similar jobs and were built at different times. **That they
+duplicate each other is a hypothesis, not a finding** — nothing has measured it
+yet, and it is listed here as the thing to check first, not as something known.
 
 ### Method per slice
 
