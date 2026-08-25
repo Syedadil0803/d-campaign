@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { campaignService } from '@/services/campaignService';
+import { getSessionUserId } from '@/lib/currentUser';
 import { CampaignConfig } from '@/types/campaign';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
@@ -70,9 +71,20 @@ async function syncToR2(config: CampaignConfig): Promise<{ ok: boolean; error?: 
   }
 }
 
+/**
+ * Checked here as well as in middleware.
+ *
+ * Middleware guards every route through one path matcher, which is right for a
+ * guard but wrong as the only defence: it is a single regex away from not
+ * matching, and neither of these handlers would notice. PUT in particular
+ * publishes to the live site and to R2.
+ */
 export async function GET() {
   const start = Date.now();
   try {
+    const userId = await getSessionUserId();
+    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+
     const config = await campaignService.getConfig();
     console.log(`[CONFIG] GET -> OK (${Date.now() - start}ms)`);
     return NextResponse.json(config);
@@ -85,6 +97,9 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   const start = Date.now();
   try {
+    const userId = await getSessionUserId();
+    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
+
     const config: CampaignConfig = await request.json();
     const result = await campaignService.saveConfig(config);
 

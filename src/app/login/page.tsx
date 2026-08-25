@@ -25,7 +25,23 @@ function LoginForm() {
   // saying out loud: someone who did not sign themselves out will otherwise
   // read this screen as the tool having lost their work.
   const timedOut = params.get('reason') === 'timeout';
-  const next = params.get('next') || '/';
+  /**
+   * Where to land after signing in — but only somewhere on this site.
+   *
+   * The value is read from the query string, so anyone can put anything in it.
+   * Unchecked, a link to /login?next=https://evil.com sends someone who has
+   * just signed in legitimately to an attacker's page, which then asks them to
+   * sign in "again" — borrowing the trust of this domain to do it.
+   *
+   * Middleware only ever writes same-origin paths here, but that is not a
+   * guarantee about what arrives: the guarantee has to be made where the value
+   * is used.
+   *
+   * A leading slash is required and a second one rejected, because "//evil.com"
+   * is a protocol-relative URL that browsers treat as another host.
+   */
+  const requested = params.get('next') || '/';
+  const next = requested.startsWith('/') && !requested.startsWith('//') ? requested : '/';
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
