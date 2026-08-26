@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Loader2, SlidersHorizontal, Clock } from 'lucide-react';
 import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
 import { whatsAppUrl, whatsAppLooksShort } from '@/lib/whatsapp';
-import { cardIsNotUserWork, lookSignature } from '@/lib/promoAuthorship';
+import { cardIsNotUserWork } from '@/lib/promoAuthorship';
 import { blankLookForVisit, currentBlankLook, forgetVisit, isBlankLook } from '@/lib/blankLooks';
 import { sampleTemplates } from '@/components/SamplePromoTemplates';
 import { normalizeLegacyTimerTokens, TIMER_FIXED_TOKEN } from '@/lib/timerUtils';
@@ -16,6 +16,14 @@ import { PromoFlow } from '@/components/PromoFlow';
 import { PromoSetupDialog } from '@/components/PromoSetupDialog';
 import { Toast, ToastAction, TOAST_ACTION_MS } from '@/components/Toast';
 import { getISODateWithOffset, toLocalISODate } from '@/lib/utils';
+import {
+  getConfigSignature,
+  normalizePromoForCompare,
+  getPromoSignature,
+  announcementSignature,
+  promoHasVisibleContent,
+  draftHasRestorableWork,
+} from '@/lib/configSignature';
 import {
   describeWhen,
   fetchUnsavedElsewhere,
@@ -363,82 +371,13 @@ export default function Home() {
   // compare the announcement against what's live.
   const publishedConfigObjRef = useRef<CampaignConfig | null>(null);
 
-  /**
-   * Strips differences the APP creates on its own, so they don't read as edits.
-   *
-   * The editors rewrite their own HTML constantly: bare text gets wrapped in a
-   * default font-size span on sync, the timer chip re-serialises, contentEditable
-   * leaves zero-width characters behind, and cardWidth flips 400↔440 by itself.
-   * A raw JSON compare counted every one of those as an unpublished change, so
-   * the badge appeared without the user editing anything.
-   *
-   * Real edits still register: text, formatting other than the injected default,
-   * and every style field are all preserved here.
-   */
-  function normalizeForCompare(html: unknown): unknown {
-    if (typeof html !== 'string') return html;
-    return (
-      html
-        // The default-size wrapper the editors inject around bare text — it
-        // changes the markup without changing what anything looks like.
-        .replace(/<span style="font-size:\s*1rem;?">([\s\S]*?)<\/span>/gi, '$1')
-        .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-    );
-  }
 
-  function normalizePromoForCompare(card: Record<string, unknown>) {
-    const clone = { ...card };
-    delete clone.active;
-    delete clone.stoppedByUser;
-    // Recomputed by the fit logic, never chosen by the user.
-    delete clone.cardWidth;
-    (['title', 'subtitle', 'description', 'buttonText'] as const).forEach((k) => {
-      clone[k] = normalizeForCompare(clone[k]);
-    });
-    // The countdown's markup is regenerated on every render; only its wording
-    // is the user's.
-    clone.timerText = String(clone.timerText ?? '')
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    return clone;
-  }
 
-  function getConfigSignature(cfg: CampaignConfig) {
-    // `active` / `stoppedByUser` are live on/off flags managed by Go-on-air /
-    // Stop, not content. Exclude them so the Save/dirty check reflects real
-    // content changes only — e.g. re-applying an already-live variant (which
-    // flips active) must not read as "unsaved changes". Mirrors the reactivate
-    // comparison below.
-    const strip = (o: Record<string, unknown>) => {
-      const clone = { ...o };
-      delete clone.active;
-      delete clone.stoppedByUser;
-      return clone;
-    };
-    // `lastUpdated` is rewritten on every save, so including it made two
-    // identical configs compare as different — which meant a draft could never
-    // match what's published, and the "Welcome back" banner fired for drafts
-    // holding no real changes.
-    const { lastUpdated: _ignored, ...content } = cfg;
-    return JSON.stringify({
-      ...content,
-      announcementBar: strip(cfg.announcementBar as unknown as Record<string, unknown>),
-      promoCard: normalizePromoForCompare(
-        cfg.promoCard as unknown as Record<string, unknown>,
-      ),
-    });
-  }
 
   function hasChangesSinceDraft() {
     return hasChangesRef.current && draftSignatureRef.current !== getConfigSignature(configRef.current);
   }
 
-  function getPromoSignature(cfg: CampaignConfig) {
-    return JSON.stringify(cfg.promoCard);
-  }
 
   function getAutoVariantLabel() {
     return `Saved ${new Date().toLocaleString(undefined, {
@@ -1437,46 +1376,6 @@ export default function Home() {
     [activeTab],
   );
 
-  // A draft is only worth persisting/restoring when it carries real content —
-  // visible text in a promo field or an announcement message. A blank card
-  // (e.g. right after Start Fresh, which sets the dirty flag but has no text)
-  // differs from published only by defaults (dates/style), which isn't work
-  // worth a "You have an unpublished draft" banner.
-  function htmlHasVisibleText(html: string | undefined): boolean {
-    if (!html) return false;
-    return html
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
-      .trim().length > 0;
-  }
-  function promoHasVisibleContent(pc: CampaignConfig['promoCard']): boolean {
-    return (
-      htmlHasVisibleText(pc.title) ||
-      htmlHasVisibleText(pc.subtitle) ||
-      htmlHasVisibleText(pc.description) ||
-      htmlHasVisibleText(pc.buttonText)
-    );
-  }
-  // Announcement signature (live on/off excluded) — to tell a real announcement
-  // edit apart from the default messages.
-  function announcementSignature(cfg: CampaignConfig): string {
-    const ann = { ...(cfg.announcementBar as unknown as Record<string, unknown>) };
-    delete ann.active;
-    return JSON.stringify(ann);
-  }
-  // Authoritative: is a draft worth restoring (→ show the banner)? Yes only if
-  // the promo has authored text, OR the announcement actually differs from
-  // what's published. A blank promo (Start Fresh) with unchanged announcements
-  // is NOT restorable work, even though the announcement carries its messages.
-  function draftHasRestorableWork(
-    draft: CampaignConfig,
-    published: CampaignConfig | null,
-  ): boolean {
-    if (promoHasVisibleContent(draft.promoCard)) return true;
-    if (!published) return false;
-    return announcementSignature(draft) !== announcementSignature(published);
-  }
 
   // Persist the draft only if it carries restorable work — real promo text or a
   // changed announcement. A fresh/blank promo (even one that replaced a full
