@@ -3189,6 +3189,9 @@ export function PromoSection({
               <PromoDatePicker
                 value={config.promoCard.endDate}
                 minDate={toLocalISODate(new Date())}
+                // The end field sits at the right edge of the panel, so its
+                // popup is anchored right or it runs off the side.
+                align="right"
                 invalid={promoDateRangeInvalid}
                 open={showEndDatePicker}
                 onOpenChange={(next) => {
