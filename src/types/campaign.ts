@@ -27,6 +27,19 @@ export interface Announcement {
   whatsappCountryCode?: string;
 }
 
+/**
+ * The promo card's five styleable text fields.
+ *
+ * Shared rather than private to the editor: the panel, the preview and the
+ * style popup all name fields, and three copies of the same union drift.
+ */
+export type PromoField =
+  | 'title'
+  | 'subtitle'
+  | 'description'
+  | 'timer'
+  | 'button';
+
 export interface PromoCard {
   active: boolean;
   title: string;
