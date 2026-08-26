@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { formatDateLabel, toISODate, buildMonthDays } from '@/lib/calendarDates';
 
 interface PromoDatePickerProps {
   value: string;
@@ -25,36 +26,8 @@ interface PromoDatePickerProps {
   invalid?: boolean;
 }
 
-function toISODate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
 
-function buildMonthDays(viewDate: Date): Date[] {
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
-  const first = new Date(year, month, 1);
-  const startOffset = first.getDay();
-  const gridStart = new Date(year, month, 1 - startOffset);
-  return Array.from(
-    { length: 42 },
-    (_, i) =>
-      new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i),
-  );
-}
 
-function formatDateLabel(value: string): string {
-  if (!value) return 'Select date';
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return 'Select date';
-  return date.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
 
 export function PromoDatePicker({
   value,

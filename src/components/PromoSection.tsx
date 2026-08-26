@@ -39,6 +39,8 @@ import {
 } from "@/lib/promoAuthorship";
 import { UndoStack } from "@/lib/undoStack";
 import { SamplePromoTemplates, sampleTemplates } from "./SamplePromoTemplates";
+import { formatDateLabel, toISODate, buildMonthDays, formatScheduleRange } from '@/lib/calendarDates';
+import { directionToAngle, normalizeAngle, angleToCssDirection } from '@/lib/gradientAngle';
 import { advanceBlankLook, isBlankLook } from "@/lib/blankLooks";
 import { useRichTextEditor } from "@/hooks/useRichTextEditor";
 import { useSignalEffect } from "@/hooks/useSignalEffect";
@@ -2540,20 +2542,6 @@ export function PromoSection({
   }, [showVersionsPopup]);
 
 
-  // The campaign's scheduled run, shown on each "My Published" entry so the
-  // published date range is visible at a glance (not just the save time).
-  function formatScheduleRange(start?: string, end?: string): string {
-    const fmt = (d?: string) => {
-      if (!d) return "";
-      const dt = new Date(`${d}T00:00:00`);
-      if (Number.isNaN(dt.getTime())) return "";
-      return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    };
-    const s = fmt(start);
-    const e = fmt(end);
-    if (s && e) return `${s} → ${e}`;
-    return s || e || "";
-  }
 
 
   /** True when this saved variant is the card currently on the website. */
@@ -3047,40 +3035,8 @@ export function PromoSection({
     });
   }
 
-  function formatDateLabel(value: string): string {
-    if (!value) return "Select date";
-    const date = new Date(`${value}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return "Select date";
-    return date.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  }
 
-  function toISODate(date: Date): string {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
 
-  function buildMonthDays(viewDate: Date): Date[] {
-    const year = viewDate.getFullYear();
-    const month = viewDate.getMonth();
-    const first = new Date(year, month, 1);
-    const startOffset = first.getDay();
-    const gridStart = new Date(year, month, 1 - startOffset);
-    return Array.from(
-      { length: 42 },
-      (_, i) =>
-        new Date(
-          gridStart.getFullYear(),
-          gridStart.getMonth(),
-          gridStart.getDate() + i,
-        ),
-    );
-  }
 
   function renderDatePicker(params: {
     mode: "start" | "end";
@@ -3290,31 +3246,8 @@ export function PromoSection({
     );
   }
 
-  function directionToAngle(direction?: string): number {
-    if (!direction) return 90;
-    const normalized = direction.trim().toLowerCase();
-    const degreeMatch = normalized.match(/^(-?\d+(?:\.\d+)?)deg$/);
-    if (degreeMatch) return Number(degreeMatch[1]);
-    const map: Record<string, number> = {
-      "to top": 0,
-      "to top right": 45,
-      "to right": 90,
-      "to bottom right": 135,
-      "to bottom": 180,
-      "to bottom left": 225,
-      "to left": 270,
-      "to top left": 315,
-    };
-    return map[normalized] ?? 90;
-  }
 
-  function normalizeAngle(angle: number): number {
-    return ((angle % 360) + 360) % 360;
-  }
 
-  function angleToCssDirection(angle: number): string {
-    return `${Math.round(normalizeAngle(angle))}deg`;
-  }
 
   function setCardDirectionAngle(angle: number) {
     updateCardBg({ direction: angleToCssDirection(angle) });

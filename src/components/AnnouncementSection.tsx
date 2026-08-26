@@ -9,6 +9,7 @@ import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { wrapBareTextWithFontSize, rgbToHex, fontSizeToLabel } from '@/lib/richTextUtils';
 import RichTextToolbar from './RichTextToolbar';
 import { Toast, TOAST_ACTION_MS, type ToastAction } from './Toast';
+import { formatDateLabel, toISODate, buildMonthDays } from '@/lib/calendarDates';
 import { PopupDropdown } from './PopupDropdown';
 import { CountryFlag, COUNTRY_CODES } from './CountryFlag';
 import { whatsAppUrl, whatsAppLooksShort, maxNationalDigits } from '@/lib/whatsapp';
@@ -492,40 +493,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     return () => document.removeEventListener('mousedown', handleMouseDown);
   }, [showLinkPopup, showSchedulePopup, showBackgroundTypeDropdown, showDirectionDropdown, actionMenuIndex, selectedStartDate, selectedEndDate]);
 
-  function formatDateLabel(value: string): string {
-    if (!value) return 'Select date';
-    const date = new Date(`${value}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return 'Select date';
-    return date.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  }
 
-  function toISODate(date: Date): string {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
 
-  function buildMonthDays(viewDate: Date): Date[] {
-    const year = viewDate.getFullYear();
-    const month = viewDate.getMonth();
-    const first = new Date(year, month, 1);
-    const startOffset = first.getDay();
-    const gridStart = new Date(year, month, 1 - startOffset);
-    return Array.from(
-      { length: 42 },
-      (_, i) =>
-        new Date(
-          gridStart.getFullYear(),
-          gridStart.getMonth(),
-          gridStart.getDate() + i,
-        ),
-    );
-  }
 
   function addAnnouncement() {
     // Adding or updating takes nothing away, so there's nothing to offer back.
