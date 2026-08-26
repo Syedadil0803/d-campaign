@@ -2741,6 +2741,16 @@ export function PromoSection({
   const hasSubtitle = hasVisibleContent(config.promoCard.subtitle);
   const hasDescription = hasVisibleContent(config.promoCard.description);
   const hasButtonText = hasVisibleContent(config.promoCard.buttonText);
+  /**
+   * Words the user wrote around the countdown — "Ends in", "left", and so on.
+   *
+   * The countdown token itself is stripped before checking, so an untouched
+   * timer does not count as work. The timer can also arm itself when dates are
+   * set, which is why enabling it is not the test: only text someone typed is.
+   */
+  const hasTimerText = hasVisibleContent(
+    (config.promoCard.timerText || '').replace(/\{timer\}/gi, ''),
+  );
   // Nothing to save, nothing to clear: no visible text in any field AND the
   // style is still the fresh default. Styling-only work counts as work, so it
   // must keep both actions enabled — same test as startFreshPromoCard's no-op
@@ -2750,6 +2760,10 @@ export function PromoSection({
     !hasSubtitle &&
     !hasDescription &&
     !hasButtonText &&
+    // Timer wording is work too. Without this, typing "Ends in" and nothing
+    // else left Clear disabled — the canvas plainly was not blank, and the one
+    // button that undoes it refused.
+    !hasTimerText &&
     // Any blank palette, not this visit's. The palettes rotate per visit, so
     // comparing against today's would say a canvas cleared last week is not
     // empty — leaving Clear enabled on an empty card and treating it as work.
