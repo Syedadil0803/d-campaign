@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
 import { getBackgroundStyle, toLocalISODate, getISODateWithOffset } from '@/lib/utils';
-import { applyTemplateFull, applyTemplateLook, BLANK_LOOK } from "@/lib/promoTemplate";
+import { applyTemplateFull, applyTemplateLook } from "@/lib/promoTemplate";
 import {
   lookSignature,
   ourLooks,
@@ -47,8 +47,6 @@ import { useSignalEffect } from "@/hooks/useSignalEffect";
 import {
   wrapBareTextWithFontSize,
   rgbToHex,
-  FONT_SIZE_LABEL_MAP,
-  FONT_SIZE_MAP,
   fontSizeToLabel,
 } from "@/lib/richTextUtils";
 import RichTextToolbar from "./RichTextToolbar";
@@ -73,6 +71,17 @@ import { LexicalTimerField, type LexicalTimerFieldHandle } from "@/components/ti
 import { ConfirmDialog } from './ConfirmDialog';
 import { measureOverflow, getRequiredCardWidth } from '@/lib/promoMeasure';
 import { SegmentedToggle } from './SegmentedToggle';
+import { clonePromoCard, promoCardsEqual, stripHtmlText, withDefaultDates, cardSignature } from '@/lib/promoCardIdentity';
+import {
+  PROMO_EDITOR_DEFAULT_COLOR,
+  type PromoSelectionSnapshot,
+  selectionIsInsideEditor,
+  hasVisibleContent,
+  getEditorFallbackColor,
+  unwrapInlineTags,
+  getPromoSelectionSnapshot,
+  restorePromoSelection,
+} from '@/lib/promoEditorSelection';
 import {
   TIMER_MIN_CONTENT_WIDTH,
   TIMER_MAX_CONTENT_WIDTH,
@@ -205,7 +214,6 @@ interface PromoSectionProps {
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
 
-const PROMO_EDITOR_DEFAULT_COLOR = "#ffffff";
 
 
 
@@ -218,10 +226,6 @@ interface PromoSnapshot {
   selection: PromoSelectionSnapshot | null;
 }
 
-interface PromoSelectionSnapshot {
-  start: number;
-  end: number;
-}
 
 interface PromoAppliedRedoSnapshot {
   snapshot: PromoSnapshot;
@@ -622,14 +626,96 @@ export function PromoSection({
   // should land on that card's CLEAN baseline (not the edited state).
   const isFreshCardRef = useRef(false);
 
-  function clonePromoCard(card: PromoCard): PromoCard {
-    return JSON.parse(JSON.stringify(card)) as PromoCard;
-  }
 
-  function promoCardsEqual(a: PromoCard, b: PromoCard): boolean {
-    return JSON.stringify(a) === JSON.stringify(b);
-  }
 
+
+  function applyWholeEditorStyleToggle(
+    editor: HTMLDivElement,
+    format: "bold" | "italic",
+    enable: boolean,
+  ) {
+    if (enable) {
+      formatText(format);
+      return;
+    }
+    if (format === "bold") {
+      unwrapInlineTags(editor, "b,strong");
+      return;
+    }
+    unwrapInlineTags(editor, "i,em");
+  }
+  function detectPromoFormatsFromHTML(
+    html: string,
+    fallbackColor = PROMO_EDITOR_DEFAULT_COLOR,
+  ) {
+    const container = document.createElement("div");
+    container.innerHTML = html;
+
+    const textNodes: Node[] = [];
+    function findTextNodes(node: Node) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent?.replace(/\u200B/g, "").trim();
+        if (text) textNodes.push(node);
+      } else {
+        node.childNodes.forEach(findTextNodes);
+      }
+    }
+    findTextNodes(container);
+
+    if (textNodes.length === 0) {
+      setActiveFormats({
+        bold: false,
+        italic: false,
+        size: "md",
+        color: fallbackColor,
+      });
+      return;
+    }
+
+    const sizes = new Set<string>();
+    const colors = new Set<string>();
+    let allBold = true;
+    let allItalic = true;
+
+    textNodes.forEach((textNode) => {
+      let foundSize = false;
+      let isBold = false;
+      let isItalic = false;
+      let effectiveColor = fallbackColor;
+      let node: HTMLElement | null = textNode.parentElement;
+
+      while (node && node !== container) {
+        if (!foundSize && node.style.fontSize) {
+          // Snaps to the nearest preset — template sizes like 1.6rem aren't in
+          // the six-value map and used to fall through, showing "md".
+          const label = fontSizeToLabel(node.style.fontSize);
+          if (label) {
+            sizes.add(label);
+            foundSize = true;
+          }
+        }
+        if (node.style.color) {
+          const color = node.style.color;
+          effectiveColor = color.startsWith("rgb") ? rgbToHex(color) : color;
+        }
+        const tag = node.tagName;
+        if (tag === "B" || tag === "STRONG") isBold = true;
+        if (tag === "I" || tag === "EM") isItalic = true;
+        node = node.parentElement;
+      }
+
+      colors.add(effectiveColor);
+      if (!isBold) allBold = false;
+      if (!isItalic) allItalic = false;
+    });
+
+    setActiveFormats({
+      bold: allBold,
+      italic: allItalic,
+      size: sizes.size === 1 ? [...sizes][0] : sizes.size === 0 ? "md" : "",
+      color: colors.size === 1 ? [...colors][0] : "",
+    });
+  }
 
   function getPromoSnapshot(): PromoSnapshot {
     const editor = getActivePromoEditor();
@@ -840,17 +926,6 @@ export function PromoSection({
     };
   }
 
-  // Fill default start/end dates if missing. Must be applied BEFORE a card's
-  // baseline is captured — otherwise the date-defaulting effect mutates the
-  // card after the baseline, making it look "edited" and wrongly enabling Reset.
-  function withDefaultDates(card: PromoCard): PromoCard {
-    if (card.startDate && card.endDate) return card;
-    return {
-      ...card,
-      startDate: card.startDate || getISODateWithOffset(0),
-      endDate: card.endDate || getISODateWithOffset(1),
-    };
-  }
 
   /**
    * The card a cleared canvas starts from: no words, no design, no end date,
@@ -1504,88 +1579,8 @@ export function PromoSection({
     return getFieldRef(currentFieldRef.current)?.current || null;
   }
 
-  function selectionIsInsideEditor(editor: HTMLDivElement): boolean {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed)
-      return false;
-    const range = selection.getRangeAt(0);
-    return (
-      editor.contains(range.commonAncestorContainer) ||
-      editor.contains(selection.anchorNode)
-    );
-  }
 
-  function getPromoSelectionSnapshot(
-    editor: HTMLDivElement,
-  ): PromoSelectionSnapshot | null {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return null;
-    const range = selection.getRangeAt(0);
-    if (
-      !editor.contains(range.commonAncestorContainer) &&
-      !editor.contains(selection.anchorNode)
-    )
-      return null;
 
-    const preStartRange = document.createRange();
-    preStartRange.selectNodeContents(editor);
-    preStartRange.setEnd(range.startContainer, range.startOffset);
-
-    const preEndRange = document.createRange();
-    preEndRange.selectNodeContents(editor);
-    preEndRange.setEnd(range.endContainer, range.endOffset);
-
-    return {
-      start: preStartRange.toString().length,
-      end: preEndRange.toString().length,
-    };
-  }
-
-  function restorePromoSelection(
-    editor: HTMLDivElement,
-    selectionSnapshot: PromoSelectionSnapshot | null,
-  ) {
-    if (!selectionSnapshot || typeof window === "undefined") return;
-    const textLength = editor.textContent?.length || 0;
-    const start = Math.max(0, Math.min(selectionSnapshot.start, textLength));
-    const end = Math.max(start, Math.min(selectionSnapshot.end, textLength));
-    const range = document.createRange();
-    const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
-    let currentOffset = 0;
-    let startSet = false;
-    let endSet = false;
-    let node = walker.nextNode();
-
-    while (node) {
-      const nodeLength = node.textContent?.length || 0;
-      const nextOffset = currentOffset + nodeLength;
-
-      if (!startSet && start <= nextOffset) {
-        range.setStart(node, Math.max(0, start - currentOffset));
-        startSet = true;
-      }
-      if (!endSet && end <= nextOffset) {
-        range.setEnd(node, Math.max(0, end - currentOffset));
-        endSet = true;
-        break;
-      }
-
-      currentOffset = nextOffset;
-      node = walker.nextNode();
-    }
-
-    if (!startSet) {
-      range.selectNodeContents(editor);
-      range.collapse(false);
-    } else if (!endSet) {
-      range.setEnd(range.startContainer, range.startOffset);
-    }
-
-    editor.focus();
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-  }
 
   function refreshPromoToolbarFormats(editor = getActivePromoEditor()) {
     // Timer is now driven by the Lexical editor — read active formats from
@@ -1613,86 +1608,7 @@ export function PromoSection({
     ref.current.innerHTML = html;
   }
 
-  function getEditorFallbackColor(editor: HTMLDivElement): string {
-    if (typeof window === "undefined") return PROMO_EDITOR_DEFAULT_COLOR;
-    const color = window.getComputedStyle(editor).color;
-    return color.startsWith("rgb")
-      ? rgbToHex(color)
-      : color || PROMO_EDITOR_DEFAULT_COLOR;
-  }
 
-  function detectPromoFormatsFromHTML(
-    html: string,
-    fallbackColor = PROMO_EDITOR_DEFAULT_COLOR,
-  ) {
-    const container = document.createElement("div");
-    container.innerHTML = html;
-
-    const textNodes: Node[] = [];
-    function findTextNodes(node: Node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent?.replace(/\u200B/g, "").trim();
-        if (text) textNodes.push(node);
-      } else {
-        node.childNodes.forEach(findTextNodes);
-      }
-    }
-    findTextNodes(container);
-
-    if (textNodes.length === 0) {
-      setActiveFormats({
-        bold: false,
-        italic: false,
-        size: "md",
-        color: fallbackColor,
-      });
-      return;
-    }
-
-    const sizes = new Set<string>();
-    const colors = new Set<string>();
-    let allBold = true;
-    let allItalic = true;
-
-    textNodes.forEach((textNode) => {
-      let foundSize = false;
-      let isBold = false;
-      let isItalic = false;
-      let effectiveColor = fallbackColor;
-      let node: HTMLElement | null = textNode.parentElement;
-
-      while (node && node !== container) {
-        if (!foundSize && node.style.fontSize) {
-          // Snaps to the nearest preset — template sizes like 1.6rem aren't in
-          // the six-value map and used to fall through, showing "md".
-          const label = fontSizeToLabel(node.style.fontSize);
-          if (label) {
-            sizes.add(label);
-            foundSize = true;
-          }
-        }
-        if (node.style.color) {
-          const color = node.style.color;
-          effectiveColor = color.startsWith("rgb") ? rgbToHex(color) : color;
-        }
-        const tag = node.tagName;
-        if (tag === "B" || tag === "STRONG") isBold = true;
-        if (tag === "I" || tag === "EM") isItalic = true;
-        node = node.parentElement;
-      }
-
-      colors.add(effectiveColor);
-      if (!isBold) allBold = false;
-      if (!isItalic) allItalic = false;
-    });
-
-    setActiveFormats({
-      bold: allBold,
-      italic: allItalic,
-      size: sizes.size === 1 ? [...sizes][0] : sizes.size === 0 ? "md" : "",
-      color: colors.size === 1 ? [...colors][0] : "",
-    });
-  }
 
   function applyPromoFormatToAll(editor: HTMLDivElement, action: () => void) {
     const hasContent = editor.textContent?.replace(/\u200B/g, "").trim();
@@ -1717,36 +1633,7 @@ export function PromoSection({
     );
   }
 
-  function unwrapInlineTags(
-    editor: HTMLDivElement,
-    selector: "b,strong" | "i,em",
-  ) {
-    const nodes = Array.from(editor.querySelectorAll(selector));
-    nodes.forEach((node) => {
-      const parent = node.parentNode;
-      if (!parent) return;
-      while (node.firstChild) {
-        parent.insertBefore(node.firstChild, node);
-      }
-      parent.removeChild(node);
-    });
-  }
 
-  function applyWholeEditorStyleToggle(
-    editor: HTMLDivElement,
-    format: "bold" | "italic",
-    enable: boolean,
-  ) {
-    if (enable) {
-      formatText(format);
-      return;
-    }
-    if (format === "bold") {
-      unwrapInlineTags(editor, "b,strong");
-      return;
-    }
-    unwrapInlineTags(editor, "i,em");
-  }
 
   // Dynamic card width across the text fields AND the timer. The timer drives
   // the 400→440 stretch too: if it wraps at the narrow card's content width
@@ -2375,30 +2262,6 @@ export function PromoSection({
 
 
 
-  /** True when this saved variant is the card currently on the website. */
-  /**
-   * What a card IS, ignoring noise the app rewrites by itself and the on-air
-   * flags that belong to the website rather than the design.
-   *
-   * Shared by every "same card?" question in here. A raw compare fails on two
-   * counts: a saved variant stores active:false while the live card is
-   * active:true, and the editors re-serialise their own HTML constantly.
-   */
-  function cardSignature(c: PromoCard): string {
-    return JSON.stringify({
-      title: stripHtmlText(c.title),
-      subtitle: stripHtmlText(c.subtitle),
-      description: stripHtmlText(c.description),
-      buttonText: stripHtmlText(c.buttonText),
-      timerText: stripHtmlText(c.timerText),
-      showTimer: c.showTimer,
-      showButton: c.showButton,
-      ctaType: c.ctaType,
-      buttonUrl: c.buttonUrl,
-      whatsappNumber: c.whatsappNumber,
-      style: c.style,
-    });
-  }
 
   /** The URL this card's button opens on the live site, if it opens anything. */
   function ctaDestination(card?: PromoCard): string | null {
@@ -2639,17 +2502,6 @@ export function PromoSection({
     onCardReplaced?.();
   }
 
-  // Ask for consent before a replacing action — but only when there's actually
-  // content to lose (no point confirming on a blank card). Undo still works after.
-  /** Visible words only — immune to the HTML normalisation editors apply. */
-  function stripHtmlText(html?: string): string {
-    return String(html ?? '')
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
 
   function confirmCardReplace(
     action: () => void,
@@ -3202,15 +3054,6 @@ export function PromoSection({
   );
   const cardAngleNormalized = normalizeAngle(cardAngle);
 
-  function hasVisibleContent(html: string | undefined): boolean {
-    if (!html) return false;
-    const plainText = html
-      .replace(/<[^>]*>/g, "")
-      .replace(/&nbsp;/g, " ")
-      .replace(/[\u200B\u200C\u200D\uFEFF]/g, "")
-      .trim();
-    return plainText.length > 0;
-  }
 
   const hasTitle = hasVisibleContent(config.promoCard.title);
   const hasSubtitle = hasVisibleContent(config.promoCard.subtitle);
