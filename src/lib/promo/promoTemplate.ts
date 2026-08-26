@@ -21,7 +21,16 @@ export function applyTemplateLook(current: PromoCard, template: PromoCard): Prom
   return {
     ...current,
     // Look only.
-    style: JSON.parse(JSON.stringify(template.style)) as PromoStyle,
+    style: {
+      ...(JSON.parse(JSON.stringify(template.style)) as PromoStyle),
+      // Where the card sits on the site is a placement choice, not a look, so
+      // trying a theme must not move it. `lookSignature` already drops
+      // `position` when deciding whether two designs match; copying it here
+      // meant a theme authored bottom-left silently relocated the user's card,
+      // and the swatch still read as applied because the signature ignored the
+      // one thing that had changed.
+      position: current.style.position,
+    },
     cardWidth: template.cardWidth ?? current.cardWidth,
     buttonFullWidth: template.buttonFullWidth ?? current.buttonFullWidth,
   };
