@@ -2964,6 +2964,23 @@ export function PromoSection({
               Titles work best as a single line — marketing best practice. Adjust font size or shorten text to fit.
             </FieldInfoNote>
 
+            {/*
+              These three editable fields — title, subtitle, description —
+              look like one component written three times, and an attempt to
+              make them one was reverted on 26 August 2026 because it changed
+              how the per-field line limit behaved.
+
+              The cause was never identified. Every part of the limit was
+              compared against the original and matched line for line: the
+              per-field maxima, the measurement, the input handler that blocks
+              overlong text, the style pre-check, and the card-width
+              calculation. Something else about having them here, written out,
+              matters.
+
+              So: do not merge these without first working out what that
+              something is. The limit logic behind them took a long time to get
+              right and is not worth trading for the lines this would save.
+            */}
             <div
               ref={titleRef}
               contentEditable
