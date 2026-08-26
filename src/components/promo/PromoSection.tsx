@@ -233,6 +233,35 @@ interface PromoAppliedRedoSnapshot {
   baseline: PromoSnapshot | null;
 }
 
+/**
+ * Rewrites a countdown element to match the stored text, unless the user is
+ * typing in it.
+ *
+ * Both the panel's timer field and the card preview need this, and both had
+ * their own copy of it. Module level rather than inside the component so its
+ * identity is stable — the two effects that call it list only the campaign
+ * values they watch, and a function rebuilt on every render would have had to
+ * join those lists and rebuild the element far more often than the text
+ * actually changes.
+ *
+ * The guard is the important line. Replacing innerHTML while the caret is in
+ * the element moves the caret to the start, so an element being typed in is
+ * left alone and picks up the change when focus leaves.
+ */
+function syncTimerElement(
+  el: HTMLElement | null,
+  timerText: string,
+  endDate: string,
+  activeEditor: HTMLElement | null,
+): void {
+  if (!el) return;
+  if (el === activeEditor || document.activeElement === el) return;
+  const nextHtml = buildTimerDisplayHtml(timerText, calcTimerRemaining(endDate));
+  if (el.innerHTML !== nextHtml) {
+    el.innerHTML = nextHtml;
+  }
+}
+
 export function PromoSection({
   config,
   setConfig,
@@ -1111,17 +1140,12 @@ export function PromoSection({
   // Structural sync: prefix/suffix HTML + the fixed countdown chip. Numbers are
   // refreshed separately (tick effect below) so typing never resets the caret.
   useEffect(() => {
-    const el = previewTimerRef.current;
-    if (!el) return;
-    // Never rebuild the editor the user is actively typing in — it resets caret.
-    if (el === activeEditorRef.current || document.activeElement === el) return;
-    const nextHtml = buildTimerDisplayHtml(
+    syncTimerElement(
+      previewTimerRef.current,
       config.promoCard.timerText ?? "",
-      calcTimerRemaining(config.promoCard.endDate || ""),
+      config.promoCard.endDate || "",
+      activeEditorRef.current,
     );
-    if (el.innerHTML !== nextHtml) {
-      el.innerHTML = nextHtml;
-    }
     // showTimer is a dep so the preview repopulates when the timer is toggled
     // back on (the element unmounts/remounts empty otherwise).
   }, [
@@ -1131,16 +1155,12 @@ export function PromoSection({
   ]);
 
   useEffect(() => {
-    const el = timerRef.current;
-    if (!el) return;
-    if (el === activeEditorRef.current || document.activeElement === el) return;
-    const nextHtml = buildTimerDisplayHtml(
+    syncTimerElement(
+      timerRef.current,
       config.promoCard.timerText ?? "",
-      calcTimerRemaining(config.promoCard.endDate || ""),
+      config.promoCard.endDate || "",
+      activeEditorRef.current,
     );
-    if (el.innerHTML !== nextHtml) {
-      el.innerHTML = nextHtml;
-    }
   }, [config.promoCard.timerText, config.promoCard.endDate, config.promoCard.showTimer]);
 
   // Live tick: update only the fixed chip's text in-place (no innerHTML reset,
