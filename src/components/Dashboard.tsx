@@ -96,10 +96,7 @@ export function Dashboard({
   onGoOnAirAnnouncement,
   onCreatePromo,
   onEditLivePromo,
-  promoUnpublished = false,
-  announcementUnpublished = false,
 }: DashboardProps) {
-  const hasUnpublished = promoUnpublished || announcementUnpublished;
   const promoUncreated = isPromoUncreated(config.promoCard);
   // Stop / go-on-air both change the live website, so confirm first.
   const [pending, setPending] = useState<{ kind: 'stop' | 'goOnAir'; target: 'promo' | 'announcement' } | null>(

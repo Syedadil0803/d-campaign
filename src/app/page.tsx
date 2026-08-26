@@ -108,7 +108,7 @@ function migrateAnnouncements(config: any): CampaignConfig['announcementBar']['a
   if (!Array.isArray(config.announcementBar.announcements)) {
     // Convert old string format to new object format
     const oldAnnouncements = config.announcementBar.announcements;
-    return oldAnnouncements.map((text: string, index: number) => ({
+    return oldAnnouncements.map((text: string) => ({
       text,
       richText: false
     }));
@@ -374,9 +374,6 @@ export default function Home() {
 
 
 
-  function hasChangesSinceDraft() {
-    return hasChangesRef.current && draftSignatureRef.current !== getConfigSignature(configRef.current);
-  }
 
 
   function getAutoVariantLabel() {
@@ -1481,9 +1478,6 @@ export default function Home() {
     }
   }
 
-  function readRecovery(): CampaignConfig | null {
-    return readRecoveryEnvelope()?.config ?? null;
-  }
 
   function clearRecovery() {
     try {
@@ -2539,8 +2533,6 @@ export default function Home() {
                   onGoOnAir={goOnAirPromoNow}
                   dateErrorPing={promoDateErrorPing}
                   hasUnsavedChanges={hasPromoChanges}
-                  activeTab={activeTab}
-                  setActiveTab={handleTabSwitch}
                   onSaveDraft={handleSaveAsDraft}
                   // Writes the draft with no replace-confirm of its own — the
                   // template dialogs already asked, and asking twice for one

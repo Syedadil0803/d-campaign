@@ -174,8 +174,6 @@ interface PromoSectionProps {
   hasUnsavedChanges: boolean;
   // Which top-level tab is active, and how to switch — used by the tab strip
   // above the preview.
-  activeTab?: 'dashboard' | 'announcement' | 'promo';
-  setActiveTab?: (tab: 'dashboard' | 'announcement' | 'promo') => void;
   // Explicit "Save as draft" — the only way a draft is written now. Saves the
   // FULL editor state (announcement + promo), not just this promo card.
   /**
@@ -254,8 +252,6 @@ export function PromoSection({
   onGoOnAir,
   dateErrorPing,
   hasUnsavedChanges,
-  activeTab,
-  setActiveTab,
   openTemplatesSignal,
   onTemplatesBack,
   pendingPopup,
@@ -1327,7 +1323,7 @@ export function PromoSection({
   function openFieldStylePopup(
     field: PromoField,
     ref: RefObject<HTMLDivElement | null>,
-    trigger?: HTMLElement | null,
+    _trigger?: HTMLElement | null,
   ) {
     const nextEditor = ref.current;
     const prevEditor = activeEditorRef.current;
@@ -1506,7 +1502,6 @@ export function PromoSection({
 
   function onPromoPreviewKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     const mod = e.metaKey || e.ctrlKey;
-    const key = e.key.toLowerCase();
     // Undo/redo are handled by the window-level listener above, for the whole
     // editor at once. Everything else typed on the card is blocked here.
     if (mod) return;
@@ -1515,7 +1510,6 @@ export function PromoSection({
 
   function onPromoEditorKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     const mod = e.metaKey || e.ctrlKey;
-    const key = e.key.toLowerCase();
 
     if (mod) return;
 

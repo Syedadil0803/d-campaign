@@ -9,7 +9,7 @@ const compat = new FlatCompat({
   baseDirectory: dirname(fileURLToPath(import.meta.url)),
 });
 
-export default [
+const config = [
   {
     // Without this, ESLint reads the build output and reports thousands of
     // problems in generated code nobody wrote.
@@ -47,3 +47,5 @@ export default [
     },
   },
 ];
+
+export default config;

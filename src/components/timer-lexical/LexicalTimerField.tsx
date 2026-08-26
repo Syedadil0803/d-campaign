@@ -136,6 +136,12 @@ export const LexicalTimerField = forwardRef<
     initialStateJson,
     onChange,
     onStateJson,
+    // DEFECT, recorded rather than silenced: PromoSection passes this and
+    // nothing here ever calls it. The plugin written to register it on the
+    // editor root was never rendered and has since been deleted. Wiring it up
+    // changes behaviour, so it belongs in its own change rather than in a
+    // restructuring pass.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     onFocus,
     onTargetChange,
     onLineOverflow,

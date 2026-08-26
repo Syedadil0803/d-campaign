@@ -394,7 +394,6 @@ export function applyFontSize(size: string): void {
     walkUp = walkUp.parentElement;
   }
 
-  const markerId = `fs-${Date.now()}`;
 
   if (existingFontSpan) {
     // Reuse existing span — update its font-size while preserving color and other styles

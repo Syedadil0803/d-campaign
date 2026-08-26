@@ -24,7 +24,6 @@
 import { useState, useRef, useCallback, Dispatch, SetStateAction } from 'react';
 import {
   FONT_SIZE_MAP,
-  FONT_SIZE_LABEL_MAP,
   fontSizeToLabel,
   applyFontSize,
   applyInlineColor,

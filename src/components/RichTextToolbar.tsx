@@ -41,7 +41,6 @@ export default function RichTextToolbar({
   onColorSelect,
   extraActions,
   rightActions,
-  presetColors = [],
   showAlignment = false,
   alignment = 'left',
   onAlignmentChange,

@@ -54,7 +54,9 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   const [selectedEndDate, setSelectedEndDate] = useState('');
   const [showShortcutsTip, setShowShortcutsTip] = useState(false);
   const shortcutsTipShown = useRef(false);
-  const [showRichToolbar, setShowRichToolbar] = useState(true);
+  // Nothing reads this — only the setter is called. Left in place because
+  // removing it means deciding whether the toolbar toggle was ever finished.
+  const [, setShowRichToolbar] = useState(true);
   const [loopCopies, setLoopCopies] = useState(1);
 
   /**
