@@ -50,7 +50,6 @@ import RichTextToolbar from "@/components/shared/RichTextToolbar";
 import { PopupDropdown } from "@/components/shared/PopupDropdown";
 import { CountryFlag, COUNTRY_CODES } from "@/components/shared/CountryFlag";
 import { whatsAppUrl, whatsAppLooksShort, maxNationalDigits } from "@/lib/whatsapp";
-import { PromoMiniPreview } from "@/components/shared/PromoMiniPreview";
 import {
   listVersions,
   deleteVersion,
@@ -73,6 +72,7 @@ import { GradientControls } from '@/components/promo/GradientControls';
 import { FieldInfoNote } from '@/components/promo/FieldInfoNote';
 import { readHiddenFieldInfos, hideFieldInfo } from '@/lib/promo/fieldInfoNotes';
 import { PromoVersionsPopup } from '@/components/promo/PromoVersionsPopup';
+import { PromoDraftPopup } from '@/components/promo/PromoDraftPopup';
 import {
   PROMO_EDITOR_DEFAULT_COLOR,
   type PromoSelectionSnapshot,
@@ -4921,126 +4921,19 @@ export function PromoSection({
       )}
 
       {/* My Draft popup — the single saved, unpublished draft. */}
-      {showDraftPopup && (() => {
-        const draftCard = draftPopupCard;
-        // The draft may already be what's on the canvas (you saved it, or just
-        // restored it). Restoring it again would be a no-op, so offering to
-        // "replace the current card" reads as nonsense — compare the cards and
-        // disable the action instead. `active`/`stoppedByUser` are live on/off
-        // flags, not content, so they're excluded (same rule as the dirty check).
-        const stripCard = (c: PromoCard) => {
-          const rest = { ...c } as Record<string, unknown>;
-          delete rest.active;
-          delete rest.stoppedByUser;
-          return JSON.stringify(rest);
-        };
-        const draftIsOnCanvas =
-          !!draftCard && stripCard(draftCard) === stripCard(config.promoCard);
-        return (
-          <div data-modal className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="absolute inset-0" onClick={() => setShowDraftPopup(false)} />
-            <div className="relative z-10 flex max-h-[90vh] w-[92vw] max-w-[520px] flex-col overflow-hidden rounded-xl border border-white/10 bg-black/10 backdrop-blur-md shadow-2xl">
-              <div className="flex items-center justify-between gap-3 border-b border-white/10 px-6 py-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-on-surface">My Draft</h3>
-                  <p className="text-xs text-on-surface-variant">
-                    The card you stored — kept until you replace or delete it.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowDraftPopup(false)}
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
-                  aria-label="Close draft"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="campaign-custom-scrollbar overflow-y-auto p-6">
-                {draftPopupLoading ? (
-                  <div className="p-8 text-center text-sm text-on-surface-variant">
-                    Loading your saved draft…
-                  </div>
-                ) : draftCard ? (
-                  // Render at the card's own width (same as the editor), never
-                  // stretched to the popup width.
-                  <div
-                    className="mx-auto"
-                    style={{ width: `${draftCard.cardWidth || 400}px`, maxWidth: '100%' }}
-                  >
-                    <PromoMiniPreview promoCard={draftCard} faithful />
-                  </div>
-                ) : (
-                  <div className="p-8 text-center text-sm text-on-surface-variant">
-                    No saved draft yet. Use “Save as draft” to store the card you’re editing here.
-                  </div>
-                )}
-              </div>
-
-              {draftCard && (
-                <div className="flex shrink-0 items-center justify-end gap-2 border-t border-white/10 px-6 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDeleteDraft(true)}
-                    className="rounded-lg border border-red-500/40 px-3 py-1.5 text-sm font-semibold text-red-500 transition-colors hover:bg-red-500/10"
-                  >
-                    Delete saved draft
-                  </button>
-                  <button
-                    type="button"
-                    disabled={draftIsOnCanvas}
-                    title={
-                      draftIsOnCanvas
-                        ? "You're already editing your saved draft."
-                        : 'Load your saved draft into the editor'
-                    }
-                    onClick={() => {
-                      setShowDraftPopup(false);
-                      confirmCardReplace(() => restoreDraftPromoCard(draftCard), {
-                        title: 'Continue editing your saved draft?',
-                        replacementLabel: 'your saved draft',
-                        nextCard: draftCard,
-                        body: "This loads your saved draft into the editor, replacing the card you're editing now. What's live on your website won't change until you publish.",
-                        reassuranceBody:
-                          "This loads your saved draft into the editor. Nothing is lost, and what's live on your website won't change until you publish.",
-                        confirmLabel: 'Continue editing',
-                      });
-                    }}
-                    className="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {draftIsOnCanvas ? 'Already in editor' : 'Continue editing'}
-                  </button>
-                </div>
-              )}
-
-              {confirmDeleteDraft && (
-                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-xl bg-surface-elevated/95 p-6 text-center backdrop-blur-sm">
-                  <p className="text-sm font-semibold text-on-surface">Delete your saved draft?</p>
-                  <p className="-mt-1 text-xs text-on-surface-variant">
-                    Your saved draft will be deleted. This can&apos;t be undone.
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeleteDraft(false)}
-                      className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={deleteDraft}
-                      className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
+      {showDraftPopup && (
+        <PromoDraftPopup
+          draftCard={draftPopupCard}
+          loading={draftPopupLoading}
+          currentCard={config.promoCard}
+          confirmingDelete={confirmDeleteDraft}
+          onClose={() => setShowDraftPopup(false)}
+          onAskDelete={setConfirmDeleteDraft}
+          onDelete={deleteDraft}
+          onRestore={restoreDraftPromoCard}
+          confirmCardReplace={confirmCardReplace}
+        />
+      )}
 
       {/* Versions popup — save / restore / delete up to MAX_VERSIONS snapshots */}
       {showVersionsPopup && (
