@@ -8,24 +8,27 @@
 
 /** True if `el`'s content occupies more than one line at its CURRENT width.
  *
- *  Works by the vertical spread of the line fragments: on one line they all
- *  share a baseline, so their tops differ only by however much their font
- *  sizes differ; on two lines they are a whole line-height apart.
+ *  Counts how many distinct BASELINES the fragments sit on. Text on one line
+ *  shares a baseline, so the fragments' bottoms line up however much their
+ *  font sizes differ; text on two lines has two groups of bottoms, a line
+ *  apart.
  *
- *  The tolerance comes from the TALLEST fragment, and that is the entire
- *  point. A line box is as tall as its tallest content, so that is the
- *  distance a genuine second line sits below the first. Measuring it from the
- *  shortest fragment — as this did until 26 August 2026 — makes the tolerance
- *  smallest exactly when the text is most mixed in size, which is when the
- *  baseline spread is largest. A real timer read: fragments 14px to 30px tall,
- *  tops spread over 11px, all on one line. Against the shortest that is
- *  11 > 10.5 and the edit was reverted with most of the box still empty;
- *  against the tallest it is 11 > 22.5, which is correct. Half a pixel decided
- *  it, and only for users who had styled the numbers larger than the labels —
- *  which the timer editor exists to let them do.
+ *  Bottoms rather than tops or heights, and that took two wrong answers to
+ *  arrive at. Comparing the spread of TOPS against the shortest fragment
+ *  reverted edits with the box half empty, because mixed font sizes spread the
+ *  tops while the shortest fragment made the tolerance smallest. Comparing it
+ *  against the tallest fragment then missed real wraps, because once content
+ *  wraps one of the measured rectangles becomes two lines tall and the
+ *  tolerance grows exactly when it should not.
  *
- *  A wrap is still caught: two lines are separated by at least a line height,
- *  which is at least the tallest fragment. */
+ *  Measured from a real timer: fitting, bottoms were [253, 255] — one line
+ *  despite fragments 19px and 24px tall. Wrapped, they were [251, 275, 277] —
+ *  the split is unmistakable and neither font size nor a tall rectangle
+ *  disturbs it.
+ *
+ *  The tolerance groups bottoms that differ by less than half the shortest
+ *  fragment, which is far below a line height and far above the pixel or two
+ *  that descenders and inline-block padding move a baseline by. */
 function isMultiline(el: HTMLElement): boolean {
   if (typeof document === 'undefined') return false;
   const range = document.createRange();
@@ -35,16 +38,17 @@ function isMultiline(el: HTMLElement): boolean {
   );
   if (rects.length < 2) return false;
 
-  let minTop = Infinity;
-  let maxTop = -Infinity;
-  let maxH = 0;
-  for (const r of rects) {
-    minTop = Math.min(minTop, r.top);
-    maxTop = Math.max(maxTop, r.top);
-    maxH = Math.max(maxH, r.height);
+  const shortest = Math.min(...rects.map((r) => r.height));
+  if (!Number.isFinite(shortest) || shortest === 0) return false;
+  // Never below 4px: a baseline can shift by a pixel or two without the text
+  // having moved to another line.
+  const tolerance = Math.max(4, shortest / 2);
+
+  const bottoms = rects.map((r) => r.bottom).sort((a, b) => a - b);
+  for (let i = 1; i < bottoms.length; i++) {
+    if (bottoms[i] - bottoms[i - 1] > tolerance) return true;
   }
-  if (maxH === 0) return false;
-  return maxTop - minTop > maxH * 0.75;
+  return false;
 }
 
 /** True if `el`'s content would wrap to a 2nd line at `contentWidth` px.
