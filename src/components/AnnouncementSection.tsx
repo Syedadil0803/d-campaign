@@ -4,12 +4,13 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Megaphone, MoreVertical, Sparkles, Radio, Infinity as InfinityIcon, MoveLeft, Trash2 } from 'lucide-react';
 import { CampaignConfig, GradientStyle, defaultConfig } from '@/types/campaign';
-import { getBackgroundStyle, stripHtml, toLocalISODate } from '@/lib/utils';
+import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { wrapBareTextWithFontSize, rgbToHex, fontSizeToLabel } from '@/lib/richTextUtils';
 import RichTextToolbar from './RichTextToolbar';
 import { Toast, TOAST_ACTION_MS, type ToastAction } from './Toast';
-import { formatDateLabel, buildMonthDays } from '@/lib/calendarDates';
+import { formatDateLabel } from '@/lib/calendarDates';
+import { InlineCalendar } from './InlineCalendar';
 import { PopupDropdown } from './PopupDropdown';
 import { CountryFlag, COUNTRY_CODES } from './CountryFlag';
 import { whatsAppUrl, whatsAppLooksShort, maxNationalDigits } from '@/lib/whatsapp';
@@ -1955,84 +1956,22 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                         </svg>
                       </button>
                       {showStartDateCalendar && (
-                        <div className="absolute z-50 mt-1 w-[260px] rounded-xl border border-border bg-surface-elevated p-2 shadow-2xl">
-                          <div className="mb-2 flex items-center justify-between">
-                            <button
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                setStartDateView(new Date(startDateView.getFullYear(), startDateView.getMonth() - 1, 1));
-                              }}
-                              className="h-7 w-7 rounded border border-border text-on-surface-variant hover:border-primary/70 hover:text-primary"
-                            >
-                              <svg className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                <path d="M12 6l-4 4 4 4" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                            </button>
-                            <div className="text-xs font-semibold text-on-surface">
-                              {startDateView.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-                            </div>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                setStartDateView(new Date(startDateView.getFullYear(), startDateView.getMonth() + 1, 1));
-                              }}
-                              className="h-7 w-7 rounded border border-border text-on-surface-variant hover:border-primary/70 hover:text-primary"
-                            >
-                              <svg className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                <path d="M8 6l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                            </button>
-                          </div>
-                          <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-on-surface-variant">
-                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, idx) => <span key={`s-${label}-${idx}`}>{label}</span>)}
-                          </div>
-                          <div className="grid grid-cols-7 gap-1">
-                            {buildMonthDays(startDateView).map((day) => {
-                              const iso = toLocalISODate(day);
-                              const inMonth = day.getMonth() === startDateView.getMonth();
-                              const isSelected = selectedStartDate === iso;
-                              const isToday = iso === toLocalISODate(new Date());
-                              // Start can't be in the past. It is NOT capped by
-                              // the end date — an invalid range surfaces as an
-                              // inline error below, not a blocked day.
-                              const disabled = iso < toLocalISODate(new Date());
-                              return (
-                                <button
-                                  key={`start-${iso}`}
-                                  type="button"
-                                  disabled={disabled}
-                                  onMouseDown={(e) => {
-                                    e.preventDefault();
-                                    if (disabled) return;
-                                    setSelectedStartDate(iso);
-                                    if (selectedIndex !== null) {
-                                      const updated = [...config.announcementBar.announcements];
-                                      updated[selectedIndex] = { ...updated[selectedIndex], startDate: iso || undefined, richText: true };
-                                      setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-                                      markChanged();
-                                    }
-                                    setShowStartDateCalendar(false);
-                                  }}
-                                  className={`h-7 rounded text-[11px] transition-colors ${
-                                    disabled
-                                      ? 'text-on-surface-variant/30 cursor-not-allowed line-through'
-                                      : isSelected
-                                      ? 'bg-primary/20 text-primary border border-primary/60'
-                                      : isToday
-                                      ? 'border border-primary/50 text-primary hover:bg-primary/10'
-                                      : inMonth
-                                      ? 'text-on-surface hover:bg-primary/10'
-                                      : 'text-on-surface-variant/60 hover:bg-primary/5'
-                                  }`}
-                                >
-                                  {day.getDate()}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
+                        <InlineCalendar
+                          viewDate={startDateView}
+                          onViewDateChange={setStartDateView}
+                          selected={selectedStartDate}
+                          keyPrefix="start"
+                          onSelect={(iso) => {
+                            setSelectedStartDate(iso);
+                            if (selectedIndex !== null) {
+                              const updated = [...config.announcementBar.announcements];
+                              updated[selectedIndex] = { ...updated[selectedIndex], startDate: iso || undefined, richText: true };
+                              setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+                              markChanged();
+                            }
+                            setShowStartDateCalendar(false);
+                          }}
+                        />
                       )}
                     </div>
                   </div>
@@ -2068,84 +2007,22 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                         </svg>
                       </button>
                       {showEndDateCalendar && (
-                        <div className="absolute z-50 mt-1 w-[260px] right-0 rounded-xl border border-border bg-surface-elevated p-2 shadow-2xl">
-                          <div className="mb-2 flex items-center justify-between">
-                            <button
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                setEndDateView(new Date(endDateView.getFullYear(), endDateView.getMonth() - 1, 1));
-                              }}
-                              className="h-7 w-7 rounded border border-border text-on-surface-variant hover:border-primary/70 hover:text-primary"
-                            >
-                              <svg className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                <path d="M12 6l-4 4 4 4" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                            </button>
-                            <div className="text-xs font-semibold text-on-surface">
-                              {endDateView.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-                            </div>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                setEndDateView(new Date(endDateView.getFullYear(), endDateView.getMonth() + 1, 1));
-                              }}
-                              className="h-7 w-7 rounded border border-border text-on-surface-variant hover:border-primary/70 hover:text-primary"
-                            >
-                              <svg className="mx-auto h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                <path d="M8 6l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                            </button>
-                          </div>
-                          <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-on-surface-variant">
-                            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, idx) => <span key={`e-${label}-${idx}`}>{label}</span>)}
-                          </div>
-                          <div className="grid grid-cols-7 gap-1">
-                            {buildMonthDays(endDateView).map((day) => {
-                              const iso = toLocalISODate(day);
-                              const inMonth = day.getMonth() === endDateView.getMonth();
-                              const isSelected = selectedEndDate === iso;
-                              const isToday = iso === toLocalISODate(new Date());
-                              // End can't be in the past. It is NOT capped by
-                              // the start date — an end-before-start range shows
-                              // the inline error below instead of blocking days.
-                              const disabled = iso < toLocalISODate(new Date());
-                              return (
-                                <button
-                                  key={`end-${iso}`}
-                                  type="button"
-                                  disabled={disabled}
-                                  onMouseDown={(e) => {
-                                    e.preventDefault();
-                                    if (disabled) return;
-                                    setSelectedEndDate(iso);
-                                    if (selectedIndex !== null) {
-                                      const updated = [...config.announcementBar.announcements];
-                                      updated[selectedIndex] = { ...updated[selectedIndex], endDate: iso || undefined, richText: true };
-                                      setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-                                      markChanged();
-                                    }
-                                    setShowEndDateCalendar(false);
-                                  }}
-                                  className={`h-7 rounded text-[11px] transition-colors ${
-                                    disabled
-                                      ? 'text-on-surface-variant/30 cursor-not-allowed line-through'
-                                      : isSelected
-                                      ? 'bg-primary/20 text-primary border border-primary/60'
-                                      : isToday
-                                      ? 'border border-primary/50 text-primary hover:bg-primary/10'
-                                      : inMonth
-                                      ? 'text-on-surface hover:bg-primary/10'
-                                      : 'text-on-surface-variant/60 hover:bg-primary/5'
-                                  }`}
-                                >
-                                  {day.getDate()}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
+                        <InlineCalendar
+                          viewDate={endDateView}
+                          onViewDateChange={setEndDateView}
+                          selected={selectedEndDate}
+                          keyPrefix="end"
+                          onSelect={(iso) => {
+                            setSelectedEndDate(iso);
+                            if (selectedIndex !== null) {
+                              const updated = [...config.announcementBar.announcements];
+                              updated[selectedIndex] = { ...updated[selectedIndex], endDate: iso || undefined, richText: true };
+                              setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
+                              markChanged();
+                            }
+                            setShowEndDateCalendar(false);
+                          }}
+                        />
                       )}
                     </div>
                   </div>
