@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Megaphone, MoreVertical, Sparkles, Radio, Infinity as InfinityIcon, MoveLeft, Trash2 } from 'lucide-react';
-import { CampaignConfig, defaultConfig } from '@/types/campaign';
+import { CampaignConfig, GradientStyle, defaultConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml, toLocalISODate } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { wrapBareTextWithFontSize, rgbToHex, fontSizeToLabel } from '@/lib/richTextUtils';
@@ -235,7 +235,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
           ...config.announcementBar.style,
           background: {
             ...config.announcementBar.style.background,
-            type: snapshot.bgType as any,
+            type: snapshot.bgType as CampaignConfig['announcementBar']['style']['background']['type'],
             startColor: snapshot.bgStartColor,
             endColor: snapshot.bgEndColor,
             direction: snapshot.bgDirection,
@@ -975,7 +975,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
 
   // ── Style helpers ──
   // Update BG without pushing history (used for live updates like color picker drag)
-  function updateBg(patch: Record<string, any>) {
+  function updateBg(patch: Partial<GradientStyle>) {
     setConfig({
       ...config,
       announcementBar: {
@@ -990,7 +990,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   }
 
   // Update BG WITH history push (used for discrete changes like type change, slider release)
-  function updateBgWithHistory(patch: Record<string, any>) {
+  function updateBgWithHistory(patch: Partial<GradientStyle>) {
     pushImmediateState(getEditorSnapshot());
     updateBg(patch);
   }
@@ -2245,7 +2245,10 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                       setShowDirectionDropdown(false);
                     }}
                     onSelect={(nextType) => {
-                      updateBgWithHistory({ type: nextType });
+                      // The dropdown is typed to plain strings; its options are
+                      // exactly the three background types, so this narrows to
+                      // what the list can actually produce.
+                      updateBgWithHistory({ type: nextType as GradientStyle['type'] });
                       setShowBackgroundTypeDropdown(false);
                     }}
                     buttonRef={backgroundTypeBtnRef}

@@ -28,7 +28,7 @@ import {
   Loader2,
   Radio,
 } from "lucide-react";
-import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
+import { CampaignConfig, PromoCard, defaultConfig, GradientStyle } from '@/types/campaign';
 import { getBackgroundStyle, toLocalISODate, getISODateWithOffset } from '@/lib/utils';
 import { applyTemplateFull, applyTemplateLook } from "@/lib/promoTemplate";
 import {
@@ -1925,7 +1925,7 @@ export function PromoSection({
   }
 
   // Update a property on the current field's background
-  function updateFieldBg(patch: Record<string, any>) {
+  function updateFieldBg(patch: Partial<GradientStyle>) {
     if (!currentField) return;
     pushPromoState();
 
@@ -1969,7 +1969,7 @@ export function PromoSection({
 
 
   // Card-level background update
-  function updateCardBg(patch: Record<string, any>) {
+  function updateCardBg(patch: Partial<GradientStyle>) {
     pushPromoState();
     setConfig({
       ...config,
@@ -2058,8 +2058,8 @@ export function PromoSection({
   // The full brief we hand to any AI (ChatGPT or another tool the user prefers).
 
 
-  function updateField(field: keyof PromoCard, value: any) {
-    if ((configRef.current.promoCard as any)[field] === value) return;
+  function updateField<K extends keyof PromoCard>(field: K, value: PromoCard[K]) {
+    if (configRef.current.promoCard[field] === value) return;
     pushPromoState();
     const nextPromoCard = {
       ...config.promoCard,
@@ -4577,7 +4577,7 @@ export function PromoSection({
                                     );
                                   }}
                                   onSelect={(v) => {
-                                    updateFieldBg({ type: v });
+                                    updateFieldBg({ type: v as GradientStyle['type'] });
                                     setShowFieldBgTypeDropdown(false);
                                   }}
                                   buttonRef={fieldBgTypeBtnRef}
@@ -4782,7 +4782,7 @@ export function PromoSection({
                                 );
                               }}
                               onSelect={(v) => {
-                                updateCardBg({ type: v });
+                                updateCardBg({ type: v as GradientStyle['type'] });
                                 setShowCardBgTypeDropdown(false);
                               }}
                               buttonRef={cardBgTypeBtnRef}
@@ -4993,7 +4993,7 @@ export function PromoSection({
                           ...config.promoCard,
                           style: {
                             ...config.promoCard.style,
-                            position: v as any,
+                            position: v as PromoCard['style']['position'],
                           },
                         },
                       });

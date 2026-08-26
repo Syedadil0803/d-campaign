@@ -1,5 +1,5 @@
 import { campaignRepository } from '@/repositories/campaignRepository';
-import { CampaignConfig, defaultConfig } from '@/types/campaign';
+import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
 
 export const campaignService = {
   async getConfig(): Promise<CampaignConfig> {
@@ -51,11 +51,11 @@ export const campaignService = {
   },
 
   // ── Variants ("My Saved") ──────────────────────────────────────────────
-  async getVariants(): Promise<unknown[]> {
+  async getVariants(): Promise<PromoCard[]> {
     return campaignRepository.getVariants();
   },
 
-  async saveVariants(variants: unknown[]): Promise<{ success: boolean }> {
+  async saveVariants(variants: PromoCard[]): Promise<{ success: boolean }> {
     if (!Array.isArray(variants)) return { success: false };
     const success = await campaignRepository.saveVariants(variants);
     return { success };

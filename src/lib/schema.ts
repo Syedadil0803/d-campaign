@@ -1,4 +1,7 @@
 import { text, timestamp, jsonb, boolean, pgSchema, primaryKey } from 'drizzle-orm/pg-core';
+// Type-only: erased at build, so nothing from the editor's type module is
+// pulled into the server bundle.
+import type { CampaignConfig, PromoCard } from '@/types/campaign';
 
 // Define the campaign schema
 export const campaignSchema = pgSchema('campaign');
@@ -7,10 +10,10 @@ export const campaignSchema = pgSchema('campaign');
 export const campaignConfig = campaignSchema.table('campaign_config', {
   id: text('id').primaryKey().default('default'),
   version: text('version').notNull().default('1.0'),
-  announcementBar: jsonb('announcement_bar').notNull(),
-  promoCard: jsonb('promo_card').notNull(),
+  announcementBar: jsonb('announcement_bar').$type<CampaignConfig['announcementBar']>().notNull(),
+  promoCard: jsonb('promo_card').$type<PromoCard>().notNull(),
   // Up to MAX_VERSIONS saved promo-card variants ("My Saved"), as a JSON array.
-  variants: jsonb('variants'),
+  variants: jsonb('variants').$type<PromoCard[]>(),
   lastUpdated: timestamp('last_updated').notNull().defaultNow(),
 });
 

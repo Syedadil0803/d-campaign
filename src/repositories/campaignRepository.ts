@@ -1,15 +1,13 @@
 import { getDb } from '@/lib/db';
 import { campaignConfig } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
-import { CampaignConfig } from '@/types/campaign';
+import { CampaignConfig, PromoCard } from '@/types/campaign';
 
 // One-line summary of a config for logs — key fields only, never the full blob.
 function summarize(config: CampaignConfig): string {
   const ann = config.announcementBar;
   const promo = config.promoCard;
-  const annCount = Array.isArray((ann as any)?.announcements)
-    ? (ann as any).announcements.length
-    : '?';
+  const annCount = Array.isArray(ann?.announcements) ? ann.announcements.length : '?';
   return `version=${config.version} annActive=${ann?.active} annCount=${annCount} promoActive=${promo?.active} lastUpdated=${config.lastUpdated}`;
 }
 
@@ -58,16 +56,16 @@ export const campaignRepository = {
         .values({
           id,
           version: config.version,
-          announcementBar: config.announcementBar as any,
-          promoCard: config.promoCard as any,
+          announcementBar: config.announcementBar,
+          promoCard: config.promoCard,
           lastUpdated: new Date(config.lastUpdated),
         })
         .onConflictDoUpdate({
           target: campaignConfig.id,
           set: {
             version: config.version,
-            announcementBar: config.announcementBar as any,
-            promoCard: config.promoCard as any,
+            announcementBar: config.announcementBar,
+            promoCard: config.promoCard,
             lastUpdated: new Date(config.lastUpdated),
           },
         });
@@ -102,7 +100,7 @@ export const campaignRepository = {
   },
 
   // ── Variants ("My Saved") — stored as a JSON array on the default row ─────
-  async getVariants(): Promise<unknown[]> {
+  async getVariants(): Promise<PromoCard[]> {
     const start = Date.now();
     try {
       const result = await getDb()
@@ -120,12 +118,12 @@ export const campaignRepository = {
     }
   },
 
-  async saveVariants(variants: unknown[]): Promise<boolean> {
+  async saveVariants(variants: PromoCard[]): Promise<boolean> {
     const start = Date.now();
     try {
       await getDb()
         .update(campaignConfig)
-        .set({ variants: variants as any })
+        .set({ variants })
         .where(eq(campaignConfig.id, DEFAULT_ID));
       console.log(`[DB] saveVariants -> OK count=${variants.length} (${Date.now() - start}ms)`);
       return true;
