@@ -11,17 +11,17 @@
 // Constants
 // ============================================================
 
-export const TIMER_PLACEHOLDER_TOKENS = ['hhh', 'mmm', 'sss'] as const;
+const TIMER_PLACEHOLDER_TOKENS = ['hhh', 'mmm', 'sss'] as const;
 
-export const TIMER_EDITOR_COLOR_MAP: Record<string, string> = {
+const TIMER_EDITOR_COLOR_MAP: Record<string, string> = {
   hhh: 'background:#e0e7ff;color:#4338ca;border:1px solid #a5b4fc;',
   mmm: 'background:#dcfce7;color:#15803d;border:1px solid #86efac;',
   sss: 'background:#ffedd5;color:#c2410c;border:1px solid #fdba74;',
 };
 
-export const TIMER_EDITOR_BASE_STYLE = 'display:inline-block;padding:1px 4px;border-radius:4px;font-family:monospace;font-weight:600;cursor:default;user-select:all;-webkit-user-select:all;';
+const TIMER_EDITOR_BASE_STYLE = 'display:inline-block;padding:1px 4px;border-radius:4px;font-family:monospace;font-weight:600;cursor:default;user-select:all;-webkit-user-select:all;';
 
-export const TIMER_SEP_STYLE = 'display:inline;user-select:none;-webkit-user-select:none;';
+const TIMER_SEP_STYLE = 'display:inline;user-select:none;-webkit-user-select:none;';
 
 // ============================================================
 // Timer Formatting Functions
@@ -67,7 +67,7 @@ export function calculateTimeRemaining(endDate: string): TimerValue {
  * Format timer text with placeholder replacements
  * Supports: {hh}, {h}, {mm}, {m}, {ss}, {s}, {ddd}, {dd}, {d}
  */
-export function formatTimerText(template: string, timerValue: TimerValue): string {
+function formatTimerText(template: string, timerValue: TimerValue): string {
   const { hours, minutes, seconds, days = 0 } = timerValue;
   const includesDayTokens = /\{ddd\}|\{dd\}|\{d\}/.test(template);
   const displayHours = includesDayTokens ? hours : (days * 24) + hours;
@@ -158,7 +158,7 @@ export function getTimerPlaceholders(): Array<{ placeholder: string; description
  * Get default timer storage HTML with placeholder tokens
  * Returns: 'Ends in <span data-timer-placeholder="hhh">hh</span>:<span data-timer-placeholder="mmm">mm</span>:<span data-timer-placeholder="sss">ss</span>'
  */
-export function getDefaultTimerStorageHTML(): string {
+function getDefaultTimerStorageHTML(): string {
   return `Ends in <span data-timer-placeholder="hhh">hh</span>:<span data-timer-placeholder="mmm">mm</span>:<span data-timer-placeholder="sss">ss</span>`;
 }
 
@@ -169,7 +169,7 @@ export function getDefaultTimerStorageHTML(): string {
  * @param editorHTML - HTML content from the editor
  * @returns Cleaned HTML suitable for storage
  */
-export function cleanTimerForStorage(editorHTML: string): string {
+function cleanTimerForStorage(editorHTML: string): string {
   if (!editorHTML) return '';
   
   const parser = new DOMParser();
@@ -218,7 +218,7 @@ export function cleanTimerForStorage(editorHTML: string): string {
  * @param storedHTML - HTML from config storage
  * @returns HTML with editor chrome applied
  */
-export function buildTimerEditorHTML(storedHTML: string): string {
+function buildTimerEditorHTML(storedHTML: string): string {
   if (!storedHTML || !storedHTML.includes('data-timer-placeholder')) {
     return buildTimerEditorHTML(getDefaultTimerStorageHTML());
   }
@@ -343,7 +343,7 @@ export function ensureTimerPlaceholders(html: string): string {
 export const TIMER_FIXED_TOKEN = '{timer}';
 
 /** Format the fixed center block, e.g. "3 days : 4 hours : 12 mins". Dashes if invalid. */
-export function formatCountdownWords(timerValue: TimerValue): string {
+function formatCountdownWords(timerValue: TimerValue): string {
   const { hours, minutes, seconds, days = 0 } = timerValue;
   if ([hours, minutes, seconds, days].some(Number.isNaN)) {
     return '-- days : -- hours : -- mins';

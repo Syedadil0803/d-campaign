@@ -612,9 +612,9 @@ export function PromoSection({
   /**
    * Multi-step history for the promo editor.
    *
-   * HistoryManager (still used by the announcement bar) keeps a single previous
-   * state, so it can swap once but can't walk back through a session. The promo
-   * needs ~30 actions of depth, so it gets a real stack.
+   * The announcement bar keeps a single previous state, so it can swap back
+   * once but cannot walk through a session. The promo needs about thirty
+   * actions of depth, so it gets a real stack.
    */
   const promoHistory = useRef(new UndoStack<PromoSnapshot>()).current;
   const restoringSnapshotRef = useRef(false);

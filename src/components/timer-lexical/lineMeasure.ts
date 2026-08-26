@@ -9,7 +9,7 @@
 /** True if `el`'s content occupies more than one line at its CURRENT width.
  *  Compares the vertical top of line fragments (robust against the chip's
  *  inline-block box being taller than the text). */
-export function isMultiline(el: HTMLElement): boolean {
+function isMultiline(el: HTMLElement): boolean {
   if (typeof document === 'undefined') return false;
   const range = document.createRange();
   range.selectNodeContents(el);

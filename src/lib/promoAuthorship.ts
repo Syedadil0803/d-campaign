@@ -36,7 +36,7 @@ export function lookSignature(style: PromoCard['style']): string {
 }
 
 /** Everything the card says, with the look left out. */
-export function wordsSignature(card: PromoCard): string {
+function wordsSignature(card: PromoCard): string {
   return JSON.stringify({
     title: plain(card.title),
     subtitle: plain(card.subtitle),

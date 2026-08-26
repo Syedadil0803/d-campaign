@@ -24,7 +24,7 @@
  */
 
 // Virtual Mirror: max lines per field
-export const FIELD_MAX_LINES: Record<string, number> = {
+const FIELD_MAX_LINES: Record<string, number> = {
   title: 1,
   subtitle: 2,
   description: 3,
@@ -32,14 +32,14 @@ export const FIELD_MAX_LINES: Record<string, number> = {
 
 
 // Mirror widths: min (400px card - 56px padding) to max (440px card - 56px padding)
-export const MIRROR_MIN_WIDTH = 344;
-export const MIRROR_MAX_WIDTH = 384;
+const MIRROR_MIN_WIDTH = 344;
+const MIRROR_MAX_WIDTH = 384;
 
 /**
  * Virtual Mirror measurement.
  * Checks if html overflows at a given width against the field's max lines.
  */
-export function measureOverflowAtWidth(html: string, field: 'title' | 'subtitle' | 'description', width: number): boolean {
+function measureOverflowAtWidth(html: string, field: 'title' | 'subtitle' | 'description', width: number): boolean {
   if (!html || typeof document === 'undefined') return false;
   const plainText = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim();
   if (!plainText) return false;
@@ -94,7 +94,7 @@ export function measureOverflow(html: string, field: 'title' | 'subtitle' | 'des
  * edge instead, which is what "Private window closes in 3 days : 5 hours :
  * 7 mins" does at 400px.
  */
-export function timerOverflowsAtWidth(html: string, width: number): boolean {
+function timerOverflowsAtWidth(html: string, width: number): boolean {
   if (!html || typeof document === 'undefined') return false;
   const plain = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim();
   if (!plain) return false;

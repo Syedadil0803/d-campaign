@@ -125,7 +125,7 @@ function toStyle(p: BlankPalette): PromoStyle {
   } as PromoStyle;
 }
 
-export const BLANK_LOOKS: PromoStyle[] = PALETTES.map(toStyle);
+const BLANK_LOOKS: PromoStyle[] = PALETTES.map(toStyle);
 
 /** The one a brand-new card starts from, and the one types/campaign.ts mirrors. */
 export const FIRST_BLANK_LOOK: PromoStyle = BLANK_LOOKS[0];
@@ -228,7 +228,7 @@ export function blankLookSignatures(): string[] {
   return BLANK_LOOKS.map(signature);
 }
 
-export function signature(style: PromoStyle): string {
+function signature(style: PromoStyle): string {
   const { position: _position, ...look } = style;
   return JSON.stringify(look);
 }

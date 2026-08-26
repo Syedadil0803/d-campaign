@@ -18,7 +18,7 @@
  * letter. Deriving the code keeps one source of truth — the table doesn't need
  * a second column that can drift out of sync with the flag.
  */
-export function isoFromFlag(flag: string): string {
+function isoFromFlag(flag: string): string {
   const points = Array.from(flag).map((ch) => ch.codePointAt(0) ?? 0);
   if (points.length !== 2) return '';
   return points

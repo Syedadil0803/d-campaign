@@ -43,7 +43,7 @@ export type StylePatch = Record<string, string>;
 // Size map — shared with the legacy editor so UX feels consistent.
 // ============================================================
 
-export const SIZE_LABEL_TO_REM: Record<string, string> = {
+const SIZE_LABEL_TO_REM: Record<string, string> = {
   xs: '0.75rem',
   sm: '0.875rem',
   md: '1rem',
@@ -118,7 +118,7 @@ export function $readActiveFormats(): ActiveFormats {
  * (whole-chip style). Used for the collapsed-caret / box-level scope so the
  * toolbar reflects the whole timer, not whatever happens to be under the caret.
  */
-export function $readBoxFormats(): ActiveFormats {
+function $readBoxFormats(): ActiveFormats {
   const root = $getRoot();
   const styleSets: Record<string, string>[] = [];
 

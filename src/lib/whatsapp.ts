@@ -42,7 +42,7 @@ const DEFAULT_MIN_NATIONAL_DIGITS = 6;
 /** Dialling codes where a leading zero belongs to the number itself. */
 const KEEPS_TRUNK_ZERO = new Set(['+39']);
 
-export function normalizeWhatsApp(countryCode?: string, raw?: string) {
+function normalizeWhatsApp(countryCode?: string, raw?: string) {
   const cc = countryCode || '+44';
   const code = cc.replace(/\D/g, '');
   let national = (raw || '').replace(/\D/g, '');
