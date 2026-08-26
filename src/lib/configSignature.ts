@@ -25,7 +25,7 @@ import { CampaignConfig } from '@/types/campaign';
  * Real edits still register: text, formatting other than the injected default,
  * and every style field are all preserved here.
  */
-export function normalizeForCompare(html: unknown): unknown {
+function normalizeForCompare(html: unknown): unknown {
   if (typeof html !== 'string') return html;
   return (
     html
@@ -99,7 +99,7 @@ export function getPromoSignature(cfg: CampaignConfig) {
 // (e.g. right after Start Fresh, which sets the dirty flag but has no text)
 // differs from published only by defaults (dates/style), which isn't work
 // worth a "You have an unpublished draft" banner.
-export function htmlHasVisibleText(html: string | undefined): boolean {
+function htmlHasVisibleText(html: string | undefined): boolean {
   if (!html) return false;
   return html
     .replace(/<[^>]*>/g, '')
