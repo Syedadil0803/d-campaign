@@ -42,8 +42,8 @@ import {
 } from 'lucide-react';
 import { CampaignConfig, PromoCard } from '@/types/campaign';
 import type { PromoBrief } from '@/lib/promoAiPrompt';
-import { sampleTemplates } from '@/components/SamplePromoTemplates';
-import { PromoMiniPreview } from '@/components/PromoMiniPreview';
+import { sampleTemplates } from '@/components/promo/SamplePromoTemplates';
+import { PromoMiniPreview } from '@/components/shared/PromoMiniPreview';
 import { parseAiPromo, applyAiPromo } from '@/lib/promoImport';
 import {
   buildGuidedPromoPrompt,

@@ -7,16 +7,16 @@ import { CampaignConfig, GradientStyle, defaultConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { wrapBareTextWithFontSize, rgbToHex, fontSizeToLabel } from '@/lib/richTextUtils';
-import RichTextToolbar from './RichTextToolbar';
-import { Toast, TOAST_ACTION_MS, type ToastAction } from './Toast';
+import RichTextToolbar from '@/components/shared/RichTextToolbar';
+import { Toast, TOAST_ACTION_MS, type ToastAction } from '@/components/shared/Toast';
 import { formatDateLabel } from '@/lib/calendarDates';
-import { InlineCalendar } from './InlineCalendar';
-import { PopupDropdown } from './PopupDropdown';
-import { CountryFlag, COUNTRY_CODES } from './CountryFlag';
+import { InlineCalendar } from '@/components/announcement/InlineCalendar';
+import { PopupDropdown } from '@/components/shared/PopupDropdown';
+import { CountryFlag, COUNTRY_CODES } from '@/components/shared/CountryFlag';
 import { whatsAppUrl, whatsAppLooksShort, maxNationalDigits } from '@/lib/whatsapp';
 import { useEditorHistory } from '@/hooks/useEditorHistory';
 import { EditorSnapshot, LinkSnapshot } from '@/lib/historyManager';
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import {
   announcementThemes,
   matchAnnouncementTheme,

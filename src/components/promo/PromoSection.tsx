@@ -38,7 +38,7 @@ import {
   cardIsUntouchedTemplate,
 } from "@/lib/promoAuthorship";
 import { UndoStack } from "@/lib/undoStack";
-import { SamplePromoTemplates, sampleTemplates } from "./SamplePromoTemplates";
+import { SamplePromoTemplates, sampleTemplates } from "@/components/promo/SamplePromoTemplates";
 import { formatScheduleRange } from '@/lib/calendarDates';
 import { advanceBlankLook, isBlankLook } from "@/lib/blankLooks";
 import { useRichTextEditor } from "@/hooks/useRichTextEditor";
@@ -48,11 +48,11 @@ import {
   rgbToHex,
   fontSizeToLabel,
 } from "@/lib/richTextUtils";
-import RichTextToolbar from "./RichTextToolbar";
-import { PopupDropdown } from "./PopupDropdown";
-import { CountryFlag, COUNTRY_CODES } from "./CountryFlag";
+import RichTextToolbar from "@/components/shared/RichTextToolbar";
+import { PopupDropdown } from "@/components/shared/PopupDropdown";
+import { CountryFlag, COUNTRY_CODES } from "@/components/shared/CountryFlag";
 import { whatsAppUrl, whatsAppLooksShort, maxNationalDigits } from "@/lib/whatsapp";
-import { PromoMiniPreview } from "./PromoMiniPreview";
+import { PromoMiniPreview } from "@/components/shared/PromoMiniPreview";
 import {
   listVersions,
   deleteVersion,
@@ -67,12 +67,12 @@ import {
   calculateTimeRemaining as calcTimerRemaining,
 } from "@/lib/timerUtils";
 import { LexicalTimerField, type LexicalTimerFieldHandle } from "@/components/timer-lexical/LexicalTimerField";
-import { ConfirmDialog } from './ConfirmDialog';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { measureOverflow, getRequiredCardWidth } from '@/lib/promoMeasure';
-import { SegmentedToggle } from './SegmentedToggle';
+import { SegmentedToggle } from '@/components/promo/SegmentedToggle';
 import { clonePromoCard, promoCardsEqual, stripHtmlText, withDefaultDates, cardSignature } from '@/lib/promoCardIdentity';
-import { PromoDatePicker } from './PromoDatePicker';
-import { GradientControls } from './GradientControls';
+import { PromoDatePicker } from '@/components/promo/PromoDatePicker';
+import { GradientControls } from '@/components/promo/GradientControls';
 import {
   PROMO_EDITOR_DEFAULT_COLOR,
   type PromoSelectionSnapshot,

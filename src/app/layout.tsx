@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import { ServiceWorkerGuard } from '@/components/ServiceWorkerGuard';
+import { ServiceWorkerGuard } from '@/components/shell/ServiceWorkerGuard';
 
 export const metadata: Metadata = {
   title: 'Campaign Admin Panel',

@@ -18,8 +18,8 @@ import {
 } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { stripHtml, getBackgroundStyle } from '@/lib/utils';
-import { PromoMiniPreview } from './PromoMiniPreview';
-import { AnnouncementBarPreview } from './AnnouncementBarPreview';
+import { PromoMiniPreview } from '@/components/shared/PromoMiniPreview';
+import { AnnouncementBarPreview } from '@/components/announcement/AnnouncementBarPreview';
 
 interface DashboardProps {
   config: CampaignConfig;

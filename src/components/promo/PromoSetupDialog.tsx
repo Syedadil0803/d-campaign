@@ -11,7 +11,7 @@
 
 import { useMemo, useState } from 'react';
 import { ArrowRight, CalendarDays, PenLine, Sparkles, X } from 'lucide-react';
-import { PromoDatePicker } from '@/components/PromoDatePicker';
+import { PromoDatePicker } from '@/components/promo/PromoDatePicker';
 import { toLocalISODate } from '@/lib/utils';
 
 export type BuildMethod = 'ai' | 'manual';

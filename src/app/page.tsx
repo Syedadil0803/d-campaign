@@ -6,15 +6,15 @@ import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
 import { whatsAppUrl, whatsAppLooksShort } from '@/lib/whatsapp';
 import { cardIsNotUserWork } from '@/lib/promoAuthorship';
 import { blankLookForVisit, currentBlankLook, forgetVisit, isBlankLook } from '@/lib/blankLooks';
-import { sampleTemplates } from '@/components/SamplePromoTemplates';
+import { sampleTemplates } from '@/components/promo/SamplePromoTemplates';
 import { normalizeLegacyTimerTokens, TIMER_FIXED_TOKEN } from '@/lib/timerUtils';
 import { fieldOverflows } from '@/lib/promoFit';
-import { Header } from '@/components/Header';
-import { Dashboard } from '@/components/Dashboard';
-import { AnnouncementSection } from '@/components/AnnouncementSection';
-import { PromoFlow } from '@/components/PromoFlow';
-import { PromoSetupDialog } from '@/components/PromoSetupDialog';
-import { Toast, ToastAction, TOAST_ACTION_MS } from '@/components/Toast';
+import { Header } from '@/components/shell/Header';
+import { Dashboard } from '@/components/dashboard/Dashboard';
+import { AnnouncementSection } from '@/components/announcement/AnnouncementSection';
+import { PromoFlow } from '@/components/promo/PromoFlow';
+import { PromoSetupDialog } from '@/components/promo/PromoSetupDialog';
+import { Toast, ToastAction, TOAST_ACTION_MS } from '@/components/shared/Toast';
 import { getISODateWithOffset, toLocalISODate } from '@/lib/utils';
 import {
   getConfigSignature,

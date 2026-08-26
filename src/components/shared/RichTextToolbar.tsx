@@ -9,7 +9,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import PresetColorPicker from './PresetColorPicker';
+import PresetColorPicker from '@/components/shared/PresetColorPicker';
 import { FONT_SIZE_DISPLAY_MAP } from '@/lib/richTextUtils';
 
 interface ActiveFormats {

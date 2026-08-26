@@ -3,7 +3,7 @@
 import { useRef } from 'react';
 import type { GradientStyle } from '@/types/campaign';
 import { directionToAngle, normalizeAngle, angleToCssDirection } from '@/lib/gradientAngle';
-import { GradientDirectionWheel } from './GradientDirectionWheel';
+import { GradientDirectionWheel } from '@/components/promo/GradientDirectionWheel';
 
 /**
  * The colour swatches under a background type selector, and the direction dial
