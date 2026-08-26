@@ -40,7 +40,6 @@ import {
 import { UndoStack } from "@/lib/undoStack";
 import { SamplePromoTemplates, sampleTemplates } from "./SamplePromoTemplates";
 import { formatScheduleRange } from '@/lib/calendarDates';
-import { directionToAngle, normalizeAngle, angleToCssDirection } from '@/lib/gradientAngle';
 import { advanceBlankLook, isBlankLook } from "@/lib/blankLooks";
 import { useRichTextEditor } from "@/hooks/useRichTextEditor";
 import { useSignalEffect } from "@/hooks/useSignalEffect";
@@ -72,8 +71,8 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { measureOverflow, getRequiredCardWidth } from '@/lib/promoMeasure';
 import { SegmentedToggle } from './SegmentedToggle';
 import { clonePromoCard, promoCardsEqual, stripHtmlText, withDefaultDates, cardSignature } from '@/lib/promoCardIdentity';
-import { GradientDirectionWheel } from './GradientDirectionWheel';
 import { PromoDatePicker } from './PromoDatePicker';
+import { GradientControls } from './GradientControls';
 import {
   PROMO_EDITOR_DEFAULT_COLOR,
   type PromoSelectionSnapshot,
@@ -408,8 +407,6 @@ export function PromoSection({
      
   }, [config.promoCard, cardWidth]);
 
-  const cardAngleWheelRef = useRef<HTMLDivElement>(null);
-  const fieldAngleWheelRef = useRef<HTMLDivElement>(null);
   // End Date field wrapper — the fallback guard scrolls here and flashes its
   // inline error if the user tries to save with an invalid range.
   const endDateFieldRef = useRef<HTMLDivElement>(null);
@@ -2709,21 +2706,11 @@ export function PromoSection({
 
 
 
-  function setCardDirectionAngle(angle: number) {
-    updateCardBg({ direction: angleToCssDirection(angle) });
-  }
-
-  function setFieldDirectionAngle(angle: number) {
-    updateFieldBg({ direction: angleToCssDirection(angle) });
-  }
 
 
 
 
-  const cardAngle = directionToAngle(
-    config.promoCard.style.background.direction || "to right",
-  );
-  const cardAngleNormalized = normalizeAngle(cardAngle);
+
 
 
   const hasTitle = hasVisibleContent(config.promoCard.title);
@@ -4201,10 +4188,6 @@ export function PromoSection({
                       const fieldStyle = getPopupFieldStyle(field);
                       const isButton = field === "button";
                       const fbg = fieldStyle.background;
-                      const fieldAngle = directionToAngle(
-                        fbg.direction || "to right",
-                      );
-                      const fieldAngleNormalized = normalizeAngle(fieldAngle);
                       return (
                         <div
                           ref={(node) => {
@@ -4392,114 +4375,11 @@ export function PromoSection({
                               </div>
                             </div>
                             <div className="mt-2 min-h-[56px]">
-                              {fbg.type === "solid" && (
-                                <div className="grid grid-cols-3 gap-2">
-                                  <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">
-                                      Background
-                                    </label>
-                                    <input
-                                      type="color"
-                                      value={fbg.startColor}
-                                      onChange={(e) =>
-                                        updateFieldBg({
-                                          startColor: e.target.value,
-                                        })
-                                      }
-                                      className="bg-color-picker h-9 w-full rounded cursor-pointer"
-                                    />
-                                  </div>
-                                  <div aria-hidden="true" />
-                                  <div aria-hidden="true" />
-                                </div>
-                              )}
-                              {fbg.type === "linear" && (
-                                <div className="grid grid-cols-2 gap-2">
-                                  <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">
-                                      Start
-                                    </label>
-                                    <input
-                                      type="color"
-                                      value={fbg.startColor}
-                                      onChange={(e) =>
-                                        updateFieldBg({
-                                          startColor: e.target.value,
-                                        })
-                                      }
-                                      className="bg-color-picker h-9 w-full rounded cursor-pointer"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">
-                                      End
-                                    </label>
-                                    <input
-                                      type="color"
-                                      value={fbg.endColor}
-                                      onChange={(e) =>
-                                        updateFieldBg({
-                                          endColor: e.target.value,
-                                        })
-                                      }
-                                      className="bg-color-picker h-9 w-full rounded cursor-pointer"
-                                    />
-                                  </div>
-                                  <div className="col-span-2 mt-2 rounded-md border border-border/70 bg-surface/30 p-3">
-                                    <div className="mb-1 flex items-center justify-between">
-                                      <label className="block text-xs text-on-surface-variant">
-                                        Gradient Direction
-                                      </label>
-                                      <span className="text-[11px] font-medium text-on-surface-variant">
-                                        {Math.round(fieldAngleNormalized)}deg
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center justify-center">
-                                      <GradientDirectionWheel
-  angle={fieldAngle}
-  wheelRef={fieldAngleWheelRef}
-  onAngleChange={setFieldDirectionAngle}
-  keyPrefix="field-wheel"
-/>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              {fbg.type === "radial" && (
-                                <div className="grid grid-cols-3 gap-2">
-                                  <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">
-                                      Center
-                                    </label>
-                                    <input
-                                      type="color"
-                                      value={fbg.startColor}
-                                      onChange={(e) =>
-                                        updateFieldBg({
-                                          startColor: e.target.value,
-                                        })
-                                      }
-                                      className="bg-color-picker h-9 w-full rounded cursor-pointer"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="block text-xs text-on-surface-variant mb-0.5">
-                                      Outer
-                                    </label>
-                                    <input
-                                      type="color"
-                                      value={fbg.endColor}
-                                      onChange={(e) =>
-                                        updateFieldBg({
-                                          endColor: e.target.value,
-                                        })
-                                      }
-                                      className="bg-color-picker h-9 w-full rounded cursor-pointer"
-                                    />
-                                  </div>
-                                  <div aria-hidden="true" />
-                                </div>
-                              )}
+                              <GradientControls
+                                background={fbg}
+                                onChange={updateFieldBg}
+                                keyPrefix="field"
+                              />
                             </div>
                           </div>
                         </div>
@@ -4605,117 +4485,11 @@ export function PromoSection({
                           </div>
                         </div>
                         <div className="mt-2 min-h-[56px]">
-                          {config.promoCard.style.background.type ===
-                            "solid" && (
-                            <div className="grid grid-cols-3 gap-2">
-                              <div>
-                                <label className="block text-xs text-on-surface-variant mb-0.5">
-                                  Background
-                                </label>
-                                <input
-                                  type="color"
-                                  value={
-                                    config.promoCard.style.background.startColor
-                                  }
-                                  onChange={(e) =>
-                                    updateCardBg({ startColor: e.target.value })
-                                  }
-                                  className="bg-color-picker h-9 w-full rounded cursor-pointer"
-                                />
-                              </div>
-                              <div aria-hidden="true" />
-                              <div aria-hidden="true" />
-                            </div>
-                          )}
-                          {config.promoCard.style.background.type ===
-                            "linear" && (
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block text-xs text-on-surface-variant mb-0.5">
-                                  Start
-                                </label>
-                                <input
-                                  type="color"
-                                  value={
-                                    config.promoCard.style.background.startColor
-                                  }
-                                  onChange={(e) =>
-                                    updateCardBg({ startColor: e.target.value })
-                                  }
-                                  className="bg-color-picker h-9 w-full rounded cursor-pointer"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-on-surface-variant mb-0.5">
-                                  End
-                                </label>
-                                <input
-                                  type="color"
-                                  value={
-                                    config.promoCard.style.background.endColor
-                                  }
-                                  onChange={(e) =>
-                                    updateCardBg({ endColor: e.target.value })
-                                  }
-                                  className="bg-color-picker h-9 w-full rounded cursor-pointer"
-                                />
-                              </div>
-                              <div className="col-span-2 mt-2 rounded-md border border-border/70 bg-surface/30 p-3">
-                                <div className="mb-1 flex items-center justify-between">
-                                  <label className="block text-xs text-on-surface-variant">
-                                    Gradient Direction
-                                  </label>
-                                  <span className="text-[11px] font-medium text-on-surface-variant">
-                                    {Math.round(cardAngleNormalized)}deg
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-center">
-                                  <GradientDirectionWheel
-  angle={cardAngle}
-  wheelRef={cardAngleWheelRef}
-  onAngleChange={setCardDirectionAngle}
-  keyPrefix="card-wheel"
-/>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          {config.promoCard.style.background.type ===
-                            "radial" && (
-                            <div className="grid grid-cols-3 gap-2">
-                              <div>
-                                <label className="block text-xs text-on-surface-variant mb-0.5">
-                                  Center
-                                </label>
-                                <input
-                                  type="color"
-                                  value={
-                                    config.promoCard.style.background.startColor
-                                  }
-                                  onChange={(e) =>
-                                    updateCardBg({ startColor: e.target.value })
-                                  }
-                                  className="bg-color-picker h-9 w-full rounded cursor-pointer"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-on-surface-variant mb-0.5">
-                                  Outer
-                                </label>
-                                <input
-                                  type="color"
-                                  value={
-                                    config.promoCard.style.background.endColor
-                                  }
-                                  onChange={(e) =>
-                                    updateCardBg({ endColor: e.target.value })
-                                  }
-                                  className="bg-color-picker h-9 w-full rounded cursor-pointer"
-                                />
-                              </div>
-                              <div aria-hidden="true" />
-                            </div>
-                          )}
+                          <GradientControls
+                            background={config.promoCard.style.background}
+                            onChange={updateCardBg}
+                            keyPrefix="card"
+                          />
                         </div>
                       </div>
                     </div>
