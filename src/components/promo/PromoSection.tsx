@@ -301,6 +301,21 @@ export function PromoSection({
    * Live copies of the stored cards, so checks running inside dialog handlers
    * see the current values rather than the scope the handler was born in.
    */
+  /**
+   * Is a campaign serving on the customer's website right now?
+   *
+   * The published card, not the one being edited. These differ the moment the
+   * canvas is cleared or a different card is loaded in: the draft is not
+   * active, while the website carries on showing what was published. Reading
+   * the draft here meant clearing the canvas removed the only button that
+   * takes a live campaign down — the campaign kept running with no way to
+   * stop it from the editor.
+   *
+   * Stopping is safe from any editor state: it is built from the published
+   * config, so it never pushes whatever happens to be on the canvas.
+   */
+  const liveIsOnAir = Boolean(livePromoCard?.active);
+
   const livePromoCardRef = useRef<PromoCard | null | undefined>(livePromoCard);
   livePromoCardRef.current = livePromoCard;
   const draftPromoCardRef = useRef<PromoCard | null | undefined>(draftPromoCard);
@@ -3607,30 +3622,30 @@ export function PromoSection({
                 <button
                   type="button"
                   onClick={
-                    config.promoCard.active
+                    liveIsOnAir
                       ? () => setShowStopConfirm(true)
                       : canReactivate
                       ? () => setShowGoOnAirConfirm(true)
                       : undefined
                   }
-                  disabled={!config.promoCard.active && !canReactivate}
-                  aria-pressed={config.promoCard.active}
+                  disabled={!liveIsOnAir && !canReactivate}
+                  aria-pressed={liveIsOnAir}
                   title={
-                    config.promoCard.active
-                      ? "On air — tap to stop"
+                    liveIsOnAir
+                      ? "Your published card is on air — tap to stop it"
                       : canReactivate
                       ? "Reactivate the same content — go on air now"
                       : "You have unpublished changes — Save & Publish to go live"
                   }
                   className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors duration-200 ${
-                    config.promoCard.active
+                    liveIsOnAir
                       ? "border-transparent bg-primary/[0.13] text-primary hover:bg-primary/[0.18] cursor-pointer"
                       : canReactivate
                       ? "border-border bg-surface-subtle text-on-surface-variant hover:border-primary/50 hover:text-primary cursor-pointer"
                       : "border-border bg-surface-subtle text-on-surface-variant/40 cursor-not-allowed"
                   }`}
                 >
-                  {config.promoCard.active ? (
+                  {liveIsOnAir ? (
                     <>
                       <span className="live-dot" />
                       On air · tap to stop
