@@ -41,16 +41,16 @@ import {
   X,
 } from 'lucide-react';
 import { CampaignConfig, PromoCard } from '@/types/campaign';
-import type { PromoBrief } from '@/lib/promoAiPrompt';
+import type { PromoBrief } from '@/lib/promo/promoAiPrompt';
 import { sampleTemplates } from '@/components/promo/SamplePromoTemplates';
 import { PromoMiniPreview } from '@/components/shared/PromoMiniPreview';
-import { parseAiPromo, applyAiPromo } from '@/lib/promoImport';
+import { parseAiPromo, applyAiPromo } from '@/lib/promo/promoImport';
 import {
   buildGuidedPromoPrompt,
   stripStyleFields,
   stripContentFields,
   type AiMode,
-} from '@/lib/promoAiPrompt';
+} from '@/lib/promo/promoAiPrompt';
 
 /** Does the card already carry the user's own copy? */
 function hasCopy(card: PromoCard): boolean {

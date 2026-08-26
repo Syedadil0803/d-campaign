@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { SESSION_COOKIE, verifySession } from '@/lib/session';
+import { SESSION_COOKIE, verifySession } from '@/lib/auth/session';
 
 /**
  * The signed-in account id for the current request, or null.

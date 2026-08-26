@@ -1,6 +1,6 @@
 import { PromoCard } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
-import { getTemplateTimerPreviewText } from "@/lib/timerUtils";
+import { getTemplateTimerPreviewText } from "@/lib/editor/timerUtils";
 
 interface PromoMiniPreviewProps {
   promoCard: PromoCard;

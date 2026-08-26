@@ -13,8 +13,8 @@
 'use client';
 
 import { useRef, useCallback } from 'react';
-import { UndoStack } from '@/lib/undoStack';
-import { EditorSnapshot, LinkSnapshot } from '@/lib/historyManager';
+import { UndoStack } from '@/lib/editor/undoStack';
+import { EditorSnapshot, LinkSnapshot } from '@/lib/editor/historyManager';
 
 export interface UseEditorHistoryReturn {
   /** A discrete action (color, format, delete run) — always its own step. */

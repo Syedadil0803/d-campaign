@@ -30,24 +30,24 @@ import {
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig, GradientStyle } from '@/types/campaign';
 import { getBackgroundStyle, toLocalISODate, getISODateWithOffset } from '@/lib/utils';
-import { applyTemplateFull, applyTemplateLook } from "@/lib/promoTemplate";
+import { applyTemplateFull, applyTemplateLook } from "@/lib/promo/promoTemplate";
 import {
   lookSignature,
   ourLooks,
   cardIsBlank,
   cardIsUntouchedTemplate,
-} from "@/lib/promoAuthorship";
-import { UndoStack } from "@/lib/undoStack";
+} from "@/lib/promo/promoAuthorship";
+import { UndoStack } from "@/lib/editor/undoStack";
 import { SamplePromoTemplates, sampleTemplates } from "@/components/promo/SamplePromoTemplates";
 import { formatScheduleRange } from '@/lib/calendarDates';
-import { advanceBlankLook, isBlankLook } from "@/lib/blankLooks";
+import { advanceBlankLook, isBlankLook } from "@/lib/promo/blankLooks";
 import { useRichTextEditor } from "@/hooks/useRichTextEditor";
 import { useSignalEffect } from "@/hooks/useSignalEffect";
 import {
   wrapBareTextWithFontSize,
   rgbToHex,
   fontSizeToLabel,
-} from "@/lib/richTextUtils";
+} from "@/lib/editor/richTextUtils";
 import RichTextToolbar from "@/components/shared/RichTextToolbar";
 import { PopupDropdown } from "@/components/shared/PopupDropdown";
 import { CountryFlag, COUNTRY_CODES } from "@/components/shared/CountryFlag";
@@ -59,18 +59,18 @@ import {
   restoreVersion,
   MAX_VERSIONS,
   type PromoVersion,
-} from "@/lib/promoVersions";
+} from "@/lib/promo/promoVersions";
 import {
   buildTimerDisplayHtml,
   serializeTimerHtml,
   refreshTimerValueSpans,
   calculateTimeRemaining as calcTimerRemaining,
-} from "@/lib/timerUtils";
+} from "@/lib/editor/timerUtils";
 import { LexicalTimerField, type LexicalTimerFieldHandle } from "@/components/timer-lexical/LexicalTimerField";
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { measureOverflow, getRequiredCardWidth } from '@/lib/promoMeasure';
+import { measureOverflow, getRequiredCardWidth } from '@/lib/promo/promoMeasure';
 import { SegmentedToggle } from '@/components/promo/SegmentedToggle';
-import { clonePromoCard, promoCardsEqual, stripHtmlText, withDefaultDates, cardSignature } from '@/lib/promoCardIdentity';
+import { clonePromoCard, promoCardsEqual, stripHtmlText, withDefaultDates, cardSignature } from '@/lib/promo/promoCardIdentity';
 import { PromoDatePicker } from '@/components/promo/PromoDatePicker';
 import { GradientControls } from '@/components/promo/GradientControls';
 import {
@@ -82,7 +82,7 @@ import {
   unwrapInlineTags,
   getPromoSelectionSnapshot,
   restorePromoSelection,
-} from '@/lib/promoEditorSelection';
+} from '@/lib/promo/promoEditorSelection';
 import {
   TIMER_MIN_CONTENT_WIDTH,
   TIMER_MAX_CONTENT_WIDTH,

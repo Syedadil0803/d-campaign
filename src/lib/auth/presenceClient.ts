@@ -1,4 +1,4 @@
-import { getDeviceId, getDeviceLabel } from '@/lib/device';
+import { getDeviceId, getDeviceLabel } from '@/lib/auth/device';
 
 /**
  * Telling the server whether this browser is holding unsaved work.

@@ -12,7 +12,7 @@
  */
 
 import { PromoCard } from '@/types/campaign';
-import { PROMO_COPY_STYLE_GUIDE } from '@/lib/promoCopyStyle';
+import { PROMO_COPY_STYLE_GUIDE } from '@/lib/promo/promoCopyStyle';
 import { GradientStyle } from '@/types/campaign';
 
 /** Human-readable color for a section, so the model can judge contrast. */

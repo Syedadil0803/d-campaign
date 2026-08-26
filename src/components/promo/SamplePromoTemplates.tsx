@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { PromoCard } from '@/types/campaign';
 import { getBackgroundStyle, getISODateWithOffset } from '@/lib/utils';
-import { getTemplateTimerPreviewText } from '@/lib/timerUtils';
-import { INDUSTRIES, withIndustryCopy } from '@/lib/industryCopy';
+import { getTemplateTimerPreviewText } from '@/lib/editor/timerUtils';
+import { INDUSTRIES, withIndustryCopy } from '@/lib/promo/industryCopy';
 
 interface SamplePromoTemplatesProps {
   onApplyTemplate: (template: PromoCard, templateName: string) => void;

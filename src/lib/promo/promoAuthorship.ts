@@ -12,7 +12,7 @@
  */
 
 import { PromoCard, defaultConfig } from '@/types/campaign';
-import { blankLookSignatures, isBlankLook } from '@/lib/blankLooks';
+import { blankLookSignatures, isBlankLook } from '@/lib/promo/blankLooks';
 
 /** Text with the markup taken off, for asking whether anything was written. */
 function plain(html?: string): string {

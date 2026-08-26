@@ -29,7 +29,7 @@ import {
   applyInlineColor,
   wrapBareTextWithFontSize,
   rgbToHex,
-} from '@/lib/richTextUtils';
+} from '@/lib/editor/richTextUtils';
 
 // ============================================================
 // Types

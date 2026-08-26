@@ -12,23 +12,31 @@
 import { readdirSync, statSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-/** file or directory prefix → [feature, layer] */
+/**
+ * Feature → the folders that hold it.
+ *
+ * This used to be a list of individual files, which meant every new file
+ * landed in the catch-all until someone remembered to add it — eleven did
+ * exactly that in one afternoon. Now that src/components and src/lib are
+ * grouped by feature, the map points at folders and new files are counted
+ * where they are put.
+ */
 const FEATURES = {
-  'Auth & session': { layer: 'front + back', paths: ['src/app/login', 'src/app/api/auth', 'src/lib/session.ts', 'src/lib/currentUser.ts', 'src/lib/password.ts', 'src/middleware.ts', 'src/lib/sessionWarning.ts'] },
-  'Promo card editor': { layer: 'front', paths: ['src/components/PromoSection.tsx', 'src/components/PromoBuildPanel.tsx', 'src/components/PromoFlow.tsx', 'src/components/PromoMiniPreview.tsx', 'src/components/PromoSetupDialog.tsx', 'src/components/PromoDatePicker.tsx', 'src/lib/promoFit.ts', 'src/lib/promoTemplate.ts', 'src/lib/promoAuthorship.ts', 'src/lib/promoCopyStyle.ts', 'src/lib/promoImport.ts', 'src/lib/promoAiPrompt.ts', 'src/lib/blankLooks.ts'] },
-  'Announcement bar': { layer: 'front', paths: ['src/components/AnnouncementSection.tsx', 'src/components/AnnouncementBarPreview.tsx', 'src/lib/announcementThemes.ts'] },
-  'Templates & industry copy': { layer: 'front', paths: ['src/components/SamplePromoTemplates.tsx', 'src/lib/industryCopy.ts'] },
-  'Countdown timer editor': { layer: 'front', paths: ['src/components/timer-lexical', 'src/lib/timerUtils.ts'] },
-  'Rich text engine': { layer: 'front', paths: ['src/components/RichTextToolbar.tsx', 'src/lib/richTextUtils.ts', 'src/hooks/useRichTextEditor.ts', 'src/lib/historyManager.ts', 'src/lib/undoStack.ts'] },
-  'Dashboard': { layer: 'front', paths: ['src/components/Dashboard.tsx'] },
-  'Persistence & publishing': { layer: 'front + back', paths: ['src/app/api/config', 'src/app/api/draft', 'src/app/api/variants', 'src/lib/promoVersions.ts', 'src/lib/db.ts', 'src/lib/schema.ts'] },
-  'Cross-device presence': { layer: 'front + back', paths: ['src/app/api/presence', 'src/lib/presenceClient.ts', 'src/lib/device.ts'] },
-  'Installable app (PWA)': { layer: 'front', paths: ['src/hooks/useInstallPrompt.ts', 'src/components/ServiceWorkerGuard.tsx'] },
-  'Shared shell & app state': { layer: 'front', paths: ['src/app/page.tsx', 'src/app/layout.tsx', 'src/components/Header.tsx', 'src/components/Toast.tsx', 'src/components/PopupDropdown.tsx', 'src/components/tour', 'src/app/error.tsx', 'src/app/global-error.tsx', 'src/components/CountryFlag.tsx', 'src/components/PresetColorPicker.tsx', 'src/types', 'src/lib/utils.ts'] },
+  'Promo card editor': { layer: 'front', paths: ['src/components/promo', 'src/lib/promo'] },
+  'Announcement bar': { layer: 'front', paths: ['src/components/announcement', 'src/lib/announcement'] },
+  'Countdown timer editor': { layer: 'front', paths: ['src/components/timer-lexical', 'src/lib/editor/timerUtils.ts'] },
+  'Rich text engine': { layer: 'front', paths: ['src/lib/editor/richTextUtils.ts', 'src/lib/editor/undoStack.ts', 'src/lib/editor/historyManager.ts', 'src/hooks/useRichTextEditor.ts', 'src/hooks/useEditorHistory.ts'] },
+  'Dashboard': { layer: 'front', paths: ['src/components/dashboard'] },
+  'Shared components & utilities': { layer: 'front', paths: ['src/components/shared', 'src/lib/utils.ts', 'src/lib/calendarDates.ts', 'src/lib/gradientAngle.ts', 'src/lib/configSignature.ts', 'src/lib/whatsapp.ts', 'src/hooks/useSignalEffect.ts'] },
+  'Auth & session': { layer: 'front + back', paths: ['src/app/login', 'src/app/api/auth', 'src/lib/auth/session.ts', 'src/lib/auth/currentUser.ts', 'src/lib/auth/password.ts', 'src/lib/auth/sessionWarning.ts', 'src/middleware.ts', 'src/repositories/userRepository.ts'] },
+  'Persistence & publishing': { layer: 'front + back', paths: ['src/app/api/config', 'src/app/api/draft', 'src/app/api/variants', 'src/lib/db', 'src/repositories/campaignRepository.ts', 'src/services'] },
+  'Cross-device presence': { layer: 'front + back', paths: ['src/app/api/presence', 'src/lib/auth/presenceClient.ts', 'src/lib/auth/device.ts'] },
+  'Installable app (PWA)': { layer: 'front', paths: ['src/hooks/useInstallPrompt.ts', 'src/components/shell/ServiceWorkerGuard.tsx'] },
+  'App shell & state': { layer: 'front', paths: ['src/app/page.tsx', 'src/app/layout.tsx', 'src/components/shell/Header.tsx', 'src/components/tour', 'src/app/error.tsx', 'src/app/global-error.tsx', 'src/types'] },
 };
 
 /** Server code, counted separately — a feature row is not a layer count. */
-const BACKEND = ['src/app/api', 'src/services', 'src/repositories', 'src/lib/db.ts', 'src/lib/schema.ts', 'src/lib/session.ts', 'src/lib/password.ts', 'src/lib/currentUser.ts', 'src/middleware.ts'];
+const BACKEND = ['src/app/api', 'src/services', 'src/repositories', 'src/lib/db/db.ts', 'src/lib/db/schema.ts', 'src/lib/auth/session.ts', 'src/lib/auth/password.ts', 'src/lib/auth/currentUser.ts', 'src/middleware.ts'];
 
 const walk = (dir) => readdirSync(dir).flatMap((e) => {
   const p = join(dir, e);

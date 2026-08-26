@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSessionUserId } from '@/lib/currentUser';
+import { getSessionUserId } from '@/lib/auth/currentUser';
 import { userRepository } from '@/repositories/userRepository';
 
 export const dynamic = 'force-dynamic';

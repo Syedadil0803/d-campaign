@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { campaignService } from '@/services/campaignService';
-import { getSessionUserId } from '@/lib/currentUser';
+import { getSessionUserId } from '@/lib/auth/currentUser';
 import { CampaignConfig } from '@/types/campaign';
 
 // The draft lives only in the DB (never R2 — it isn't published). Talks to the

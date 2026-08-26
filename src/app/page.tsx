@@ -4,11 +4,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Loader2, SlidersHorizontal, Clock } from 'lucide-react';
 import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
 import { whatsAppUrl, whatsAppLooksShort } from '@/lib/whatsapp';
-import { cardIsNotUserWork } from '@/lib/promoAuthorship';
-import { blankLookForVisit, currentBlankLook, forgetVisit, isBlankLook } from '@/lib/blankLooks';
+import { cardIsNotUserWork } from '@/lib/promo/promoAuthorship';
+import { blankLookForVisit, currentBlankLook, forgetVisit, isBlankLook } from '@/lib/promo/blankLooks';
 import { sampleTemplates } from '@/components/promo/SamplePromoTemplates';
-import { normalizeLegacyTimerTokens, TIMER_FIXED_TOKEN } from '@/lib/timerUtils';
-import { fieldOverflows } from '@/lib/promoFit';
+import { normalizeLegacyTimerTokens, TIMER_FIXED_TOKEN } from '@/lib/editor/timerUtils';
+import { fieldOverflows } from '@/lib/promo/promoFit';
 import { Header } from '@/components/shell/Header';
 import { Dashboard } from '@/components/dashboard/Dashboard';
 import { AnnouncementSection } from '@/components/announcement/AnnouncementSection';
@@ -29,7 +29,7 @@ import {
   fetchUnsavedElsewhere,
   markElsewhereSeen,
   reportUnsaved,
-} from '@/lib/presenceClient';
+} from '@/lib/auth/presenceClient';
 import {
   askNotificationPermission,
   closeIdleNotification,
@@ -43,7 +43,7 @@ import {
   setTitleCountdown,
   showIdleNotification,
   unblockSteps,
-} from '@/lib/sessionWarning';
+} from '@/lib/auth/sessionWarning';
 import {
   listVersions,
   MAX_VERSIONS,
@@ -51,7 +51,7 @@ import {
   saveVersion,
   updateVersion,
   type PromoVersion,
-} from '@/lib/promoVersions';
+} from '@/lib/promo/promoVersions';
 
 /**
  * How long the editor sits untouched before signing itself out.

@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as schema from './schema';
+import * as schema from '@/lib/db/schema';
 
 // Lazily create the client on first use — NOT at module load. Instantiating it
 // at import time would require DATABASE_URL during `next build` (page-data

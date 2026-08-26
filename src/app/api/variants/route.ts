@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { campaignService } from '@/services/campaignService';
-import { getSessionUserId } from '@/lib/currentUser';
-import { MAX_VERSIONS } from '@/lib/promoVersions';
+import { getSessionUserId } from '@/lib/auth/currentUser';
+import { MAX_VERSIONS } from '@/lib/promo/promoVersions';
 
 /**
  * Five is the rule, not a convention.

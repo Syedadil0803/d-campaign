@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { campaignService } from '@/services/campaignService';
-import { getSessionUserId } from '@/lib/currentUser';
+import { getSessionUserId } from '@/lib/auth/currentUser';
 import { CampaignConfig } from '@/types/campaign';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 

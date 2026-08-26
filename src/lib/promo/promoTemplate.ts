@@ -8,7 +8,7 @@
  */
 
 import { PromoCard } from '@/types/campaign';
-import { FIRST_BLANK_LOOK } from '@/lib/blankLooks';
+import { FIRST_BLANK_LOOK } from '@/lib/promo/blankLooks';
 
 /** Fields that carry the card's look. Everything else is content or scheduling. */
 type PromoStyle = PromoCard['style'];

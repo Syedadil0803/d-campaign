@@ -6,7 +6,7 @@ import { Megaphone, MoreVertical, Sparkles, Radio, Infinity as InfinityIcon, Mov
 import { CampaignConfig, GradientStyle, defaultConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
-import { wrapBareTextWithFontSize, rgbToHex, fontSizeToLabel } from '@/lib/richTextUtils';
+import { wrapBareTextWithFontSize, rgbToHex, fontSizeToLabel } from '@/lib/editor/richTextUtils';
 import RichTextToolbar from '@/components/shared/RichTextToolbar';
 import { Toast, TOAST_ACTION_MS, type ToastAction } from '@/components/shared/Toast';
 import { formatDateLabel } from '@/lib/calendarDates';
@@ -15,14 +15,14 @@ import { PopupDropdown } from '@/components/shared/PopupDropdown';
 import { CountryFlag, COUNTRY_CODES } from '@/components/shared/CountryFlag';
 import { whatsAppUrl, whatsAppLooksShort, maxNationalDigits } from '@/lib/whatsapp';
 import { useEditorHistory } from '@/hooks/useEditorHistory';
-import { EditorSnapshot, LinkSnapshot } from '@/lib/historyManager';
+import { EditorSnapshot, LinkSnapshot } from '@/lib/editor/historyManager';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import {
   announcementThemes,
   matchAnnouncementTheme,
   themeBackgroundCss,
   type AnnouncementTheme,
-} from '@/lib/announcementThemes';
+} from '@/lib/announcement/announcementThemes';
 
 interface AnnouncementSectionProps {
   config: CampaignConfig;

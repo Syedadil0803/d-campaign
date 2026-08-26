@@ -1,5 +1,5 @@
-import { getDb } from '@/lib/db';
-import { users, userDevicePresence } from '@/lib/schema';
+import { getDb } from '@/lib/db/db';
+import { users, userDevicePresence } from '@/lib/db/schema';
 import { and, desc, eq, gt, ne, sql } from 'drizzle-orm';
 
 export interface UserRow {

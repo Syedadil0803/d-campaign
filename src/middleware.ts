@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SESSION_COOKIE, verifySession } from '@/lib/session';
+import { SESSION_COOKIE, verifySession } from '@/lib/auth/session';
 
 /**
  * Keeps the editor behind a sign-in.

@@ -1,4 +1,4 @@
-import { FIRST_BLANK_LOOK } from '@/lib/blankLooks';
+import { FIRST_BLANK_LOOK } from '@/lib/promo/blankLooks';
 
 export interface GradientStyle {
   type: 'solid' | 'linear' | 'radial';

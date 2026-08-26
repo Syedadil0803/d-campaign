@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { userRepository } from '@/repositories/userRepository';
-import { verifyPassword } from '@/lib/password';
-import { SESSION_COOKIE, SESSION_TTL_MS, signSession, sessionCookieOptions } from '@/lib/session';
+import { verifyPassword } from '@/lib/auth/password';
+import { SESSION_COOKIE, SESSION_TTL_MS, signSession, sessionCookieOptions } from '@/lib/auth/session';
 
 // Reads the database and sets a cookie, so it can never be prerendered.
 export const dynamic = 'force-dynamic';

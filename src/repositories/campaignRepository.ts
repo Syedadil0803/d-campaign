@@ -1,5 +1,5 @@
-import { getDb } from '@/lib/db';
-import { campaignConfig } from '@/lib/schema';
+import { getDb } from '@/lib/db/db';
+import { campaignConfig } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { CampaignConfig, PromoCard } from '@/types/campaign';
 
