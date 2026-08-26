@@ -15,6 +15,7 @@ import { CountryFlag, COUNTRY_CODES } from './CountryFlag';
 import { whatsAppUrl, whatsAppLooksShort, maxNationalDigits } from '@/lib/whatsapp';
 import { useEditorHistory } from '@/hooks/useEditorHistory';
 import { EditorSnapshot, LinkSnapshot } from '@/lib/historyManager';
+import { ConfirmDialog } from './ConfirmDialog';
 import {
   announcementThemes,
   matchAnnouncementTheme,
@@ -1084,65 +1085,34 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
       />
 
       {/* Stop Announcement Confirmation — immediate (no save/publish needed) */}
-      {showStopConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0" onClick={() => setShowStopConfirm(false)} />
-          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
-            <h2 className="text-base font-semibold">Switch off this campaign?</h2>
-            <p className="mt-2 text-sm text-on-surface-variant">
-              If you switch off the campaign, the entire campaign stops displaying on your website. Are you sure you want to do it?
-            </p>
-            <p className="mt-2 text-xs text-on-surface-variant/80">
-              You can switch it back on anytime with <strong>Go on air</strong> — as long as the content hasn&apos;t changed. New content needs Save &amp; Publish.
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowStopConfirm(false)}
-                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
-              >
-                No
-              </button>
-              <button
-                type="button"
-                onClick={confirmStop}
-                className="rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:bg-red-600"
-              >
-                Yes, switch off
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showStopConfirm}
+        title="Switch off this campaign?"
+        confirmLabel="Yes, switch off"
+        tone="danger"
+        onCancel={() => setShowStopConfirm(false)}
+        onConfirm={confirmStop}
+      >
+        <p className="mt-2 text-sm text-on-surface-variant">
+          If you switch off the campaign, the entire campaign stops displaying on your website. Are you sure you want to do it?
+        </p>
+        <p className="mt-2 text-xs text-on-surface-variant/80">
+          You can switch it back on anytime with <strong>Go on air</strong> — as long as the content hasn&apos;t changed. New content needs Save &amp; Publish.
+        </p>
+      </ConfirmDialog>
 
       {/* Go On Air Confirmation — reactivate the same published content */}
-      {showGoOnAirConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0" onClick={() => setShowGoOnAirConfirm(false)} />
-          <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
-            <h2 className="text-base font-semibold">Go on air?</h2>
-            <p className="mt-2 text-sm text-on-surface-variant">
-              This puts the same campaign back on your website right away — no need to save or publish again.
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowGoOnAirConfirm(false)}
-                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
-              >
-                No
-              </button>
-              <button
-                type="button"
-                onClick={confirmGoOnAir}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
-              >
-                Yes, go on air
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showGoOnAirConfirm}
+        title="Go on air?"
+        confirmLabel="Yes, go on air"
+        onCancel={() => setShowGoOnAirConfirm(false)}
+        onConfirm={confirmGoOnAir}
+      >
+        <p className="mt-2 text-sm text-on-surface-variant">
+          This puts the same campaign back on your website right away — no need to save or publish again.
+        </p>
+      </ConfirmDialog>
 
       {/* Start Fresh Confirmation — full reset of the announcement draft */}
       {showResetConfirm && (
