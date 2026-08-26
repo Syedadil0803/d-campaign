@@ -73,6 +73,7 @@ import { readHiddenFieldInfos, hideFieldInfo } from '@/lib/promo/fieldInfoNotes'
 import { PromoVersionsPopup } from '@/components/promo/PromoVersionsPopup';
 import { PromoDraftPopup } from '@/components/promo/PromoDraftPopup';
 import { PromoTemplatesPopup } from '@/components/promo/PromoTemplatesPopup';
+import { PromoCardBackgroundPopup } from '@/components/promo/PromoCardBackgroundPopup';
 import {
   PROMO_EDITOR_DEFAULT_COLOR,
   type PromoSelectionSnapshot,
@@ -4448,113 +4449,26 @@ export function PromoSection({
                       );
                     })()}
                   {showCardBgPopup && (
-                    <div
-                      ref={cardBgPopupRef}
-                      className="absolute z-30 w-[320px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3"
-                      style={(() => {
-                        const card = promoCardRef.current;
-                        const canvas = card?.closest(
-                          "[data-promo-canvas]",
-                        ) as HTMLElement | null;
-                        const left =
-                          card && canvas
-                            ? `${Math.round(
-                                canvas.getBoundingClientRect().left +
-                                  8 -
-                                  card.getBoundingClientRect().left,
-                              )}px`
-                            : "8px";
-                        // Top fixed at open — see cardBgPopupTop.
-                        return { top: `${cardBgPopupTop ?? 8}px`, left };
-                      })()}
-                    >
-                      <button
-                        type="button"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setShowCardBgPopup(false);
-                        }}
-                        className="absolute -top-[28px] -right-[28px] inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface-elevated text-on-surface-variant shadow-sm transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
-                        aria-label="Close card background controls"
-                        title="Close"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                      {/* Change here to reflect color updates on the full promo card preview. */}
-                      <label className="text-xs font-semibold text-on-surface">
-                        Card Background
-                      </label>
-                      <div className="mt-2.5 space-y-2">
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <PopupDropdown
-                              label="Type"
-                              value={config.promoCard.style.background.type}
-                              options={[
-                                { value: "solid", label: "Solid" },
-                                { value: "linear", label: "Linear" },
-                                { value: "radial", label: "Gradient" },
-                              ]}
-                              open={showCardBgTypeDropdown}
-                              onOpen={() => {
-                                const next = !showCardBgTypeDropdown;
-                                closeAllPromoDropdowns();
-                                setShowCardBgPopup(true);
-                                setShowCardBgTypeDropdown(next);
-                                setCardBgTypePos(
-                                  getDropdownPosition(cardBgTypeBtnRef.current),
-                                );
-                              }}
-                              onSelect={(v) => {
-                                updateCardBg({ type: v as GradientStyle['type'] });
-                                setShowCardBgTypeDropdown(false);
-                              }}
-                              buttonRef={cardBgTypeBtnRef}
-                              menuRef={cardBgTypeMenuRef}
-                              menuPosition={cardBgTypePos}
-                              compact={true}
-                            />
-                          </div>
-                          <div className="col-span-2">
-                            {(config.promoCard.style.background.type ===
-                              "linear" ||
-                              config.promoCard.style.background.type ===
-                                "radial") && (
-                              <>
-                                <label className="block text-xs text-on-surface-variant mb-0.5">
-                                  Balance:{" "}
-                                  {config.promoCard.style.background.midpoint ??
-                                    50}
-                                  %
-                                </label>
-                                <input
-                                  type="range"
-                                  min="0"
-                                  max="100"
-                                  value={
-                                    config.promoCard.style.background
-                                      .midpoint ?? 50
-                                  }
-                                  onChange={(e) =>
-                                    updateCardBg({
-                                      midpoint: Number(e.target.value),
-                                    })
-                                  }
-                                  className="balance-slider mt-3"
-                                />
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="mt-2 min-h-[56px]">
-                          <GradientControls
-                            background={config.promoCard.style.background}
-                            onChange={updateCardBg}
-                            keyPrefix="card"
-                          />
-                        </div>
-                      </div>
-                    </div>
+                    <PromoCardBackgroundPopup
+                      popupRef={cardBgPopupRef}
+                      anchorRef={promoCardRef}
+                      top={cardBgPopupTop}
+                      background={config.promoCard.style.background}
+                      onChange={updateCardBg}
+                      onClose={() => setShowCardBgPopup(false)}
+                      typeDropdownOpen={showCardBgTypeDropdown}
+                      onTypeDropdownOpen={() => {
+                        const next = !showCardBgTypeDropdown;
+                        closeAllPromoDropdowns();
+                        setShowCardBgPopup(true);
+                        setShowCardBgTypeDropdown(next);
+                        setCardBgTypePos(getDropdownPosition(cardBgTypeBtnRef.current));
+                      }}
+                      onTypeDropdownClose={() => setShowCardBgTypeDropdown(false)}
+                      typeButtonRef={cardBgTypeBtnRef}
+                      typeMenuRef={cardBgTypeMenuRef}
+                      typeMenuPosition={cardBgTypePos}
+                    />
                   )}
                 </div>
               )}
