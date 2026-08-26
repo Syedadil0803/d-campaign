@@ -15,7 +15,7 @@ import { join } from 'node:path';
 /** file or directory prefix → [feature, layer] */
 const FEATURES = {
   'Auth & session': { layer: 'front + back', paths: ['src/app/login', 'src/app/api/auth', 'src/lib/session.ts', 'src/lib/currentUser.ts', 'src/lib/password.ts', 'src/middleware.ts', 'src/lib/sessionWarning.ts'] },
-  'Promo card editor': { layer: 'front', paths: ['src/components/PromoSection.tsx', 'src/components/PromoBuildPanel.tsx', 'src/components/PromoFlow.tsx', 'src/components/PromoMiniPreview.tsx', 'src/components/PromoSetupDialog.tsx', 'src/components/PromoDatePicker.tsx', 'src/components/PromoCardThumb.tsx', 'src/lib/promoFit.ts', 'src/lib/promoTemplate.ts', 'src/lib/promoRichText.ts', 'src/lib/promoAuthorship.ts', 'src/lib/promoCopyStyle.ts', 'src/lib/promoImport.ts', 'src/lib/promoAiPrompt.ts', 'src/lib/blankLooks.ts'] },
+  'Promo card editor': { layer: 'front', paths: ['src/components/PromoSection.tsx', 'src/components/PromoBuildPanel.tsx', 'src/components/PromoFlow.tsx', 'src/components/PromoMiniPreview.tsx', 'src/components/PromoSetupDialog.tsx', 'src/components/PromoDatePicker.tsx', 'src/lib/promoFit.ts', 'src/lib/promoTemplate.ts', 'src/lib/promoAuthorship.ts', 'src/lib/promoCopyStyle.ts', 'src/lib/promoImport.ts', 'src/lib/promoAiPrompt.ts', 'src/lib/blankLooks.ts'] },
   'Announcement bar': { layer: 'front', paths: ['src/components/AnnouncementSection.tsx', 'src/components/AnnouncementBarPreview.tsx', 'src/lib/announcementThemes.ts'] },
   'Templates & industry copy': { layer: 'front', paths: ['src/components/SamplePromoTemplates.tsx', 'src/lib/industryCopy.ts'] },
   'Countdown timer editor': { layer: 'front', paths: ['src/components/timer-lexical', 'src/lib/timerUtils.ts'] },

@@ -127,7 +127,7 @@ export function TimerEditor({
     // build a fresh document from prefix/suffix/endDate.
     editorState: initialStateJson || seedEditor,
     onError(error: Error) {
-      // eslint-disable-next-line no-console
+       
       console.error('[TimerEditor]', error);
     },
     theme: {

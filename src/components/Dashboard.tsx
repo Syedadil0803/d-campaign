@@ -8,7 +8,6 @@ import {
   Radio,
   CircleStop,
   Pencil,
-  Upload,
   Check,
   AlertTriangle,
   Eye,

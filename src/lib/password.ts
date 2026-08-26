@@ -1,8 +1,8 @@
-import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
+import { scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
 /**
- * Password hashing for the seeded test account.
+ * Password verification for the seeded test account.
  *
  * scrypt from Node's standard library, so no dependency is added for something
  * that is meant to be temporary: once sign-in moves to Google there are no
@@ -18,15 +18,6 @@ const scrypt = promisify(scryptCallback) as (
   salt: Buffer,
   keylen: number,
 ) => Promise<Buffer>;
-
-const KEY_LENGTH = 64;
-
-/** `<salt hex>:<derived key hex>` — the salt travels with the hash. */
-export async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16);
-  const derived = await scrypt(password, salt, KEY_LENGTH);
-  return `${salt.toString('hex')}:${derived.toString('hex')}`;
-}
 
 export async function verifyPassword(password: string, stored: string | null): Promise<boolean> {
   if (!stored) return false;

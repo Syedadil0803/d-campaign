@@ -25,4 +25,17 @@ export default [
   // next/core-web-vitals — React, hooks and accessibility rules.
   // next/typescript  — the TypeScript rules on top of those.
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
+
+  {
+    rules: {
+      // A leading underscore is how this codebase marks a parameter it is
+      // required to accept and deliberately does not use — Lexical's node API
+      // dictates several of these signatures. Deleting them would break the
+      // signature; renaming them would lose the signal.
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+    },
+  },
 ];

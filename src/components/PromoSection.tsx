@@ -200,37 +200,6 @@ interface PromoSectionProps {
 
 type PromoField = "title" | "subtitle" | "description" | "timer" | "button";
 
-/**
- * Split stored timer text into prefix/suffix plain-text parts for the panel
- * inputs. Storage is `"prefix{timer}suffix"` (or a rendered chip span); we
- * strip any markup so the panel never echoes inline styles back into the
- * inputs.
- */
-function splitTimerStorageText(stored: string): { prefix: string; suffix: string } {
-  if (!stored) return { prefix: '', suffix: '' };
-  const stripTags = (s: string) =>
-    s
-      .replace(/<[^>]+>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>');
-  const TOKEN = '{timer}';
-  if (stored.includes(TOKEN)) {
-    const i = stored.indexOf(TOKEN);
-    return {
-      prefix: stripTags(stored.slice(0, i)),
-      suffix: stripTags(stored.slice(i + TOKEN.length)),
-    };
-  }
-  const chipMatch = stored.match(
-    /^([\s\S]*?)<span\b[^>]*\bdata-timer-fixed\b[\s\S]*?<\/span>([\s\S]*)$/,
-  );
-  if (chipMatch) {
-    return { prefix: stripTags(chipMatch[1]), suffix: stripTags(chipMatch[2]) };
-  }
-  return { prefix: stripTags(stored), suffix: '' };
-}
 const PROMO_EDITOR_DEFAULT_COLOR = "#ffffff";
 
 // Virtual Mirror: max lines per field
@@ -240,9 +209,6 @@ const FIELD_MAX_LINES: Record<string, number> = {
   description: 3,
 };
 
-function getPlainTextLength(html: string): number {
-  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim().length;
-}
 
 // Mirror widths: min (400px card - 56px padding) to max (440px card - 56px padding)
 const MIRROR_MIN_WIDTH = 344;
@@ -352,36 +318,8 @@ function getRequiredCardWidth(
   return 400;
 }
 
-function getDisabledSizes(html: string, field: 'title' | 'subtitle' | 'description'): string[] {
-  if (!html || typeof document === 'undefined') return [];
-  const plainText = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim();
-  if (!plainText) return [];
-  const sizes = ['xs', 'sm', 'md', 'lg', 'xl', 'xxl'];
-  const sizeMap: Record<string, string> = {
-    xs: '0.75rem', sm: '0.875rem', md: '1rem',
-    lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem',
-  };
-  const disabled: string[] = [];
-  for (const size of sizes) {
-    const testHtml = `<span style="font-size:${sizeMap[size]}">${plainText}</span>`;
-    if (measureOverflow(testHtml, field)) disabled.push(size);
-  }
-  return disabled;
-}
 
-function wouldBoldOverflow(html: string, field: 'title' | 'subtitle' | 'description'): boolean {
-  if (!html || typeof document === 'undefined') return false;
-  const plainText = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim();
-  if (!plainText) return false;
-  return measureOverflow(`<b>${html}</b>`, field);
-}
 
-function wouldItalicOverflow(html: string, field: 'title' | 'subtitle' | 'description'): boolean {
-  if (!html || typeof document === 'undefined') return false;
-  const plainText = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim();
-  if (!plainText) return false;
-  return measureOverflow(`<i>${html}</i>`, field);
-}
 
 /**
  * Two-state segmented pill toggle (Off ◀ / ▶ On) with a sliding thumb.
@@ -632,7 +570,7 @@ export function PromoSection({
       if (vv) vv.removeEventListener('resize', measure);
       cancelAnimationFrame(raf);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [config.promoCard, cardWidth]);
 
   const cardAngleWheelRef = useRef<HTMLDivElement>(null);
@@ -829,7 +767,6 @@ export function PromoSection({
     detectFormats,
     ensureDefaultFontSize,
     saveSelection,
-    getNormalizedHTML,
   } = useRichTextEditor(activeEditorRef, {
     defaultColor: PROMO_EDITOR_DEFAULT_COLOR,
   });
@@ -1184,7 +1121,7 @@ export function PromoSection({
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [config.promoCard]);
 
   // Populate editors from config on mount
@@ -1224,7 +1161,7 @@ export function PromoSection({
           )
         : '',
     ));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [config.promoCard.title, config.promoCard.subtitle, config.promoCard.description, config.promoCard.buttonText, config.promoCard.cardWidth, config.promoCard.timerText, config.promoCard.showTimer, config.promoCard.endDate]);
 
   // The preview renders at the local `cardWidth`, but only `config.promoCard.cardWidth`
@@ -2238,16 +2175,6 @@ export function PromoSection({
     button: "buttonStyle",
   } as const;
 
-  // Get current field's style object
-  function getFieldStyle() {
-    if (!currentField) return null;
-    if (currentField === "timer") {
-      // Timer uses dateStyle
-      return config.promoCard.style.dateStyle;
-    }
-    const key = STYLE_KEY_MAP[currentField];
-    return config.promoCard.style[key];
-  }
 
   // Update a property on current field's style
   function updateFieldStyle(patch: Record<string, any>) {
@@ -2325,27 +2252,6 @@ export function PromoSection({
     updateFieldStyle({ textAlign: align });
   }
 
-  // Direct style update for a specific style key (used by timer controls)
-  function updateFieldStyleDirect(
-    styleKey: string,
-    patch: Record<string, any>,
-  ) {
-    pushPromoState();
-    setConfig({
-      ...config,
-      promoCard: {
-        ...config.promoCard,
-        style: {
-          ...config.promoCard.style,
-          [styleKey]: {
-            ...(config.promoCard.style as any)[styleKey],
-            ...patch,
-          },
-        },
-      },
-    });
-    markChanged();
-  }
 
   // Card-level background update
   function updateCardBg(patch: Record<string, any>) {
@@ -2633,16 +2539,6 @@ export function PromoSection({
     };
   }, [showVersionsPopup]);
 
-  function formatVersionTime(savedAt: string): string {
-    const date = new Date(savedAt);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  }
 
   // The campaign's scheduled run, shown on each "My Published" entry so the
   // published date range is visible at a glance (not just the save time).
@@ -5993,7 +5889,7 @@ export function PromoSection({
                   </div>
                 ) : (
                   <div className="p-8 text-center text-sm text-on-surface-variant">
-                    No saved draft yet. Use “Save as draft” to store the card you're editing here.
+                    No saved draft yet. Use “Save as draft” to store the card you’re editing here.
                   </div>
                 )}
               </div>
@@ -6210,11 +6106,11 @@ export function PromoSection({
                             {isLive ? (
                               <p className="-mt-1 text-[11px] font-medium text-red-500">
                                 This card is live. Deleting it removes it from your
-                                website right away. This can't be undone.
+                                website right away. This can’t be undone.
                               </p>
                             ) : (
                               <p className="-mt-1 text-[11px] text-on-surface-variant">
-                                You'll have a few seconds to undo this.
+                                You’ll have a few seconds to undo this.
                               </p>
                             )}
                             <div className="flex items-center gap-2">

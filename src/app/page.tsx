@@ -214,7 +214,7 @@ function normalizeAnnouncementBackgroundType(config: any): CampaignConfig['annou
 }
 
 function migrateConfig(config: any, version: string): CampaignConfig {
-  let migrated = { ...config };
+  const migrated = { ...config };
 
   // Always normalize announcement background style regardless of version.
   migrated.announcementBar = normalizeAnnouncementBackgroundType(migrated);

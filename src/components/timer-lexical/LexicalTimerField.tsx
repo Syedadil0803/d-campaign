@@ -16,7 +16,6 @@ import {
   useMemo,
   useRef,
 } from 'react';
-import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import {
   $getRoot,
   $getNodeByKey,
@@ -653,24 +652,3 @@ function escapeAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 }
 
-// ============================================================
-// Internal: a focus-event capture plugin (optional). Currently unused but
-// kept for future hookup if PromoSection needs Lexical-focus → currentField
-// integration. The empty hook avoids a "no exports" tree-shake issue.
-// ============================================================
-
-export function _FocusCapturePlugin({
-  onEditorFocus,
-}: {
-  onEditorFocus?: () => void;
-}): null {
-  const [editor] = useLexicalComposerContext();
-  useEffect(() => {
-    if (!onEditorFocus) return;
-    return editor.registerRootListener((rootElement, prevRootElement) => {
-      if (prevRootElement) prevRootElement.removeEventListener('focus', onEditorFocus);
-      if (rootElement) rootElement.addEventListener('focus', onEditorFocus);
-    });
-  }, [editor, onEditorFocus]);
-  return null;
-}

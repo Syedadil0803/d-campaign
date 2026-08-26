@@ -77,7 +77,7 @@ export function ChipGuardPlugin(): null {
 
   useEffect(() => {
     if (!editor.hasNodes([TimerChipNode])) {
-      // eslint-disable-next-line no-console
+       
       console.warn('[ChipGuardPlugin] TimerChipNode not registered.');
       return;
     }

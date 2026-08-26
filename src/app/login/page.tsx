@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Loader2, LogIn } from 'lucide-react';
 
 /**
@@ -14,7 +14,6 @@ import { Loader2, LogIn } from 'lucide-react';
  * the presence flag.
  */
 function LoginForm() {
-  const router = useRouter();
   const params = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
