@@ -1891,8 +1891,14 @@ export function PromoSection({
   } as const;
 
 
-  // Update a property on current field's style
-  function updateFieldStyle(patch: Record<string, any>) {
+  /**
+   * Update a property on the current field's style.
+   *
+   * Every field style has the same three properties, so the patch is typed
+   * against one of them rather than left open. Record<string, any> accepted a
+   * misspelled key silently and wrote it into the saved config.
+   */
+  function updateFieldStyle(patch: Partial<PromoCard['style']['titleStyle']>) {
     if (!currentField) return;
     pushPromoState();
 

@@ -104,19 +104,28 @@ const IDLE_WARNING_LEAD_MS = 30_000;
 
 
 // Migration functions
-function migrateAnnouncements(config: any): CampaignConfig['announcementBar']['announcements'] {
+function migrateAnnouncements(stored: unknown): CampaignConfig['announcementBar']['announcements'] {
+  // Data from an older saved config: the shape is a hope, not a fact.
+  const config = stored as CampaignConfig;
   if (!Array.isArray(config.announcementBar.announcements)) {
-    // Convert old string format to new object format
-    const oldAnnouncements = config.announcementBar.announcements;
-    return oldAnnouncements.map((text: string) => ({
+    // The current type says this is always an array, so inside this branch
+    // TypeScript has narrowed it to never — which is the point: this branch
+    // exists for saved configs written before announcements became objects,
+    // when the field held plain strings. The cast names that older shape
+    // rather than pretending the branch is unreachable.
+    const oldAnnouncements = config.announcementBar
+      .announcements as unknown as string[];
+    return oldAnnouncements.map((text) => ({
       text,
-      richText: false
+      richText: false,
     }));
   }
   return config.announcementBar.announcements;
 }
 
-function normalizePromoCardFontSizes(promoCard: any): CampaignConfig['promoCard'] {
+function normalizePromoCardFontSizes(stored: unknown): CampaignConfig['promoCard'] {
+  // Data from an older saved config: the shape is a hope, not a fact.
+  const promoCard = stored as CampaignConfig["promoCard"];
   // Ensure all text fields have explicit font-size in HTML
   const fieldsToNormalize = ['title', 'subtitle', 'description', 'buttonText'] as const;
   const normalized = { ...promoCard };
@@ -133,7 +142,9 @@ function normalizePromoCardFontSizes(promoCard: any): CampaignConfig['promoCard'
   return normalized;
 }
 
-function migrateTimerText(promoCard: any): CampaignConfig['promoCard'] {
+function migrateTimerText(stored: unknown): CampaignConfig['promoCard'] {
+  // Data from an older saved config: the shape is a hope, not a fact.
+  const promoCard = stored as CampaignConfig["promoCard"];
   const raw = (promoCard.timerText || '').trim();
 
   // Already in the new fixed-block format (chip span or {timer} marker) — leave
@@ -165,7 +176,9 @@ function migrateTimerText(promoCard: any): CampaignConfig['promoCard'] {
   return { ...promoCard, timerText: withMarker };
 }
 
-function migrateButtonStyle(promoCard: any): CampaignConfig['promoCard'] {
+function migrateButtonStyle(stored: unknown): CampaignConfig['promoCard'] {
+  // Data from an older saved config: the shape is a hope, not a fact.
+  const promoCard = stored as CampaignConfig["promoCard"];
   // Add default buttonStyle if missing
   if (!promoCard.style.buttonStyle) {
     return {
@@ -183,7 +196,9 @@ function migrateButtonStyle(promoCard: any): CampaignConfig['promoCard'] {
   return promoCard;
 }
 
-function migrateButtonFullWidth(promoCard: any): CampaignConfig['promoCard'] {
+function migrateButtonFullWidth(stored: unknown): CampaignConfig['promoCard'] {
+  // Data from an older saved config: the shape is a hope, not a fact.
+  const promoCard = stored as CampaignConfig["promoCard"];
   // Add default buttonFullWidth if missing
   if (promoCard.buttonFullWidth === undefined) {
     return {
@@ -194,7 +209,9 @@ function migrateButtonFullWidth(promoCard: any): CampaignConfig['promoCard'] {
   return promoCard;
 }
 
-function normalizeAnnouncementBackgroundType(config: any): CampaignConfig['announcementBar'] {
+function normalizeAnnouncementBackgroundType(stored: unknown): CampaignConfig['announcementBar'] {
+  // Data from an older saved config: the shape is a hope, not a fact.
+  const config = stored as CampaignConfig;
   const announcementBar = { ...config.announcementBar };
   const background = announcementBar?.style?.background;
 
@@ -221,7 +238,9 @@ function normalizeAnnouncementBackgroundType(config: any): CampaignConfig['annou
   };
 }
 
-function migrateConfig(config: any, version: string): CampaignConfig {
+function migrateConfig(stored: unknown, version: string): CampaignConfig {
+  // Data from an older saved config: the shape is a hope, not a fact.
+  const config = stored as CampaignConfig;
   const migrated = { ...config };
 
   // Always normalize announcement background style regardless of version.
