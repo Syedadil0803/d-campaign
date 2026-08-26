@@ -2418,6 +2418,24 @@ export default function Home() {
   })();
 
   // Same rule for the promo card (ignore active + stoppedByUser status flags).
+  /**
+   * Is there a promo card worth publishing right now?
+   *
+   * True either when the card differs from what was published, or when
+   * nothing is on air at all. The second half is the point: selecting a card
+   * from My Published while the campaign is stopped changes nothing about the
+   * content, so the ordinary comparison says "no changes" and Publish stayed
+   * dark — leaving the one button that puts a card back on the website unlit
+   * with a perfectly good card on screen.
+   *
+   * Guarded on the card having content, so a blank canvas with nothing live
+   * does not light Publish for something there is nothing to publish.
+   */
+  const promoWorthPublishing =
+    hasPromoChanges ||
+    (!publishedConfig.promoCard.active &&
+      promoHasVisibleContent(config.promoCard));
+
   const promoCanReactivate = (() => {
     if (config.promoCard.active) return false;
     if (!publishedConfigRef.current) return false;
@@ -2481,7 +2499,7 @@ export default function Home() {
           activeTab={activeTab}
           setActiveTab={handleTabSwitch}
           hasAnnouncementChanges={hasAnnouncementChanges}
-          hasPromoChanges={hasPromoChanges}
+          hasPromoChanges={promoWorthPublishing}
           readyToPublishAnnouncement={readyToPublishAnnouncement}
           promoDateInvalid={promoDateRangeInvalid}
           isPublishing={isPublishing}
