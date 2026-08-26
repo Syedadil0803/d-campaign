@@ -38,6 +38,23 @@ const config = [
       // worth refusing to ship over: a warning keeps every one of them in the
       // report while letting the build through. Typing them properly is its
       // own piece of work.
+      /**
+       * 750 lines a file, which is SonarQube's default and the only figure in
+       * this area with a widely used tool behind it. ESLint's own default is
+       * 300 — the right destination, but six files exceed 750 today and
+       * thirteen exceed 300, and a rule that fails on day one gets switched
+       * off rather than met.
+       *
+       * So this is a ceiling to ratchet down: 750 now, then 500, then 300, as
+       * the large files are split. Comments and blank lines are not counted,
+       * because a file is not harder to work with for being explained.
+       *
+       * A warning rather than an error on purpose. `next build` runs ESLint,
+       * and a file being long should not stop a deploy — it should be visible
+       * on every run until someone deals with it.
+       */
+      'max-lines': ['warn', { max: 750, skipBlankLines: true, skipComments: true }],
+
       '@typescript-eslint/no-explicit-any': 'warn',
 
       '@typescript-eslint/no-unused-vars': [
