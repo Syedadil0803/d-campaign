@@ -75,7 +75,6 @@ import { PromoDatePicker } from '@/components/promo/PromoDatePicker';
 import { GradientControls } from '@/components/promo/GradientControls';
 import { FieldInfoNote } from '@/components/promo/FieldInfoNote';
 import { readHiddenFieldInfos, hideFieldInfo } from '@/lib/promo/fieldInfoNotes';
-import { PromoTextField } from '@/components/promo/PromoTextField';
 import {
   PROMO_EDITOR_DEFAULT_COLOR,
   type PromoSelectionSnapshot,
@@ -2965,19 +2964,37 @@ export function PromoSection({
               Titles work best as a single line — marketing best practice. Adjust font size or shorten text to fit.
             </FieldInfoNote>
 
-            <PromoTextField
-              field="title"
-              fieldRef={titleRef}
-              placeholder="Your headline"
-              value={config.promoCard.title || ''}
-              isActive={currentField === "title"}
-              background={config.promoCard.style.background}
-              onInput={onFieldInput}
-              onFocus={onFieldFocus}
+            <div
+              ref={titleRef}
+              contentEditable
+              spellCheck={true}
+              data-placeholder="Your headline"
+              suppressContentEditableWarning
+              onInput={() => onFieldInput("title")}
+              onFocus={() => onFieldFocus("title", titleRef)}
               onKeyDown={onPromoEditorKeyDown}
-              onFormatsRefresh={refreshPromoToolbarFormats}
-              onPaste={smartPaste}
+              onMouseUp={() => refreshPromoToolbarFormats(titleRef.current)}
+              onKeyUp={() => refreshPromoToolbarFormats(titleRef.current)}
+              onPaste={(e) => smartPaste(e, 'title')}
+              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-none overflow-y-auto outline-none break-words transition-colors ${
+                currentField === "title" ? "border-primary/70" : "border-border"
+              } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
+              style={{
+                background: getBackgroundStyle(
+                  config.promoCard.style.background,
+                ),
+                paddingTop: '10px',
+                paddingBottom: '10px',
+              }}
             />
+            {(() => {
+              const html = config.promoCard.title || '';
+              if (!html) return null;
+              const testHtml = html + 'x';
+              return measureOverflow(testHtml, 'title') ? (
+                <p className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 animate-pulse">⚠️ Field limit reached</p>
+              ) : null;
+            })()}
           </div>
           <div>
             <div className="flex items-center justify-between">
@@ -3006,19 +3023,39 @@ export function PromoSection({
               Subtitles are optimised for 2 lines for better engagement. Adjust font size or styling to fit.
             </FieldInfoNote>
 
-            <PromoTextField
-              field="subtitle"
-              fieldRef={subtitleRef}
-              placeholder="A supporting line"
-              value={config.promoCard.subtitle || ''}
-              isActive={currentField === "subtitle"}
-              background={config.promoCard.style.background}
-              onInput={onFieldInput}
-              onFocus={onFieldFocus}
+            <div
+              ref={subtitleRef}
+              contentEditable
+              spellCheck={true}
+              data-placeholder="A supporting line"
+              suppressContentEditableWarning
+              onInput={() => onFieldInput("subtitle")}
+              onFocus={() => onFieldFocus("subtitle", subtitleRef)}
               onKeyDown={onPromoEditorKeyDown}
-              onFormatsRefresh={refreshPromoToolbarFormats}
-              onPaste={smartPaste}
+              onMouseUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
+              onKeyUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
+              onPaste={(e) => smartPaste(e, 'subtitle')}
+              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-none overflow-y-auto outline-none break-words transition-colors ${
+                currentField === "subtitle"
+                  ? "border-primary/70"
+                  : "border-border"
+              } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
+              style={{
+                background: getBackgroundStyle(
+                  config.promoCard.style.background,
+                ),
+                paddingTop: '10px',
+                paddingBottom: '10px',
+              }}
             />
+            {(() => {
+              const html = config.promoCard.subtitle || '';
+              if (!html) return null;
+              const testHtml = html + 'x';
+              return measureOverflow(testHtml, 'subtitle') ? (
+                <p className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 animate-pulse">⚠️ Field limit reached</p>
+              ) : null;
+            })()}
           </div>
 
           <div>
@@ -3048,19 +3085,39 @@ export function PromoSection({
               Descriptions are capped at 3 lines for readability. Adjust font size or styling to fit your message.
             </FieldInfoNote>
 
-            <PromoTextField
-              field="description"
-              fieldRef={descRef}
-              placeholder="A little more about the offer"
-              value={config.promoCard.description || ''}
-              isActive={currentField === "description"}
-              background={config.promoCard.style.background}
-              onInput={onFieldInput}
-              onFocus={onFieldFocus}
+            <div
+              ref={descRef}
+              contentEditable
+              spellCheck={true}
+              suppressContentEditableWarning
+              data-placeholder="A little more about the offer"
+              onInput={() => onFieldInput("description")}
+              onFocus={() => onFieldFocus("description", descRef)}
               onKeyDown={onPromoEditorKeyDown}
-              onFormatsRefresh={refreshPromoToolbarFormats}
-              onPaste={smartPaste}
+              onMouseUp={() => refreshPromoToolbarFormats(descRef.current)}
+              onKeyUp={() => refreshPromoToolbarFormats(descRef.current)}
+              onPaste={(e) => smartPaste(e, 'description')}
+              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-none overflow-y-auto outline-none break-words transition-colors ${
+                currentField === "description"
+                  ? "border-primary/70"
+                  : "border-border"
+              } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
+              style={{
+                background: getBackgroundStyle(
+                  config.promoCard.style.background,
+                ),
+                paddingTop: '10px',
+                paddingBottom: '10px',
+              }}
             />
+            {(() => {
+              const html = config.promoCard.description || '';
+              if (!html) return null;
+              const testHtml = html + 'x';
+              return measureOverflow(testHtml, 'description') ? (
+                <p className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 animate-pulse">⚠️ Field limit reached</p>
+              ) : null;
+            })()}
           </div>
 
           <div className="!mt-8">
