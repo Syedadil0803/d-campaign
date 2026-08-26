@@ -7,8 +7,25 @@
  */
 
 /** True if `el`'s content occupies more than one line at its CURRENT width.
- *  Compares the vertical top of line fragments (robust against the chip's
- *  inline-block box being taller than the text). */
+ *
+ *  Works by the vertical spread of the line fragments: on one line they all
+ *  share a baseline, so their tops differ only by however much their font
+ *  sizes differ; on two lines they are a whole line-height apart.
+ *
+ *  The tolerance comes from the TALLEST fragment, and that is the entire
+ *  point. A line box is as tall as its tallest content, so that is the
+ *  distance a genuine second line sits below the first. Measuring it from the
+ *  shortest fragment — as this did until 26 August 2026 — makes the tolerance
+ *  smallest exactly when the text is most mixed in size, which is when the
+ *  baseline spread is largest. A real timer read: fragments 14px to 30px tall,
+ *  tops spread over 11px, all on one line. Against the shortest that is
+ *  11 > 10.5 and the edit was reverted with most of the box still empty;
+ *  against the tallest it is 11 > 22.5, which is correct. Half a pixel decided
+ *  it, and only for users who had styled the numbers larger than the labels —
+ *  which the timer editor exists to let them do.
+ *
+ *  A wrap is still caught: two lines are separated by at least a line height,
+ *  which is at least the tallest fragment. */
 function isMultiline(el: HTMLElement): boolean {
   if (typeof document === 'undefined') return false;
   const range = document.createRange();
@@ -20,14 +37,14 @@ function isMultiline(el: HTMLElement): boolean {
 
   let minTop = Infinity;
   let maxTop = -Infinity;
-  let minH = Infinity;
+  let maxH = 0;
   for (const r of rects) {
     minTop = Math.min(minTop, r.top);
     maxTop = Math.max(maxTop, r.top);
-    minH = Math.min(minH, r.height);
+    maxH = Math.max(maxH, r.height);
   }
-  if (!Number.isFinite(minH) || minH === 0) return false;
-  return maxTop - minTop > minH * 0.75;
+  if (maxH === 0) return false;
+  return maxTop - minTop > maxH * 0.75;
 }
 
 /** True if `el`'s content would wrap to a 2nd line at `contentWidth` px.
