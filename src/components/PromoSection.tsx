@@ -73,7 +73,7 @@ import { measureOverflow, getRequiredCardWidth } from '@/lib/promoMeasure';
 import { SegmentedToggle } from './SegmentedToggle';
 import { clonePromoCard, promoCardsEqual, stripHtmlText, withDefaultDates, cardSignature } from '@/lib/promoCardIdentity';
 import { GradientDirectionWheel } from './GradientDirectionWheel';
-import { PromoScheduleField } from './PromoScheduleField';
+import { PromoDatePicker } from './PromoDatePicker';
 import {
   PROMO_EDITOR_DEFAULT_COLOR,
   type PromoSelectionSnapshot,
@@ -410,8 +410,6 @@ export function PromoSection({
 
   const cardAngleWheelRef = useRef<HTMLDivElement>(null);
   const fieldAngleWheelRef = useRef<HTMLDivElement>(null);
-  const startDatePickerRef = useRef<HTMLDivElement>(null);
-  const endDatePickerRef = useRef<HTMLDivElement>(null);
   // End Date field wrapper — the fallback guard scrolls here and flashes its
   // inline error if the user tries to save with an invalid range.
   const endDateFieldRef = useRef<HTMLDivElement>(null);
@@ -564,18 +562,6 @@ export function PromoSection({
     left: number;
     width: number;
   } | null>(null);
-  const [startDateView, setStartDateView] = useState<Date>(() => {
-    const base = config.promoCard.startDate
-      ? new Date(`${config.promoCard.startDate}T00:00:00`)
-      : new Date();
-    return new Date(base.getFullYear(), base.getMonth(), 1);
-  });
-  const [endDateView, setEndDateView] = useState<Date>(() => {
-    const base = config.promoCard.endDate
-      ? new Date(`${config.promoCard.endDate}T00:00:00`)
-      : new Date();
-    return new Date(base.getFullYear(), base.getMonth(), 1);
-  });
 
   const [cardPositionPos, setCardPositionPos] = useState<{
     top: number;
@@ -2030,10 +2016,6 @@ export function PromoSection({
           return;
         setOpen(false);
       });
-      if (!startDatePickerRef.current?.contains(target))
-        setShowStartDatePicker(false);
-      if (!endDatePickerRef.current?.contains(target))
-        setShowEndDatePicker(false);
       // Keep card background popup open until explicit close (X button).
     };
     document.addEventListener("mousedown", onDocMouseDown);
@@ -3179,19 +3161,16 @@ export function PromoSection({
               <label className="block text-sm font-semibold text-on-surface mb-2">
                 Start Date
               </label>
-              <PromoScheduleField {...{
-                mode: "start" as const,
-                containerRef: startDatePickerRef,
-                value: config.promoCard.startDate,
-                viewDate: startDateView,
-                setViewDate: setStartDateView,
-                open: showStartDatePicker,
-                setOpen: setShowStartDatePicker,
-                // Any future date is selectable — the End picker is NOT used to
-                // gray out Start days. An invalid range is surfaced as an
-                // inline error, not by blocking the picker.
-                minDate: toLocalISODate(new Date()),
-                onSelect: (nextValue: string) => {
+              <PromoDatePicker
+                value={config.promoCard.startDate}
+                minDate={toLocalISODate(new Date())}
+                open={showStartDatePicker}
+                onOpenChange={(next) => {
+                  setShowStartDatePicker(next);
+                  // Only one calendar at a time — opening this closes the other.
+                  if (next) setShowEndDatePicker(false);
+                }}
+                onChange={(nextValue: string) => {
                   pushPromoState();
                   const nextPromoCard = {
                     ...config.promoCard,
@@ -3200,26 +3179,24 @@ export function PromoSection({
                   };
                   setConfig({ ...config, promoCard: nextPromoCard });
                   markChanged();
-                },
-              }} />
+                }}
+              />
             </div>
             <div ref={endDateFieldRef}>
               <label className="block text-sm font-semibold text-on-surface mb-2">
                 End Date
               </label>
-              <PromoScheduleField {...{
-                mode: "end" as const,
-                containerRef: endDatePickerRef,
-                value: config.promoCard.endDate,
-                viewDate: endDateView,
-                setViewDate: setEndDateView,
-                open: showEndDatePicker,
-                setOpen: setShowEndDatePicker,
-                // Any future date is selectable; an end before start is caught
-                // by the inline error below, not blocked in the picker.
-                minDate: toLocalISODate(new Date()),
-                invalid: promoDateRangeInvalid,
-                onSelect: (nextValue: string) => {
+              <PromoDatePicker
+                value={config.promoCard.endDate}
+                minDate={toLocalISODate(new Date())}
+                invalid={promoDateRangeInvalid}
+                open={showEndDatePicker}
+                onOpenChange={(next) => {
+                  setShowEndDatePicker(next);
+                  // Only one calendar at a time — opening this closes the other.
+                  if (next) setShowStartDatePicker(false);
+                }}
+                onChange={(nextValue: string) => {
                   pushPromoState();
                   const nextPromoCard = {
                     ...config.promoCard,
@@ -3228,8 +3205,8 @@ export function PromoSection({
                   };
                   setConfig({ ...config, promoCard: nextPromoCard });
                   markChanged();
-                },
-              }} />
+                }}
+              />
               {promoDateRangeInvalid && (
                 <p
                   className={`mt-1.5 text-[11px] font-semibold text-red-600 dark:text-red-400 ${

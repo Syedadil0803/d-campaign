@@ -12,7 +12,7 @@
  * outside click, so callers only pass a value and a change handler.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatDateLabel, buildMonthDays } from '@/lib/calendarDates';
 import { toLocalISODate } from '@/lib/utils';
 
@@ -25,6 +25,16 @@ interface PromoDatePickerProps {
   minDate?: string;
   /** Red border, used when the range is backwards. */
   invalid?: boolean;
+  /**
+   * Optional: let the caller own whether the calendar is open.
+   *
+   * The promo editor has two of these side by side and closes one when the
+   * other opens, which it cannot do if each field keeps that state to itself.
+   * Passing `open` and `onOpenChange` hands that decision over; omitting them
+   * leaves the field managing itself, which is what the setup dialog wants.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 
@@ -36,8 +46,31 @@ export function PromoDatePicker({
   align = 'left',
   minDate,
   invalid,
+  open: controlledOpen,
+  onOpenChange,
 }: PromoDatePickerProps) {
-  const [open, setOpen] = useState(false);
+  // Kept regardless, so the field still works when the caller does not care.
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : uncontrolledOpen;
+
+  /**
+   * Latest values, read at call time.
+   *
+   * The promo editor passes an inline arrow for onOpenChange, so its identity
+   * changes on every render. Reading it through a ref keeps setOpen stable,
+   * which keeps the click-outside listener below from being torn down and
+   * re-attached on each render.
+   */
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
+  const isControlledRef = useRef(isControlled);
+  isControlledRef.current = isControlled;
+
+  const setOpen = useCallback((next: boolean) => {
+    if (isControlledRef.current) onOpenChangeRef.current?.(next);
+    else setUncontrolledOpen(next);
+  }, []);
   const [viewDate, setViewDate] = useState<Date>(() => {
     const base = value ? new Date(`${value}T00:00:00`) : new Date();
     return new Date(base.getFullYear(), base.getMonth(), 1);
@@ -52,7 +85,7 @@ export function PromoDatePicker({
     };
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
+  }, [open, setOpen]);
 
   // Follow the value when it changes from outside (e.g. duration presets).
   useEffect(() => {
