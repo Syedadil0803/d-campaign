@@ -303,7 +303,7 @@ export function useRichTextEditor(
         setActiveFormats(prev => ({ ...prev, size: detectedSize }));
       }
     },
-    [editorRef, isSelectionInEditor, detectFormats]
+    [editorRef, isSelectionInEditor]
   );
 
   // --------------------------------------------------------

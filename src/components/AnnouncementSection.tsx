@@ -333,7 +333,10 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     });
     observer.observe(root, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
-  }, []);
+    // setActiveFormats is a useState setter, so React guarantees its identity
+    // never changes. Naming it satisfies the rule and cannot cause this
+    // observer to be torn down and rebuilt.
+  }, [setActiveFormats]);
 
   // Marquee layout: calculate copies for loop mode, or set min-width for non-loop
   // Also dynamically compute --scroll-duration so speed (px/s) stays constant

@@ -32,6 +32,13 @@ export function CountryFlag({ flag, name }: { flag: string; name: string }) {
   const code = isoFromFlag(flag);
   if (!code) return null;
   return (
+    /*
+     * next/image is wrong for this one. These are 20x15 local SVGs: there is
+     * nothing for an optimiser to do to a vector, serving SVG through
+     * next/image needs dangerouslyAllowSVG turned on, and it would add a
+     * wrapper element and a loader for an icon the size of a word.
+     */
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={`/flags/${code}.svg`}
       alt={name}
