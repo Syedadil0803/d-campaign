@@ -69,6 +69,10 @@ import { PromoThemeRow } from '@/components/promo/PromoThemeRow';
 import { PromoEditorToolbar } from '@/components/promo/PromoEditorToolbar';
 import { PromoScheduleAndTimer } from '@/components/promo/PromoScheduleAndTimer';
 import {
+  PromoCardActionDialog,
+  type PromoCardAction,
+} from '@/components/promo/PromoCardActionDialog';
+import {
   PROMO_EDITOR_DEFAULT_COLOR,
   type PromoSelectionSnapshot,
   selectionIsInsideEditor,
@@ -451,21 +455,8 @@ export function PromoSection({
   const endDateFieldRef = useRef<HTMLDivElement>(null);
   const [dateErrorFlash, setDateErrorFlash] = useState(false);
   // Consent before a card-replacing action (Start Fresh / apply Variant / apply Template).
-  const [cardActionConfirm, setCardActionConfirm] = useState<{
-    title: string;
-    // ReactNode, not string: names of places in the UI ("My Published") are
-    // emphasised inline so they read as things you can go and open.
-    body: React.ReactNode;
-    confirmLabel: string;
-    onConfirm: () => void;
-    /**
-     * Optional third button, for actions where keeping a copy is worth
-     * offering but must never be imposed — Clear Canvas being the case: the
-     * user asked to destroy the card, so saving is an offer, not a condition.
-     */
-    secondaryLabel?: string;
-    onSecondary?: () => void;
-  } | null>(null);
+  const [cardActionConfirm, setCardActionConfirm] =
+    useState<PromoCardAction | null>(null);
 
   const [showCardPositionDropdown, setShowCardPositionDropdown] =
     useState(false);
@@ -2906,62 +2897,10 @@ export function PromoSection({
               in the action-tab strip above the Website Content Area preview. */}
 
           {/* Consent before a card-replacing action */}
-          {cardActionConfirm && (
-            <div data-modal className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-              <div className="absolute inset-0 bg-black/20" onClick={() => setCardActionConfirm(null)} />
-              <div
-                className={`relative z-10 w-full rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md ${
-                  cardActionConfirm.secondaryLabel ? 'max-w-xl' : 'max-w-md'
-                }`}
-              >
-                <h2 className="text-base font-semibold">{cardActionConfirm.title}</h2>
-                <p className="mt-2 text-sm text-on-surface-variant">{cardActionConfirm.body}</p>
-                {/* Cancel sits apart on the left — it's "leave", not one of the
-                    ways forward. The two ways forward group on the right, with
-                    the safe one weighted. Three buttons in a single row read as
-                    a queue and hide which is which. */}
-                <div className="mt-5 flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setCardActionConfirm(null)}
-                    className="shrink-0 whitespace-nowrap rounded-md px-2 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:text-primary"
-                  >
-                    Cancel
-                  </button>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const fn = cardActionConfirm.onConfirm;
-                        setCardActionConfirm(null);
-                        fn();
-                      }}
-                      className={
-                        cardActionConfirm.secondaryLabel
-                          ? 'whitespace-nowrap rounded-md border border-white/15 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-red-400/70 hover:text-red-500'
-                          : 'whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95'
-                      }
-                    >
-                      {cardActionConfirm.confirmLabel}
-                    </button>
-                    {cardActionConfirm.secondaryLabel && cardActionConfirm.onSecondary && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const fn = cardActionConfirm.onSecondary!;
-                          setCardActionConfirm(null);
-                          fn();
-                        }}
-                        className="whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
-                      >
-                        {cardActionConfirm.secondaryLabel}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          <PromoCardActionDialog
+            action={cardActionConfirm}
+            onDismiss={() => setCardActionConfirm(null)}
+          />
 
           {/* More room than the other sections get, because this is the only
               one that follows a heading rather than body text. "Promo Card" at
