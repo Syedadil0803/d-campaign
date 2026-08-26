@@ -73,6 +73,8 @@ import { SegmentedToggle } from '@/components/promo/SegmentedToggle';
 import { clonePromoCard, promoCardsEqual, stripHtmlText, withDefaultDates, cardSignature } from '@/lib/promo/promoCardIdentity';
 import { PromoDatePicker } from '@/components/promo/PromoDatePicker';
 import { GradientControls } from '@/components/promo/GradientControls';
+import { FieldInfoNote } from '@/components/promo/FieldInfoNote';
+import { readHiddenFieldInfos, hideFieldInfo } from '@/lib/promo/fieldInfoNotes';
 import {
   PROMO_EDITOR_DEFAULT_COLOR,
   type PromoSelectionSnapshot,
@@ -322,11 +324,13 @@ export function PromoSection({
   const [styleWarning, setStyleWarning] = useState<string | null>(null);
   const styleWarningTimer = useRef<NodeJS.Timeout | null>(null);
   const [fieldInfoPopup, setFieldInfoPopup] = useState<'title' | 'subtitle' | 'description' | null>(null);
-  const [hiddenFieldInfos, setHiddenFieldInfos] = useState<Set<string>>(() => {
-    if (typeof window === 'undefined') return new Set();
-    const stored = localStorage.getItem('hidden-field-infos');
-    return stored ? new Set(JSON.parse(stored)) : new Set();
-  });
+  const [hiddenFieldInfos, setHiddenFieldInfos] = useState<Set<string>>(readHiddenFieldInfos);
+  /** Closes the note and remembers not to offer it again. */
+  function dismissFieldInfo(field: string) {
+    setFieldInfoPopup(null);
+    setHiddenFieldInfos((current) => hideFieldInfo(current, field));
+  }
+
   const configRef = useRef(config);
   configRef.current = config;
   const currentFieldRef = useRef<PromoField | null>(currentField);
@@ -2952,15 +2956,13 @@ export function PromoSection({
               </button>
             </div>
 
-            {fieldInfoPopup === 'title' && (
-              <div className="mb-2 p-3 rounded-lg bg-surface border border-border shadow-md text-[12px] text-on-surface/80 leading-relaxed">
-                <p>Titles work best as a single line — marketing best practice. Adjust font size or shorten text to fit.</p>
-                <div className="flex gap-2 mt-2">
-                  <button onClick={() => setFieldInfoPopup(null)} className="px-3 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-medium transition-colors">Got it</button>
-                  <button onClick={() => { setFieldInfoPopup(null); const next = new Set(hiddenFieldInfos); next.add('title'); setHiddenFieldInfos(next); localStorage.setItem('hidden-field-infos', JSON.stringify([...next])); }} className="px-3 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-medium transition-colors">Don&apos;t show again</button>
-                </div>
-              </div>
-            )}
+            <FieldInfoNote
+              open={fieldInfoPopup === 'title'}
+              onDismiss={() => setFieldInfoPopup(null)}
+              onNeverShow={() => dismissFieldInfo('title')}
+            >
+              Titles work best as a single line — marketing best practice. Adjust font size or shorten text to fit.
+            </FieldInfoNote>
 
             <div
               ref={titleRef}
@@ -3013,15 +3015,13 @@ export function PromoSection({
               </button>
             </div>
 
-            {fieldInfoPopup === 'subtitle' && (
-              <div className="mb-2 p-3 rounded-lg bg-surface border border-border shadow-md text-[12px] text-on-surface/80 leading-relaxed">
-                <p>Subtitles are optimised for 2 lines for better engagement. Adjust font size or styling to fit.</p>
-                <div className="flex gap-2 mt-2">
-                  <button onClick={() => setFieldInfoPopup(null)} className="px-3 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-medium transition-colors">Got it</button>
-                  <button onClick={() => { setFieldInfoPopup(null); const next = new Set(hiddenFieldInfos); next.add('subtitle'); setHiddenFieldInfos(next); localStorage.setItem('hidden-field-infos', JSON.stringify([...next])); }} className="px-3 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-medium transition-colors">Don&apos;t show again</button>
-                </div>
-              </div>
-            )}
+            <FieldInfoNote
+              open={fieldInfoPopup === 'subtitle'}
+              onDismiss={() => setFieldInfoPopup(null)}
+              onNeverShow={() => dismissFieldInfo('subtitle')}
+            >
+              Subtitles are optimised for 2 lines for better engagement. Adjust font size or styling to fit.
+            </FieldInfoNote>
 
             <div
               ref={subtitleRef}
@@ -3077,15 +3077,13 @@ export function PromoSection({
               </button>
             </div>
 
-            {fieldInfoPopup === 'description' && (
-              <div className="mb-2 p-3 rounded-lg bg-surface border border-border shadow-md text-[12px] text-on-surface/80 leading-relaxed">
-                <p>Descriptions are capped at 3 lines for readability. Adjust font size or styling to fit your message.</p>
-                <div className="flex gap-2 mt-2">
-                  <button onClick={() => setFieldInfoPopup(null)} className="px-3 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-medium transition-colors">Got it</button>
-                  <button onClick={() => { setFieldInfoPopup(null); const next = new Set(hiddenFieldInfos); next.add('description'); setHiddenFieldInfos(next); localStorage.setItem('hidden-field-infos', JSON.stringify([...next])); }} className="px-3 py-1 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-[11px] font-medium transition-colors">Don&apos;t show again</button>
-                </div>
-              </div>
-            )}
+            <FieldInfoNote
+              open={fieldInfoPopup === 'description'}
+              onDismiss={() => setFieldInfoPopup(null)}
+              onNeverShow={() => dismissFieldInfo('description')}
+            >
+              Descriptions are capped at 3 lines for readability. Adjust font size or styling to fit your message.
+            </FieldInfoNote>
 
             <div
               ref={descRef}
