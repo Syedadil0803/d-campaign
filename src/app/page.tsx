@@ -2418,33 +2418,21 @@ export default function Home() {
   })();
 
   // Same rule for the promo card (ignore active + stoppedByUser status flags).
-  /**
-   * Can the promo card be put back on air with one click — same content, just
-   * switched off?
-   *
-   * Both sides go through normalizePromoForCompare, and they have to. This
-   * used to parse publishedConfigRef, which holds a SIGNATURE rather than a
-   * config: its promoCard has already been through that normalisation, with
-   * cardWidth dropped and the text flattened. Comparing it against the raw
-   * card in the editor meant the two strings could never match, so Go on air
-   * was never offered for the promo — a stopped campaign showed neither that
-   * nor Publish, because its content genuinely had not changed. The
-   * announcement path escaped this only because its side of the signature is
-   * stripped the same way on both ends.
-   *
-   * The live card decides whether there is anything to reactivate, not the
-   * one being edited. A cleared canvas is not active either, and that says
-   * nothing about the website.
-   */
   const promoCanReactivate = (() => {
-    const live = publishedConfigObjRef.current;
-    if (!live) return false;
-    if (live.promoCard.active) return false;
-    const sig = (pc: CampaignConfig['promoCard']) =>
-      JSON.stringify(
-        normalizePromoForCompare(pc as unknown as Record<string, unknown>),
-      );
-    return sig(config.promoCard) === sig(live.promoCard);
+    if (config.promoCard.active) return false;
+    if (!publishedConfigRef.current) return false;
+    try {
+      const pub = JSON.parse(publishedConfigRef.current) as CampaignConfig;
+      const sig = (pc: CampaignConfig['promoCard']) => {
+        const clone: Record<string, unknown> = { ...pc };
+        delete clone.active;
+        delete clone.stoppedByUser;
+        return JSON.stringify(clone);
+      };
+      return sig(config.promoCard) === sig(pub.promoCard);
+    } catch {
+      return false;
+    }
   })();
 
   // Work worth protecting: the promo differs from what's live AND isn't the
