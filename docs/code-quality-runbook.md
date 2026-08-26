@@ -110,20 +110,23 @@ not at the end. It is also the only automated check the project has today.
 
 ---
 
-# Not yet run — tools not installed
+# Verified — the remaining four
 
-Nothing below has produced output for this repository. These are recorded so
-they are ready to run, not because their findings are known.
+All four have now been run against this repository. Every count below is what
+was actually observed.
 
 ## Install
 
 ```bash
-npm i -D eslint @eslint/js typescript-eslint eslint-plugin-react-hooks knip jscpd madge
+npm i -D knip jscpd madge eslint eslint-config-next@15
 ```
 
-`typescript-eslint` is the current single package. Older guides tell you to
-install `@typescript-eslint/parser` and `@typescript-eslint/eslint-plugin`
-separately — that is the ESLint 8 arrangement and does not fit this project.
+**Pin eslint-config-next to the framework version.** npm installs the latest
+major by default, which put v16 on a Next 15 project — a rule set describing a
+framework this code is not running. The cost of matching is that v15 needs the
+FlatCompat wrapper rather than supporting flat config directly.
+
+cloc is not installed; `npx` fetches it each time.
 
 ## knip — unused code
 
@@ -131,62 +134,126 @@ separately — that is the ESLint 8 arrangement and does not fit this project.
 npx knip
 ```
 
-Finds files, exports and dependencies nothing uses.
+Observed: 4 unused files, 2 unused packages, 36 unused exports, 5 unused
+exported types.
 
-**Expect false positives on the first run.** knip does not know Next's
-conventions, and `page.tsx`, `layout.tsx`, `route.ts`, `middleware.ts` and
-`manifest` are all entry points that nothing imports by design. Anything it
-flags inside `src/app/` is almost certainly wrong until a `knip.json` declares
-those as entry points.
+**Half the file findings were wrong**, and that is the tool working correctly
+rather than failing. knip follows imports between code files. Three of the
+things it flagged are used in ways that leave no import to follow:
 
-**It will also miss things.** It follows JavaScript and TypeScript imports
-only. Five dead HTML mockups were removed from `src` — 986 lines — and knip
-would not have seen them, because nothing imported them and they were not
-TypeScript. They turned up in the cloc language breakdown instead.
+- `public/sw.js` — the browser loads it by address
+- `scripts/feature-inventory.mjs` — run by hand
+- `flag-icons` — a script reads it as files rather than importing it
+
+Check every finding before acting on it. Search the whole repository for the
+name, including `scripts/`, which is where two of the three false positives
+were hiding.
+
+**The 36 unused exports are not dead code.** The functions are used inside
+their own files and exported unnecessarily. The fix is deleting the word
+`export`, not the function. Confirm by searching within the file itself: if the
+name appears several times there and nowhere else, it is alive but needlessly
+public.
+
+**It will now report the quality tools themselves as unused devDependencies.**
+cloc, knip, jscpd, madge and eslint are command-line tools that nothing
+imports. Correct, and noise on every run — the argument for writing a
+`knip.json` that declares the real entry points.
+
+**It cannot see everything.** Five dead HTML mockups in `src` were invisible to
+it because nothing imported them and they were not TypeScript. Eight unused
+functions inside PromoSection were invisible because they were never exported.
+ESLint found those.
 
 ## jscpd — duplication
 
 ```bash
-npx jscpd src --min-lines 20 --reporters console
+npx jscpd src --min-lines 5 --reporters console
 ```
 
-Finds blocks of 20 or more lines repeated elsewhere.
+Observed at the tool's default of 5 lines: 50 repeated blocks, 580 duplicated
+lines, 2.03%.
 
-First thing to check: Announcement against Promo. They do similar jobs and
-were built at different times. **Whether they duplicate each other is a
-hypothesis** — nothing has measured it yet.
+**The threshold changes the answer, so state which was used.** At 20 lines the
+same codebase reports 6 blocks and 0.53%. Neither figure is wrong; they answer
+different questions. Use the default unless there is a reason not to — a
+threshold someone picked is a judgement that has to be defended.
+
+Read the *locations*, not the percentage. 34 of the 50 blocks were a file
+repeating itself rather than two files sharing code, and 25 of those were in
+the two largest files. A repeat is within-file when the same filename appears
+on both lines of the pair.
+
+Duplication is reported in both lines and tokens. Quote lines — tokens are how
+the tool compares code internally and mean nothing to a reader.
 
 ## madge — how the parts connect
 
 ```bash
-npx madge --extensions ts,tsx --circular src
+npx madge --extensions ts,tsx --ts-config tsconfig.json --circular src
 ```
 
-Lists circular imports — where two files each depend on the other. A direct
-measure of tangled boundaries.
+Observed: 80 files, 2 circular dependencies.
 
-```bash
-npx madge --extensions ts,tsx --image docs/architecture.svg src
-```
+**The `--ts-config` flag is not optional here, and leaving it off fails
+silently.** Without it madge cannot resolve this project's `@/...` import
+paths. It skipped 55 of 80 files, said so only as "(55 warnings)", and reported
+a confident, clean-looking "1 circular dependency" having ignored most of the
+project. With the flag, unresolved files drop to 7 — all external packages —
+and the real answer is 2.
 
-Draws the dependency graph. This is what replaces the architecture diagram
-that was read from the code by hand. Needs Graphviz (`brew install graphviz`);
-madge says so if it is missing.
+Always read the warning count before the result.
+
+**Check whether a reported cycle is real.** Open both files and read their
+import lines. If either side uses `import type`, that half is erased when the
+code is built and no cycle exists at runtime. Both of the two found here are
+type-only, so neither exists in the built application.
 
 ## ESLint — everyday code problems
 
-ESLint is not installed and there is no configuration file. `npm run lint`
-runs `next lint`, which has nothing to run.
-
-Next 15 uses **flat config** (`eslint.config.mjs`), not `.eslintrc`. `next
-lint` is also deprecated in Next 15 and removed in 16, so the setup should
-call ESLint directly rather than going through Next.
+Needs `eslint.config.mjs` at the project root before it will run. ESLint 9 uses
+flat config; `.eslintrc.json` is never read, and an old one left in place will
+mislead whoever edits it next.
 
 ```bash
 npx eslint .
 ```
 
----
+Observed on first run: 94 problems — 31 errors, 63 warnings.
+
+**Ignore what you did not write.** Without an ignore list this reads the build
+output and reports thousands of problems in generated code. `next-env.d.ts`
+belongs there too: Next regenerates it every build, so its one error cannot be
+fixed and returns anyway.
+
+**Teach it the underscore convention rather than obeying it.** Several Lexical
+signatures require parameters this code does not use, marked `_config`,
+`_editor`, `_position`. Deleting them breaks the signature; renaming them loses
+the signal. `argsIgnorePattern: '^_'` in the config is the right answer.
+
+```bash
+npx eslint . --fix
+```
+
+**Only run this after the before-count is recorded.** It rewrites files. Check
+what ESLint says is fixable first — it reported "1 error and 5 warnings
+potentially fixable", so nothing else could be quietly rewritten.
+
+## Re-measuring after a change
+
+```bash
+npx cloc src
+npx cloc src --by-file --include-lang=TypeScript
+npx knip
+npx jscpd src --min-lines 5 --reporters console
+npx madge --extensions ts,tsx --ts-config tsconfig.json --circular src
+npx eslint .
+npx tsc --noEmit
+npm run build
+```
+
+Same commands, same scope, or the comparison means nothing. `npm run build`
+last: it compiles every page and catches what a type check alone does not.
 
 # Saving output
 
