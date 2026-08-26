@@ -13,7 +13,8 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { formatDateLabel, toISODate, buildMonthDays } from '@/lib/calendarDates';
+import { formatDateLabel, buildMonthDays } from '@/lib/calendarDates';
+import { toLocalISODate } from '@/lib/utils';
 
 interface PromoDatePickerProps {
   value: string;
@@ -62,7 +63,7 @@ export function PromoDatePicker({
 
   const days = buildMonthDays(viewDate);
   const month = viewDate.getMonth();
-  const today = toISODate(new Date());
+  const today = toLocalISODate(new Date());
   const isOutOfRange = (iso: string) => Boolean(minDate && iso < minDate);
   const todayDisabled = Boolean(isOutOfRange(today));
 
@@ -152,7 +153,7 @@ export function PromoDatePicker({
 
           <div className="grid grid-cols-7 gap-1">
             {days.map((date) => {
-              const iso = toISODate(date);
+              const iso = toLocalISODate(date);
               const inMonth = date.getMonth() === month;
               const isSelected = value === iso;
               const isToday = today === iso;
@@ -203,7 +204,7 @@ export function PromoDatePicker({
                 e.preventDefault();
                 if (todayDisabled) return;
                 const now = new Date();
-                onChange(toISODate(now));
+                onChange(toLocalISODate(now));
                 setViewDate(new Date(now.getFullYear(), now.getMonth(), 1));
                 setOpen(false);
               }}

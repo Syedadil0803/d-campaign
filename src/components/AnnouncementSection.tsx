@@ -4,12 +4,12 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Megaphone, MoreVertical, Sparkles, Radio, Infinity as InfinityIcon, MoveLeft, Trash2 } from 'lucide-react';
 import { CampaignConfig, defaultConfig } from '@/types/campaign';
-import { getBackgroundStyle, stripHtml } from '@/lib/utils';
+import { getBackgroundStyle, stripHtml, toLocalISODate } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { wrapBareTextWithFontSize, rgbToHex, fontSizeToLabel } from '@/lib/richTextUtils';
 import RichTextToolbar from './RichTextToolbar';
 import { Toast, TOAST_ACTION_MS, type ToastAction } from './Toast';
-import { formatDateLabel, toISODate, buildMonthDays } from '@/lib/calendarDates';
+import { formatDateLabel, buildMonthDays } from '@/lib/calendarDates';
 import { PopupDropdown } from './PopupDropdown';
 import { CountryFlag, COUNTRY_CODES } from './CountryFlag';
 import { whatsAppUrl, whatsAppLooksShort, maxNationalDigits } from '@/lib/whatsapp';
@@ -1985,14 +1985,14 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                           </div>
                           <div className="grid grid-cols-7 gap-1">
                             {buildMonthDays(startDateView).map((day) => {
-                              const iso = toISODate(day);
+                              const iso = toLocalISODate(day);
                               const inMonth = day.getMonth() === startDateView.getMonth();
                               const isSelected = selectedStartDate === iso;
-                              const isToday = iso === toISODate(new Date());
+                              const isToday = iso === toLocalISODate(new Date());
                               // Start can't be in the past. It is NOT capped by
                               // the end date — an invalid range surfaces as an
                               // inline error below, not a blocked day.
-                              const disabled = iso < toISODate(new Date());
+                              const disabled = iso < toLocalISODate(new Date());
                               return (
                                 <button
                                   key={`start-${iso}`}
@@ -2098,14 +2098,14 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                           </div>
                           <div className="grid grid-cols-7 gap-1">
                             {buildMonthDays(endDateView).map((day) => {
-                              const iso = toISODate(day);
+                              const iso = toLocalISODate(day);
                               const inMonth = day.getMonth() === endDateView.getMonth();
                               const isSelected = selectedEndDate === iso;
-                              const isToday = iso === toISODate(new Date());
+                              const isToday = iso === toLocalISODate(new Date());
                               // End can't be in the past. It is NOT capped by
                               // the start date — an end-before-start range shows
                               // the inline error below instead of blocking days.
-                              const disabled = iso < toISODate(new Date());
+                              const disabled = iso < toLocalISODate(new Date());
                               return (
                                 <button
                                   key={`end-${iso}`}

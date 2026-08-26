@@ -313,6 +313,35 @@ export function wrapBareTextWithFontSize(html: string): string {
  * Operates on `window.getSelection()` — caller must verify
  * the selection is within the intended editor.
  */
+/**
+ * Drops an empty styled span at the caret and leaves the caret inside it.
+ *
+ * The zero-width space is load-bearing: an empty span has no position for a
+ * caret to sit in, so the browser puts it outside and the next character typed
+ * lands unstyled. A single invisible character gives it somewhere to be.
+ *
+ * setStart and setEnd both use offset 1 — after the zero-width space, not
+ * before it — or the character typed next goes in front and misses the span.
+ *
+ * Written out twice before, in the two places that start styled typing from an
+ * empty selection. Both would have to change together.
+ */
+function placeCaretInsideNewSpan(
+  newSpan: HTMLElement,
+  range: Range,
+  selection: Selection,
+): void {
+  const zwsp = document.createTextNode('\u200B');
+  newSpan.appendChild(zwsp);
+  range.insertNode(newSpan);
+
+  const newRange = document.createRange();
+  newRange.setStart(zwsp, 1);
+  newRange.setEnd(zwsp, 1);
+  selection.removeAllRanges();
+  selection.addRange(newRange);
+}
+
 export function applyFontSize(size: string): void {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return;
@@ -342,15 +371,7 @@ export function applyFontSize(size: string): void {
       // Create new span with font-size and zero-width space
       const newSpan = document.createElement('span');
       newSpan.style.fontSize = size;
-      const zwsp = document.createTextNode('\u200B');
-      newSpan.appendChild(zwsp);
-      range.insertNode(newSpan);
-
-      const newRange = document.createRange();
-      newRange.setStart(zwsp, 1);
-      newRange.setEnd(zwsp, 1);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
+      placeCaretInsideNewSpan(newSpan, range, selection);
     }
     return;
   }
@@ -519,15 +540,7 @@ export function applyInlineColor(color: string, range: Range): void {
         }
         parentNode = parentNode.parentNode;
       }
-      const zwsp = document.createTextNode('\u200B');
-      newSpan.appendChild(zwsp);
-      range.insertNode(newSpan);
-
-      const newRange = document.createRange();
-      newRange.setStart(zwsp, 1);
-      newRange.setEnd(zwsp, 1);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
+      placeCaretInsideNewSpan(newSpan, range, selection);
     }
     return;
   }

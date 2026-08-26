@@ -9,15 +9,11 @@
  *
  * Nothing here touches React or component state. It takes dates and returns
  * dates and strings.
+ *
+ * Date-to-string serialisation is NOT here — toLocalISODate in lib/utils.ts
+ * already owns it, and its comment explains the timezone trap that makes it
+ * necessary. An earlier version of this file carried a copy, which made five.
  */
-
-/** `2026-08-26` — the form the config stores and the API expects. */
-export function toISODate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
 
 /**
  * The 42 cells of a month grid — six rows of seven, starting on the Sunday

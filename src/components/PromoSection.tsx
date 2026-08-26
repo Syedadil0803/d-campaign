@@ -29,7 +29,7 @@ import {
   Radio,
 } from "lucide-react";
 import { CampaignConfig, PromoCard, defaultConfig } from "@/types/campaign";
-import { getBackgroundStyle } from "@/lib/utils";
+import { getBackgroundStyle, toLocalISODate, getISODateWithOffset } from '@/lib/utils';
 import { applyTemplateFull, applyTemplateLook, BLANK_LOOK } from "@/lib/promoTemplate";
 import {
   lookSignature,
@@ -39,7 +39,7 @@ import {
 } from "@/lib/promoAuthorship";
 import { UndoStack } from "@/lib/undoStack";
 import { SamplePromoTemplates, sampleTemplates } from "./SamplePromoTemplates";
-import { formatDateLabel, toISODate, buildMonthDays, formatScheduleRange } from '@/lib/calendarDates';
+import { formatDateLabel, buildMonthDays, formatScheduleRange } from '@/lib/calendarDates';
 import { directionToAngle, normalizeAngle, angleToCssDirection } from '@/lib/gradientAngle';
 import { advanceBlankLook, isBlankLook } from "@/lib/blankLooks";
 import { useRichTextEditor } from "@/hooks/useRichTextEditor";
@@ -426,14 +426,6 @@ export function PromoSection({
   onRemoveLive,
   onUseAi,
 }: PromoSectionProps) {
-  const getISODateWithOffset = useCallback((daysFromToday = 0): string => {
-    const date = new Date();
-    date.setDate(date.getDate() + daysFromToday);
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }, []);
   const [currentTime, setCurrentTime] = useState(Date.now());
   /**
    * Live copies of the stored cards, so checks running inside dialog handlers
@@ -1936,6 +1928,48 @@ export function PromoSection({
   }
 
   // Show the transient style-warning toast (single owner of its lifecycle).
+  /**
+   * Would applying this format push the field past its line limit?
+   *
+   * Asked in both branches of the toolbar handler — once when there is a
+   * selection inside the editor, once when the whole field is being formatted
+   * — and the two copies were identical. Shows the warning itself, so the
+   * caller only has to decide whether to stop.
+   *
+   * Measures against a mock-up of the result rather than applying the format
+   * and undoing it, so the editor never flickers through a state the user
+   * did not ask for.
+   */
+  function formatWouldOverflow(
+    editor: HTMLElement,
+    field: PromoField,
+    format: string,
+  ): boolean {
+    const overflowFields: PromoField[] = ['title', 'subtitle', 'description'];
+    if (!overflowFields.includes(field)) return false;
+
+    const plainText = editor.textContent?.replace(/\u200B/g, '').trim() || '';
+    const sizeMap: Record<string, string> = {
+      xs: '0.75rem', sm: '0.875rem', md: '1rem',
+      lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem',
+    };
+    let testHtml = '';
+    if (format.startsWith('size-')) {
+      const size = format.replace('size-', '');
+      testHtml = `<span style="font-size:${sizeMap[size] || '1rem'}">${plainText}</span>`;
+    } else if (format === 'bold') {
+      testHtml = `<b>${wrapBareTextWithFontSize(editor.innerHTML)}</b>`;
+    } else if (format === 'italic') {
+      testHtml = `<i>${wrapBareTextWithFontSize(editor.innerHTML)}</i>`;
+    }
+
+    if (testHtml && measureOverflow(testHtml, field as 'title' | 'subtitle' | 'description')) {
+      showStyleWarning('This style exceeds the field limit — try a smaller size or shorter text');
+      return true;
+    }
+    return false;
+  }
+
   function showStyleWarning(message: string) {
     if (styleWarningTimer.current) clearTimeout(styleWarningTimer.current);
     setStyleWarning(message);
@@ -2044,28 +2078,7 @@ export function PromoSection({
     };
     if (selectionIsInsideEditor(editor)) {
       // Pre-check: would this format cause overflow?
-      if (overflowFields.includes(field)) {
-        const plainText = editor.textContent?.replace(/\u200B/g, '').trim() || '';
-        const sizeMap: Record<string, string> = {
-          xs: '0.75rem', sm: '0.875rem', md: '1rem',
-          lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem',
-        };
-        let testHtml = '';
-        if (format.startsWith('size-')) {
-          const size = format.replace('size-', '');
-          testHtml = `<span style="font-size:${sizeMap[size] || '1rem'}">${plainText}</span>`;
-        } else if (format === 'bold') {
-          const currentHtml = wrapBareTextWithFontSize(editor.innerHTML);
-          testHtml = `<b>${currentHtml}</b>`;
-        } else if (format === 'italic') {
-          const currentHtml = wrapBareTextWithFontSize(editor.innerHTML);
-          testHtml = `<i>${currentHtml}</i>`;
-        }
-        if (testHtml && measureOverflow(testHtml, field as 'title' | 'subtitle' | 'description')) {
-          showStyleWarning('This style exceeds the field limit — try a smaller size or shorter text');
-          return;
-        }
-      }
+      if (formatWouldOverflow(editor, field, format)) return;
       saveSelection();
       formatText(format);
       skipOverflowBlockRef.current = true;
@@ -2083,28 +2096,7 @@ export function PromoSection({
     const hasContent = editor.textContent?.replace(/\u200B/g, "").trim();
     if (hasContent) {
       // Pre-check: would this format cause overflow?
-      if (overflowFields.includes(field)) {
-        const plainText = editor.textContent?.replace(/\u200B/g, '').trim() || '';
-        const sizeMap: Record<string, string> = {
-          xs: '0.75rem', sm: '0.875rem', md: '1rem',
-          lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem',
-        };
-        let testHtml = '';
-        if (format.startsWith('size-')) {
-          const size = format.replace('size-', '');
-          testHtml = `<span style="font-size:${sizeMap[size] || '1rem'}">${plainText}</span>`;
-        } else if (format === 'bold') {
-          const currentHtml = wrapBareTextWithFontSize(editor.innerHTML);
-          testHtml = `<b>${currentHtml}</b>`;
-        } else if (format === 'italic') {
-          const currentHtml = wrapBareTextWithFontSize(editor.innerHTML);
-          testHtml = `<i>${currentHtml}</i>`;
-        }
-        if (testHtml && measureOverflow(testHtml, field as 'title' | 'subtitle' | 'description')) {
-          showStyleWarning('This style exceeds the field limit — try a smaller size or shorter text');
-          return;
-        }
-      }
+      if (formatWouldOverflow(editor, field, format)) return;
       if (format === "bold" || format === "italic") {
         const shouldEnable =
           format === "bold" ? !activeFormats.bold : !activeFormats.italic;
@@ -3064,7 +3056,7 @@ export function PromoSection({
     const days = buildMonthDays(viewDate);
     const month = viewDate.getMonth();
     const selected = value;
-    const today = toISODate(new Date());
+    const today = toLocalISODate(new Date());
     // A day is out of range if before minDate (past dates). Cross-field limits
     // are NOT applied here — an invalid range surfaces as an inline error.
     const isOutOfRange = (iso: string) => Boolean(minDate && iso < minDate);
@@ -3182,7 +3174,7 @@ export function PromoSection({
             </div>
             <div className="grid grid-cols-7 gap-1">
               {days.map((date) => {
-                const iso = toISODate(date);
+                const iso = toLocalISODate(date);
                 const inMonth = date.getMonth() === month;
                 const isSelected = selected === iso;
                 const isToday = today === iso;
@@ -3232,7 +3224,7 @@ export function PromoSection({
                   e.preventDefault();
                   if (todayDisabled) return;
                   const now = new Date();
-                  onSelect(toISODate(now));
+                  onSelect(toLocalISODate(now));
                   setViewDate(new Date(now.getFullYear(), now.getMonth(), 1));
                   setOpen(false);
                 }}
@@ -3827,7 +3819,7 @@ export function PromoSection({
                 // Any future date is selectable — the End picker is NOT used to
                 // gray out Start days. An invalid range is surfaced as an
                 // inline error, not by blocking the picker.
-                minDate: toISODate(new Date()),
+                minDate: toLocalISODate(new Date()),
                 onSelect: (nextValue) => {
                   pushPromoState();
                   const nextPromoCard = {
@@ -3853,7 +3845,7 @@ export function PromoSection({
                 setOpen: setShowEndDatePicker,
                 // Any future date is selectable; an end before start is caught
                 // by the inline error below, not blocked in the picker.
-                minDate: toISODate(new Date()),
+                minDate: toLocalISODate(new Date()),
                 invalid: promoDateRangeInvalid,
                 onSelect: (nextValue) => {
                   pushPromoState();
