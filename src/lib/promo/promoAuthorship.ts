@@ -12,6 +12,7 @@
  */
 
 import { PromoCard, defaultConfig } from '@/types/campaign';
+import { FIELD_STYLE_KEYS } from '@/lib/promo/promoStyleKeys';
 import { blankLookSignatures, isBlankLook } from '@/lib/promo/blankLooks';
 
 /** Text with the markup taken off, for asking whether anything was written. */
@@ -32,6 +33,18 @@ function plain(html?: string): string {
  */
 export function lookSignature(style: PromoCard['style']): string {
   const { position: _position, ...look } = style;
+  // How the words sit in the card is layout, not a look — the same reasoning
+  // that drops `position` above. Themes swap colours; leaving textAlign in
+  // meant centring a title made the card stop matching the theme it was
+  // wearing, so it started reading as a design of the user's own and the
+  // "your own design" swatch appeared over a colour change nobody made.
+  for (const key of FIELD_STYLE_KEYS) {
+    const fieldStyle = look[key];
+    if (fieldStyle) {
+      const { textAlign: _textAlign, ...rest } = fieldStyle;
+      look[key] = rest as typeof fieldStyle;
+    }
+  }
   return JSON.stringify(look);
 }
 

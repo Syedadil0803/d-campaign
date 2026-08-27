@@ -1,27 +1,13 @@
 'use client';
 
 import { useRef, useState, type RefObject } from 'react';
-import type { CampaignConfig, GradientStyle, PromoCard, PromoField } from '@/types/campaign';
+import type { CampaignConfig, GradientStyle, PromoField } from '@/types/campaign';
+import { STYLE_KEY_MAP, type FieldStyle } from '@/lib/promo/promoStyleKeys';
 import {
   fieldStylePopupPosition,
   STYLE_POPUP_FALLBACK_HEIGHT,
 } from '@/lib/promo/fieldStylePopupPosition';
 
-/**
- * Which entry under `style` each field is painted from.
- *
- * The timer was missing here, so both style mutators carried a
- * `currentField === "timer"` branch that duplicated the whole setConfig shape
- * just to write dateStyle instead — and getPopupFieldStyle spelled the same
- * mapping out a third time as an if-chain. One map, three call sites.
- */
-export const STYLE_KEY_MAP = {
-  title: 'titleStyle',
-  subtitle: 'subheadingStyle',
-  description: 'descriptionStyle',
-  button: 'buttonStyle',
-  timer: 'dateStyle',
-} as const;
 
 const FIELD_STYLE_LABEL: Record<PromoField, string> = {
   title: 'Title Style',
@@ -30,8 +16,6 @@ const FIELD_STYLE_LABEL: Record<PromoField, string> = {
   timer: 'Timer Style',
   button: 'Button Style',
 };
-
-type FieldStyle = PromoCard['style']['titleStyle'];
 
 interface UsePromoFieldStylingArgs {
   config: CampaignConfig;

@@ -14,10 +14,6 @@ import {
 import { isInvalidRange } from '@/lib/dateRange';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
 import {
-  fieldStylePopupPosition,
-  STYLE_POPUP_FALLBACK_HEIGHT,
-} from '@/lib/promo/fieldStylePopupPosition';
-import {
   Gift,
   X,
   Palette,

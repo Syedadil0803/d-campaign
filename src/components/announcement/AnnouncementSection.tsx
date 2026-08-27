@@ -10,7 +10,6 @@ import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { wrapBareTextWithFontSize, rgbToHex, fontSizeToLabel } from '@/lib/editor/richTextUtils';
 import RichTextToolbar from '@/components/shared/RichTextToolbar';
 import { Toast, TOAST_ACTION_MS, type ToastAction } from '@/components/shared/Toast';
-import { PopupDropdown } from '@/components/shared/PopupDropdown';
 import { AnnouncementLinkPopup } from '@/components/announcement/AnnouncementLinkPopup';
 import { AnnouncementSchedulePopup } from '@/components/announcement/AnnouncementSchedulePopup';
 import { AnnouncementStylePanel } from '@/components/announcement/AnnouncementStylePanel';

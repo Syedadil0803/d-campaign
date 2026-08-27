@@ -8,6 +8,7 @@
  */
 
 import { PromoCard } from '@/types/campaign';
+import { FIELD_STYLE_KEYS } from '@/lib/promo/promoStyleKeys';
 import { FIRST_BLANK_LOOK } from '@/lib/promo/blankLooks';
 
 /** Fields that carry the card's look. Everything else is content or scheduling. */
@@ -17,6 +18,25 @@ type PromoStyle = PromoCard['style'];
  * Apply a template's look to the card the user is editing, keeping their copy,
  * links, dates and timer settings exactly as they are.
  */
+/**
+ * The current card's per-field alignment, shaped to spread over a template's
+ * style. Fields the current card has no alignment for are left as the
+ * template has them.
+ */
+function carryAlignment(
+  current: PromoStyle,
+  template: PromoStyle,
+): Partial<PromoStyle> {
+  const out: Record<string, unknown> = {};
+  for (const key of FIELD_STYLE_KEYS) {
+    const mine = current[key];
+    const theirs = template[key];
+    if (!theirs) continue;
+    out[key] = { ...theirs, textAlign: mine?.textAlign };
+  }
+  return out as Partial<PromoStyle>;
+}
+
 export function applyTemplateLook(current: PromoCard, template: PromoCard): PromoCard {
   return {
     ...current,
@@ -30,6 +50,13 @@ export function applyTemplateLook(current: PromoCard, template: PromoCard): Prom
       // and the swatch still read as applied because the signature ignored the
       // one thing that had changed.
       position: current.style.position,
+      // Alignment travels with position, and for the same reason: where the
+      // words sit is the user's layout choice, not part of the look being
+      // tried on. Copying the template's textAlign meant sampling a theme
+      // silently re-centred a title the user had left-aligned, and
+      // lookSignature — which ignores textAlign — still reported the theme as
+      // applied, so nothing on screen said it had happened.
+      ...carryAlignment(current.style, template.style),
     },
     cardWidth: template.cardWidth ?? current.cardWidth,
     buttonFullWidth: template.buttonFullWidth ?? current.buttonFullWidth,
