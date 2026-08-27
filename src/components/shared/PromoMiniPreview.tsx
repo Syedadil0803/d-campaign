@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { PromoCard } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
 import { getTemplateTimerPreviewText } from "@/lib/editor/timerUtils";
@@ -23,13 +24,57 @@ interface PromoMiniPreviewProps {
  */
 export function PromoMiniPreview({ promoCard, faithful, scaffold }: PromoMiniPreviewProps) {
   const style = promoCard.style;
+  /**
+   * Render at the card's REAL width, then scale the whole thing to fit.
+   *
+   * This used to render at whatever width the tile happened to be, which meant
+   * the words wrapped somewhere else than they do on the site — a card widened
+   * to 440 still previewed with the line breaks of a narrow one. The preview's
+   * whole job is to show where the text lands, so it has to be laid out at the
+   * width it will actually have.
+   */
+  const CARD_WIDTH = promoCard.cardWidth || 400;
+  const frameRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [cardHeight, setCardHeight] = useState(0);
+  useEffect(() => {
+    const frame = frameRef.current;
+    const card = cardRef.current;
+    if (!frame || !card || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      const available = frame.clientWidth;
+      // Never scale UP: a tile wider than the card shows it at its own size
+      // rather than stretching a 400px card across the popup.
+      if (available > 0) setScale(Math.min(1, available / CARD_WIDTH));
+      setCardHeight(card.offsetHeight);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, [CARD_WIDTH]);
   /** An empty band still needs height, same as the editor's empty fields. */
   const EMPTY = "&nbsp;";
   const show = (html?: string) => Boolean(html) || scaffold;
   return (
     <div
-      className="flex w-full flex-col rounded-xl p-4 shadow-xl"
-      style={{ background: getBackgroundStyle(style.background) }}
+      ref={frameRef}
+      className="w-full overflow-hidden"
+      // The scaled card no longer contributes its real height to the layout,
+      // so the frame has to carry it or the tiles overlap.
+      style={{ height: cardHeight ? cardHeight * scale : undefined }}
+    >
+    <div
+      ref={cardRef}
+      className="flex flex-col rounded-xl p-4 shadow-xl"
+      style={{
+        background: getBackgroundStyle(style.background),
+        width: `${CARD_WIDTH}px`,
+        transform: `scale(${scale})`,
+        transformOrigin: "top left",
+      }}
     >
       {show(promoCard.title) && (
         <h3
@@ -92,6 +137,7 @@ export function PromoMiniPreview({ promoCard, faithful, scaffold }: PromoMiniPre
           />
         </div>
       )}
+    </div>
     </div>
   );
 }
