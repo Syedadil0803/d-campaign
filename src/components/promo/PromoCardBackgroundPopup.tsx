@@ -1,5 +1,10 @@
 'use client';
 
+import { popupLeftBesideCard } from '@/lib/promo/fieldStylePopupPosition';
+
+/** Matches the w-[320px] on the panel below. */
+const POPUP_WIDTH = 320;
+
 import type { RefObject } from 'react';
 import type { GradientStyle } from '@/types/campaign';
 import { GradientControls } from '@/components/promo/GradientControls';
@@ -9,11 +14,15 @@ import { X } from 'lucide-react';
 /**
  * The card background controls, floating beside the card in the preview.
  *
- * The only one of the promo editor's popups that has to know where it is. It
- * pins itself to the left edge of the canvas by measuring the card, so the
+ * The only one of the promo editor's popups that has to know where it is. The
  * anchor arrives as a ref rather than as a position — the caller does not know
  * where the card will be either, and asking the DOM at render is the only
  * honest answer.
+ *
+ * It used to pin itself to the canvas's left edge unconditionally, which is
+ * free space only while the card is on the right. Parking the card bottom-left
+ * dropped this popup on top of the card it was recolouring. It now uses the
+ * same side rule as the field style panel.
  *
  * Its vertical position is fixed when it opens rather than followed live, so
  * the panel does not crawl up the screen while a colour is being dragged.
@@ -31,6 +40,7 @@ export function PromoCardBackgroundPopup({
   typeButtonRef,
   typeMenuRef,
   typeMenuPosition,
+  cardIsOnTheLeft,
 }: {
   popupRef: RefObject<HTMLDivElement | null>;
   /** The card itself — measured to place this beside it. */
@@ -49,6 +59,8 @@ export function PromoCardBackgroundPopup({
   typeButtonRef: RefObject<HTMLButtonElement | null>;
   typeMenuRef: RefObject<HTMLDivElement | null>;
   typeMenuPosition: { top: number; left: number; width: number } | null;
+  /** Where the card sits — decides which side has room for this. */
+  cardIsOnTheLeft: boolean;
 }) {
   return (
     <div
@@ -56,17 +68,14 @@ export function PromoCardBackgroundPopup({
       className="absolute z-30 w-[320px] bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3"
       style={(() => {
         const card = anchorRef.current;
-        const canvas = card?.closest(
-          "[data-promo-canvas]",
-        ) as HTMLElement | null;
-        const left =
-          card && canvas
-            ? `${Math.round(
-                canvas.getBoundingClientRect().left +
-                  8 -
-                  card.getBoundingClientRect().left,
-              )}px`
-            : "8px";
+        const left = card
+          ? popupLeftBesideCard({
+              card,
+              width: POPUP_WIDTH,
+              anchor: 'input',
+              cardIsOnTheLeft,
+            })
+          : '8px';
         // Top fixed at open — see top.
         return { top: `${top ?? 8}px`, left };
       })()}

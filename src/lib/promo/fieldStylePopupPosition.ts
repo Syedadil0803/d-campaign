@@ -13,6 +13,49 @@ export const STYLE_POPUP_GAP = 40;
 /** Assumed panel height for the very first frame, before it can be measured. */
 export const STYLE_POPUP_FALLBACK_HEIGHT = 260;
 
+/**
+ * Which side of the card a floating panel opens on.
+ *
+ * Shared, because getting it wrong is the same bug twice: the card background
+ * popup pinned itself to the canvas's left edge unconditionally, so parking the
+ * card bottom-left dropped the popup straight on top of the card it was
+ * recolouring.
+ *
+ * From a control on the left, hug the canvas's left edge — but only while the
+ * card is on the right, because that is the only time the left is free space.
+ * Otherwise open beside the card, on whichever side has room, falling back to
+ * its left rather than running off the canvas.
+ */
+export function popupLeftBesideCard({
+  card,
+  width,
+  anchor,
+  cardIsOnTheLeft,
+  gap = STYLE_POPUP_GAP,
+}: {
+  card: HTMLElement;
+  width: number;
+  anchor: 'card' | 'input';
+  cardIsOnTheLeft: boolean;
+  gap?: number;
+}): string {
+  const canvas = card.closest('[data-promo-canvas]') as HTMLElement | null;
+
+  if (anchor === 'input' && !cardIsOnTheLeft && canvas) {
+    const cardLeft = card.getBoundingClientRect().left;
+    const canvasLeft = canvas.getBoundingClientRect().left;
+    return `${Math.round(canvasLeft + 8 - cardLeft)}px`;
+  }
+
+  const rightEdge = card.getBoundingClientRect().right;
+  const roomOnRight = canvas
+    ? canvas.getBoundingClientRect().right - rightEdge
+    : 0;
+
+  if (roomOnRight >= width + gap) return `${card.clientWidth + gap}px`;
+  return `${-(width + gap)}px`;
+}
+
 export interface FieldStylePopupPositionArgs {
   /** The promo card element the panel is positioned against. */
   card: HTMLElement | null;
@@ -67,43 +110,13 @@ export function fieldStylePopupPosition({
   }
   const vertical = { top: `${Math.round(desiredTop - cardTop)}px` };
 
-  /**
-   * Horizontal: open beside whatever was clicked.
-   *
-   * From a field in the card, the popup sits next to the card, on whichever
-   * side has room — the canvas is ~838px, the card 400px and the popup 280px,
-   * so they only fit side by side, never both on the same side.
-   *
-   * From the style icon beside an input on the left, it instead hugs the
-   * canvas's left edge, next to the input that opened it. It can't go further
-   * left and sit truly beside the inputs: an ancestor of the preview column
-   * sets overflow-x: hidden, so anything past the canvas edge is clipped
-   * rather than floating over the panel.
-   *
-   * Unless the card is parked there. The left of the canvas is only free real
-   * estate while the card sits on the right — move the card to bottom-left and
-   * that same placement drops the panel straight on top of the thing it is
-   * restyling, hiding the preview the user is watching. In that case it falls
-   * through to the card-relative placement below, which opens on whichever
-   * side the card actually leaves open.
-   */
-  if (anchor === 'input' && !cardIsOnTheLeft && canvas) {
-    const cardLeft = card.getBoundingClientRect().left;
-    const canvasLeft = canvas.getBoundingClientRect().left;
-    return { ...vertical, left: `${Math.round(canvasLeft + 8 - cardLeft)}px` };
-  }
-
-  // Clicked a field in the card: open to its right, so the panel lands on the
-  // opposite side from the two left-hand routes and it stays obvious which one
-  // opened it. A card parked bottom-right leaves no room there, so that case
-  // falls back to the left rather than running off the canvas.
-  const rightEdge = card.getBoundingClientRect().right;
-  const roomOnRight = canvas
-    ? canvas.getBoundingClientRect().right - rightEdge
-    : 0;
-
-  if (roomOnRight >= STYLE_POPUP_WIDTH + STYLE_POPUP_GAP) {
-    return { ...vertical, left: `${card.clientWidth + STYLE_POPUP_GAP}px` };
-  }
-  return { ...vertical, left: `${-(STYLE_POPUP_WIDTH + STYLE_POPUP_GAP)}px` };
+  return {
+    ...vertical,
+    left: popupLeftBesideCard({
+      card,
+      width: STYLE_POPUP_WIDTH,
+      anchor,
+      cardIsOnTheLeft,
+    }),
+  };
 }

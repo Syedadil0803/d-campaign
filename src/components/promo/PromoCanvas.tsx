@@ -246,6 +246,10 @@ export function PromoCanvas() {
                 )}
               {showCardBgPopup && (
                 <PromoCardBackgroundPopup
+                  cardIsOnTheLeft={
+                    config.promoCard.style.position === 'bottom-left' ||
+                    config.promoCard.style.position === 'top-left'
+                  }
                   popupRef={cardBgPopupRef}
                   anchorRef={promoCardRef}
                   top={cardBgPopupTop}
