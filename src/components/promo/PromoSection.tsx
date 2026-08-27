@@ -4,11 +4,7 @@ import {
   useState,
   useEffect,
   useRef,
-  useCallback,
   useMemo,
-  type RefObject,
-  type Dispatch,
-  type SetStateAction,
 } from "react";
 import { cardReplaceConsent } from '@/lib/promo/cardReplaceConsent';
 import { PromoCanvas } from '@/components/promo/PromoCanvas';
@@ -22,6 +18,7 @@ import { isInvalidRange } from '@/lib/dateRange';
 import { getFreshPromoCard } from '@/lib/promo/freshPromoCard';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
 import { useMirroredHtml } from '@/components/promo/useMirroredHtml';
+import { usePromoDropdowns } from '@/components/promo/usePromoDropdowns';
 import { usePromoRichText } from '@/components/promo/usePromoRichText';
 import {
 } from "lucide-react";
@@ -399,14 +396,43 @@ export function PromoSection({
   const previewButtonRef = useRef<HTMLDivElement>(null);
   const previewTimerRef = useRef<HTMLDivElement>(null);
   const activeEditorRef = useRef<HTMLDivElement>(null);
-  const cardPositionBtnRef = useRef<HTMLButtonElement>(null);
-  const cardPositionMenuRef = useRef<HTMLDivElement>(null);
-  const cardBgTypeBtnRef = useRef<HTMLButtonElement>(null);
-  const cardBgTypeMenuRef = useRef<HTMLDivElement>(null);
-  const fieldBgTypeBtnRef = useRef<HTMLButtonElement>(null);
-  const fieldBgTypeMenuRef = useRef<HTMLDivElement>(null);
-  const cardBgPopupBtnRef = useRef<HTMLButtonElement>(null);
-  const cardBgPopupRef = useRef<HTMLDivElement>(null);
+
+  /** Every menu in the editor, and the one effect that dismisses them. */
+  const {
+    cardPositionBtnRef,
+    cardPositionMenuRef,
+    showCardPositionDropdown,
+    setShowCardPositionDropdown,
+    cardPositionPos,
+    setCardPositionPos,
+    cardBgTypeBtnRef,
+    cardBgTypeMenuRef,
+    showCardBgTypeDropdown,
+    setShowCardBgTypeDropdown,
+    cardBgTypePos,
+    setCardBgTypePos,
+    fieldBgTypeBtnRef,
+    fieldBgTypeMenuRef,
+    showFieldBgTypeDropdown,
+    setShowFieldBgTypeDropdown,
+    fieldBgTypePos,
+    setFieldBgTypePos,
+    countryCodeBtnRef,
+    countryCodeMenuRef,
+    showCountryCodeDropdown,
+    setShowCountryCodeDropdown,
+    countryCodePos,
+    setCountryCodePos,
+    cardBgPopupBtnRef,
+    cardBgPopupRef,
+    showCardBgPopup,
+    setShowCardBgPopup,
+    cardBgPopupTop,
+    setCardBgPopupTop,
+    getDropdownPosition,
+    closeAllPromoDropdowns,
+  } = usePromoDropdowns();
+
   const promoCardRef = useRef<HTMLDivElement>(null);
   const [cardWidth, setCardWidth] = useState(config.promoCard.cardWidth || 400);
   // Auto-fit: scale the preview card down so a tall card (or a short/zoomed
@@ -462,21 +488,6 @@ export function PromoSection({
   const [cardActionConfirm, setCardActionConfirm] =
     useState<PromoCardAction | null>(null);
 
-  const [showCardPositionDropdown, setShowCardPositionDropdown] =
-    useState(false);
-  const [showCardBgTypeDropdown, setShowCardBgTypeDropdown] = useState(false);
-  const [showFieldBgTypeDropdown, setShowFieldBgTypeDropdown] = useState(false);
-  const [showCardBgPopup, setShowCardBgPopup] = useState(false);
-  /**
-   * Where the panel's top edge sits, decided once when it opens.
-   *
-   * Recomputing it as the panel resizes moves the heading under the user's
-   * cursor: switching Type between Solid and a gradient adds or removes
-   * controls, and an edge that follows the content makes the whole panel jump.
-   * Fixed at open, the panel grows and shrinks downward from a stationary
-   * heading.
-   */
-  const [cardBgPopupTop, setCardBgPopupTop] = useState<number | null>(null);
   const [showPersistentScaffold, setShowPersistentScaffold] = useState(true);
   /**
    * Renaming only: the flag itself is a prop now (see the interface above).
@@ -584,31 +595,7 @@ export function PromoSection({
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  const [showCountryCodeDropdown, setShowCountryCodeDropdown] = useState(false);
-  /** Wraps the country button + its menu, so outside-clicks can be told apart. */
-  const countryCodeBtnRef = useRef<HTMLButtonElement>(null);
-  const countryCodeMenuRef = useRef<HTMLDivElement>(null);
-  const [countryCodePos, setCountryCodePos] = useState<{
-    top: number;
-    left: number;
-    width: number;
-  } | null>(null);
 
-  const [cardPositionPos, setCardPositionPos] = useState<{
-    top: number;
-    left: number;
-    width: number;
-  } | null>(null);
-  const [cardBgTypePos, setCardBgTypePos] = useState<{
-    top: number;
-    left: number;
-    width: number;
-  } | null>(null);
-  const [fieldBgTypePos, setFieldBgTypePos] = useState<{
-    top: number;
-    left: number;
-    width: number;
-  } | null>(null);
 
   // Single hook instance — activeEditorRef is swapped on focus
   const {
@@ -1049,52 +1036,6 @@ export function PromoSection({
     return () => clearInterval(interval);
   }, []);
 
-  const getDropdownPosition = useCallback(
-    (button: HTMLButtonElement | null) => {
-      if (!button) return null;
-      const rect = button.getBoundingClientRect();
-      return { top: rect.bottom + 6, left: rect.left, width: rect.width };
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const onDocMouseDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      const pairs: Array<
-        [
-          RefObject<HTMLButtonElement | null>,
-          RefObject<HTMLDivElement | null>,
-          Dispatch<SetStateAction<boolean>>,
-        ]
-      > = [
-        [cardPositionBtnRef, cardPositionMenuRef, setShowCardPositionDropdown],
-        [cardBgTypeBtnRef, cardBgTypeMenuRef, setShowCardBgTypeDropdown],
-        [fieldBgTypeBtnRef, fieldBgTypeMenuRef, setShowFieldBgTypeDropdown],
-        [countryCodeBtnRef, countryCodeMenuRef, setShowCountryCodeDropdown],
-      ];
-      pairs.forEach(([btnRef, menuRef, setOpen]) => {
-        if (
-          btnRef.current?.contains(target) ||
-          menuRef.current?.contains(target)
-        )
-          return;
-        setOpen(false);
-      });
-      // Keep card background popup open until explicit close (X button).
-    };
-    document.addEventListener("mousedown", onDocMouseDown);
-    return () => document.removeEventListener("mousedown", onDocMouseDown);
-  }, []);
-
-  const closeAllPromoDropdowns = useCallback(() => {
-
-    setShowCardPositionDropdown(false);
-    setShowCardBgTypeDropdown(false);
-    setShowFieldBgTypeDropdown(false);
-    setShowCountryCodeDropdown(false);
-    setShowCardBgPopup(false);
-  }, []);
 
   const richText = usePromoRichText({
     config,
