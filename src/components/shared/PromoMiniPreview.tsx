@@ -68,7 +68,11 @@ export function PromoMiniPreview({ promoCard, faithful, scaffold }: PromoMiniPre
     >
     <div
       ref={cardRef}
-      className="flex flex-col rounded-xl p-4 shadow-xl"
+      // p-5, not p-4: the live card uses p-5 and its fields px-2, which is what
+      // makes its content box exactly the 344 / 384 the overflow measurement
+      // assumes. At p-4 the preview gave itself 8px more and wrapped later than
+      // the card it is previewing.
+      className="flex flex-col rounded-xl p-5 shadow-xl"
       style={{
         background: getBackgroundStyle(style.background),
         width: `${CARD_WIDTH}px`,

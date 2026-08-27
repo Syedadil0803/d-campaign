@@ -124,7 +124,7 @@ export function PromoVersionsPopup({
                 </button>
               </div>
               <div className="mt-3 max-w-xs">
-                <PromoMiniPreview promoCard={livePromoCard} />
+                <PromoMiniPreview promoCard={livePromoCard} faithful />
               </div>
             </div>
           )}
@@ -201,7 +201,7 @@ export function PromoVersionsPopup({
                         {formatScheduleRange(version.promoCard.startDate, version.promoCard.endDate)}
                       </p>
                     )}
-                    <PromoMiniPreview promoCard={version.promoCard} />
+                    <PromoMiniPreview promoCard={version.promoCard} faithful />
 
                     {pendingDeleteId === version.id && (
                       <div
