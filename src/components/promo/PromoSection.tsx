@@ -12,6 +12,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { isInvalidRange } from '@/lib/dateRange';
+import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
 import {
   fieldStylePopupPosition,
   STYLE_POPUP_FALLBACK_HEIGHT,
@@ -364,9 +365,7 @@ export function PromoSection({
    * having the panel appear across the canvas next to the card, meant looking
    * away from the thing just clicked.
    */
-  const [stylePopupAnchor, setStylePopupAnchor] = useState<"card" | "input">("card");
   const [styleWarning, setStyleWarning] = useState<string | null>(null);
-  const styleWarningTimer = useRef<NodeJS.Timeout | null>(null);
   const [fieldInfoPopup, setFieldInfoPopup] = useState<'title' | 'subtitle' | 'description' | null>(null);
   const [hiddenFieldInfos, setHiddenFieldInfos] = useState<Set<string>>(readHiddenFieldInfos);
   /** Closes the note and remembers not to offer it again. */
@@ -635,6 +634,42 @@ export function PromoSection({
   const restoringSnapshotRef = useRef(false);
   const skipOverflowBlockRef = useRef(false);
   const promoDeletingRef = useRef(false);
+
+  const {
+    setStylePopupAnchor,
+    updateFieldBg,
+    setFieldAlignment,
+    updateCardBg,
+    openFieldStylePopup,
+    showStyleWarning,
+    getPopupFieldStyle,
+    getPopupFieldLabel,
+    getPreviewFieldBackground,
+    getPopupPositionStyle,
+  } = usePromoFieldStyling({
+    config,
+    setConfig,
+    markChanged,
+    pushPromoState,
+    currentField,
+    setCurrentField,
+    activeEditorRef,
+    promoDeletingRef,
+    setShowPersistentScaffold,
+    setShowCardBgPopup,
+    setStyleWarning,
+    refreshPromoToolbarFormats,
+    ensureDefaultFontSize,
+    promoCardRef,
+    fieldPopupHeightRef,
+    previewFieldRefs: {
+      title: previewTitleRef,
+      subtitle: previewSubtitleRef,
+      description: previewDescriptionRef,
+      button: previewButtonRef,
+      timer: previewTimerRef,
+    },
+  });
   const promoAppliedCardBaselineRef = useRef<PromoSnapshot | null>(null);
   const promoAppliedRedoRef = useRef<PromoAppliedRedoSnapshot | null>(null);
   // True while the current card is a Start-Fresh card. Leaving a fresh card,
@@ -1330,29 +1365,6 @@ export function PromoSection({
     }, 0);
   }
 
-  function openFieldStylePopup(
-    field: PromoField,
-    ref: RefObject<HTMLDivElement | null>,
-    _trigger?: HTMLElement | null,
-  ) {
-    const nextEditor = ref.current;
-    const prevEditor = activeEditorRef.current;
-    if (prevEditor && prevEditor !== nextEditor) {
-      prevEditor.blur();
-    }
-    setShowPersistentScaffold(true);
-    setShowCardBgPopup(false);
-    setStylePopupAnchor("input");
-    setCurrentField(field);
-    activeEditorRef.current = nextEditor;
-    promoDeletingRef.current = false;
-    setTimeout(() => {
-      nextEditor?.focus();
-      refreshPromoToolbarFormats(ref.current);
-      ensureDefaultFontSize();
-    }, 0);
-  }
-
   function onFieldInput(field: PromoField) {
     if (restoringSnapshotRef.current) return;
     if (field === "timer") {
@@ -1700,12 +1712,6 @@ export function PromoSection({
     return false;
   }
 
-  function showStyleWarning(message: string) {
-    if (styleWarningTimer.current) clearTimeout(styleWarningTimer.current);
-    setStyleWarning(message);
-    styleWarningTimer.current = setTimeout(() => setStyleWarning(null), 3000);
-  }
-
   // Fires when the editor reverted an edit for exceeding one line. Shows the
   // shared "field limit reached" warning AND re-syncs the toolbar to the
   // actual (reverted) state — otherwise a rejected size/style (e.g. clicking
@@ -1892,112 +1898,12 @@ export function PromoSection({
   }
 
   // Style key map for field → config path
-  const STYLE_KEY_MAP = {
-    title: "titleStyle",
-    subtitle: "subheadingStyle",
-    description: "descriptionStyle",
-    button: "buttonStyle",
-  } as const;
 
 
-  /**
-   * Update a property on the current field's style.
-   *
-   * Every field style has the same three properties, so the patch is typed
-   * against one of them rather than left open. Record<string, any> accepted a
-   * misspelled key silently and wrote it into the saved config.
-   */
-  function updateFieldStyle(patch: Partial<PromoCard['style']['titleStyle']>) {
-    if (!currentField) return;
-    pushPromoState();
-
-    if (currentField === "timer") {
-      // Timer uses dateStyle
-      setConfig({
-        ...config,
-        promoCard: {
-          ...config.promoCard,
-          style: {
-            ...config.promoCard.style,
-            dateStyle: { ...config.promoCard.style.dateStyle, ...patch },
-          },
-        },
-      });
-    } else {
-      const key = STYLE_KEY_MAP[currentField];
-      setConfig({
-        ...config,
-        promoCard: {
-          ...config.promoCard,
-          style: {
-            ...config.promoCard.style,
-            [key]: { ...config.promoCard.style[key], ...patch },
-          },
-        },
-      });
-    }
-    markChanged();
-  }
-
-  // Update a property on the current field's background
-  function updateFieldBg(patch: Partial<GradientStyle>) {
-    if (!currentField) return;
-    pushPromoState();
-
-    if (currentField === "timer") {
-      // Timer uses dateStyle
-      const style = config.promoCard.style.dateStyle;
-      setConfig({
-        ...config,
-        promoCard: {
-          ...config.promoCard,
-          style: {
-            ...config.promoCard.style,
-            dateStyle: {
-              ...style,
-              background: { ...style.background, ...patch },
-            },
-          },
-        },
-      });
-    } else {
-      const key = STYLE_KEY_MAP[currentField];
-      const style = config.promoCard.style[key];
-      setConfig({
-        ...config,
-        promoCard: {
-          ...config.promoCard,
-          style: {
-            ...config.promoCard.style,
-            [key]: { ...style, background: { ...style.background, ...patch } },
-          },
-        },
-      });
-    }
-    markChanged();
-  }
-
-  // Alignment helper
-  function setFieldAlignment(align: "left" | "center" | "right") {
-    updateFieldStyle({ textAlign: align });
-  }
 
 
-  // Card-level background update
-  function updateCardBg(patch: Partial<GradientStyle>) {
-    pushPromoState();
-    setConfig({
-      ...config,
-      promoCard: {
-        ...config.promoCard,
-        style: {
-          ...config.promoCard.style,
-          background: { ...config.promoCard.style.background, ...patch },
-        },
-      },
-    });
-    markChanged();
-  }
+
+
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -2084,29 +1990,6 @@ export function PromoSection({
   }
 
 
-  /** Popup width and its gap from the card — must match the JSX below. */
-  function getPopupPositionStyle(
-    field: PopupField,
-    popupHeight = STYLE_POPUP_FALLBACK_HEIGHT,
-  ) {
-    const refMap = {
-      title: previewTitleRef,
-      subtitle: previewSubtitleRef,
-      description: previewDescriptionRef,
-      button: previewButtonRef,
-      timer: previewTimerRef,
-    } as const;
-    const position = config.promoCard.style.position;
-    return fieldStylePopupPosition({
-      card: promoCardRef.current,
-      field: refMap[field].current,
-      // The real height is measured once the panel has rendered; the constant
-      // only covers the first frame.
-      height: fieldPopupHeightRef.current || popupHeight,
-      anchor: stylePopupAnchor,
-      cardIsOnTheLeft: position === 'bottom-left' || position === 'top-left',
-    });
-  }
 
 
   const popupEditableFields = [
@@ -2117,26 +2000,6 @@ export function PromoSection({
     "timer",
   ] as const;
   type PopupField = (typeof popupEditableFields)[number];
-
-  function getPopupFieldStyle(field: PopupField) {
-    if (field === "title") return config.promoCard.style.titleStyle;
-    if (field === "subtitle") return config.promoCard.style.subheadingStyle;
-    if (field === "description") return config.promoCard.style.descriptionStyle;
-    if (field === "timer") return config.promoCard.style.dateStyle;
-    return config.promoCard.style.buttonStyle;
-  }
-
-  function getPopupFieldLabel(field: PopupField) {
-    if (field === "title") return "Title Style";
-    if (field === "subtitle") return "Subtitle Style";
-    if (field === "description") return "Description Style";
-    if (field === "timer") return "Timer Style";
-    return "Button Style";
-  }
-
-  function getPreviewFieldBackground(field: PopupField) {
-    return getPopupFieldStyle(field).background;
-  }
 
   // On mount: load saved versions. The saved config remains the source of truth.
   useEffect(() => {
