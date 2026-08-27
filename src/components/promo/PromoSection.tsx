@@ -15,7 +15,6 @@ import {
   Gift,
   X,
   Palette,
-  Power,
 } from "lucide-react";
 import { CampaignConfig, PromoCard, PromoField, defaultConfig, GradientStyle } from '@/types/campaign';
 import { getBackgroundStyle, getISODateWithOffset } from '@/lib/utils';
@@ -68,6 +67,7 @@ import { PromoCardBackgroundPopup } from '@/components/promo/PromoCardBackground
 import { PromoThemeRow } from '@/components/promo/PromoThemeRow';
 import { PromoEditorToolbar } from '@/components/promo/PromoEditorToolbar';
 import { PromoScheduleAndTimer } from '@/components/promo/PromoScheduleAndTimer';
+import { PromoPreviewHeader } from '@/components/promo/PromoPreviewHeader';
 import {
   PromoCardActionDialog,
   type PromoCardAction,
@@ -3415,61 +3415,12 @@ export function PromoSection({
 
         {/* Right: Preview — 70% width, fixed */}
         <div className="flex-1 min-h-0 h-full pr-2 flex flex-col gap-3 overflow-x-hidden">
-          <div className="space-y-1">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h4 className="text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">
-                  Preview
-                </h4>
-                <p className="mt-2 text-sm text-on-surface-variant">
-                  See your promo card update as you edit — click any field to restyle it.
-                </p>
-              </div>
-              <div className="shrink-0">
-                {/* Status chip — 3 states: On air (tap to stop) / Go on air
-                    enabled (same content, one click) / Go on air disabled
-                    (new or edited content → must Save & Publish). */}
-                <button
-                  type="button"
-                  onClick={
-                    liveIsOnAir
-                      ? () => setShowStopConfirm(true)
-                      : canReactivate
-                      ? () => setShowGoOnAirConfirm(true)
-                      : undefined
-                  }
-                  disabled={!liveIsOnAir && !canReactivate}
-                  aria-pressed={liveIsOnAir}
-                  title={
-                    liveIsOnAir
-                      ? "Your published card is on air — tap to stop it"
-                      : canReactivate
-                      ? "Reactivate the same content — go on air now"
-                      : "You have unpublished changes — Save & Publish to go live"
-                  }
-                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors duration-200 ${
-                    liveIsOnAir
-                      ? "border-transparent bg-primary/[0.13] text-primary hover:bg-primary/[0.18] cursor-pointer"
-                      : canReactivate
-                      ? "border-border bg-surface-subtle text-on-surface-variant hover:border-primary/50 hover:text-primary cursor-pointer"
-                      : "border-border bg-surface-subtle text-on-surface-variant/40 cursor-not-allowed"
-                  }`}
-                >
-                  {liveIsOnAir ? (
-                    <>
-                      <span className="live-dot" />
-                      On air · tap to stop
-                    </>
-                  ) : (
-                    <>
-                      <Power className="h-3.5 w-3.5" />
-                      Go on air
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
+          <PromoPreviewHeader
+            liveIsOnAir={liveIsOnAir}
+            canReactivate={canReactivate}
+            setShowStopConfirm={setShowStopConfirm}
+            setShowGoOnAirConfirm={setShowGoOnAirConfirm}
+          />
           {/* Action tabs — sit between the preview header and the Website
               Content Area, left-aligned. Fixed height so the preview below
               shrinks to keep the column scroll-free. */}
