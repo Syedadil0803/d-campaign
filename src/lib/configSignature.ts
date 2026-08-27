@@ -33,71 +33,64 @@ function normalizeForCompare(html: unknown): unknown {
       // changes the markup without changing what anything looks like.
       .replace(/<span style="font-size:\s*1rem;?">([\s\S]*?)<\/span>/gi, '$1')
       .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
+      // A space typed into a contentEditable is stored as &nbsp;, which \s
+      // does not match — so "text" and "text&nbsp;" compared as different and
+      // the header's Publish button stayed lit over a space nobody could see.
+      // htmlHasVisibleText below already knew this; this did not.
+      .replace(/&nbsp;|\u00a0/gi, ' ')
       .replace(/\s+/g, ' ')
       .trim()
   );
 }
 
 /**
- * The countdown's stored editor state, reduced to what the user actually chose.
+ * The countdown's stored editor state, reduced to the ONE thing it adds.
  *
- * timerStateJson is a serialized Lexical state, regenerated every time the
- * editor reports a change — and Lexical is free to split text into different
- * nodes while rendering identically. Applying a saved variant re-serialises it,
- * so the card's state stopped matching the published one even though nothing
- * visible differed, and the header's Publish button stayed lit with nothing to
- * publish.
+ * timerStateJson is a serialized Lexical state, rewritten every time the editor
+ * reports a change, and Lexical splits text into different nodes while
+ * rendering identically. Comparing it raw meant applying a saved variant
+ * stopped the card matching the published copy over a difference nobody could
+ * see, and Publish stayed lit for good.
  *
- * The rule was already written for timerText right below — "the countdown's
- * markup is regenerated on every render; only its wording is the user's" — and
- * simply never applied to its twin.
+ * The wording is already compared, through timerText. All this state adds is
+ * the per-cell chip styling that timerText cannot express — so that is all
+ * that survives here. Everything else is presentation the app rewrites.
  *
- * What survives: the text, its styling, and any chip cell styling, in order,
- * with adjacent runs of identical styling merged so node boundaries stop
- * mattering. What goes: the node tree itself.
+ * Absence is not a difference. A card published before it carried a state at
+ * all reduces to the same empty result as a card whose countdown is unstyled,
+ * because neither expresses a styling choice — that was the second half of the
+ * same bug.
  */
 function normalizeTimerStateForCompare(json: unknown): unknown {
   if (typeof json !== 'string' || !json) return '';
-  type Run = { text: string; style: string; format: unknown };
   type Node = {
     type?: string;
-    text?: string;
     style?: unknown;
     format?: unknown;
     children?: Node[];
   };
   try {
-    const runs: Run[] = [];
+    const styling: string[] = [];
     const walk = (node: Node | undefined): void => {
       if (!node || typeof node !== 'object') return;
-      if (node.type === 'text' && typeof node.text === 'string') {
-        const text = node.text.replace(/[\u200B]/g, '').replace(/\s+/g, ' ');
-        if (text) {
-          const style = String(node.style ?? '');
-          const format = node.format ?? 0;
-          const last = runs[runs.length - 1];
-          if (last && last.style === style && last.format === format) {
-            last.text += text;
-          } else {
-            runs.push({ text, style, format });
-          }
-        }
-        return;
-      }
-      // A chip or other custom node: its own styling IS the user's, and
-      // timerText cannot express it, so it has to survive the comparison.
-      if (node.type && node.type !== 'root' && node.type !== 'paragraph') {
-        runs.push({
-          text: `<${node.type}>`,
-          style: JSON.stringify(node.style ?? ''),
-          format: node.format ?? 0,
-        });
+      const style = typeof node.style === 'string' ? node.style.trim() : '';
+      const format = node.format;
+      // Consecutive duplicates collapse: Lexical splits a styled run across
+      // several nodes as it is edited, and the same styling listed twice is
+      // still one choice. Without this, splitting a run counted as a change.
+      const add = (entry: string) => {
+        if (styling[styling.length - 1] !== entry) styling.push(entry);
+      };
+      if (style) add(style);
+      if (typeof format === 'number' && format !== 0) {
+        add(`format:${format}`);
       }
       node.children?.forEach(walk);
     };
     const parsed = JSON.parse(json) as { root?: Node };
     walk(parsed.root ?? (parsed as Node));
-    return runs;
+    // Nothing styled means no choice was made, which is the same as no state.
+    return styling.length ? styling : '';
   } catch {
     // Not a state this build can read — compare it as it is rather than
     // pretending two unreadable states are the same.
