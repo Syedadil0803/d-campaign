@@ -13,6 +13,10 @@ import {
 } from "react";
 import { isInvalidRange } from '@/lib/dateRange';
 import {
+  fieldStylePopupPosition,
+  STYLE_POPUP_FALLBACK_HEIGHT,
+} from '@/lib/promo/fieldStylePopupPosition';
+import {
   Gift,
   X,
   Palette,
@@ -2081,14 +2085,10 @@ export function PromoSection({
 
 
   /** Popup width and its gap from the card — must match the JSX below. */
-  const STYLE_POPUP_WIDTH = 280;
-  const STYLE_POPUP_GAP = 40;
-
   function getPopupPositionStyle(
     field: PopupField,
-    popupHeight = 260,
-  ): { top?: string; bottom?: string; left?: string } {
-    const card = promoCardRef.current;
+    popupHeight = STYLE_POPUP_FALLBACK_HEIGHT,
+  ) {
     const refMap = {
       title: previewTitleRef,
       subtitle: previewSubtitleRef,
@@ -2096,97 +2096,16 @@ export function PromoSection({
       button: previewButtonRef,
       timer: previewTimerRef,
     } as const;
-    const el = refMap[field].current;
-    if (!card) return { bottom: "8px" };
-
-    /**
-     * Line the panel up with the field it edits, then keep it inside the
-     * canvas.
-     *
-     * It used to ask whether the panel fitted below the field and pin it to
-     * the card's bottom when it did not. The height it asked with was a
-     * hardcoded 320 against a panel that is nearer 250, so the test almost
-     * always failed — and pinning the bottom of a ~250px panel inside a ~244px
-     * card pushed it up past the card entirely. Editing the timer, at the
-     * bottom of the card, opened its panel at the top of the preview.
-     *
-     * The real height is measured once the panel has rendered; the constant
-     * only covers the first frame.
-     */
-    const height = fieldPopupHeightRef.current || popupHeight;
-    const canvas = card.closest("[data-promo-canvas]") as HTMLElement | null;
-    const cardTop = card.getBoundingClientRect().top;
-    /**
-     * The field may not be on the card yet — during a blank start the preview
-     * only draws what has been written, so styling a field before typing in it
-     * means there is nothing to line up with. The card's own top stands in.
-     *
-     * Bailing out here instead returned a vertical offset and no horizontal
-     * one, which left the panel at the card's left edge — sitting on top of
-     * the card it was meant to sit beside.
-     */
-    let desiredTop = (el ?? card).getBoundingClientRect().top;
-    if (canvas) {
-      const canvasRect = canvas.getBoundingClientRect();
-      const lowest = canvasRect.bottom - height - 8;
-      desiredTop = Math.min(
-        Math.max(desiredTop, canvasRect.top + 8),
-        Math.max(canvasRect.top + 8, lowest),
-      );
-    }
-    const vertical = { top: `${Math.round(desiredTop - cardTop)}px` };
-
-    /**
-     * Horizontal: open beside whatever was clicked.
-     *
-     * From a field in the card, the popup sits next to the card, on whichever
-     * side has room — the canvas is ~838px, the card 400px and the popup
-     * 280px, so they only fit side by side, never both on the same side.
-     *
-     * From the style icon beside an input on the left, it instead hugs the
-     * canvas's left edge, next to the input that opened it. It can't go
-     * further left and sit truly beside the inputs: an ancestor of the
-     * preview column sets overflow-x: hidden, so anything past the canvas
-     * edge is clipped rather than floating over the panel.
-     */
-    const offset = STYLE_POPUP_WIDTH + STYLE_POPUP_GAP;
-
-    const cardIsOnTheLeft =
-      config.promoCard.style.position === "bottom-left" ||
-      config.promoCard.style.position === "top-left";
-
-    /**
-     * Opened from a style icon beside an input: hug the canvas's left edge,
-     * the side those inputs are on.
-     *
-     * Unless the card is parked there. The left of the canvas is only free
-     * real estate while the card sits on the right — move the card to
-     * bottom-left and that same placement drops the panel straight on top of
-     * the thing it is restyling, hiding the preview the user is watching.
-     * In that case it falls through to the card-relative placement below,
-     * which opens on whichever side the card actually leaves open.
-     */
-    if (stylePopupAnchor === "input" && !cardIsOnTheLeft) {
-      if (canvas) {
-        const cardLeft = card.getBoundingClientRect().left;
-        const canvasLeft = canvas.getBoundingClientRect().left;
-        return { ...vertical, left: `${Math.round(canvasLeft + 8 - cardLeft)}px` };
-      }
-    }
-
-    // Clicked a field in the card: open to its right, so the panel lands on
-    // the opposite side from the two left-hand routes and it stays obvious
-    // which one opened it. A card parked bottom-right leaves no room there,
-    // so that case falls back to the left rather than running off the canvas.
-    const rightEdge = card.getBoundingClientRect().right;
-    const roomOnRight = canvas
-      ? canvas.getBoundingClientRect().right - rightEdge
-      : 0;
-
-    if (roomOnRight >= STYLE_POPUP_WIDTH + STYLE_POPUP_GAP) {
-      return { ...vertical, left: `${card.clientWidth + STYLE_POPUP_GAP}px` };
-    }
-    return { ...vertical, left: `${-offset}px` };
+    const position = config.promoCard.style.position;
+    return fieldStylePopupPosition({
+      card: promoCardRef.current,
+      field: refMap[field].current,
+      // The real height is measured once the panel has rendered; the constant
+      // only covers the first frame.
+      height: fieldPopupHeightRef.current || popupHeight,
+      anchor: stylePopupAnchor,
+      cardIsOnTheLeft: position === 'bottom-left' || position === 'top-left',
+    });
   }
 
 
