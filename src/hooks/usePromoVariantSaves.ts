@@ -17,9 +17,7 @@ import {
 } from '@/lib/configSignature';
 
 interface UsePromoVariantSavesArgs {
-  config: CampaignConfig;
   savedPromoSignatureRef: RefObject<string | null>;
-  loadConfig: () => Promise<void> | void;
   persistConfig: (
     cfg: CampaignConfig,
     successMessage?: string,
@@ -39,9 +37,7 @@ interface UsePromoVariantSavesArgs {
  * (twenty-seven inputs) was not.
  */
 export function usePromoVariantSaves({
-  config,
   savedPromoSignatureRef,
-  loadConfig,
   persistConfig,
   setIsPublishing,
 }: UsePromoVariantSavesArgs) {
