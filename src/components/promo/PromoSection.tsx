@@ -15,13 +15,14 @@ import { FieldLimitNote } from '@/components/promo/FieldLimitNote';
 import { PromoFieldStylePanel } from '@/components/promo/PromoFieldStylePanel';
 import { PromoSkeletonGhosts } from '@/components/promo/PromoSkeletonGhosts';
 import { isInvalidRange } from '@/lib/dateRange';
+import { getFreshPromoCard } from '@/lib/promo/freshPromoCard';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
 import { usePromoRichText } from '@/components/promo/usePromoRichText';
 import {
   Gift,
   Palette,
 } from "lucide-react";
-import { CampaignConfig, PromoCard, PromoField, defaultConfig } from '@/types/campaign';
+import { CampaignConfig, PromoCard, PromoField } from '@/types/campaign';
 import { getBackgroundStyle, getISODateWithOffset } from '@/lib/utils';
 import { applyTemplateFull } from '@/lib/promo/promoTemplate';
 import {
@@ -33,7 +34,6 @@ import {
 import { UndoStack } from '@/lib/editor/undoStack';
 import { sampleTemplates } from '@/components/promo/SamplePromoTemplates';
 
-import { advanceBlankLook } from '@/lib/promo/blankLooks';
 import { isBlankLook } from '@/lib/promo/lookSignature';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { useSignalEffect } from '@/hooks/useSignalEffect';
@@ -907,46 +907,7 @@ export function PromoSection({
    * countdown switching itself on before anyone has said when the campaign
    * runs is what gave that away.
    */
-  function getFreshPromoCard(): PromoCard {
-    return {
-      ...clonePromoCard(defaultConfig.promoCard),
-      // No design either. Keeping the default gradient meant "clear" cleared
-      // the words and left a look nobody had chosen, which then had to be
-      // undone before any other could be picked.
-      // The next palette in the rotation — see src/lib/blankLooks.ts.
-      style: JSON.parse(JSON.stringify(advanceBlankLook())) as PromoCard["style"],
-      active: false,
-      title: "",
-      subtitle: "",
-      description: "",
-      buttonText: "",
-      buttonUrl: "",
-      /**
-       * Both switches off, not just hidden.
-       *
-       * A countdown with no dates behind it is a number nobody can act on,
-       * and a CTA with no words on it is a coloured bar. Leaving the toggles
-       * on and suppressing the output would have made the panel disagree with
-       * the card — the switch saying the card has a button while the card
-       * shows none. Off is the honest state, and turning either on is then a
-       * decision the user makes rather than one they have to undo.
-       */
-      showTimer: false,
-      showButton: false,
-      /**
-       * Starts today, ends whenever the user decides.
-       *
-       * "From today" is the safe assumption — a campaign being built now is
-       * one meant to run now — while the end is a real decision nobody can
-       * make on the user's behalf. Leaving it blank is also what keeps the
-       * countdown off: it switches on once the schedule is complete, so the
-       * end date is both the missing fact and the trigger.
-       */
-      startDate: getISODateWithOffset(0),
-      endDate: "",
-      timerText: "Ends In {timer}",
-    };
-  }
+
 
   function startFreshPromoCard(options: { silent?: boolean } = {}) {
     // Not withDefaultDates: that fills today/tomorrow into any card missing a
