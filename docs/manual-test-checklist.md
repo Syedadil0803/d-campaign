@@ -91,3 +91,37 @@ PromoSection. Revert this one commit alone if anything below fails.
 - [ ] Per-field background and text colour apply correctly to each
 - [ ] The selected field shows its ring; the others do not
 - [ ] On a blank card the ghost styling still applies to all three
+
+## PromoCtaSettings — the call-to-action half of the panel
+
+Moved verbatim (checked: identical with comments and whitespace normalised).
+The button label's editor ref still belongs to PromoSection.
+
+### Destination type
+- [ ] Three chips — **WhatsApp / Link / Text** — and the selected one is highlighted
+- [ ] Choosing **WhatsApp** shows the country picker and number field
+- [ ] Choosing **Link** shows the URL field
+- [ ] Choosing **Text** shows neither, and explains the button will not link
+- [ ] Switching between them does not wipe what you already entered in the other
+
+### WhatsApp
+- [ ] The dial-code picker opens, is searchable, and shows the flag and code
+- [ ] Selecting a country updates the code shown in the field
+- [ ] The number field accepts digits only and caps at that country's length
+- [ ] A short number shows the amber "looks short" warning but is still accepted
+- [ ] Opening this dropdown closes any other promo dropdown
+
+### Link
+- [ ] Typing a URL saves it
+- [ ] The helper lines beneath still read correctly
+
+### Button label
+- [ ] Typing past one line reverts and warns — the cap still works here
+- [ ] "⚠️ Field limit reached" shows under the button field at its limit
+- [ ] Pasting a long label truncates to what fits
+- [ ] The palette button opens the button's style panel
+- [ ] The label's background follows the button's own style
+
+### The section as a whole
+- [ ] Turning **CTA Button** off greys and disables everything in this block
+- [ ] Turning it back on restores it with what you entered intact
