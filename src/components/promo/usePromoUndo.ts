@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import type { CampaignConfig, PromoCard, PromoField } from '@/types/campaign';
 import type { PromoSelectionSnapshot } from '@/lib/promo/promoEditorSelection';
 import { UndoStack } from '@/lib/editor/undoStack';
@@ -351,6 +351,29 @@ export function usePromoUndo({
    * caret is in and would otherwise fight this stack — hence preventDefault on
    * every handled combination.
    */
+  useEffect(() => {
+    function onKeyDown(e: globalThis.KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      const isUndo = key === 'z' && !e.shiftKey;
+      const isRedo = (key === 'z' && e.shiftKey) || key === 'y';
+      if (!isUndo && !isRedo) return;
+
+      // Typing in a plain input (WhatsApp number, button URL) is that field's
+      // own business — the browser's undo is the right one there.
+      const el = document.activeElement;
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
+
+      e.preventDefault();
+      if (isUndo) undoPromo();
+      else redoPromo();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   return {
     getPromoSnapshot,

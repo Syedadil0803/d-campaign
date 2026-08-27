@@ -21,6 +21,7 @@ import {
 import { isInvalidRange } from '@/lib/dateRange';
 import { getFreshPromoCard } from '@/lib/promo/freshPromoCard';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
+import { useMirroredHtml } from '@/components/promo/useMirroredHtml';
 import { usePromoRichText } from '@/components/promo/usePromoRichText';
 import {
 } from "lucide-react";
@@ -833,43 +834,16 @@ export function PromoSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardWidth]);
 
-  // Keep preview subtitle DOM in sync without re-rendering innerHTML every state change,
-  // so text selection in preview is not reset.
-  useEffect(() => {
-    const el = previewTitleRef.current;
-    if (!el) return;
-    const nextHtml = config.promoCard.title || "";
-    if (el.innerHTML !== nextHtml) {
-      el.innerHTML = nextHtml;
-    }
-  }, [config.promoCard.title]);
-
-  useEffect(() => {
-    const el = previewSubtitleRef.current;
-    if (!el) return;
-    const nextHtml = config.promoCard.subtitle || "";
-    if (el.innerHTML !== nextHtml) {
-      el.innerHTML = nextHtml;
-    }
-  }, [config.promoCard.subtitle]);
-
-  useEffect(() => {
-    const el = previewDescriptionRef.current;
-    if (!el) return;
-    const nextHtml = config.promoCard.description || "";
-    if (el.innerHTML !== nextHtml) {
-      el.innerHTML = nextHtml;
-    }
-  }, [config.promoCard.description]);
-
-  useEffect(() => {
-    const el = previewButtonRef.current;
-    if (!el) return;
-    const nextHtml = config.promoCard.buttonText || "";
-    if (el.innerHTML !== nextHtml) {
-      el.innerHTML = nextHtml;
-    }
-  }, [config.promoCard.buttonText, config.promoCard.showButton]);
+  // Keep the preview's editors in step with the card without re-rendering
+  // them, so a selection being held is not thrown away. See useMirroredHtml.
+  useMirroredHtml(previewTitleRef, config.promoCard.title);
+  useMirroredHtml(previewSubtitleRef, config.promoCard.subtitle);
+  useMirroredHtml(previewDescriptionRef, config.promoCard.description);
+  useMirroredHtml(
+    previewButtonRef,
+    config.promoCard.buttonText,
+    config.promoCard.showButton,
+  );
 
   // Structural sync: prefix/suffix HTML + the fixed countdown chip. Numbers are
   // refreshed separately (tick effect below) so typing never resets the caret.
@@ -969,28 +943,6 @@ export function PromoSection({
 
 
 
-  useEffect(() => {
-    function onKeyDown(e: globalThis.KeyboardEvent) {
-      const mod = e.metaKey || e.ctrlKey;
-      if (!mod) return;
-      const key = e.key.toLowerCase();
-      const isUndo = key === 'z' && !e.shiftKey;
-      const isRedo = (key === 'z' && e.shiftKey) || key === 'y';
-      if (!isUndo && !isRedo) return;
-
-      // Typing in a plain input (WhatsApp number, button URL) is that field's
-      // own business — the browser's undo is the right one there.
-      const el = document.activeElement;
-      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
-
-      e.preventDefault();
-      if (isUndo) undoPromo();
-      else redoPromo();
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
 
 
@@ -1200,8 +1152,6 @@ export function PromoSection({
     nothingToOfferBack,
     toastWithUndo,
     setPromoAppliedCardBaseline,
-    undoPromo,
-    redoPromo,
     promoAppliedCardBaselineRef,
     promoHistory,
     promoAppliedRedoRef,
