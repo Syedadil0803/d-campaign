@@ -125,7 +125,7 @@ function toStyle(p: BlankPalette): PromoStyle {
   } as PromoStyle;
 }
 
-const BLANK_LOOKS: PromoStyle[] = PALETTES.map(toStyle);
+export const BLANK_LOOKS: PromoStyle[] = PALETTES.map(toStyle);
 
 /** The one a brand-new card starts from, and the one types/campaign.ts mirrors. */
 export const FIRST_BLANK_LOOK: PromoStyle = BLANK_LOOKS[0];
@@ -211,28 +211,4 @@ export function forgetVisit(): void {
   } catch {
     // Nothing to do; the next new tab advances it anyway.
   }
-}
-
-/**
- * Is this card still wearing a blank look — any of them?
- *
- * Has to accept every palette, not just this visit's. A card cleared last
- * week wears last week's colours, and if that no longer counts as blank the
- * tool decides the user designed it: consent dialogs, "save as draft?" and
- * unsaved-changes warnings, all for a card nobody has touched.
- *
- * Placement is left out on purpose. Where the card sits is a setting, not a
- * design, and moving it must not make a blank card look authored.
- */
-export function blankLookSignatures(): string[] {
-  return BLANK_LOOKS.map(signature);
-}
-
-function signature(style: PromoStyle): string {
-  const { position: _position, ...look } = style;
-  return JSON.stringify(look);
-}
-
-export function isBlankLook(style: PromoStyle): boolean {
-  return blankLookSignatures().includes(signature(style));
 }

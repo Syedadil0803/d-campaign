@@ -12,8 +12,10 @@
  */
 
 import { PromoCard, defaultConfig } from '@/types/campaign';
-import { FIELD_STYLE_KEYS } from '@/lib/promo/promoStyleKeys';
-import { blankLookSignatures, isBlankLook } from '@/lib/promo/blankLooks';
+import { lookSignature } from '@/lib/promo/lookSignature';
+
+export { lookSignature };
+import { blankLookSignatures, isBlankLook } from '@/lib/promo/lookSignature';
 
 /** Text with the markup taken off, for asking whether anything was written. */
 function plain(html?: string): string {
@@ -24,29 +26,7 @@ function plain(html?: string): string {
     .trim();
 }
 
-/**
- * A card's look, with placement left out.
- *
- * Where the card sits is a setting, not a design. Every built-in template
- * ships bottom-right, so including position made a card moved to bottom-left
- * match no template at all and count as authored.
- */
-export function lookSignature(style: PromoCard['style']): string {
-  const { position: _position, ...look } = style;
-  // How the words sit in the card is layout, not a look — the same reasoning
-  // that drops `position` above. Themes swap colours; leaving textAlign in
-  // meant centring a title made the card stop matching the theme it was
-  // wearing, so it started reading as a design of the user's own and the
-  // "your own design" swatch appeared over a colour change nobody made.
-  for (const key of FIELD_STYLE_KEYS) {
-    const fieldStyle = look[key];
-    if (fieldStyle) {
-      const { textAlign: _textAlign, ...rest } = fieldStyle;
-      look[key] = rest as typeof fieldStyle;
-    }
-  }
-  return JSON.stringify(look);
-}
+
 
 /** Everything the card says, with the look left out. */
 function wordsSignature(card: PromoCard): string {

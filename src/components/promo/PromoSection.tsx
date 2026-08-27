@@ -30,7 +30,8 @@ import {
 import { UndoStack } from "@/lib/editor/undoStack";
 import { sampleTemplates } from '@/components/promo/SamplePromoTemplates';
 
-import { advanceBlankLook, isBlankLook } from "@/lib/promo/blankLooks";
+import { advanceBlankLook } from '@/lib/promo/blankLooks';
+import { isBlankLook } from '@/lib/promo/lookSignature';
 import { useRichTextEditor } from "@/hooks/useRichTextEditor";
 import { useSignalEffect } from "@/hooks/useSignalEffect";
 import {
@@ -2178,6 +2179,7 @@ export function PromoSection({
 
   // Apply a saved version to the live card — click-to-apply, like a template.
   function applyVersion(version: PromoVersion) {
+    setBlankStart(false); // a design has arrived
     const before = capturePromoRestorePoint();
     // Leaving a fresh card → undo lands on its EDITED state (getPromoSnapshot).
     // Leaving a template/variant → undo lands on its CLEAN baseline.
@@ -2235,6 +2237,7 @@ export function PromoSection({
 
   // Load the saved draft's promo card back into the editor.
   function restoreDraftPromoCard(card: PromoCard) {
+    setBlankStart(false); // a design has arrived
     const before = capturePromoRestorePoint();
     isFreshCardRef.current = false;
     promoAppliedRedoRef.current = null;
@@ -2259,7 +2262,7 @@ export function PromoSection({
    */
   function applyTemplate(template: PromoCard, templateName: string) {
     const before = capturePromoRestorePoint();
-    setBlankStart(false);
+    setBlankStart(false); // a design has arrived
     isFreshCardRef.current = false;
     promoAppliedRedoRef.current = null;
     promoHistory.clear();
@@ -2618,18 +2621,20 @@ export function PromoSection({
   }, [blankStart, timerAutoArmed, config.promoCard.startDate, config.promoCard.endDate]);
 
   /**
-   * The blank start ends the moment a design arrives, whatever brought it —
-   * a template, a variant, a draft, My Published. Watching the card rather
-   * than patching each of those routes means a new one cannot forget to.
+   * The blank start ends when a design ARRIVES — a template, a variant, a
+   * draft, My Published — and those routes say so themselves, below.
    *
-   * Typing keeps the mode: words alone are what the progressive reveal is for.
+   * It used to be inferred by watching promoCard.style and ending the moment
+   * the look stopped being one of the blank palettes. That could not tell a
+   * design landing from the user picking their own colour on the blank canvas,
+   * so a colour change ended the mode and took the countdown and button
+   * outlines with it, while the three text ghosts beside them — which follow
+   * showContentScaffold, not this — stayed put. Five hints, two rules, and any
+   * style edit dropped two of them.
+   *
+   * Cards loaded from the server are covered separately: page.tsx recomputes
+   * the flag from the card it just loaded.
    */
-  useEffect(() => {
-    if (!blankStart) return;
-    if (!isBlankLook(config.promoCard.style)) {
-      setBlankStart(false);
-    }
-  }, [blankStart, config.promoCard.style]);
 
   const showContentScaffold =
     showPersistentScaffold ||
