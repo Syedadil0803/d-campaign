@@ -29,6 +29,7 @@ import {
 } from "@/lib/editor/timerUtils";
 import { type LexicalTimerFieldHandle } from '@/components/timer-lexical/LexicalTimerField';
 import { type MeasuredField, measureOverflow } from '@/lib/promo/promoMeasure';
+import { STYLE_KEY_MAP } from '@/lib/promo/promoStyleKeys';
 import {
 } from '@/components/promo/PromoCardActionDialog';
 import {
@@ -564,10 +565,34 @@ export function usePromoRichText({
       detectFormats();
       return;
     }
-    detectPromoFormatsFromHTML(
-      editor.innerHTML,
-      getEditorFallbackColor(editor),
-    );
+    detectPromoFormatsFromHTML(editor.innerHTML, fieldFallbackColor(editor));
+  }
+
+  /**
+   * The colour text falls back to when it carries no inline colour of its own.
+   *
+   * It has to come from the FIELD, not from the element. The panel's editors
+   * are deliberately forced to the app's on-surface colour —
+   *
+   *   .promo-standard-editor, .promo-standard-editor * {
+   *     color: rgb(var(--on-surface)) !important;
+   *   }
+   *
+   * — so they stay a plain readable surface while the card shows the real
+   * styling. Reading the computed colour there returned that override, so the
+   * toolbar's swatch reported the wrong colour whenever the style panel was
+   * opened from the left-hand icons, and the right one from the card.
+   *
+   * The card's own editors carry the field's colour already, so this is the
+   * same answer for them and a correct one for the panel.
+   */
+  function fieldFallbackColor(editor: HTMLDivElement): string {
+    const field = currentFieldRef.current;
+    if (field) {
+      const configured = config.promoCard.style[STYLE_KEY_MAP[field]]?.textColor;
+      if (configured) return configured;
+    }
+    return getEditorFallbackColor(editor);
   }
 
   function syncInactiveFieldEditor(field: PromoField, html: string) {
