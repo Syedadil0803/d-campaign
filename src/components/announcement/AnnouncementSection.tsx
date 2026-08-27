@@ -13,6 +13,7 @@ import { Toast, TOAST_ACTION_MS, type ToastAction } from '@/components/shared/To
 import { PopupDropdown } from '@/components/shared/PopupDropdown';
 import { AnnouncementLinkPopup } from '@/components/announcement/AnnouncementLinkPopup';
 import { AnnouncementSchedulePopup } from '@/components/announcement/AnnouncementSchedulePopup';
+import { AnnouncementStylePanel } from '@/components/announcement/AnnouncementStylePanel';
 import { whatsAppUrl } from '@/lib/whatsapp';
 import { useEditorHistory } from '@/hooks/useEditorHistory';
 import { EditorSnapshot, LinkSnapshot } from '@/lib/editor/historyManager';
@@ -1764,140 +1765,24 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
               document.body
             )}
 
-            {/* Style Customization */}
-            <div>
-              <label className="block text-xl font-semibold leading-7 text-on-surface mb-4">Style Customization</label>
-
-              {/* Type + inline control */}
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <PopupDropdown
-                    label="Background Type"
-                    value={bg.type || 'solid'}
-                    options={[
-                      { value: 'solid', label: 'Solid' },
-                      { value: 'linear', label: 'Linear' },
-                      { value: 'radial', label: 'Gradient' },
-                    ]}
-                    open={showBackgroundTypeDropdown}
-                    onOpen={() => {
-                      setShowBackgroundTypeDropdown((current) => !current);
-                      setShowDirectionDropdown(false);
-                    }}
-                    onSelect={(nextType) => {
-                      // The dropdown is typed to plain strings; its options are
-                      // exactly the three background types, so this narrows to
-                      // what the list can actually produce.
-                      updateBgWithHistory({ type: nextType as GradientStyle['type'] });
-                      setShowBackgroundTypeDropdown(false);
-                    }}
-                    buttonRef={backgroundTypeBtnRef}
-                    menuRef={backgroundTypeMenuRef}
-                    menuPosition={backgroundTypePos}
-                  />
-                </div>
-                <div className="col-span-2">
-                  {bg.type === 'linear' && (
-                    <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">Balance: {bg.midpoint ?? 50}%</label>
-                      <input type="range" min="0" max="100" value={bg.midpoint ?? 50}
-                        onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
-                        onMouseDown={() => pushImmediateState(getEditorSnapshot())}
-                        className="balance-slider mt-3" />
-                    </div>
-                  )}
-                  {bg.type === 'radial' && (
-                    <div>
-                      <label className="block text-xs text-on-surface-variant mb-1">Balance: {bg.midpoint ?? 50}%</label>
-                      <input type="range" min="0" max="100" value={bg.midpoint ?? 50}
-                        onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
-                        onMouseDown={() => pushImmediateState(getEditorSnapshot())}
-                        className="balance-slider mt-3" />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Colors + Direction (second line) */}
-              <div className="mt-4 min-h-[96px]">
-                {bg.type === 'solid' && (
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-on-surface mb-2">Background Color</label>
-                      <input type="color" value={bg.startColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ startColor: e.target.value })}
-                        className="bg-color-picker h-11 w-full rounded cursor-pointer" />
-                    </div>
-                    <div aria-hidden="true" />
-                    <div aria-hidden="true" />
-                  </div>
-                )}
-
-                {bg.type === 'linear' && (
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-on-surface mb-2">Start Color</label>
-                      <input type="color" value={bg.startColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ startColor: e.target.value })}
-                        className="bg-color-picker h-11 w-full rounded cursor-pointer" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-on-surface mb-2">End Color</label>
-                      <input type="color" value={bg.endColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ endColor: e.target.value })}
-                        className="bg-color-picker h-11 w-full rounded cursor-pointer" />
-                    </div>
-                    <div>
-                      <PopupDropdown
-                        label="Direction"
-                        labelClassName="block text-sm font-semibold text-on-surface mb-2"
-                        buttonExtraClassName="h-11"
-                        value={bg.direction || 'to right'}
-                        options={[
-                          { value: 'to right', label: 'To Right →' },
-                          { value: 'to left', label: 'To Left ←' },
-                          { value: 'to bottom', label: 'To Bottom ↓' },
-                          { value: 'to top', label: 'To Top ↑' },
-                          { value: 'to bottom right', label: 'To Bottom Right ↘' },
-                          { value: 'to bottom left', label: 'To Bottom Left ↙' },
-                          { value: 'to top right', label: 'To Top Right ↗' },
-                          { value: 'to top left', label: 'To Top Left ↖' },
-                        ]}
-                        open={showDirectionDropdown}
-                        onOpen={() => {
-                          setShowDirectionDropdown((current) => !current);
-                          setShowBackgroundTypeDropdown(false);
-                        }}
-                        onSelect={(nextDirection) => {
-                          pushImmediateState(getEditorSnapshot());
-                          updateBg({ direction: nextDirection });
-                          setShowDirectionDropdown(false);
-                        }}
-                        onHover={(dir) => setPreviewDirection(dir)}
-                        onHoverEnd={() => setPreviewDirection(null)}
-                        buttonRef={directionBtnRef}
-                        menuRef={directionMenuRef}
-                        menuPosition={directionPos}
-                        arrowDirection="right"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {bg.type === 'radial' && (
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-on-surface mb-2">Center Color</label>
-                      <input type="color" value={bg.startColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ startColor: e.target.value })}
-                        className="bg-color-picker h-11 w-full rounded cursor-pointer" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-on-surface mb-2">Outer Color</label>
-                      <input type="color" value={bg.endColor} onFocus={() => pushImmediateState(getEditorSnapshot())} onChange={(e) => updateBg({ endColor: e.target.value })}
-                        className="bg-color-picker h-11 w-full rounded cursor-pointer" />
-                    </div>
-                    <div aria-hidden="true" />
-                  </div>
-                )}
-              </div>
-            </div>
+            <AnnouncementStylePanel
+              bg={bg}
+              updateBg={updateBg}
+              updateBgWithHistory={updateBgWithHistory}
+              pushImmediateState={pushImmediateState}
+              getEditorSnapshot={getEditorSnapshot}
+              showBackgroundTypeDropdown={showBackgroundTypeDropdown}
+              setShowBackgroundTypeDropdown={setShowBackgroundTypeDropdown}
+              backgroundTypeBtnRef={backgroundTypeBtnRef}
+              backgroundTypeMenuRef={backgroundTypeMenuRef}
+              backgroundTypePos={backgroundTypePos}
+              showDirectionDropdown={showDirectionDropdown}
+              setShowDirectionDropdown={setShowDirectionDropdown}
+              directionBtnRef={directionBtnRef}
+              directionMenuRef={directionMenuRef}
+              directionPos={directionPos}
+              setPreviewDirection={setPreviewDirection}
+            />
           </div>
 
           {/* Right: Message List + Style (single card split into equal halves) */}
