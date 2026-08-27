@@ -11,13 +11,13 @@ import {
   type SetStateAction,
 } from "react";
 import { cardReplaceConsent } from '@/lib/promo/cardReplaceConsent';
-import { PromoFieldStylePanel } from '@/components/promo/PromoFieldStylePanel';
-import { PromoSkeletonGhosts } from '@/components/promo/PromoSkeletonGhosts';
 import { PromoTextField } from '@/components/promo/PromoTextField';
-import { PromoPreviewTextField } from '@/components/promo/PromoPreviewTextField';
 import { PromoCtaSettings } from '@/components/promo/PromoCtaSettings';
-import { PromoPreviewTimer } from '@/components/promo/PromoPreviewTimer';
-import { PromoPreviewButton } from '@/components/promo/PromoPreviewButton';
+import { PromoCanvas } from '@/components/promo/PromoCanvas';
+import {
+  PromoEditorProvider,
+  type PromoEditorApi,
+} from '@/components/promo/PromoEditorContext';
 import { isInvalidRange } from '@/lib/dateRange';
 import { getFreshPromoCard } from '@/lib/promo/freshPromoCard';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
@@ -65,7 +65,6 @@ import { readHiddenFieldInfos, hideFieldInfo } from '@/lib/promo/fieldInfoNotes'
 import { PromoVersionsPopup } from '@/components/promo/PromoVersionsPopup';
 import { PromoDraftPopup } from '@/components/promo/PromoDraftPopup';
 import { PromoTemplatesPopup } from '@/components/promo/PromoTemplatesPopup';
-import { PromoCardBackgroundPopup } from '@/components/promo/PromoCardBackgroundPopup';
 import { PromoThemeRow } from '@/components/promo/PromoThemeRow';
 import { PromoEditorToolbar } from '@/components/promo/PromoEditorToolbar';
 import { PromoScheduleAndTimer } from '@/components/promo/PromoScheduleAndTimer';
@@ -287,30 +286,6 @@ const PANEL_TEXT_FIELDS = [
   },
 ];
 
-/** The three text fields as they appear on the card, in order. */
-const PREVIEW_TEXT_FIELDS = [
-  {
-    field: 'title' as const,
-    placeholder: 'Your headline',
-    emptyClassName: 'text-xl font-semibold',
-    marginClassName: 'mb-1',
-    defaultAlign: 'center' as const,
-  },
-  {
-    field: 'subtitle' as const,
-    placeholder: 'A supporting line',
-    emptyClassName: 'text-sm font-medium',
-    marginClassName: 'mb-2',
-    defaultAlign: 'center' as const,
-  },
-  {
-    field: 'description' as const,
-    placeholder: 'A little more about the offer',
-    emptyClassName: 'text-xs',
-    marginClassName: 'mb-2',
-    defaultAlign: 'left' as const,
-  },
-];
 
 export function PromoSection({
   config,
@@ -701,18 +676,7 @@ export function PromoSection({
     () => {},
   );
 
-  const {
-    setStylePopupAnchor,
-    updateFieldBg,
-    setFieldAlignment,
-    updateCardBg,
-    openFieldStylePopup,
-    showStyleWarning,
-    getPopupFieldStyle,
-    getPopupFieldLabel,
-    getPreviewFieldBackground,
-    getPopupPositionStyle,
-  } = usePromoFieldStyling({
+  const styling = usePromoFieldStyling({
     config,
     setConfig,
     markChanged,
@@ -742,6 +706,11 @@ export function PromoSection({
       timer: previewTimerRef,
     },
   });
+  const {
+    setStylePopupAnchor,
+    openFieldStylePopup,
+    showStyleWarning,
+  } = styling;
   const promoAppliedCardBaselineRef = useRef<PromoSnapshot | null>(null);
   const promoAppliedRedoRef = useRef<PromoAppliedRedoSnapshot | null>(null);
   // True while the current card is a Start-Fresh card. Leaving a fresh card,
@@ -1422,19 +1391,7 @@ export function PromoSection({
     setShowCardBgPopup(false);
   }, []);
 
-  const {
-    handlePromoToolbarFormat,
-    handlePromoToolbarColor,
-    smartPaste,
-    onFieldInput,
-    onFieldFocus,
-    refreshPromoToolbarFormats,
-    syncEditorsFromConfig,
-    getActivePromoEditor,
-    onPromoEditorKeyDown,
-    onPromoPreviewKeyDown,
-    warnTimerLimit,
-  } = usePromoRichText({
+  const richText = usePromoRichText({
     config,
     setConfig,
     markChanged,
@@ -1475,6 +1432,15 @@ export function PromoSection({
     ensureDefaultFontSize,
     saveSelection,
   });
+  const {
+    smartPaste,
+    onFieldInput,
+    onFieldFocus,
+    refreshPromoToolbarFormats,
+    syncEditorsFromConfig,
+    getActivePromoEditor,
+    onPromoEditorKeyDown,
+  } = richText;
   refreshToolbarRef.current = refreshPromoToolbarFormats;
 
   
@@ -1518,7 +1484,6 @@ export function PromoSection({
     "button",
     "timer",
   ] as const;
-  type PopupField = (typeof popupEditableFields)[number];
 
   // On mount: load saved versions. The saved config remains the source of truth.
   useEffect(() => {
@@ -2109,8 +2074,67 @@ export function PromoSection({
   const showTimerInPreview = config.promoCard.showTimer;
   const showButtonInPreview = config.promoCard.showButton;
 
+  /**
+   * What the editor's parts read instead of taking props.
+   *
+   * The rich-text and styling hooks are spread whole rather than listed out,
+   * so adding to either reaches the canvas without a change here.
+   */
+  const editorApi: PromoEditorApi = {
+    ...richText,
+    ...styling,
+    config,
+    setConfig,
+    markChanged,
+    currentField,
+    setCurrentField,
+    updateField,
+    promoCardRef,
+    previewFieldRefs: PREVIEW_FIELD_REFS,
+    previewButtonRef,
+    lexicalTimerRef,
+    activeEditorRef,
+    fieldPopupHeightRef,
+    blankStart,
+    previewZoom,
+    cardWidth,
+    setCardWidth,
+    computeCardWidth,
+    showTimerInPreview,
+    showButtonInPreview,
+    previewFieldVisible,
+    previewFieldHasContent,
+    ctaDestination,
+    onTimerEdited,
+    configLoadedSignal,
+    activeFormats,
+    setActiveFormats,
+    styleWarning,
+    setStyleWarning,
+    showCardBgPopup,
+    setShowCardBgPopup,
+    cardBgPopupRef,
+    cardBgPopupTop,
+    showCardBgTypeDropdown,
+    setShowCardBgTypeDropdown,
+    cardBgTypeBtnRef,
+    cardBgTypeMenuRef,
+    cardBgTypePos,
+    setCardBgTypePos,
+    showFieldBgTypeDropdown,
+    setShowFieldBgTypeDropdown,
+    fieldBgTypeBtnRef,
+    fieldBgTypeMenuRef,
+    fieldBgTypePos,
+    setFieldBgTypePos,
+    closeAllPromoDropdowns,
+    getDropdownPosition,
+    popupEditableFields,
+  };
+
   return (
-    <>
+    <PromoEditorProvider value={editorApi}>
+      <>
       <div
         className="sticky top-0 flex gap-4 overflow-hidden"
         style={{ height: "calc(100dvh - 120px)", maxHeight: "calc(100dvh - 120px)" }}
@@ -2296,187 +2320,7 @@ export function PromoSection({
             savingDraft={savingDraft}
             draftUpToDate={draftUpToDate}
           />
-          {/* data-promo-canvas: the build panel measures this box and sits
-              inside it, so it never floats over the toolbar above. */}
-          <div
-            data-promo-canvas
-            className="campaign-card-surface rounded-lg px-5 pt-5 pb-2 relative flex-1 min-h-0 border border-gray-200 dark:border-gray-600"
-          >
-            <div className="absolute inset-x-0 top-4 flex items-center justify-center text-gray-400 text-sm font-medium pointer-events-none">
-              Website Content Area
-            </div>
-
-            <div className="relative z-10 w-full h-full min-h-[228px] grid">
-              {/* Preview popup is ALWAYS rendered (even when the campaign is
-                  stopped) so editing stays visible; `active` only controls the
-                  live website output, not this editor preview. */}
-              {(
-                <div
-                  ref={promoCardRef}
-                  className={`promo-live-preview relative rounded-xl shadow-2xl p-5 flex flex-col ${
-                    config.promoCard.style.position === "bottom-right"
-                      ? "justify-self-end self-end"
-                      : config.promoCard.style.position === "bottom-left"
-                        ? "justify-self-start self-end"
-                        : config.promoCard.style.position === "top-right"
-                          ? "justify-self-end self-start"
-                          : "justify-self-start self-start"
-                  }`}
-                  style={{
-                    width: `${cardWidth}px`,
-                    /**
-                     * Held back until the first load, then faded in.
-                     *
-                     * The editor paints from defaultConfig — always palette one
-                     * — before the real card arrives, so the card appeared in
-                     * the wrong colours and swapped a moment later, outlines
-                     * arriving after that. Gating the whole tab fixed the swap
-                     * and replaced it with a blank page, which is worse: the
-                     * panel and controls are correct from the first frame and
-                     * have no reason to wait.
-                     *
-                     * Only the card waits, and it holds its space while it
-                     * does, so nothing moves when it appears.
-                     */
-                    opacity: (configLoadedSignal ?? 0) > 0 ? 1 : 0,
-                    transition: 'opacity 160ms ease-out',
-                    // Auto-fit: scale the whole card down (layout included, via
-                    // `zoom`) when it's taller than the frame, so the full card is
-                    // always visible — no clip, no scroll — at any window/zoom.
-                    zoom: previewZoom,
-                    // No max-height: the live widget card grows to fit its content
-                    // (it's position:fixed on the site), so capping it here clipped
-                    // the preview and forced a scroll that never happens on the site.
-                    // Render the preview in the SAME system font the widget uses
-                    // so line-wrapping is identical (WYSIWYG). The app's Geist is
-                    // a different, wider cut than the widget could reliably load,
-                    // which made text wrap differently between tool and site.
-                    fontFamily:
-                      '-apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-                    background: getBackgroundStyle(
-                      config.promoCard.style.background,
-                    ),
-                  }}
-                >
-                  {PREVIEW_TEXT_FIELDS.map(
-                    ({ field, placeholder, emptyClassName, marginClassName, defaultAlign }) =>
-                      previewFieldVisible[field] && (
-                        <PromoPreviewTextField
-                          key={field}
-                          field={field}
-                          editorRef={PREVIEW_FIELD_REFS[field]}
-                          placeholder={placeholder}
-                          hasContent={previewFieldHasContent[field]}
-                          emptyClassName={emptyClassName}
-                          marginClassName={marginClassName}
-                          defaultAlign={defaultAlign}
-                          config={config}
-                          blankStart={blankStart}
-                          currentField={currentField}
-                          background={getPreviewFieldBackground(field)}
-                          activeEditorRef={activeEditorRef}
-                          setShowCardBgPopup={setShowCardBgPopup}
-                          setStylePopupAnchor={setStylePopupAnchor}
-                          setCurrentField={setCurrentField}
-                          refreshPromoToolbarFormats={refreshPromoToolbarFormats}
-                          onFieldInput={onFieldInput}
-                          onPromoPreviewKeyDown={onPromoPreviewKeyDown}
-                        />
-                      ),
-                  )}
-
-                  {showTimerInPreview && (
-                    <PromoPreviewTimer
-                      config={config}
-                      currentField={currentField}
-                      lexicalTimerRef={lexicalTimerRef}
-                      setConfig={setConfig}
-                      markChanged={markChanged}
-                      setCurrentField={setCurrentField}
-                      setActiveFormats={setActiveFormats}
-                      setShowCardBgPopup={setShowCardBgPopup}
-                      setStylePopupAnchor={setStylePopupAnchor}
-                      setCardWidth={setCardWidth}
-                      computeCardWidth={computeCardWidth}
-                      warnTimerLimit={warnTimerLimit}
-                      onTimerEdited={onTimerEdited}
-                      background={getPreviewFieldBackground("timer")}
-                    />
-                  )}
-
-                  <PromoSkeletonGhosts
-                    blankStart={blankStart}
-                    showTimerInPreview={showTimerInPreview}
-                    showButtonInPreview={showButtonInPreview}
-                    textColor={config.promoCard.style.textColor}
-                    endDate={config.promoCard.endDate}
-                  />
-
-                  {showButtonInPreview && (
-                    <PromoPreviewButton
-                      config={config}
-                      currentField={currentField}
-                      previewButtonRef={previewButtonRef}
-                      setShowCardBgPopup={setShowCardBgPopup}
-                      ctaDestination={ctaDestination}
-                      background={getPreviewFieldBackground("button")}
-                    />
-                  )}
-
-                  {popupEditableFields.includes(currentField as PopupField) &&
-                    !showCardBgPopup && (
-                      <PromoFieldStylePanel
-                        field={currentField as PopupField}
-                        fieldStyle={getPopupFieldStyle(currentField as PopupField)}
-                        fieldLabel={getPopupFieldLabel(currentField as PopupField)}
-                        positionStyle={getPopupPositionStyle(currentField as PopupField)}
-                        config={config}
-                        activeFormats={activeFormats}
-                        fieldPopupHeightRef={fieldPopupHeightRef}
-                        setCurrentField={setCurrentField}
-                        handlePromoToolbarFormat={handlePromoToolbarFormat}
-                        handlePromoToolbarColor={handlePromoToolbarColor}
-                        setFieldAlignment={setFieldAlignment}
-                        updateFieldBg={updateFieldBg}
-                        updateField={updateField}
-                        showFieldBgTypeDropdown={showFieldBgTypeDropdown}
-                        setShowFieldBgTypeDropdown={setShowFieldBgTypeDropdown}
-                        fieldBgTypePos={fieldBgTypePos}
-                        setFieldBgTypePos={setFieldBgTypePos}
-                        fieldBgTypeBtnRef={fieldBgTypeBtnRef}
-                        fieldBgTypeMenuRef={fieldBgTypeMenuRef}
-                        closeAllPromoDropdowns={closeAllPromoDropdowns}
-                        getDropdownPosition={getDropdownPosition}
-                        styleWarning={styleWarning}
-                        setStyleWarning={setStyleWarning}
-                      />
-                    )}
-                  {showCardBgPopup && (
-                    <PromoCardBackgroundPopup
-                      popupRef={cardBgPopupRef}
-                      anchorRef={promoCardRef}
-                      top={cardBgPopupTop}
-                      background={config.promoCard.style.background}
-                      onChange={updateCardBg}
-                      onClose={() => setShowCardBgPopup(false)}
-                      typeDropdownOpen={showCardBgTypeDropdown}
-                      onTypeDropdownOpen={() => {
-                        const next = !showCardBgTypeDropdown;
-                        closeAllPromoDropdowns();
-                        setShowCardBgPopup(true);
-                        setShowCardBgTypeDropdown(next);
-                        setCardBgTypePos(getDropdownPosition(cardBgTypeBtnRef.current));
-                      }}
-                      onTypeDropdownClose={() => setShowCardBgTypeDropdown(false)}
-                      typeButtonRef={cardBgTypeBtnRef}
-                      typeMenuRef={cardBgTypeMenuRef}
-                      typeMenuPosition={cardBgTypePos}
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+          <PromoCanvas />
 
           <PromoThemeRow
             config={config}
@@ -2644,6 +2488,7 @@ export function PromoSection({
           opacity: 0.55;
         }
       `}</style>
-    </>
+      </>
+    </PromoEditorProvider>
   );
 }
