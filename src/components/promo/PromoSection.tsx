@@ -19,6 +19,8 @@ import { getFreshPromoCard } from '@/lib/promo/freshPromoCard';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
 import { useMirroredHtml } from '@/components/promo/useMirroredHtml';
 import { usePromoDropdowns } from '@/components/promo/usePromoDropdowns';
+import { usePromoPopupFlags } from '@/components/promo/usePromoPopupFlags';
+import { usePromoVersions } from '@/components/promo/usePromoVersions';
 import { usePromoRichText } from '@/components/promo/usePromoRichText';
 import {
 } from "lucide-react";
@@ -38,7 +40,6 @@ import {
 } from "@/lib/editor/richTextUtils";
 import { whatsAppUrl } from '@/lib/whatsapp';
 import {
-  listVersions,
   deleteVersion,
   restoreVersion,
   type PromoVersion,
@@ -52,7 +53,7 @@ import {
 import type { LexicalTimerFieldHandle } from '@/components/timer-lexical/LexicalTimerField';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { getRequiredCardWidth } from '@/lib/promo/promoMeasure';
-import { clonePromoCard, promoCardsEqual, withDefaultDates, cardSignature } from '@/lib/promo/promoCardIdentity';
+import { clonePromoCard, withDefaultDates, cardSignature } from '@/lib/promo/promoCardIdentity';
 import { readHiddenFieldInfos, hideFieldInfo } from '@/lib/promo/fieldInfoNotes';
 import { PromoVersionsPopup } from '@/components/promo/PromoVersionsPopup';
 import { PromoDraftPopup } from '@/components/promo/PromoDraftPopup';
@@ -398,6 +399,7 @@ export function PromoSection({
   const activeEditorRef = useRef<HTMLDivElement>(null);
 
   /** Every menu in the editor, and the one effect that dismisses them. */
+  const dropdowns = usePromoDropdowns();
   const {
     cardPositionBtnRef,
     cardPositionMenuRef,
@@ -405,33 +407,12 @@ export function PromoSection({
     setShowCardPositionDropdown,
     cardPositionPos,
     setCardPositionPos,
-    cardBgTypeBtnRef,
-    cardBgTypeMenuRef,
-    showCardBgTypeDropdown,
-    setShowCardBgTypeDropdown,
-    cardBgTypePos,
-    setCardBgTypePos,
-    fieldBgTypeBtnRef,
-    fieldBgTypeMenuRef,
-    showFieldBgTypeDropdown,
-    setShowFieldBgTypeDropdown,
-    fieldBgTypePos,
-    setFieldBgTypePos,
-    countryCodeBtnRef,
-    countryCodeMenuRef,
-    showCountryCodeDropdown,
-    setShowCountryCodeDropdown,
-    countryCodePos,
-    setCountryCodePos,
     cardBgPopupBtnRef,
-    cardBgPopupRef,
-    showCardBgPopup,
     setShowCardBgPopup,
-    cardBgPopupTop,
     setCardBgPopupTop,
     getDropdownPosition,
     closeAllPromoDropdowns,
-  } = usePromoDropdowns();
+  } = dropdowns;
 
   const promoCardRef = useRef<HTMLDivElement>(null);
   const [cardWidth, setCardWidth] = useState(config.promoCard.cardWidth || 400);
@@ -498,9 +479,39 @@ export function PromoSection({
    * date, so the countdown stays off until the user sets one.
    */
   const setBlankStart = onBlankStartChange;
-  // Action popups launched from the buttons under the Promo Card heading.
-  const [showVersionsPopup, setShowVersionsPopup] = useState(false);
-  const [showTemplatesPopup, setShowTemplatesPopup] = useState(false);
+
+  const popupFlags = usePromoPopupFlags();
+  const {
+    setShowVersionsPopup,
+    setShowTemplatesPopup,
+    setTemplatesFromBuild,
+    setShowDraftPopup,
+    setDraftPopupCard,
+    setDraftPopupLoading,
+    setConfirmDeleteDraft,
+    draftPopupCard,
+    confirmDeleteDraft,
+    showDraftPopup,
+    showTemplatesPopup,
+    templatesFromBuild,
+    draftPopupLoading,
+    showVersionsPopup,
+  } = popupFlags;
+
+  const versionsApi = usePromoVersions({
+    promoCard: config.promoCard,
+    onSelectedVersionChange,
+    showVersionsPopup: popupFlags.showVersionsPopup,
+  });
+  const {
+    versions,
+    setVersions,
+    selectedVersionId,
+    setSelectedVersionId,
+    pendingDeleteId,
+    setPendingDeleteId,
+  } = versionsApi;
+
   /**
    * The design to return to, shown as the first chip in the Themes strip.
    *
@@ -553,11 +564,6 @@ export function PromoSection({
     setThemeBaseline(configRef.current.promoCard.style);
   });
 
-  /**
-   * True when the popup was opened by the build panel rather than the toolbar
-   * chip — that's the only case with somewhere to go Back to.
-   */
-  const [templatesFromBuild, setTemplatesFromBuild] = useState(false);
 
   // Opened from outside (the build panel's "Write it myself"). Guarded on > 0
   // so the initial render doesn't pop it open on its own.
@@ -576,23 +582,12 @@ export function PromoSection({
     onPendingPopupHandled?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingPopup]);
-  const [showDraftPopup, setShowDraftPopup] = useState(false);
-  const [draftPopupCard, setDraftPopupCard] = useState<PromoCard | null>(null);
-  const [draftPopupLoading, setDraftPopupLoading] = useState(false);
-  const [confirmDeleteDraft, setConfirmDeleteDraft] = useState(false);
   const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [showGoOnAirConfirm, setShowGoOnAirConfirm] = useState(false);
   // Paste-from-AI import: modal open, textarea contents, and last parse error.
 
-  // Saved promo-card versions (local-only for now; see lib/promoVersions).
-  const [versions, setVersions] = useState<PromoVersion[]>([]);
 
-  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
-    null,
-  );
 
-  // Id of the variant awaiting delete confirmation (null = none).
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
@@ -1165,47 +1160,6 @@ export function PromoSection({
     "timer",
   ] as const;
 
-  // On mount: load saved versions. The saved config remains the source of truth.
-  useEffect(() => {
-    listVersions().then((list) => {
-      setVersions(list);
-    });
-  }, []);
-
-  /**
-   * Keeps the "Live" marker pointed at the variant the editor is actually
-   * holding — including when that's none of them.
-   *
-   * This used to `return` early on no match, so the marker stayed on whatever
-   * it last matched. Edit the card away from the published one and a variant
-   * still claimed to be Live, which then fed real damage: deleting that variant
-   * checks `selectedVersionId === id && active` to decide whether to pull the
-   * campaign off the website, so a stale marker could take the site down (or
-   * fail to) for the wrong card.
-   */
-  useEffect(() => {
-    const matchingVersion = [...versions]
-      .reverse()
-      .find((version) => promoCardsEqual(version.promoCard, config.promoCard));
-    const nextId = matchingVersion?.id ?? null;
-    setSelectedVersionId((prev) => (prev === nextId ? prev : nextId));
-    onSelectedVersionChange?.(nextId);
-  }, [config.promoCard, versions, onSelectedVersionChange]);
-
-  // Refresh the list whenever the popup is opened (keeps it current).
-  useEffect(() => {
-    if (!showVersionsPopup) {
-      setPendingDeleteId(null);
-      return;
-    }
-    let active = true;
-    listVersions().then((list) => {
-      if (active) setVersions(list);
-    });
-    return () => {
-      active = false;
-    };
-  }, [showVersionsPopup]);
 
 
 
@@ -1763,6 +1717,9 @@ export function PromoSection({
   const editorApi: PromoEditorApi = {
     ...richText,
     ...styling,
+    ...popupFlags,
+    ...versionsApi,
+    ...dropdowns,
     config,
     setConfig,
     markChanged,
@@ -1791,24 +1748,6 @@ export function PromoSection({
     setActiveFormats,
     styleWarning,
     setStyleWarning,
-    showCardBgPopup,
-    setShowCardBgPopup,
-    cardBgPopupRef,
-    cardBgPopupTop,
-    showCardBgTypeDropdown,
-    setShowCardBgTypeDropdown,
-    cardBgTypeBtnRef,
-    cardBgTypeMenuRef,
-    cardBgTypePos,
-    setCardBgTypePos,
-    showFieldBgTypeDropdown,
-    setShowFieldBgTypeDropdown,
-    fieldBgTypeBtnRef,
-    fieldBgTypeMenuRef,
-    fieldBgTypePos,
-    setFieldBgTypePos,
-    closeAllPromoDropdowns,
-    getDropdownPosition,
     popupEditableFields,
     panelFieldRefs: PANEL_FIELD_REFS,
     buttonRef,
@@ -1829,12 +1768,6 @@ export function PromoSection({
     promoDateRangeInvalid,
     dateErrorFlash,
     timerLimitReached,
-    showCountryCodeDropdown,
-    setShowCountryCodeDropdown,
-    countryCodePos,
-    setCountryCodePos,
-    countryCodeBtnRef,
-    countryCodeMenuRef,
   };
 
   return (
