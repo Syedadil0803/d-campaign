@@ -1560,7 +1560,15 @@ export default function Home() {
   // Explicit "Save as draft" — the ONLY way a draft is ever written now.
   // Unlike the automatic saveDraft() above, this always writes what's in the
   // editor: an explicit click means the user wants it saved, blank or not.
-  function writeDraftNow() {
+  /**
+   * @param options.keepEditor
+   *   Leave the editor alone after the write. Set by the card-replace consent,
+   *   which saves the outgoing card and then applies the incoming one: the
+   *   reset below lands after the fetch resolves, so it blanked the card that
+   *   had just replaced it and the user was left looking at the skeleton,
+   *   with the draft saved and the template apparently ignored.
+   */
+  function writeDraftNow(options: { keepEditor?: boolean } = {}) {
     const cfg = configRef.current;
     setSavingDraft(true);
     fetch('/api/draft', {
@@ -1576,8 +1584,9 @@ export default function Home() {
           // Safe in the draft now, so the recovery copy has nothing to rescue.
           clearRecovery();
           toast('Saved draft updated');
-          // Parked in My Draft — the editor is free for the next card.
-          resetPromoEditorToDefault();
+          // Parked in My Draft — the editor is free for the next card, unless
+          // something has already been put in it.
+          if (!options.keepEditor) resetPromoEditorToDefault();
         } else {
           toast('Couldn’t save your draft', true);
         }

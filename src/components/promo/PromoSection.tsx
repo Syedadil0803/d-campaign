@@ -199,7 +199,7 @@ interface PromoSectionProps {
   onPendingPopupHandled?: () => void;
   onSaveDraft: () => void;
   /** Saves the draft immediately, skipping the replace-confirm dialog. */
-  onSaveDraftDirect?: () => void;
+  onSaveDraftDirect?: (options?: { keepEditor?: boolean }) => void;
   savingDraft: boolean;
   // Deletes the single saved draft slot (called from the My Draft popup).
   onDeleteDraft: () => void;
@@ -2170,7 +2170,7 @@ export function PromoSection({
                         : {
                             secondaryLabel: draftExists ? 'Replace draft & clear' : 'Save & clear',
                             onSecondary: () => {
-                              (onSaveDraftDirect ?? onSaveDraft)();
+                              saveOutgoingCardToDraft();
                               startFreshPromoCard();
                             },
                           }),
@@ -2285,6 +2285,18 @@ export function PromoSection({
     onCardReplaced?.();
   }
 
+
+  /**
+   * Save what is on the canvas now, on the way to replacing it.
+   *
+   * keepEditor matters: the incoming card is applied immediately after this
+   * returns, while the write is still in flight, so the editor must survive
+   * the write completing.
+   */
+  function saveOutgoingCardToDraft() {
+    if (onSaveDraftDirect) onSaveDraftDirect({ keepEditor: true });
+    else onSaveDraft();
+  }
 
   function confirmCardReplace(
     action: () => void,
@@ -2445,7 +2457,7 @@ export function PromoSection({
         ),
         confirmLabel: 'Save and continue',
         onConfirm: () => {
-          (onSaveDraftDirect ?? onSaveDraft)();
+          saveOutgoingCardToDraft();
           action();
         },
         // Saving is the safe default, not the only way through: the draft on
@@ -2491,7 +2503,7 @@ export function PromoSection({
       ),
       confirmLabel: 'Save and continue',
       onConfirm: () => {
-        (onSaveDraftDirect ?? onSaveDraft)();
+        saveOutgoingCardToDraft();
         action();
       },
       // Discards the current card without keeping a copy. Offered because
