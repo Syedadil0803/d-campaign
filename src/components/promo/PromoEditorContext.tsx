@@ -4,6 +4,7 @@ import { createContext, useContext, type Dispatch, type ReactNode, type RefObjec
 import type { CampaignConfig, GradientStyle, PromoCard, PromoField } from '@/types/campaign';
 import type { LexicalTimerFieldHandle } from '@/components/timer-lexical/LexicalTimerField';
 import type { ActiveFormats } from '@/hooks/useRichTextEditor';
+import type { PromoCardAction } from '@/components/promo/PromoCardActionDialog';
 import type { usePromoRichText } from '@/components/promo/usePromoRichText';
 import type { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
 
@@ -86,6 +87,39 @@ export interface PromoEditorApi
   closeAllPromoDropdowns: () => void;
   getDropdownPosition: (button: HTMLButtonElement | null) => MenuPosition;
   popupEditableFields: readonly PromoField[];
+
+  /** The panel's own editors. Same rule as the preview's — owned, not made. */
+  panelFieldRefs: Record<'title' | 'subtitle' | 'description', Editor>;
+  buttonRef: Editor;
+  timerRef: Editor;
+
+  /** The per-field "i" guidance. */
+  fieldInfoPopup: 'title' | 'subtitle' | 'description' | null;
+  setFieldInfoPopup: (field: 'title' | 'subtitle' | 'description' | null) => void;
+  dismissFieldInfo: (field: 'title' | 'subtitle' | 'description') => void;
+
+  /** Consent before anything replaces the card. */
+  cardActionConfirm: PromoCardAction | null;
+  setCardActionConfirm: (action: PromoCardAction | null) => void;
+  pushPromoState: (options?: { replace?: boolean }) => void;
+
+  /** Schedule and countdown. */
+  showStartDatePicker: boolean;
+  setShowStartDatePicker: Dispatch<SetStateAction<boolean>>;
+  showEndDatePicker: boolean;
+  setShowEndDatePicker: Dispatch<SetStateAction<boolean>>;
+  endDateFieldRef: Editor;
+  promoDateRangeInvalid: boolean;
+  dateErrorFlash: boolean;
+  timerLimitReached: boolean;
+
+  /** The CTA's dialling-code picker. */
+  showCountryCodeDropdown: boolean;
+  setShowCountryCodeDropdown: (open: boolean | ((prev: boolean) => boolean)) => void;
+  countryCodePos: MenuPosition;
+  setCountryCodePos: (pos: MenuPosition) => void;
+  countryCodeBtnRef: RefObject<HTMLButtonElement | null>;
+  countryCodeMenuRef: Editor;
 }
 
 const PromoEditorContext = createContext<PromoEditorApi | null>(null);
