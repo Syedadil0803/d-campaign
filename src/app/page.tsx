@@ -2381,10 +2381,36 @@ export default function Home() {
     toast('Saved draft deleted');
   }
 
+  /**
+   * The promo card's content, with the markup noise removed.
+   *
+   * getPromoSignature stringifies the card raw, so it counts the editors'
+   * own re-serialisation as an edit — the very thing normalizePromoForCompare
+   * exists to strip.
+   */
+  function promoContentSignature(cfg: CampaignConfig): string {
+    return JSON.stringify(
+      normalizePromoForCompare(
+        cfg.promoCard as unknown as Record<string, unknown>,
+      ),
+    );
+  }
+
+  // Both of these ask "does MY half still match what is published?".
+  //
+  // They used to compare the whole config signature, which answered a
+  // different question: it went true whenever EITHER half differed. So an
+  // unpublished promo card kept the announcement tab reading "unsaved
+  // changes" with nothing in the announcement bar touched, and neither flag
+  // could clear until both halves matched. Comparing each half against its own
+  // published counterpart is what the flags are named for.
   function markAnnouncementChanged() {
-    // If config matches published state, no actual changes
     setTimeout(() => {
-      if (publishedConfigRef.current && publishedConfigRef.current === getConfigSignature(configRef.current)) {
+      const published = publishedConfigObjRef.current;
+      if (
+        published &&
+        announcementSignature(published) === announcementSignature(configRef.current)
+      ) {
         setHasAnnouncementChanges(false);
         return;
       }
@@ -2394,9 +2420,12 @@ export default function Home() {
   }
 
   function markPromoChanged() {
-    // If config matches published state, no actual changes
     setTimeout(() => {
-      if (publishedConfigRef.current && publishedConfigRef.current === getConfigSignature(configRef.current)) {
+      const published = publishedConfigObjRef.current;
+      if (
+        published &&
+        promoContentSignature(published) === promoContentSignature(configRef.current)
+      ) {
         setHasPromoChanges(false);
         return;
       }

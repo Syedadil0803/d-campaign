@@ -56,6 +56,30 @@ export function normalizePromoForCompare(card: Record<string, unknown>) {
   return clone;
 }
 
+/**
+ * Same idea as normalizePromoForCompare, for the other editor.
+ *
+ * Each announcement's `text` is contentEditable HTML, so it carries exactly
+ * the noise described at the top of this file — the injected default-size
+ * span, zero-width characters, re-collapsed whitespace. It was compared raw,
+ * which is why typing a character and deleting it again left "unsaved
+ * changes" lit: the content was back to where it started, the markup was not.
+ */
+export function normalizeAnnouncementsForCompare(
+  bar: Record<string, unknown>,
+): Record<string, unknown> {
+  const announcements = bar.announcements;
+  if (!Array.isArray(announcements)) return bar;
+  return {
+    ...bar,
+    announcements: announcements.map((item) =>
+      item && typeof item === 'object'
+        ? { ...item, text: normalizeForCompare((item as { text?: unknown }).text) }
+        : item,
+    ),
+  };
+}
+
 export function getConfigSignature(cfg: CampaignConfig) {
   // `active` / `stoppedByUser` are live on/off flags managed by Go-on-air /
   // Stop, not content. Exclude them so the Save/dirty check reflects real
@@ -63,7 +87,7 @@ export function getConfigSignature(cfg: CampaignConfig) {
   // flips active) must not read as "unsaved changes". Mirrors the reactivate
   // comparison below.
   const strip = (o: Record<string, unknown>) => {
-    const clone = { ...o };
+    const clone = normalizeAnnouncementsForCompare({ ...o });
     delete clone.active;
     delete clone.stoppedByUser;
     return clone;
@@ -85,7 +109,9 @@ export function getConfigSignature(cfg: CampaignConfig) {
 // Announcement signature (live on/off excluded) — to tell a real announcement
 // edit apart from the default messages.
 export function announcementSignature(cfg: CampaignConfig): string {
-  const ann = { ...(cfg.announcementBar as unknown as Record<string, unknown>) };
+  const ann = normalizeAnnouncementsForCompare({
+    ...(cfg.announcementBar as unknown as Record<string, unknown>),
+  });
   delete ann.active;
   return JSON.stringify(ann);
 }
