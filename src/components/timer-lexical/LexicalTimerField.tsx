@@ -92,6 +92,15 @@ export interface LexicalTimerFieldHandle {
    *  Used by PromoSection to decide whether the timer needs the card
    *  stretched (wraps at the narrow card but fits at the wide one). */
   wrapsAtContentWidth(width: number): boolean;
+  /**
+   * Replace the editor's contents with a previously serialized state.
+   *
+   * `initialStateJson` reaches createEditor and is therefore read once, at
+   * creation. Without this there was no way to put a different state back, so
+   * restoring an undo snapshot changed the stored card and left the countdown
+   * on screen untouched — the countdown simply could not be undone.
+   */
+  loadStateJson(json: string): void;
   /** Focus the editor (used when the user clicks the surrounding chrome).
    *  Pass the click's clientX so a click next to the chip lands the caret on
    *  the correct side of the countdown. */
@@ -190,6 +199,19 @@ export const LexicalTimerField = forwardRef<
           result = $currentFormats(targetRef.current);
         });
         return result;
+      },
+      loadStateJson(json: string) {
+        const ed = editorRef.current;
+        if (!ed || !json) return;
+        try {
+          ed.setEditorState(ed.parseEditorState(json));
+          // The change this provokes is an echo of what was just loaded. It is
+          // left to reach the host, which compares it against the card it just
+          // restored and records no step for it — see PromoPreviewTimer.
+        } catch {
+          // A state this build cannot parse (an older shape, say). Leaving the
+          // editor as it is beats clearing the user's countdown.
+        }
       },
       applyColor(value: string): ActiveFormats {
         const ed = editorRef.current;

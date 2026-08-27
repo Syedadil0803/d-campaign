@@ -282,6 +282,20 @@ export function usePromoRichText({
           calcTimerRemaining(pc.endDate || ""),
         );
       }
+      /**
+       * The countdown is a Lexical editor, so it cannot be re-seeded by
+       * assigning innerHTML the way the four fields above are. Without this
+       * the whole function skipped it: restoring a snapshot changed the stored
+       * card and left the countdown on screen exactly as it was, so it could
+       * not be undone at all.
+       *
+       * Only when a serialized state exists. A card saved before the countdown
+       * carried one has nothing to load, and clearing the editor would be
+       * worse than leaving it.
+       */
+      if (pc.timerStateJson) {
+        lexicalTimerRef.current?.loadStateJson(pc.timerStateJson);
+      }
     }, 0);
   }
 
