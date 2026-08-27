@@ -166,6 +166,27 @@ export function usePromoUndo({
     nothingToUndo: boolean;
   }
 
+  /**
+   * A step taken from the config rather than from the editors.
+   *
+   * getPromoSnapshot reads the live DOM for whichever field is active, which is
+   * right when the push happens BEFORE the edit lands — how typing in the three
+   * text fields is recorded, from their keydown. The countdown has no keydown to
+   * hang that on: it is a Lexical editor and only reports a change once the
+   * change is already in it, so reading its DOM there would snapshot the edit we
+   * are trying to be able to undo. The config still holds the previous text at
+   * that moment, so it is the honest source.
+   */
+  function pushPromoStateFromConfig() {
+    if (restoringSnapshotRef.current) return;
+    promoAppliedRedoRef.current = null;
+    promoHistory.push({
+      promoCard: clonePromoCard(configRef.current.promoCard),
+      currentField: currentFieldRef.current,
+      selection: null,
+    });
+  }
+
   function capturePromoRestorePoint(): PromoRestorePoint {
     return {
       snapshot: getPromoSnapshot(),
@@ -339,6 +360,7 @@ export function usePromoUndo({
   return {
     getPromoSnapshot,
     pushPromoState,
+    pushPromoStateFromConfig,
     capturePromoRestorePoint,
     restorePromoPoint,
     cardIsRecoverable,

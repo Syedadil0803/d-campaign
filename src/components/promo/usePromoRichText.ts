@@ -647,6 +647,10 @@ export function usePromoRichText({
     // it BEFORE the getActivePromoEditor()/null guard — otherwise it returns
     // early (there's no contenteditable div for the timer) and nothing applies.
     if (currentFieldRef.current === "timer") {
+      // Recorded like every other style change. This branch returned before
+      // reaching the push below, so styling the countdown left no step on the
+      // stack and Ctrl+Z jumped past it to whatever came before the timer.
+      pushPromoState();
       const fmts = lexicalTimerRef.current?.applyFormat(format);
       if (fmts) setActiveFormats(fmts);
       return;
@@ -727,6 +731,8 @@ export function usePromoRichText({
     // editor element for the timer). Route through the Lexical imperative API;
     // scope (cell / whole chip / text selection) is decided inside.
     if (currentFieldRef.current === "timer") {
+      // Same as the format branch above: this returned before the push.
+      pushPromoState();
       const fmts = lexicalTimerRef.current?.applyColor(color);
       if (fmts) setActiveFormats(fmts);
       return;

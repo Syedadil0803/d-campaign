@@ -1169,6 +1169,7 @@ export function PromoSection({
 
   const {
     pushPromoState,
+    pushPromoStateFromConfig,
     capturePromoRestorePoint,
     nothingToOfferBack,
     toastWithUndo,
@@ -1902,6 +1903,7 @@ export function PromoSection({
     cardActionConfirm,
     setCardActionConfirm,
     pushPromoState,
+    pushPromoStateFromConfig,
     showStartDatePicker,
     setShowStartDatePicker,
     showEndDatePicker,

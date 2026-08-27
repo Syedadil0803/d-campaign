@@ -102,6 +102,7 @@ export interface PromoEditorApi
   cardActionConfirm: PromoCardAction | null;
   setCardActionConfirm: (action: PromoCardAction | null) => void;
   pushPromoState: (options?: { replace?: boolean }) => void;
+  pushPromoStateFromConfig: () => void;
 
   /** Schedule and countdown. */
   showStartDatePicker: boolean;

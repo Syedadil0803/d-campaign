@@ -23,6 +23,7 @@ interface PromoPreviewTimerProps {
   setCardWidth: (width: number) => void;
   computeCardWidth: (promo: PromoCard) => number;
   warnTimerLimit: () => void;
+  pushPromoStateFromConfig: () => void;
   onTimerEdited: (() => void) | undefined;
 }
 
@@ -48,6 +49,7 @@ export function PromoPreviewTimer({
   setCardWidth,
   computeCardWidth,
   warnTimerLimit,
+  pushPromoStateFromConfig,
   onTimerEdited,
 }: PromoPreviewTimerProps) {
   return (
@@ -117,6 +119,14 @@ export function PromoPreviewTimer({
                         }, 0);
                       }}
                       onChange={(nextTimerText) => {
+                        // The step for this edit, taken from config: the editor
+                        // already holds the new text by the time it reports a
+                        // change, so its own DOM cannot supply the "before".
+                        // Without this nothing typed into the countdown reached
+                        // the undo stack at all, and Ctrl+Z skipped back past
+                        // the point the timer was switched on — so undoing an
+                        // edit removed the countdown instead of the edit.
+                        pushPromoStateFromConfig();
                         // Functional update: this fires in the SAME batch as
                         // onStateJson below. Spreading a stale closure `config`
                         // in both makes the second setConfig clobber the first

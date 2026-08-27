@@ -48,6 +48,7 @@ export function PromoCanvas() {
     updateField,
     setActiveFormats,
     warnTimerLimit,
+    pushPromoStateFromConfig,
     onFieldInput,
     onPromoPreviewKeyDown,
     refreshPromoToolbarFormats,
@@ -176,6 +177,7 @@ export function PromoCanvas() {
 
               {showTimerInPreview && (
                 <PromoPreviewTimer
+                  pushPromoStateFromConfig={pushPromoStateFromConfig}
                   config={config}
                   currentField={currentField}
                   lexicalTimerRef={lexicalTimerRef}
