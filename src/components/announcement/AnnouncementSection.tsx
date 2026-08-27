@@ -1941,7 +1941,14 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                 ) : (
                   <div className="campaign-custom-scrollbar flex-1 min-h-0 overflow-y-auto">
                     <div className="flex flex-wrap gap-2 p-1">
-                      {config.announcementBar.announcements.map((ann, index) => (
+                      {config.announcementBar.announcements.map((ann, index) => {
+                      // A back-to-front schedule blocks Save and Publish in the
+                      // header. Without marking the message that carries it,
+                      // the header just locks and there is nothing on screen
+                      // saying which of these to open — the promo card gets a
+                      // scroll-and-flash for the same reason.
+                      const rowRangeInvalid = isInvalidRange(ann.startDate, ann.endDate);
+                      return (
                         <div key={index}
                           draggable
                           onDragStart={(e) => {
@@ -1982,7 +1989,11 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                               detectFormatsForSelectMode(normalizedText);
                             }
                           }}
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm text-[#5a4138] dark:text-[#dbc1b3] bg-primary/20 group relative cursor-pointer transition-all ${selectedIndex === index ? 'ring-[1.5px] ring-primary/80 bg-primary/30' : 'hover:bg-primary/25 hover:ring-1 hover:ring-primary/70'} ${draggedIndex === index ? 'opacity-60' : ''}`}>
+                          title={rowRangeInvalid ? 'This message ends before it starts — open it and fix or clear the schedule.' : undefined}
+                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm text-[#5a4138] dark:text-[#dbc1b3] bg-primary/20 group relative cursor-pointer transition-all ${rowRangeInvalid ? 'ring-[1.5px] ring-red-500 dark:ring-red-400' : selectedIndex === index ? 'ring-[1.5px] ring-primary/80 bg-primary/30' : 'hover:bg-primary/25 hover:ring-1 hover:ring-primary/70'} ${draggedIndex === index ? 'opacity-60' : ''}`}>
+                          {rowRangeInvalid && (
+                            <span aria-hidden="true" className="text-red-600 dark:text-red-400 font-bold">!</span>
+                          )}
                           <span className="flex-1 truncate max-w-[200px]" title={stripHtml(ann.text)}>
                             {stripHtml(ann.text)}
                           </span>
@@ -1999,7 +2010,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
                             <MoreVertical className="w-3 h-3" />
                           </button>
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   </div>
                 )}

@@ -64,11 +64,16 @@ export function Header({
   const blockForDateRange =
     (activeTab === 'promo' && promoDateInvalid) ||
     (activeTab === 'announcement' && announcementDateInvalid);
-  // Announcement stages through Save first, so name whichever action is
-  // actually blocked rather than always saying "publish".
-  const dateRangeTooltip = `Fix invalid date range to ${
-    state === 'unsaved' ? 'save' : 'publish'
-  }.`;
+  // Name the blocked action — announcement stages through Save first, so
+  // always saying "publish" was wrong on the Save button — and, for
+  // announcements, say where to look. One bad message out of several locks
+  // this button, and the button itself cannot show which one; the offending
+  // message is ringed red in the list.
+  const blockedAction = state === 'unsaved' ? 'save' : 'publish';
+  const dateRangeTooltip =
+    activeTab === 'announcement'
+      ? `A message ends before it starts — it is outlined in red in the list. Fix or clear its schedule to ${blockedAction}.`
+      : `Fix invalid date range to ${blockedAction}.`;
 
   async function onSave() {
     setSaving(true);
