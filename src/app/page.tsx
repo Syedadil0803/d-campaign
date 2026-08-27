@@ -1,6 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  writeRecovery,
+  readRecoveryEnvelope,
+  clearRecovery,
+} from '@/lib/recovery';
 import { isInvalidRange, anyInvalidRange } from '@/lib/dateRange';
 import { X, Loader2, SlidersHorizontal, Clock } from 'lucide-react';
 import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
@@ -16,7 +21,8 @@ import { Dashboard } from '@/components/dashboard/Dashboard';
 import { AnnouncementSection } from '@/components/announcement/AnnouncementSection';
 import { PromoFlow } from '@/components/promo/PromoFlow';
 import { PromoSetupDialog } from '@/components/promo/PromoSetupDialog';
-import { Toast, ToastAction, TOAST_ACTION_MS } from '@/components/shared/Toast';
+import { Toast, TOAST_ACTION_MS } from '@/components/shared/Toast';
+import { useToast } from '@/hooks/useToast';
 import { getISODateWithOffset, toLocalISODate } from '@/lib/utils';
 import {
   getConfigSignature,
@@ -308,13 +314,13 @@ export default function Home() {
   useEffect(() => {
     refreshPromoVariants();
   }, [refreshPromoVariants]);
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-  const [toastIsError, setToastIsError] = useState(false);
-  const [toastAction, setToastAction] = useState<ToastAction | null>(null);
-  // One timer owns the toast's life, so a second toast doesn't inherit the
-  // first one's countdown and vanish early.
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const {
+    showToast,
+    toastMessage,
+    toastIsError,
+    toastAction,
+    toast,
+  } = useToast();
   const [publishConfirm, setPublishConfirm] = useState<{
     warnings: string[];
     onConfirm: () => Promise<void> | void;
@@ -1446,74 +1452,6 @@ export default function Home() {
     return true;
   }
 
-  /**
-   * Crash recovery, kept apart from the draft.
-   *
-   * These are two different jobs that were sharing one slot and had opposite
-   * rules. A draft is parked on purpose and must never be overwritten without
-   * asking. A recovery copy is taken automatically and *should* be replaced by
-   * the next one. Sharing the slot meant one of them always lost: either the
-   * rescue clobbered a deliberate draft, or — once that was stopped — work in
-   * progress had nowhere to go because the slot was taken.
-   *
-   * Recovery lives in localStorage: it is per-browser, survives a reload, and
-   * costs no round trip on the way out, which matters when the page is already
-   * closing.
-   */
-  const RECOVERY_KEY = 'campaign-admin:recovery';
-
-  /**
-   * Stored with the moment it was taken, not just the config.
-   *
-   * The config's own `lastUpdated` is when it was last published, which says
-   * nothing about when this copy was made — and without that, a draft saved
-   * from another device in the meantime cannot be told from one saved before
-   * the user ever walked away.
-   */
-  interface RecoveryEnvelope {
-    savedAt: string;
-    config: CampaignConfig;
-  }
-
-  function writeRecovery(cfg: CampaignConfig) {
-    try {
-      const envelope: RecoveryEnvelope = { savedAt: new Date().toISOString(), config: cfg };
-      localStorage.setItem(RECOVERY_KEY, JSON.stringify(envelope));
-    } catch {
-      // Private mode or quota — nothing to fall back to, and the close must
-      // not be blocked by it.
-    }
-  }
-
-  /**
-   * Reads either shape.
-   *
-   * Copies written before this carried the bare config. They belong to someone
-   * who is mid-edit right now, so the change must not throw their work away —
-   * it reads as a recovery with an unknown time, which is exactly what it is.
-   */
-  function readRecoveryEnvelope(): RecoveryEnvelope | null {
-    try {
-      const raw = localStorage.getItem(RECOVERY_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed.savedAt === 'string' && parsed.config) {
-        return parsed as RecoveryEnvelope;
-      }
-      return { savedAt: '', config: parsed as CampaignConfig };
-    } catch {
-      return null;
-    }
-  }
-
-
-  function clearRecovery() {
-    try {
-      localStorage.removeItem(RECOVERY_KEY);
-    } catch {
-      /* nothing to do */
-    }
-  }
 
   function clearDraft() {
     fetch('/api/draft', { method: 'DELETE', keepalive: true }).catch(() => {});
@@ -2277,50 +2215,9 @@ export default function Home() {
     setPublishConfirm({ warnings: [], onConfirm: handlePublishAnnouncement });
   }
 
-  function dismissToast() {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = null;
-    setShowToast(false);
-    setToastAction(null);
-  }
 
-  /**
-   * `action` turns the toast into a one-tap recovery offer ("Undo"). It gets a
-   * longer life than a plain confirmation — long enough to read and reach, and
-   * still short enough that the offer clearly expires with the toast.
-   */
-  /**
-   * `durationMs` overrides the default dwell for a message that takes longer
-   * to act on than to read — one that names a control the user then has to go
-   * and find. Ignored when an action is present: that timer belongs to the
-   * Undo countdown and the ring drawn from it, and the two must agree.
-   */
-  function toast(
-    message: string,
-    isError = false,
-    action?: ToastAction,
-    durationMs?: number,
-  ) {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToastMessage(message);
-    setToastIsError(isError);
-    setToastAction(
-      action
-        ? {
-            label: action.label,
-            onClick: () => {
-              dismissToast();
-              action.onClick();
-            },
-          }
-        : null,
-    );
-    setShowToast(true);
-    toastTimerRef.current = setTimeout(
-      dismissToast,
-      action ? TOAST_ACTION_MS : durationMs ?? 3000,
-    );
-  }
+
+
 
   function toggleDarkMode() {
     const newMode = !isDarkMode;
