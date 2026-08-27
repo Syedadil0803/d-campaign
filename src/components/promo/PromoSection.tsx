@@ -16,6 +16,8 @@ import { PromoSkeletonGhosts } from '@/components/promo/PromoSkeletonGhosts';
 import { PromoTextField } from '@/components/promo/PromoTextField';
 import { PromoPreviewTextField } from '@/components/promo/PromoPreviewTextField';
 import { PromoCtaSettings } from '@/components/promo/PromoCtaSettings';
+import { PromoPreviewTimer } from '@/components/promo/PromoPreviewTimer';
+import { PromoPreviewButton } from '@/components/promo/PromoPreviewButton';
 import { isInvalidRange } from '@/lib/dateRange';
 import { getFreshPromoCard } from '@/lib/promo/freshPromoCard';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
@@ -54,7 +56,7 @@ import {
   refreshTimerValueSpans,
   calculateTimeRemaining as calcTimerRemaining,
 } from "@/lib/editor/timerUtils";
-import { LexicalTimerField, type LexicalTimerFieldHandle } from '@/components/timer-lexical/LexicalTimerField';
+import type { LexicalTimerFieldHandle } from '@/components/timer-lexical/LexicalTimerField';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { getRequiredCardWidth } from '@/lib/promo/promoMeasure';
 import { SegmentedToggle } from '@/components/promo/SegmentedToggle';
@@ -2384,108 +2386,22 @@ export function PromoSection({
                   )}
 
                   {showTimerInPreview && (
-                    /* The preview card IS the timer editor — you type, select,
-                       and style here (and see the result here). It renders
-                       inside the card's dateStyle (background / textColor /
-                       align); chrome='inline' keeps the editor from adding any
-                       wrapper styling that would change that look. */
-                    <div
-                      data-tour="promo-timer"
-                      className={`mb-4 px-2 py-1 rounded break-words ${currentField === "timer" ? "ring-1 ring-primary/70" : ""}`}
-                      onMouseDown={() => {
-                        if (currentField !== "timer") setCurrentField("timer");
-                        // Touching the countdown is the signal that the hint
-                        // has done its job and should stop reappearing.
-                        onTimerEdited?.();
-                      }}
-                      onClick={(e) => {
-                        setShowCardBgPopup(false);
-                        setStylePopupAnchor("card");
-                        if (currentField !== "timer") setCurrentField("timer");
-                        // Clicking ON the countdown targets a chip cell for
-                        // styling (its own mousedown sets the target) — placing
-                        // a caret here would fire a text SELECTION_CHANGE that
-                        // clears that just-set target. Only place the caret for
-                        // clicks OUTSIDE the countdown; pass the click X so a
-                        // click beside it lands on the correct side.
-                        const onChip = (e.target as HTMLElement).closest?.(
-                          "[data-timer-chip]",
-                        );
-                        if (!onChip) {
-                          lexicalTimerRef.current?.focus(e.clientX);
-                        } else if (
-                          document.activeElement instanceof HTMLElement &&
-                          document.activeElement !== document.body
-                        ) {
-                          // The chip's mousedown preventDefault()s, so the
-                          // browser never moves DOM focus — without this,
-                          // keystrokes after a chip click keep going to the
-                          // PREVIOUSLY focused field (e.g. the Title).
-                          document.activeElement.blur();
-                        }
-                      }}
-                      style={{
-                        background: getBackgroundStyle(
-                          getPreviewFieldBackground("timer"),
-                        ),
-                        color: config.promoCard.style.dateStyle.textColor,
-                        textAlign:
-                          config.promoCard.style.dateStyle.textAlign ||
-                          "center",
-                      }}
-                    >
-                      <LexicalTimerField
-                        ref={lexicalTimerRef}
-                        chrome="inline"
-                        timerText={config.promoCard.timerText ?? ''}
-                        initialStateJson={config.promoCard.timerStateJson}
-                        endDate={config.promoCard.endDate || ''}
-                        onFocus={() => {
-                          if (currentField !== "timer") setCurrentField("timer");
-                        }}
-                        onTargetChange={() => {
-                          setTimeout(() => {
-                            const fmts = lexicalTimerRef.current?.getActiveFormats();
-                            if (fmts) setActiveFormats(fmts);
-                          }, 0);
-                        }}
-                        onChange={(nextTimerText) => {
-                          // Functional update: this fires in the SAME batch as
-                          // onStateJson below. Spreading a stale closure `config`
-                          // in both makes the second setConfig clobber the first
-                          // (that desynced timerText from timerStateJson — stale
-                          // suffixes like "on a" survived in timerText only).
-                          setConfig((prev) =>
-                            nextTimerText === (prev.promoCard.timerText ?? '')
-                              ? prev
-                              : { ...prev, promoCard: { ...prev.promoCard, timerText: nextTimerText } },
-                          );
-                          markChanged();
-                        }}
-                        onStateJson={(json) => {
-                          // The timer can also drive the 400→440 stretch.
-                          const w = computeCardWidth(config.promoCard);
-                          setCardWidth(w);
-                          // Functional update so this merges onto the latest state
-                          // (incl. the timerText just set by onChange) instead of
-                          // overwriting it from a stale closure — keeps timerText
-                          // and timerStateJson in sync.
-                          setConfig((prev) =>
-                            json === (prev.promoCard.timerStateJson ?? '')
-                              ? prev
-                              : {
-                                  ...prev,
-                                  promoCard: { ...prev.promoCard, timerStateJson: json, cardWidth: w },
-                                },
-                          );
-                          markChanged();
-                        }}
-                        // 1-line limit is enforced inside the editor (plugin);
-                        // it reverts the overflowing edit and calls this so we
-                        // show the shared "field limit reached" warning.
-                        onLineOverflow={warnTimerLimit}
-                      />
-                    </div>
+                    <PromoPreviewTimer
+                      config={config}
+                      currentField={currentField}
+                      lexicalTimerRef={lexicalTimerRef}
+                      setConfig={setConfig}
+                      markChanged={markChanged}
+                      setCurrentField={setCurrentField}
+                      setActiveFormats={setActiveFormats}
+                      setShowCardBgPopup={setShowCardBgPopup}
+                      setStylePopupAnchor={setStylePopupAnchor}
+                      setCardWidth={setCardWidth}
+                      computeCardWidth={computeCardWidth}
+                      warnTimerLimit={warnTimerLimit}
+                      onTimerEdited={onTimerEdited}
+                      background={getPreviewFieldBackground("timer")}
+                    />
                   )}
 
                   <PromoSkeletonGhosts
@@ -2497,68 +2413,14 @@ export function PromoSection({
                   />
 
                   {showButtonInPreview && (
-                    <div
-                      className={
-                        config.promoCard.buttonFullWidth
-                          ? ""
-                          : `flex ${
-                              (config.promoCard.style.buttonStyle.textAlign ||
-                                "center") === "left"
-                                ? "justify-start"
-                                : (config.promoCard.style.buttonStyle
-                                      .textAlign || "center") === "right"
-                                  ? "justify-end"
-                                  : "justify-center"
-                            }`
-                      }
-                    >
-                      <div
-                        ref={previewButtonRef}
-                        {...(ctaDestination(config.promoCard)
-                          ? { role: 'button' as const, tabIndex: 0 }
-                          : {})}
-                        title={
-                          // Silence was the problem: an inert button gives no
-                          // clue that a destination is missing, so a click that
-                          // does nothing reads as broken rather than unset.
-                          ctaDestination(config.promoCard)
-                            ? `Opens ${ctaDestination(config.promoCard)} in a new tab`
-                            : config.promoCard.ctaType === 'text'
-                              ? 'Text only — this button has no link'
-                              : (config.promoCard.ctaType || 'whatsapp') === 'whatsapp'
-                                ? 'Add a WhatsApp number on the left to make this clickable'
-                                : 'Add a link on the left to make this clickable'
-                        }
-                        data-placeholder="Button"
-                        className={`promo-preview-button py-2 px-4 rounded-lg text-base font-semibold outline-none min-h-10 ${
-                          config.promoCard.buttonFullWidth ? "w-full" : ""
-                        } ${currentField === "button" ? "ring-1 ring-primary/70" : ""} ${
-                          ctaDestination(config.promoCard)
-                            ? 'cursor-pointer transition-opacity hover:opacity-90'
-                            : ''
-                        }`}
-                        onClick={() => {
-                          // The card's CTA behaves like the button it depicts:
-                          // it opens its destination. Its styles are reached
-                          // from the palette beside "Button Text" on the left,
-                          // so a click here doesn't have to serve two masters.
-                          const url = ctaDestination(config.promoCard);
-                          if (!url) return;
-                          setShowCardBgPopup(false);
-                          window.open(url, '_blank', 'noopener,noreferrer');
-                        }}
-                        style={{
-                          background: getBackgroundStyle(
-                            getPreviewFieldBackground("button"),
-                          ),
-                          color: config.promoCard.style.buttonStyle.textColor,
-                          textAlign:
-                            config.promoCard.style.buttonStyle.textAlign ||
-                            "center",
-                          cursor: ctaDestination(config.promoCard) ? 'pointer' : 'default',
-                        }}
-                      />
-                    </div>
+                    <PromoPreviewButton
+                      config={config}
+                      currentField={currentField}
+                      previewButtonRef={previewButtonRef}
+                      setShowCardBgPopup={setShowCardBgPopup}
+                      ctaDestination={ctaDestination}
+                      background={getPreviewFieldBackground("button")}
+                    />
                   )}
 
                   {popupEditableFields.includes(currentField as PopupField) &&

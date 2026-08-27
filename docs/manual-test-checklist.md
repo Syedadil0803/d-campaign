@@ -125,3 +125,29 @@ The button label's editor ref still belongs to PromoSection.
 ### The section as a whole
 - [ ] Turning **CTA Button** off greys and disables everything in this block
 - [ ] Turning it back on restores it with what you entered intact
+
+## PromoPreviewTimer and PromoPreviewButton — the last two card blocks
+
+The countdown keeps its own component rather than joining the three text
+fields: it is a Lexical editor, not a contenteditable div, because the chip's
+per-cell styling cannot be expressed as plain HTML.
+
+### Countdown on the card
+- [ ] The countdown renders and ticks down
+- [ ] Typing wording before/after the countdown works, and the countdown itself cannot be deleted
+- [ ] Typing past one line reverts and shows the timer limit warning
+- [ ] Clicking a number, word or colon in the chip styles just that part
+- [ ] Selecting wording and changing size/colour applies to that run only
+- [ ] The toolbar updates as you move between differently styled runs
+- [ ] Clicking the countdown selects it for styling and closes the card-background popup
+- [ ] The card widens when the countdown grows (e.g. at a day rollover)
+- [ ] Turning the countdown off removes it immediately
+
+### Button on the card
+- [ ] The button shows the label typed in the panel
+- [ ] With a destination set, its tooltip reads "Opens … in a new tab"
+- [ ] With none set, the tooltip explains what is missing (WhatsApp number / link / text-only)
+- [ ] Clicking it selects the button for styling
+- [ ] Its background and text colour follow the button's own style
+- [ ] Full-width toggle changes its width on the card
+- [ ] Turning the CTA off removes it immediately
