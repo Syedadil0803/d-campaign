@@ -14,6 +14,7 @@ import { cardReplaceConsent } from '@/lib/promo/cardReplaceConsent';
 import { FieldLimitNote } from '@/components/promo/FieldLimitNote';
 import { PromoFieldStylePanel } from '@/components/promo/PromoFieldStylePanel';
 import { PromoSkeletonGhosts } from '@/components/promo/PromoSkeletonGhosts';
+import { PromoTextField } from '@/components/promo/PromoTextField';
 import { isInvalidRange } from '@/lib/dateRange';
 import { getFreshPromoCard } from '@/lib/promo/freshPromoCard';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
@@ -60,7 +61,6 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { getRequiredCardWidth } from '@/lib/promo/promoMeasure';
 import { SegmentedToggle } from '@/components/promo/SegmentedToggle';
 import { clonePromoCard, promoCardsEqual, withDefaultDates, cardSignature } from '@/lib/promo/promoCardIdentity';
-import { FieldInfoNote } from '@/components/promo/FieldInfoNote';
 import { readHiddenFieldInfos, hideFieldInfo } from '@/lib/promo/fieldInfoNotes';
 import { PromoVersionsPopup } from '@/components/promo/PromoVersionsPopup';
 import { PromoDraftPopup } from '@/components/promo/PromoDraftPopup';
@@ -255,6 +255,37 @@ function syncTimerElement(
     el.innerHTML = nextHtml;
   }
 }
+
+/**
+ * The panel's three text fields, in order. Only the wording differs between
+ * them; everything else is PromoTextField.
+ */
+const PANEL_TEXT_FIELDS = [
+  {
+    field: 'title' as const,
+    label: 'Title',
+    placeholder: 'Your headline',
+    info: 'Titles work best as a single line — marketing best practice. Adjust font size or shorten text to fit.',
+    className: '!mt-6',
+    headerClassName: '!mt-0 flex items-center justify-between',
+  },
+  {
+    field: 'subtitle' as const,
+    label: 'Subtitle',
+    placeholder: 'A supporting line',
+    info: 'Subtitles are optimised for 2 lines for better engagement. Adjust font size or styling to fit.',
+    className: undefined,
+    headerClassName: undefined,
+  },
+  {
+    field: 'description' as const,
+    label: 'Description',
+    placeholder: 'A little more about the offer',
+    info: 'Descriptions are capped at 3 lines for readability. Adjust font size or styling to fit your message.',
+    className: undefined,
+    headerClassName: undefined,
+  },
+];
 
 export function PromoSection({
   config,
@@ -627,6 +658,13 @@ export function PromoSection({
   const restoringSnapshotRef = useRef(false);
   const skipOverflowBlockRef = useRef(false);
   const promoDeletingRef = useRef(false);
+
+  /** The editors' refs stay here; PromoTextField only receives them. */
+  const PANEL_FIELD_REFS = {
+    title: titleRef,
+    subtitle: subtitleRef,
+    description: descRef,
+  } as const;
 
   const refreshToolbarRef = useRef<(editor: HTMLDivElement | null) => void>(
     () => {},
@@ -2077,184 +2115,40 @@ export function PromoSection({
             </p>
           </div>
 
-          <div className="!mt-6">
-            <div className="!mt-0 flex items-center justify-between">
-              <label className="block text-sm font-semibold text-on-surface mb-2">
-                Title
-              </label>
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  openFieldStylePopup("title", titleRef, e.currentTarget as HTMLElement);
-                }}
-                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
-                title="Open title style"
-                aria-label="Open title style"
-              >
-                <Palette className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <FieldInfoNote
-              open={fieldInfoPopup === 'title'}
-              onDismiss={() => setFieldInfoPopup(null)}
-              onNeverShow={() => dismissFieldInfo('title')}
-            >
-              Titles work best as a single line — marketing best practice. Adjust font size or shorten text to fit.
-            </FieldInfoNote>
-
-            {/*
-              These three editable fields — title, subtitle, description —
-              look like one component written three times, and an attempt to
-              make them one was reverted on 26 August 2026 because it changed
-              how the per-field line limit behaved.
-
-              The cause was never identified. Every part of the limit was
-              compared against the original and matched line for line: the
-              per-field maxima, the measurement, the input handler that blocks
-              overlong text, the style pre-check, and the card-width
-              calculation. Something else about having them here, written out,
-              matters.
-
-              So: do not merge these without first working out what that
-              something is. The limit logic behind them took a long time to get
-              right and is not worth trading for the lines this would save.
-            */}
-            <div
-              ref={titleRef}
-              contentEditable
-              spellCheck={true}
-              data-placeholder="Your headline"
-              suppressContentEditableWarning
-              onInput={() => onFieldInput("title")}
-              onFocus={() => onFieldFocus("title", titleRef)}
-              onKeyDown={onPromoEditorKeyDown}
-              onMouseUp={() => refreshPromoToolbarFormats(titleRef.current)}
-              onKeyUp={() => refreshPromoToolbarFormats(titleRef.current)}
-              onPaste={(e) => smartPaste(e, 'title')}
-              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-none overflow-y-auto outline-none break-words transition-colors ${
-                currentField === "title" ? "border-primary/70" : "border-border"
-              } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
-              style={{
-                background: getBackgroundStyle(
-                  config.promoCard.style.background,
-                ),
-                paddingTop: '10px',
-                paddingBottom: '10px',
-              }}
+          {/* Three fields, one component.
+              An earlier attempt to merge these was reverted on 26 August 2026
+              because the per-field line limit stopped working, and the cause
+              was not found at the time. It is recorded in PromoTextField now:
+              a field whose editor ref is created inside the component leaves
+              PromoSection's titleRef / subtitleRef / descRef null, and
+              onFieldInput returns before measuring when that ref is null — the
+              cap disappears with nothing else changed. The refs stay here and
+              are passed down, so that route is closed. If the limit misbehaves
+              again, this is the first thing to check. */}
+          {PANEL_TEXT_FIELDS.map(({ field, label, placeholder, info, className, headerClassName }) => (
+            <PromoTextField
+              key={field}
+              field={field}
+              label={label}
+              placeholder={placeholder}
+              info={info}
+              className={className}
+              headerClassName={headerClassName}
+              html={config.promoCard[field]}
+              editorRef={PANEL_FIELD_REFS[field]}
+              currentField={currentField}
+              background={getBackgroundStyle(config.promoCard.style.background)}
+              fieldInfoPopup={fieldInfoPopup}
+              setFieldInfoPopup={setFieldInfoPopup}
+              dismissFieldInfo={dismissFieldInfo}
+              openFieldStylePopup={openFieldStylePopup}
+              onFieldInput={onFieldInput}
+              onFieldFocus={onFieldFocus}
+              onPromoEditorKeyDown={onPromoEditorKeyDown}
+              refreshPromoToolbarFormats={refreshPromoToolbarFormats}
+              smartPaste={smartPaste}
             />
-            <FieldLimitNote html={config.promoCard.title} field="title" />
-          </div>
-          <div>
-            <div className="flex items-center justify-between">
-              <label className="block text-sm font-semibold text-on-surface mb-2">
-                Subtitle
-              </label>
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  openFieldStylePopup("subtitle", subtitleRef, e.currentTarget as HTMLElement);
-                }}
-                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
-                title="Open subtitle style"
-                aria-label="Open subtitle style"
-              >
-                <Palette className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <FieldInfoNote
-              open={fieldInfoPopup === 'subtitle'}
-              onDismiss={() => setFieldInfoPopup(null)}
-              onNeverShow={() => dismissFieldInfo('subtitle')}
-            >
-              Subtitles are optimised for 2 lines for better engagement. Adjust font size or styling to fit.
-            </FieldInfoNote>
-
-            <div
-              ref={subtitleRef}
-              contentEditable
-              spellCheck={true}
-              data-placeholder="A supporting line"
-              suppressContentEditableWarning
-              onInput={() => onFieldInput("subtitle")}
-              onFocus={() => onFieldFocus("subtitle", subtitleRef)}
-              onKeyDown={onPromoEditorKeyDown}
-              onMouseUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
-              onKeyUp={() => refreshPromoToolbarFormats(subtitleRef.current)}
-              onPaste={(e) => smartPaste(e, 'subtitle')}
-              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-none overflow-y-auto outline-none break-words transition-colors ${
-                currentField === "subtitle"
-                  ? "border-primary/70"
-                  : "border-border"
-              } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
-              style={{
-                background: getBackgroundStyle(
-                  config.promoCard.style.background,
-                ),
-                paddingTop: '10px',
-                paddingBottom: '10px',
-              }}
-            />
-            <FieldLimitNote html={config.promoCard.subtitle} field="subtitle" />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between">
-              <label className="block text-sm font-semibold text-on-surface mb-2">
-                Description
-              </label>
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  openFieldStylePopup("description", descRef, e.currentTarget as HTMLElement);
-                }}
-                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
-                title="Open description style"
-                aria-label="Open description style"
-              >
-                <Palette className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <FieldInfoNote
-              open={fieldInfoPopup === 'description'}
-              onDismiss={() => setFieldInfoPopup(null)}
-              onNeverShow={() => dismissFieldInfo('description')}
-            >
-              Descriptions are capped at 3 lines for readability. Adjust font size or styling to fit your message.
-            </FieldInfoNote>
-
-            <div
-              ref={descRef}
-              contentEditable
-              spellCheck={true}
-              suppressContentEditableWarning
-              data-placeholder="A little more about the offer"
-              onInput={() => onFieldInput("description")}
-              onFocus={() => onFieldFocus("description", descRef)}
-              onKeyDown={onPromoEditorKeyDown}
-              onMouseUp={() => refreshPromoToolbarFormats(descRef.current)}
-              onKeyUp={() => refreshPromoToolbarFormats(descRef.current)}
-              onPaste={(e) => smartPaste(e, 'description')}
-              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-none overflow-y-auto outline-none break-words transition-colors ${
-                currentField === "description"
-                  ? "border-primary/70"
-                  : "border-border"
-              } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
-              style={{
-                background: getBackgroundStyle(
-                  config.promoCard.style.background,
-                ),
-                paddingTop: '10px',
-                paddingBottom: '10px',
-              }}
-            />
-            <FieldLimitNote html={config.promoCard.description} field="description" />
-          </div>
+          ))}
 
           <div className="!mt-8">
             <h4 className="text-2xl font-semibold leading-8 text-on-surface">
