@@ -103,6 +103,8 @@ export interface PromoEditorApi
   setCardActionConfirm: (action: PromoCardAction | null) => void;
   pushPromoState: (options?: { replace?: boolean }) => void;
   pushPromoStateFromConfig: () => void;
+  /** The card ahead of React — the undo history's single source. */
+  liveCardRef: RefObject<PromoCard>;
 
   /** Schedule and countdown. */
   showStartDatePicker: boolean;

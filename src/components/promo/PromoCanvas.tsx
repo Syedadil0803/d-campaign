@@ -49,6 +49,7 @@ export function PromoCanvas() {
     setActiveFormats,
     warnTimerLimit,
     pushPromoStateFromConfig,
+    liveCardRef,
     onFieldInput,
     onPromoPreviewKeyDown,
     refreshPromoToolbarFormats,
@@ -178,6 +179,7 @@ export function PromoCanvas() {
               {showTimerInPreview && (
                 <PromoPreviewTimer
                   pushPromoStateFromConfig={pushPromoStateFromConfig}
+                  liveCardRef={liveCardRef}
                   config={config}
                   currentField={currentField}
                   lexicalTimerRef={lexicalTimerRef}

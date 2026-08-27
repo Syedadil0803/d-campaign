@@ -7,8 +7,6 @@ import { UndoStack } from '@/lib/editor/undoStack';
 import { clonePromoCard, cardSignature } from '@/lib/promo/promoCardIdentity';
 import { cardIsBlank, cardIsUntouchedTemplate } from '@/lib/promo/promoAuthorship';
 import { restorePromoSelection, getPromoSelectionSnapshot } from '@/lib/promo/promoEditorSelection';
-import { wrapBareTextWithFontSize } from '@/lib/editor/richTextUtils';
-import { serializeTimerHtml } from '@/lib/editor/timerUtils';
 
 export interface PromoSnapshot {
   promoCard: PromoCard;
@@ -23,13 +21,13 @@ interface PromoAppliedRedoSnapshot {
 
 interface UsePromoUndoArgs {
   configRef: RefObject<CampaignConfig>;
+  /** The card ahead of React — see getPromoSnapshot. */
+  liveCardRef: RefObject<PromoCard>;
   setConfig: (config: CampaignConfig) => void;
   markChanged: () => void;
   currentFieldRef: RefObject<PromoField | null>;
   setCurrentField: (field: PromoField | null) => void;
   activeEditorRef: RefObject<HTMLDivElement | null>;
-  timerRef: RefObject<HTMLDivElement | null>;
-  previewTimerRef: RefObject<HTMLDivElement | null>;
   getActivePromoEditor: () => HTMLDivElement | null;
   getFieldRef: (field: PromoField | null) => RefObject<HTMLDivElement | null> | null;
   syncEditorsFromConfig: (card: PromoCard) => void;
@@ -66,13 +64,12 @@ interface UsePromoUndoArgs {
  */
 export function usePromoUndo({
   configRef,
+  liveCardRef,
   setConfig,
   markChanged,
   currentFieldRef,
   setCurrentField,
   activeEditorRef,
-  timerRef,
-  previewTimerRef,
   getActivePromoEditor,
   getFieldRef,
   syncEditorsFromConfig,
@@ -93,36 +90,30 @@ export function usePromoUndo({
   const promoAppliedCardBaselineRef = useRef<PromoSnapshot | null>(null);
   const promoAppliedRedoRef = useRef<PromoAppliedRedoSnapshot | null>(null);
 
+  /**
+   * The card as it is now, plus where the caret was.
+   *
+   * ONE source. This used to be `configRef` overlaid with the live DOM of
+   * whichever field had focus, which made a snapshot's accuracy depend on where
+   * the caret happened to be: with the cursor in the countdown its text was
+   * read live and was right, with the cursor in the title the countdown's text
+   * — and showTimer — came from a config that had not caught up. Undoing from
+   * the title could therefore restore a card in which the timer had never been
+   * switched on, and because each push discards the redo branch it could not be
+   * brought back.
+   *
+   * liveCardRef is updated by every editor in the same breath as setConfig, so
+   * it is never behind, and the caret no longer decides what the history sees.
+   */
   function getPromoSnapshot(): PromoSnapshot {
     const editor = getActivePromoEditor();
-    const promoCard = clonePromoCard(configRef.current.promoCard);
-    const currentField = currentFieldRef.current;
-    if (editor && currentField) {
-      const html = wrapBareTextWithFontSize(editor.innerHTML);
-      if (currentField === "title") promoCard.title = html;
-      if (currentField === "subtitle") promoCard.subtitle = html;
-      if (currentField === "description") promoCard.description = html;
-      if (currentField === "button") promoCard.buttonText = html;
-      if (currentField === "timer") {
-        // Always read the real timer editor — never a stale/other-field editor,
-        // which would corrupt timerText in the undo/redo history.
-        const tEl =
-          editor === timerRef.current || editor === previewTimerRef.current
-            ? editor
-            : timerRef.current;
-        if (tEl) {
-          promoCard.timerText = serializeTimerHtml(
-            wrapBareTextWithFontSize(tEl.innerHTML),
-          );
-        }
-      }
-    }
     return {
-      promoCard,
-      currentField,
+      promoCard: clonePromoCard(liveCardRef.current),
+      currentField: currentFieldRef.current,
       selection: editor ? getPromoSelectionSnapshot(editor) : null,
     };
   }
+
 
   /**
    * Record the card as it is BEFORE a change, so undo restores this moment.
@@ -181,7 +172,7 @@ export function usePromoUndo({
     if (restoringSnapshotRef.current) return;
     promoAppliedRedoRef.current = null;
     promoHistory.push({
-      promoCard: clonePromoCard(configRef.current.promoCard),
+      promoCard: clonePromoCard(liveCardRef.current),
       currentField: currentFieldRef.current,
       selection: null,
     });
@@ -283,6 +274,9 @@ export function usePromoUndo({
   function applyPromoSnapshot(snapshot: PromoSnapshot) {
     restoringSnapshotRef.current = true;
     const nextPromoCard = clonePromoCard(snapshot.promoCard);
+    // The live card moves with the restore, or the next push would record the
+    // card we just stepped away from.
+    liveCardRef.current = nextPromoCard;
     setCurrentField(snapshot.currentField);
     setShowPersistentScaffold(
       nextPromoCard.active || Boolean(snapshot.currentField),

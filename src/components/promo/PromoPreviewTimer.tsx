@@ -24,6 +24,8 @@ interface PromoPreviewTimerProps {
   computeCardWidth: (promo: PromoCard) => number;
   warnTimerLimit: () => void;
   pushPromoStateFromConfig: () => void;
+  /** Kept current here too — the countdown writes through its own onChange. */
+  liveCardRef: RefObject<PromoCard>;
   onTimerEdited: (() => void) | undefined;
 }
 
@@ -50,6 +52,7 @@ export function PromoPreviewTimer({
   computeCardWidth,
   warnTimerLimit,
   pushPromoStateFromConfig,
+  liveCardRef,
   onTimerEdited,
 }: PromoPreviewTimerProps) {
   return (
@@ -132,11 +135,12 @@ export function PromoPreviewTimer({
                         // in both makes the second setConfig clobber the first
                         // (that desynced timerText from timerStateJson — stale
                         // suffixes like "on a" survived in timerText only).
-                        setConfig((prev) =>
-                          nextTimerText === (prev.promoCard.timerText ?? '')
-                            ? prev
-                            : { ...prev, promoCard: { ...prev.promoCard, timerText: nextTimerText } },
-                        );
+                        setConfig((prev) => {
+                          if (nextTimerText === (prev.promoCard.timerText ?? '')) return prev;
+                          const nextCard = { ...prev.promoCard, timerText: nextTimerText };
+                          liveCardRef.current = nextCard;
+                          return { ...prev, promoCard: nextCard };
+                        });
                         markChanged();
                       }}
                       onStateJson={(json) => {

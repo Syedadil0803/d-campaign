@@ -350,6 +350,31 @@ export function PromoSection({
 
   const configRef = useRef(config);
   configRef.current = config;
+
+  /**
+   * The promo card as it stands right now, ahead of React.
+   *
+   * setConfig does not land until the next render, so between an input event
+   * and that render the editors show something `config` does not yet have. The
+   * undo history reads this, so a snapshot never depends on which field happens
+   * to hold the caret. Every editor write updates it alongside setConfig; this
+   * assignment is the baseline for cards that arrive from anywhere else.
+   */
+  const liveCardRef = useRef(config.promoCard);
+  /**
+   * Config only wins when it has actually changed.
+   *
+   * Assigning on every render would let an unrelated re-render — one that
+   * happens before a pending setConfig lands — put the OLD card back over an
+   * edit the editors have already made, which is the same staleness this ref
+   * exists to remove. Comparing identity means cards arriving from elsewhere
+   * (a template, a draft, an undo) still take effect, and nothing else does.
+   */
+  const lastConfigCardRef = useRef(config.promoCard);
+  if (lastConfigCardRef.current !== config.promoCard) {
+    lastConfigCardRef.current = config.promoCard;
+    liveCardRef.current = config.promoCard;
+  }
   const currentFieldRef = useRef<PromoField | null>(currentField);
   currentFieldRef.current = currentField;
 
@@ -1122,6 +1147,7 @@ export function PromoSection({
   const richText = usePromoRichText({
     config,
     setConfig,
+    liveCardRef,
     markChanged,
     pushPromoState: (options?: { replace?: boolean }) =>
       pushPromoStateRef.current(options),
@@ -1181,13 +1207,12 @@ export function PromoSection({
     promoAppliedRedoRef,
   } = usePromoUndo({
     configRef,
+    liveCardRef,
     setConfig,
     markChanged,
     currentFieldRef,
     setCurrentField,
     activeEditorRef,
-    timerRef,
-    previewTimerRef,
     getActivePromoEditor,
     getFieldRef,
     syncEditorsFromConfig,
@@ -1904,6 +1929,7 @@ export function PromoSection({
     setCardActionConfirm,
     pushPromoState,
     pushPromoStateFromConfig,
+    liveCardRef,
     showStartDatePicker,
     setShowStartDatePicker,
     showEndDatePicker,

@@ -47,6 +47,15 @@ type Editor = RefObject<HTMLDivElement | null>;
 interface UsePromoRichTextArgs {
   config: CampaignConfig;
   setConfig: (config: CampaignConfig) => void;
+  /**
+   * The card as it stands RIGHT NOW, ahead of React.
+   *
+   * setConfig does not land until the next render, so between an input event
+   * and that render `config` is behind what the editor shows. The undo stack
+   * reads this instead, which is why every write below updates it in the same
+   * breath as setConfig.
+   */
+  liveCardRef: RefObject<PromoCard>;
   markChanged: () => void;
   pushPromoState: (options?: { replace?: boolean }) => void;
 
@@ -129,6 +138,7 @@ export function usePromoRichText({
   restoringSnapshotRef,
   setCardWidth,
   setConfig,
+  liveCardRef,
   setCurrentField,
   setFieldInfoPopup,
   setShowCardBgPopup,
@@ -371,6 +381,7 @@ export function usePromoRichText({
       const html = wrapBareTextWithFontSize(el.innerHTML);
       const text = serializeTimerHtml(html);
       const nextPromoCard = { ...config.promoCard, timerText: text };
+      liveCardRef.current = nextPromoCard;
       setConfig({
         ...config,
         promoCard: nextPromoCard,
@@ -441,6 +452,7 @@ export function usePromoRichText({
       ...config.promoCard,
       [fieldMap[field]]: html,
     };
+    liveCardRef.current = nextPromoCard;
     setConfig({
       ...config,
       promoCard: nextPromoCard,
@@ -458,7 +470,9 @@ export function usePromoRichText({
     const newWidth = computeCardWidth(nextPromoCard);
     setCardWidth(newWidth);
     if (newWidth !== nextPromoCard.cardWidth) {
-      setConfig({ ...config, promoCard: { ...nextPromoCard, cardWidth: newWidth } });
+      const widened = { ...nextPromoCard, cardWidth: newWidth };
+      liveCardRef.current = widened;
+      setConfig({ ...config, promoCard: widened });
     }
   }
 
