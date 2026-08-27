@@ -13,6 +13,7 @@ import {
 import { cardReplaceConsent } from '@/lib/promo/cardReplaceConsent';
 import { FieldLimitNote } from '@/components/promo/FieldLimitNote';
 import { PromoFieldStylePanel } from '@/components/promo/PromoFieldStylePanel';
+import { PromoSkeletonGhosts } from '@/components/promo/PromoSkeletonGhosts';
 import { isInvalidRange } from '@/lib/dateRange';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
 import { usePromoRichText } from '@/components/promo/usePromoRichText';
@@ -2948,58 +2949,13 @@ export function PromoSection({
                     </div>
                   )}
 
-                  {/* Ghosts for the two parts that are switched off.
-                      A cleared card has no countdown and no button, so the
-                      skeleton stopped after the description and the lower half
-                      of the card was blank — someone who has never built one
-                      had no way to know a countdown or a button were even
-                      possible, which is the whole reason the skeleton exists.
-
-                      Inert on purpose. They are dashed outlines that render
-                      nothing real: showTimer and showButton stay false, so
-                      nothing here can switch the countdown back on behind the
-                      user, and they disappear the moment a design arrives or
-                      the toggle is turned on for real. */}
-                  {blankStart && !showTimerInPreview && (
-                    <div
-                      className="mb-2 rounded border border-dashed px-2 py-1.5 text-center text-xs"
-                      style={{
-                        borderColor: `${config.promoCard.style.textColor}33`,
-                        color: `${config.promoCard.style.textColor}66`,
-                      }}
-                    >
-                      {/* Says the step that is actually outstanding.
-                          Fixed text told people to set an end date they may
-                          have already set — the countdown turns itself on when
-                          a cleared card gets its dates, so the only way to be
-                          looking at this ghost WITH dates in place is to have
-                          switched the timer off by hand. Repeating the first
-                          instruction there is telling someone to redo work
-                          they have done. */}
-                      {config.promoCard.endDate
-                        ? 'Countdown — turn on Countdown Timer Display'
-                        : 'Countdown — set an end date to switch it on'}
-                    </div>
-                  )}
-
-                  {blankStart && !showButtonInPreview && (
-                    <div className="flex justify-center">
-                      {/* A dashed outline again, not a filled button.
-                          Filling it made the card look finished — a real call
-                          to action sitting on a real design — which is exactly
-                          what a skeleton must not look like. Dashed says
-                          "something goes here", which is the whole message. */}
-                      <div
-                        className="rounded border border-dashed px-4 py-1.5 text-xs"
-                        style={{
-                          borderColor: `${config.promoCard.style.textColor}55`,
-                          color: `${config.promoCard.style.textColor}aa`,
-                        }}
-                      >
-                        Button — turn on Call to Action
-                      </div>
-                    </div>
-                  )}
+                  <PromoSkeletonGhosts
+                    blankStart={blankStart}
+                    showTimerInPreview={showTimerInPreview}
+                    showButtonInPreview={showButtonInPreview}
+                    textColor={config.promoCard.style.textColor}
+                    endDate={config.promoCard.endDate}
+                  />
 
                   {showButtonInPreview && (
                     <div
