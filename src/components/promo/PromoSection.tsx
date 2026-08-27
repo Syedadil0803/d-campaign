@@ -11,6 +11,7 @@ import {
   type SetStateAction,
 } from "react";
 import { createPortal } from 'react-dom';
+import { cardReplaceConsent } from '@/lib/promo/cardReplaceConsent';
 import { FieldLimitNote } from '@/components/promo/FieldLimitNote';
 import { isInvalidRange } from '@/lib/dateRange';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
@@ -59,7 +60,7 @@ import { LexicalTimerField, type LexicalTimerFieldHandle } from '@/components/ti
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { getRequiredCardWidth } from '@/lib/promo/promoMeasure';
 import { SegmentedToggle } from '@/components/promo/SegmentedToggle';
-import { clonePromoCard, promoCardsEqual, stripHtmlText, withDefaultDates, cardSignature } from '@/lib/promo/promoCardIdentity';
+import { clonePromoCard, promoCardsEqual, withDefaultDates, cardSignature } from '@/lib/promo/promoCardIdentity';
 import { GradientControls } from '@/components/promo/GradientControls';
 import { FieldInfoNote } from '@/components/promo/FieldInfoNote';
 import { readHiddenFieldInfos, hideFieldInfo } from '@/lib/promo/fieldInfoNotes';
@@ -1827,116 +1828,35 @@ export function PromoSection({
     },
   ) {
     const pc = configRef.current.promoCard;
-
-    /**
-     * What the card actually IS, ignoring noise the app rewrites by itself:
-     * font-size spans the editors normalise, re-serialised timer HTML, and the
-     * auto 400/440 width. A raw compare reports "different" for cards that
-     * look and behave identically.
-     */
-    // Applying what's already on the canvas is a no-op: don't ask, don't apply
-    // (applying would mark the card changed for no visible reason).
-    if (opts.nextCard && cardSignature(opts.nextCard) === cardSignature(pc)) {
-      toast("That's already the card you're editing.");
-      return;
-    }
-
-    /**
-     * Nothing of the user's own is on the canvas, so nothing can be lost:
-     * it's blank, it's already stored, or it is a template — with or without
-     * one of our themes over it — that Template Hub will hand straight back.
-     *
-     * Consent is for protecting work. Asking here made picking a second
-     * template feel like a commitment, and offered to spend the single draft
-     * slot on a card the user had merely glanced at.
-     */
-    if (nothingToOfferBack(pc)) {
-      action();
-      return;
-    }
-
-    const hasContent =
-      hasVisibleContent(pc.title) ||
-      hasVisibleContent(pc.subtitle) ||
-      hasVisibleContent(pc.description) ||
-      hasVisibleContent(pc.buttonText);
-    // A blank/fresh card has nothing to lose — replace it silently (this also
-    // covers the dirty flag being set right after a previous Start Fresh).
-    if (!hasContent) {
-      action();
-      return;
-    }
-
-    // Still byte-identical to whatever was last applied, so the user hasn't
-    // written anything into it — swapping it away loses nothing, and it's one
-    // click from its own popup. Checked BEFORE the dirty flag on purpose:
-    // applying a template calls markChanged(), so hasUnsavedChanges is always
-    // true straight afterwards and this branch was unreachable — which made
-    // browsing templates warn on every click after the first.
-    // Compare only what represents the USER'S work: the words and the styling.
-    // A whole-object compare fails on things the app changes by itself right
-    // after applying — cardWidth is recomputed 400↔440, the timer HTML is
-    // re-serialised, editors normalise font-size spans — so it reported "edited"
-    // for a card nobody had touched, and every template click warned.
-    const baseline = promoAppliedCardBaselineRef.current?.promoCard;
-    const workSignature = (c: PromoCard) =>
-      JSON.stringify({
-        title: hasVisibleContent(c.title) ? stripHtmlText(c.title) : '',
-        subtitle: hasVisibleContent(c.subtitle) ? stripHtmlText(c.subtitle) : '',
-        description: hasVisibleContent(c.description) ? stripHtmlText(c.description) : '',
-        buttonText: hasVisibleContent(c.buttonText) ? stripHtmlText(c.buttonText) : '',
-        style: c.style,
-      });
-    if (baseline && workSignature(baseline) === workSignature(pc)) {
-      action();
-      return;
-    }
-
-    // ── Draft-aware branches ──────────────────────────────────────────
-    // The card holds real work, so what happens next depends entirely on
-    // whether that work is already safe in the draft. In every branch "No"
-    // simply closes the dialog: it cancels the template change and touches
-    // nothing, because a button labelled No must never destroy anything.
-
     const incoming = opts.replacementLabel ?? 'the new card';
     const offerDraftSave = opts.offerDraftSave !== false;
 
-    /**
-     * Already published — the card on the canvas can be fetched back from My
-     * Published, so nothing is at risk and no save is worth offering.
-     *
-     * Checked BEFORE the draft branches on purpose: with a draft lying around
-     * from other work, replacing a published card used to prompt "Replace your
-     * saved draft?" — offering to overwrite the draft with a card that was
-     * already safe, which is both pointless and destructive.
-     */
-    const cardIsPublished =
-      !!livePromoCard && cardSignature(pc) === cardSignature(livePromoCard);
+    const verdict = cardReplaceConsent({
+      current: pc,
+      next: opts.nextCard,
+      live: livePromoCard,
+      draft: draftPromoCard,
+      draftExists,
+      draftUpToDate,
+      hasUnsavedChanges,
+      appliedBaseline: promoAppliedCardBaselineRef.current?.promoCard ?? null,
+      nothingToOfferBack: nothingToOfferBack(pc),
+      offerDraftSave,
+    });
 
-    /**
-     * Already in the draft. Uses the card comparison, not `draftUpToDate`:
-     * that flag is a whole-config signature, so switching tabs and coming back
-     * made an unchanged card look edited and prompted to re-save it.
-     */
-    const cardIsInDraft =
-      !!draftPromoCard && cardSignature(pc) === cardSignature(draftPromoCard);
-
-    /**
-     * Saved somewhere — apply it, say nothing.
-     *
-     * These two cases used to open a dialog whose entire message was "nothing
-     * is at risk". A confirmation that confirms nothing is just a click in the
-     * way: the card can be brought back from My Published or My Draft, and the
-     * action's own toast already reports what happened.
-     */
-    if (offerDraftSave && (cardIsPublished || cardIsInDraft || draftUpToDate)) {
+    if (verdict.kind === 'already-applied') {
+      toast("That's already the card you're editing.");
+      return;
+    }
+    if (verdict.kind === 'silent') {
       action();
       return;
     }
 
-    if (offerDraftSave && draftExists && !draftUpToDate && !cardIsInDraft) {
-      // A draft exists but the editor has moved on. Continuing overwrites the
-      // draft with what's on screen now — say so before it happens.
+    // Every dialog below shares one rule: "No" simply closes it. It cancels the
+    // replacement and touches nothing, because a button labelled No must never
+    // destroy anything.
+    if (verdict.kind === 'overwrites-draft') {
       setCardActionConfirm({
         ...opts,
         title: 'Replace your saved draft?',
@@ -1962,10 +1882,7 @@ export function PromoSection({
       return;
     }
 
-    if (!hasUnsavedChanges) {
-      // Content with no pending edits — typically their published card, loaded
-      // on landing. Confirmed with reassuring copy so it never vanishes
-      // unannounced, but without implying work will be lost.
+    if (verdict.kind === 'reassure') {
       setCardActionConfirm({
         ...opts,
         body:
@@ -1976,14 +1893,11 @@ export function PromoSection({
       return;
     }
 
-    // Destructive by intent (Clear Canvas): warn plainly, save nothing.
-    if (!offerDraftSave) {
+    if (verdict.kind === 'destructive') {
       setCardActionConfirm({ ...opts, onConfirm: action });
       return;
     }
 
-    // Unsaved work with no draft behind it — the only branch where continuing
-    // could actually lose something, so it offers to save on the way through.
     setCardActionConfirm({
       ...opts,
       title: 'Save this card as a draft?',
@@ -1999,8 +1913,8 @@ export function PromoSection({
         saveOutgoingCardToDraft();
         action();
       },
-      // Discards the current card without keeping a copy. Offered because
-      // some cards are not worth a draft slot, and the cap is five.
+      // Discards the current card without keeping a copy. Offered because some
+      // cards are not worth a draft slot, and the cap is five.
       secondaryLabel: 'Continue anyway',
       onSecondary: action,
     });
