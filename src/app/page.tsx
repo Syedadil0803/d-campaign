@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { isInvalidRange, anyInvalidRange } from '@/lib/dateRange';
 import { X, Loader2, SlidersHorizontal, Clock } from 'lucide-react';
 import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
 import { whatsAppUrl, whatsAppLooksShort } from '@/lib/whatsapp';
@@ -1190,18 +1191,25 @@ export default function Home() {
   // Invalid promo schedule = both dates set and start is after end. Blocks
   // Save/Publish (disabled CTA); the ping triggers PromoSection's scroll+flash
   // fallback if a save is somehow still attempted.
-  const promoDateRangeInvalid = (() => {
-    const s = config.promoCard.startDate;
-    const e = config.promoCard.endDate;
-    return !!(s && e && s > e);
-  })();
+  const promoDateRangeInvalid = isInvalidRange(
+    config.promoCard.startDate,
+    config.promoCard.endDate,
+  );
+
+  // Announcements schedule per message, so any one of them being back to front
+  // has to block the header the same way. Without this the popup refused to
+  // close on a bad range while Save and Publish stayed live beside it — the bad
+  // range could be saved and published from the header instead.
+  const announcementDateRangeInvalid = anyInvalidRange(
+    config.announcementBar.announcements,
+  );
   const [promoDateErrorPing, setPromoDateErrorPing] = useState(0);
   // Returns true (and fires the fallback guard) when a promo save/publish must
   // be blocked because the date range is invalid.
   function blockPromoSaveIfInvalidRange(): boolean {
     const s = configRef.current.promoCard.startDate;
     const e = configRef.current.promoCard.endDate;
-    if (s && e && s > e) {
+    if (isInvalidRange(s, e)) {
       setPromoDateErrorPing((n) => n + 1);
       return true;
     }
@@ -2502,6 +2510,7 @@ export default function Home() {
           hasPromoChanges={promoWorthPublishing}
           readyToPublishAnnouncement={readyToPublishAnnouncement}
           promoDateInvalid={promoDateRangeInvalid}
+          announcementDateInvalid={announcementDateRangeInvalid}
           isPublishing={isPublishing}
           isDarkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode}

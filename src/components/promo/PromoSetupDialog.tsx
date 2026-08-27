@@ -10,6 +10,7 @@
  */
 
 import { useMemo, useState } from 'react';
+import { isInvalidRange } from '@/lib/dateRange';
 import { ArrowRight, CalendarDays, PenLine, Sparkles, X } from 'lucide-react';
 import { PromoDatePicker } from '@/components/promo/PromoDatePicker';
 import { toLocalISODate } from '@/lib/utils';
@@ -72,7 +73,7 @@ export function PromoSetupDialog({
   const [showError, setShowError] = useState(false);
   const [customDates, setCustomDates] = useState(false);
   const todayISO = toLocalISODate(new Date());
-  const rangeInvalid = Boolean(startDate && endDate && startDate > endDate);
+  const rangeInvalid = isInvalidRange(startDate, endDate);
   const incomplete = !startDate || !endDate;
   const scheduleReady = !rangeInvalid && !incomplete;
 

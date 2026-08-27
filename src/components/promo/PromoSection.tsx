@@ -11,6 +11,7 @@ import {
   type SetStateAction,
   type KeyboardEvent,
 } from "react";
+import { isInvalidRange } from '@/lib/dateRange';
 import {
   Gift,
   X,
@@ -1716,11 +1717,10 @@ export function PromoSection({
 
   // Invalid schedule = both dates set and start is after end. Drives the
   // in-field error, the red End Date border, and the disabled Save/Publish CTA.
-  const promoDateRangeInvalid = (() => {
-    const s = config.promoCard.startDate;
-    const e = config.promoCard.endDate;
-    return !!(s && e && s > e);
-  })();
+  const promoDateRangeInvalid = isInvalidRange(
+    config.promoCard.startDate,
+    config.promoCard.endDate,
+  );
 
   // Fallback guard: when the page reports a blocked save/publish attempt, scroll
   // the End Date field into view and flash its inline error (no toast).

@@ -12,6 +12,8 @@ interface HeaderProps {
   // straight to a draft via the tab strip, so its top button is Publish-only.
   readyToPublishAnnouncement: boolean;
   promoDateInvalid: boolean;
+  /** Any announcement scheduled back to front. */
+  announcementDateInvalid: boolean;
   /** Hides the status badge and Save/Publish — used outside the promo editor. */
   hideActions?: boolean;
   isPublishing: boolean;
@@ -30,6 +32,7 @@ export function Header({
   hasPromoChanges,
   readyToPublishAnnouncement,
   promoDateInvalid,
+  announcementDateInvalid,
   hideActions,
   isPublishing,
   isDarkMode,
@@ -54,9 +57,18 @@ export function Header({
       ? (readyToPublishAnnouncement ? 'ready' : hasAnnouncementChanges ? 'unsaved' : 'published')
       : (hasPromoChanges ? 'ready' : 'published');
 
-  // Block Publish while the promo schedule range is invalid (start > end).
-  const blockForDateRange = activeTab === 'promo' && promoDateInvalid;
-  const dateRangeTooltip = 'Fix invalid date range to publish.';
+  // Block the action while the tab's schedule is back to front (start > end).
+  // Announcement was missing here: its editor refused to close the schedule
+  // popup on a bad range, but Save and Publish stayed live in the header, so
+  // the range the popup would not let you leave could be saved from up here.
+  const blockForDateRange =
+    (activeTab === 'promo' && promoDateInvalid) ||
+    (activeTab === 'announcement' && announcementDateInvalid);
+  // Announcement stages through Save first, so name whichever action is
+  // actually blocked rather than always saying "publish".
+  const dateRangeTooltip = `Fix invalid date range to ${
+    state === 'unsaved' ? 'save' : 'publish'
+  }.`;
 
   async function onSave() {
     setSaving(true);
@@ -182,7 +194,8 @@ export function Header({
               {state === 'unsaved' && (
                 <button
                   onClick={onSave}
-                  disabled={saving}
+                  disabled={saving || blockForDateRange}
+                  title={blockForDateRange ? dateRangeTooltip : undefined}
                   className="inline-flex items-center rounded-md border border-primary/40 bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-all hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}

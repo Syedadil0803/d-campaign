@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { isInvalidRange } from '@/lib/dateRange';
 import { createPortal } from 'react-dom';
 import { Megaphone, MoreVertical, Sparkles, Radio, Infinity as InfinityIcon, MoveLeft, Trash2 } from 'lucide-react';
 import { CampaignConfig, GradientStyle, defaultConfig } from '@/types/campaign';
@@ -9,10 +10,7 @@ import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { wrapBareTextWithFontSize, rgbToHex, fontSizeToLabel } from '@/lib/editor/richTextUtils';
 import RichTextToolbar from '@/components/shared/RichTextToolbar';
 import { Toast, TOAST_ACTION_MS, type ToastAction } from '@/components/shared/Toast';
-import { formatDateLabel } from '@/lib/calendarDates';
-import { InlineCalendar } from '@/components/announcement/InlineCalendar';
 import { PopupDropdown } from '@/components/shared/PopupDropdown';
-import { CountryFlag, COUNTRY_CODES } from '@/components/shared/CountryFlag';
 import { AnnouncementLinkPopup } from '@/components/announcement/AnnouncementLinkPopup';
 import { AnnouncementSchedulePopup } from '@/components/announcement/AnnouncementSchedulePopup';
 import { whatsAppUrl } from '@/lib/whatsapp';
@@ -473,7 +471,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
         showSchedulePopup &&
         // Don't close on outside-click while the range is invalid — the user
         // must fix it or press Clear (mirrors the blocked Done button).
-        !(selectedStartDate && selectedEndDate && selectedStartDate > selectedEndDate) &&
+        !isInvalidRange(selectedStartDate, selectedEndDate) &&
         schedulePopupRef.current && !schedulePopupRef.current.contains(target) &&
         scheduleBtnRef.current && !scheduleBtnRef.current.contains(target)
       ) {
@@ -1077,11 +1075,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   // Invalid schedule for the message being edited = both dates set and start is
   // after end. Mirrors the Promo schedule: calendars don't gray out the other
   // field; instead we show an inline error and block the popup's Done action.
-  const scheduleRangeInvalid = !!(
-    selectedStartDate &&
-    selectedEndDate &&
-    selectedStartDate > selectedEndDate
-  );
+  const scheduleRangeInvalid = isInvalidRange(selectedStartDate, selectedEndDate);
   scheduleRangeInvalidRef.current = scheduleRangeInvalid;
 
   const isAnnouncementInWindow = (startDate?: string, endDate?: string) => {
