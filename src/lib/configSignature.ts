@@ -38,6 +38,73 @@ function normalizeForCompare(html: unknown): unknown {
   );
 }
 
+/**
+ * The countdown's stored editor state, reduced to what the user actually chose.
+ *
+ * timerStateJson is a serialized Lexical state, regenerated every time the
+ * editor reports a change — and Lexical is free to split text into different
+ * nodes while rendering identically. Applying a saved variant re-serialises it,
+ * so the card's state stopped matching the published one even though nothing
+ * visible differed, and the header's Publish button stayed lit with nothing to
+ * publish.
+ *
+ * The rule was already written for timerText right below — "the countdown's
+ * markup is regenerated on every render; only its wording is the user's" — and
+ * simply never applied to its twin.
+ *
+ * What survives: the text, its styling, and any chip cell styling, in order,
+ * with adjacent runs of identical styling merged so node boundaries stop
+ * mattering. What goes: the node tree itself.
+ */
+function normalizeTimerStateForCompare(json: unknown): unknown {
+  if (typeof json !== 'string' || !json) return '';
+  type Run = { text: string; style: string; format: unknown };
+  type Node = {
+    type?: string;
+    text?: string;
+    style?: unknown;
+    format?: unknown;
+    children?: Node[];
+  };
+  try {
+    const runs: Run[] = [];
+    const walk = (node: Node | undefined): void => {
+      if (!node || typeof node !== 'object') return;
+      if (node.type === 'text' && typeof node.text === 'string') {
+        const text = node.text.replace(/[\u200B]/g, '').replace(/\s+/g, ' ');
+        if (text) {
+          const style = String(node.style ?? '');
+          const format = node.format ?? 0;
+          const last = runs[runs.length - 1];
+          if (last && last.style === style && last.format === format) {
+            last.text += text;
+          } else {
+            runs.push({ text, style, format });
+          }
+        }
+        return;
+      }
+      // A chip or other custom node: its own styling IS the user's, and
+      // timerText cannot express it, so it has to survive the comparison.
+      if (node.type && node.type !== 'root' && node.type !== 'paragraph') {
+        runs.push({
+          text: `<${node.type}>`,
+          style: JSON.stringify(node.style ?? ''),
+          format: node.format ?? 0,
+        });
+      }
+      node.children?.forEach(walk);
+    };
+    const parsed = JSON.parse(json) as { root?: Node };
+    walk(parsed.root ?? (parsed as Node));
+    return runs;
+  } catch {
+    // Not a state this build can read — compare it as it is rather than
+    // pretending two unreadable states are the same.
+    return json;
+  }
+}
+
 export function normalizePromoForCompare(card: Record<string, unknown>) {
   const clone = { ...card };
   delete clone.active;
@@ -53,6 +120,7 @@ export function normalizePromoForCompare(card: Record<string, unknown>) {
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  clone.timerStateJson = normalizeTimerStateForCompare(clone.timerStateJson);
   return clone;
 }
 
