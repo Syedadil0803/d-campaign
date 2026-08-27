@@ -249,7 +249,17 @@ export function useCampaignConfig({
            */
           // Live now, so anything the recovery slot was holding is moot.
           clearRecovery();
-          if (draftPort.savedDraftSignatureRef.current !== null) {
+          /**
+           * Only when the promo was published. My Draft holds a promo card, so
+           * publishing the announcement bar says nothing about it — yet this
+           * ran for every scope and asked "we kept your draft" after an
+           * announcement publish, about a card the user had not touched.
+           *
+           * The same rule is applied two lines below, to the editor reset: an
+           * undefined scope saves both and counts as a promo publish, an
+           * explicit 'announcement' does not.
+           */
+          if (scope !== 'announcement' && draftPort.savedDraftSignatureRef.current !== null) {
             if (draftPort.savedDraftSignatureRef.current === getConfigSignature(guaranteed)) {
               draftPort.clearDraft();
             } else {
