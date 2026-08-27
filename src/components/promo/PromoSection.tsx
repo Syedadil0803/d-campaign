@@ -10,6 +10,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { createPortal } from 'react-dom';
 import { isInvalidRange } from '@/lib/dateRange';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
 import { usePromoRichText } from '@/components/promo/usePromoRichText';
@@ -2676,11 +2677,9 @@ export function PromoSection({
                     refreshPromoToolbarFormats(buttonRef.current)
                   }
                   onKeyUp={() => refreshPromoToolbarFormats(buttonRef.current)}
-                  onPaste={(e) => {
-                    e.preventDefault();
-                    const text = e.clipboardData.getData('text/plain');
-                    document.execCommand('insertText', false, text);
-                  }}
+                  // Was a plain insert with no cap, so pasting was the one way
+                  // to get more than a line into the button.
+                  onPaste={(e) => smartPaste(e, 'button')}
                   className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-none overflow-y-auto outline-none break-words transition-colors ${
                     currentField === "button"
                       ? "border-primary/70"
@@ -3290,7 +3289,16 @@ export function PromoSection({
                             compact={true}
                           />
 
-                          {styleWarning && (
+                          {/* Portalled to the body on purpose. `position:
+                              fixed` is measured against the nearest ancestor
+                              with a transform or filter, and the panel this
+                              sits inside carries backdrop-blur — so a 420px
+                              box "centred on the viewport" was really centred
+                              on a 280px popup, and hung off both sides. With
+                              the popup against the canvas's left edge the
+                              overflow-x: hidden above it clipped the warning
+                              away entirely. */}
+                          {styleWarning && typeof document !== 'undefined' && createPortal(
                             <>
                               {/* No backdrop: an invisible full-screen layer
                                   silently eats the user's next click (the
@@ -3306,7 +3314,8 @@ export function PromoSection({
                                 <p className="text-2xl mb-3">⚠️</p>
                                 <p className="text-sm text-on-surface font-medium leading-relaxed">{styleWarning}</p>
                               </div>
-                            </>
+                            </>,
+                            document.body,
                           )}
 
                           <div className="mt-2 pt-2 border-t border-white/10">

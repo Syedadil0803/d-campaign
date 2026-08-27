@@ -23,11 +23,26 @@
  * until that decision is made.
  */
 
+export type MeasuredField = 'title' | 'subtitle' | 'description' | 'button';
+
 // Virtual Mirror: max lines per field
 const FIELD_MAX_LINES: Record<string, number> = {
   title: 1,
   subtitle: 2,
   description: 3,
+  // The CTA was absent here AND from the caller's overflow list, so the button
+  // label was the one field with no cap at all — it wrapped to as many lines as
+  // you cared to type while every other field stopped you.
+  button: 1,
+};
+
+/**
+ * Horizontal space the field's own chrome takes, so the mirror measures the
+ * width the words actually get. The three text fields sit flush in the card;
+ * the button carries px-4 either side.
+ */
+const FIELD_INSET: Record<string, number> = {
+  button: 32,
 };
 
 
@@ -39,17 +54,18 @@ const MIRROR_MAX_WIDTH = 384;
  * Virtual Mirror measurement.
  * Checks if html overflows at a given width against the field's max lines.
  */
-function measureOverflowAtWidth(html: string, field: 'title' | 'subtitle' | 'description', width: number): boolean {
+function measureOverflowAtWidth(html: string, field: MeasuredField, width: number): boolean {
   if (!html || typeof document === 'undefined') return false;
   const plainText = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim();
   if (!plainText) return false;
 
   const maxLines = FIELD_MAX_LINES[field] || 1;
+  const usableWidth = width - (FIELD_INSET[field] ?? 0);
 
   const ghost = document.createElement('div');
   ghost.style.cssText = `
     position:absolute;visibility:hidden;pointer-events:none;
-    width:${width}px;padding:0;
+    width:${usableWidth}px;padding:0;
     font-family:inherit;line-height:1.5;letter-spacing:normal;
     word-break:break-word;overflow-wrap:break-word;
     white-space:nowrap;
@@ -78,7 +94,7 @@ function measureOverflowAtWidth(html: string, field: 'title' | 'subtitle' | 'des
  * Dynamic mirror: tries min width first, then max width.
  * Returns true only if content overflows at max width (384px).
  */
-export function measureOverflow(html: string, field: 'title' | 'subtitle' | 'description'): boolean {
+export function measureOverflow(html: string, field: MeasuredField): boolean {
   return measureOverflowAtWidth(html, field, MIRROR_MAX_WIDTH);
 }
 

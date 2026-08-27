@@ -27,7 +27,7 @@ import {
   calculateTimeRemaining as calcTimerRemaining,
 } from "@/lib/editor/timerUtils";
 import { type LexicalTimerFieldHandle } from '@/components/timer-lexical/LexicalTimerField';
-import { measureOverflow } from '@/lib/promo/promoMeasure';
+import { type MeasuredField, measureOverflow } from '@/lib/promo/promoMeasure';
 import {
 } from '@/components/promo/PromoCardActionDialog';
 import {
@@ -251,7 +251,7 @@ export function usePromoRichText({
     }, 0);
   }
 
-  function smartPaste(e: React.ClipboardEvent<HTMLDivElement>, field: 'title' | 'subtitle' | 'description') {
+  function smartPaste(e: React.ClipboardEvent<HTMLDivElement>, field: MeasuredField) {
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain');
     if (!text) return;
@@ -391,8 +391,8 @@ export function usePromoRichText({
     }
 
     // Block typing if overflow (skip when format handler will handle it)
-    const overflowFields: PromoField[] = ['title', 'subtitle', 'description'];
-    if (!skipOverflowBlockRef.current && overflowFields.includes(field) && html && measureOverflow(html, field as 'title' | 'subtitle' | 'description')) {
+    const overflowFields: PromoField[] = ['title', 'subtitle', 'description', 'button'];
+    if (!skipOverflowBlockRef.current && overflowFields.includes(field) && html && measureOverflow(html, field as MeasuredField)) {
       const lastValid = lastValidHtmlRef.current[field] || '';
       el.innerHTML = lastValid;
       const sel = window.getSelection();
@@ -580,7 +580,7 @@ export function usePromoRichText({
     field: PromoField,
     format: string,
   ): boolean {
-    const overflowFields: PromoField[] = ['title', 'subtitle', 'description'];
+    const overflowFields: PromoField[] = ['title', 'subtitle', 'description', 'button'];
     if (!overflowFields.includes(field)) return false;
 
     const plainText = editor.textContent?.replace(/\u200B/g, '').trim() || '';
