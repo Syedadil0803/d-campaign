@@ -11,6 +11,7 @@ import {
   type SetStateAction,
 } from "react";
 import { createPortal } from 'react-dom';
+import { FieldLimitNote } from '@/components/promo/FieldLimitNote';
 import { isInvalidRange } from '@/lib/dateRange';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
 import { usePromoRichText } from '@/components/promo/usePromoRichText';
@@ -56,7 +57,7 @@ import {
 } from "@/lib/editor/timerUtils";
 import { LexicalTimerField, type LexicalTimerFieldHandle } from '@/components/timer-lexical/LexicalTimerField';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-import { measureOverflow, getRequiredCardWidth } from '@/lib/promo/promoMeasure';
+import { getRequiredCardWidth } from '@/lib/promo/promoMeasure';
 import { SegmentedToggle } from '@/components/promo/SegmentedToggle';
 import { clonePromoCard, promoCardsEqual, stripHtmlText, withDefaultDates, cardSignature } from '@/lib/promo/promoCardIdentity';
 import { GradientControls } from '@/components/promo/GradientControls';
@@ -2270,14 +2271,7 @@ export function PromoSection({
                 paddingBottom: '10px',
               }}
             />
-            {(() => {
-              const html = config.promoCard.title || '';
-              if (!html) return null;
-              const testHtml = html + 'x';
-              return measureOverflow(testHtml, 'title') ? (
-                <p className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 animate-pulse">⚠️ Field limit reached</p>
-              ) : null;
-            })()}
+            <FieldLimitNote html={config.promoCard.title} field="title" />
           </div>
           <div>
             <div className="flex items-center justify-between">
@@ -2331,14 +2325,7 @@ export function PromoSection({
                 paddingBottom: '10px',
               }}
             />
-            {(() => {
-              const html = config.promoCard.subtitle || '';
-              if (!html) return null;
-              const testHtml = html + 'x';
-              return measureOverflow(testHtml, 'subtitle') ? (
-                <p className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 animate-pulse">⚠️ Field limit reached</p>
-              ) : null;
-            })()}
+            <FieldLimitNote html={config.promoCard.subtitle} field="subtitle" />
           </div>
 
           <div>
@@ -2393,14 +2380,7 @@ export function PromoSection({
                 paddingBottom: '10px',
               }}
             />
-            {(() => {
-              const html = config.promoCard.description || '';
-              if (!html) return null;
-              const testHtml = html + 'x';
-              return measureOverflow(testHtml, 'description') ? (
-                <p className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 animate-pulse">⚠️ Field limit reached</p>
-              ) : null;
-            })()}
+            <FieldLimitNote html={config.promoCard.description} field="description" />
           </div>
 
           <div className="!mt-8">
@@ -2694,6 +2674,7 @@ export function PromoSection({
                     paddingBottom: '10px',
                   }}
                 />
+                <FieldLimitNote html={config.promoCard.buttonText} field="button" />
               </div>
             </div>
         </div>
