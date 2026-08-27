@@ -14,6 +14,7 @@ import { InlineCalendar } from '@/components/announcement/InlineCalendar';
 import { PopupDropdown } from '@/components/shared/PopupDropdown';
 import { CountryFlag, COUNTRY_CODES } from '@/components/shared/CountryFlag';
 import { AnnouncementLinkPopup } from '@/components/announcement/AnnouncementLinkPopup';
+import { AnnouncementSchedulePopup } from '@/components/announcement/AnnouncementSchedulePopup';
 import { whatsAppUrl } from '@/lib/whatsapp';
 import { useEditorHistory } from '@/hooks/useEditorHistory';
 import { EditorSnapshot, LinkSnapshot } from '@/lib/editor/historyManager';
@@ -1708,166 +1709,31 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
               redoLink={redoLink}
             />
 
-            {/* Schedule popup portal */}
-            {showSchedulePopup && schedulePos && typeof document !== 'undefined' && createPortal(
-              <div
-                ref={schedulePopupRef}
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-                style={{ position: 'absolute', top: schedulePos.top, left: schedulePos.left, zIndex: 9999 }}
-                className="bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-3 w-[260px]">
-                <button
-                  onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); if (scheduleRangeInvalid) return; closePopupAndFocusEditor(); }}
-                  aria-label="Close"
-                  title={scheduleRangeInvalid ? 'Fix invalid date range to close.' : undefined}
-                  className={`absolute top-0 right-2 p-1 rounded text-xl ${scheduleRangeInvalid ? 'text-on-surface-variant/40 cursor-not-allowed' : 'text-on-surface-variant hover:text-on-surface'}`}
-                >
-                  ×
-                </button>
-                <p className="text-xs font-medium text-on-surface mb-2">Schedule (optional)</p>
-                <div className="space-y-2">
-                  <div>
-                    <label className="block text-[11px] text-on-surface-variant mb-0.5">Start Date</label>
-                    <div ref={startDateCalendarRef} className="relative">
-                      <button
-                        type="button"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          if (selectedStartDate) {
-                            const date = new Date(`${selectedStartDate}T00:00:00`);
-                            if (!Number.isNaN(date.getTime())) setStartDateView(new Date(date.getFullYear(), date.getMonth(), 1));
-                          }
-                          setShowStartDateCalendar((prev) => !prev);
-                          setShowEndDateCalendar(false);
-                        }}
-                        className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-black/10 p-1.5 text-sm text-on-surface backdrop-blur-md"
-                      >
-                        <span className={selectedStartDate ? 'text-on-surface' : 'text-on-surface-variant'}>
-                          {formatDateLabel(selectedStartDate)}
-                        </span>
-                        <svg
-                          className={`h-4 w-4 flex-shrink-0 text-on-surface-variant transition-transform duration-200 ${showStartDateCalendar ? 'rotate-180' : 'rotate-0'}`}
-                          viewBox="0 0 20 20"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                        >
-                          <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                      {showStartDateCalendar && (
-                        <InlineCalendar
-                          viewDate={startDateView}
-                          onViewDateChange={setStartDateView}
-                          selected={selectedStartDate}
-                          keyPrefix="start"
-                          onSelect={(iso) => {
-                            setSelectedStartDate(iso);
-                            if (selectedIndex !== null) {
-                              const updated = [...config.announcementBar.announcements];
-                              updated[selectedIndex] = { ...updated[selectedIndex], startDate: iso || undefined, richText: true };
-                              setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-                              markChanged();
-                            }
-                            setShowStartDateCalendar(false);
-                          }}
-                        />
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-on-surface-variant mb-0.5">End Date</label>
-                    <div ref={endDateCalendarRef} className="relative">
-                      <button
-                        type="button"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          if (selectedEndDate) {
-                            const date = new Date(`${selectedEndDate}T00:00:00`);
-                            if (!Number.isNaN(date.getTime())) setEndDateView(new Date(date.getFullYear(), date.getMonth(), 1));
-                          }
-                          setShowEndDateCalendar((prev) => !prev);
-                          setShowStartDateCalendar(false);
-                        }}
-                        className={`flex w-full items-center justify-between rounded-xl border bg-black/10 p-1.5 text-sm text-on-surface backdrop-blur-md ${
-                          scheduleRangeInvalid ? 'border-red-500 dark:border-red-400' : 'border-white/10'
-                        }`}
-                      >
-                        <span className={selectedEndDate ? 'text-on-surface' : 'text-on-surface-variant'}>
-                          {formatDateLabel(selectedEndDate)}
-                        </span>
-                        <svg
-                          className={`h-4 w-4 flex-shrink-0 text-on-surface-variant transition-transform duration-200 ${showEndDateCalendar ? 'rotate-180' : 'rotate-0'}`}
-                          viewBox="0 0 20 20"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                        >
-                          <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                      {showEndDateCalendar && (
-                        <InlineCalendar
-                          viewDate={endDateView}
-                          onViewDateChange={setEndDateView}
-                          selected={selectedEndDate}
-                          keyPrefix="end"
-                          onSelect={(iso) => {
-                            setSelectedEndDate(iso);
-                            if (selectedIndex !== null) {
-                              const updated = [...config.announcementBar.announcements];
-                              updated[selectedIndex] = { ...updated[selectedIndex], endDate: iso || undefined, richText: true };
-                              setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-                              markChanged();
-                            }
-                            setShowEndDateCalendar(false);
-                          }}
-                        />
-                      )}
-                    </div>
-                  </div>
-                  {scheduleRangeInvalid && (
-                    <p className="text-[11px] font-medium text-red-600 dark:text-red-400">
-                      End date must be on or after the start date.
-                    </p>
-                  )}
-                  <p className="text-[10px] text-on-surface-variant">Leave empty to always show when bar is active.</p>
-                </div>
-                <div className="flex justify-between items-center mt-2">
-                  {(selectedStartDate || selectedEndDate) && (
-                    <button
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        setSelectedStartDate('');
-                        setSelectedEndDate('');
-                        if (selectedIndex !== null) {
-                          const updated = [...config.announcementBar.announcements];
-                          updated[selectedIndex] = { ...updated[selectedIndex], startDate: undefined, endDate: undefined, richText: true };
-                          setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-                          markChanged();
-                        }
-                      }}
-                      className="text-xs text-primary hover:opacity-80"
-                    >
-                      Clear
-                    </button>
-                  )}
-                  <button
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      if (scheduleRangeInvalid) return;
-                      closePopupAndFocusEditor();
-                    }}
-                    disabled={scheduleRangeInvalid}
-                    title={scheduleRangeInvalid ? 'Fix invalid date range to save.' : undefined}
-                    className="ml-auto text-xs bg-primary text-on-primary px-3 py-1 rounded hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>,
-              document.body
-            )}
+            <AnnouncementSchedulePopup
+              open={showSchedulePopup}
+              position={schedulePos}
+              popupRef={schedulePopupRef}
+              closePopupAndFocusEditor={closePopupAndFocusEditor}
+              scheduleRangeInvalid={scheduleRangeInvalid}
+              selectedIndex={selectedIndex}
+              config={config}
+              setConfig={setConfig}
+              markChanged={markChanged}
+              selectedStartDate={selectedStartDate}
+              setSelectedStartDate={setSelectedStartDate}
+              selectedEndDate={selectedEndDate}
+              setSelectedEndDate={setSelectedEndDate}
+              startDateView={startDateView}
+              setStartDateView={setStartDateView}
+              endDateView={endDateView}
+              setEndDateView={setEndDateView}
+              showStartDateCalendar={showStartDateCalendar}
+              setShowStartDateCalendar={setShowStartDateCalendar}
+              showEndDateCalendar={showEndDateCalendar}
+              setShowEndDateCalendar={setShowEndDateCalendar}
+              startDateCalendarRef={startDateCalendarRef}
+              endDateCalendarRef={endDateCalendarRef}
+            />
 
             {actionMenuIndex !== null && actionMenuPos && typeof document !== 'undefined' && createPortal(
               <div
