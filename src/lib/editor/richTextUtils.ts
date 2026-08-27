@@ -405,7 +405,16 @@ export function applyFontSize(size: string): void {
     selection.addRange(selectRange);
     return;
   } else {
-    // Check if selection is inside a color/bold/italic span - need to preserve it
+    /**
+     * The colour has to be carried onto the new span explicitly, because
+     * execCommand('insertHTML') does not leave the inserted node where the
+     * selection was: it SPLITS the enclosing inline spans and drops the new
+     * one between the halves, as a sibling. Verified in the browser — resizing
+     * "wonderful" inside
+     *   <span style="color:red"><span style="font-size:1.25rem">…</span></span>
+     * leaves the new span outside the colour span, so the text falls back to
+     * the field's base colour.
+     */
     let colorToPreserve = '';
     let hasBold = false;
     let hasItalic = false;
@@ -422,7 +431,12 @@ export function applyFontSize(size: string): void {
       if (el.tagName === 'I' || el.tagName === 'EM' || el.style.fontStyle === 'italic') {
         hasItalic = true;
       }
-      if (el.style.fontSize) break;
+      // Stopping at the nearest font-size ancestor was wrong. Applying a
+      // colour to a whole field wraps it in a span OUTSIDE the size span, so
+      // this found no colour at all and the resized text lost it. Everything
+      // gathered here has to be re-applied for the same reason — insertHTML
+      // splits every enclosing inline element, so an outer <b> is lost too.
+      if (el.style.fontSize && colorToPreserve) break;
       walkForStyle = el.parentElement;
     }
 

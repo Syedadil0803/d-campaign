@@ -2,6 +2,7 @@
 
 
 import {
+  useEffect,
   type RefObject,
   type Dispatch,
   type SetStateAction,
@@ -146,6 +147,28 @@ export function usePromoRichText({
   applyColor,
   activeFormats,
 }: UsePromoRichTextArgs) {
+  /**
+   * Keep the toolbar in step with what is selected inside the countdown.
+   *
+   * The timer reports only chip-TARGET changes, and selecting text clears the
+   * target to null — so the first text selection fired an event and every one
+   * after it was null to null, silently. Moving between a small blue run and a
+   * large red one left the toolbar showing whichever run was selected first.
+   *
+   * The editor's own selection is the signal, so listen for it directly, and
+   * only while the countdown is the field being edited.
+   */
+  useEffect(() => {
+    if (currentField !== 'timer') return;
+    const syncFromSelection = () => {
+      const fmts = lexicalTimerRef.current?.getActiveFormats();
+      if (fmts) setActiveFormats(fmts);
+    };
+    document.addEventListener('selectionchange', syncFromSelection);
+    return () =>
+      document.removeEventListener('selectionchange', syncFromSelection);
+  }, [currentField, lexicalTimerRef, setActiveFormats]);
+
   function applyWholeEditorStyleToggle(
     editor: HTMLDivElement,
     format: "bold" | "italic",
