@@ -15,6 +15,7 @@ import { FieldLimitNote } from '@/components/promo/FieldLimitNote';
 import { PromoFieldStylePanel } from '@/components/promo/PromoFieldStylePanel';
 import { PromoSkeletonGhosts } from '@/components/promo/PromoSkeletonGhosts';
 import { PromoTextField } from '@/components/promo/PromoTextField';
+import { PromoPreviewTextField } from '@/components/promo/PromoPreviewTextField';
 import { isInvalidRange } from '@/lib/dateRange';
 import { getFreshPromoCard } from '@/lib/promo/freshPromoCard';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
@@ -284,6 +285,31 @@ const PANEL_TEXT_FIELDS = [
     info: 'Descriptions are capped at 3 lines for readability. Adjust font size or styling to fit your message.',
     className: undefined,
     headerClassName: undefined,
+  },
+];
+
+/** The three text fields as they appear on the card, in order. */
+const PREVIEW_TEXT_FIELDS = [
+  {
+    field: 'title' as const,
+    placeholder: 'Your headline',
+    emptyClassName: 'text-xl font-semibold',
+    marginClassName: 'mb-1',
+    defaultAlign: 'center' as const,
+  },
+  {
+    field: 'subtitle' as const,
+    placeholder: 'A supporting line',
+    emptyClassName: 'text-sm font-medium',
+    marginClassName: 'mb-2',
+    defaultAlign: 'center' as const,
+  },
+  {
+    field: 'description' as const,
+    placeholder: 'A little more about the offer',
+    emptyClassName: 'text-xs',
+    marginClassName: 'mb-2',
+    defaultAlign: 'left' as const,
   },
 ];
 
@@ -658,6 +684,12 @@ export function PromoSection({
   const restoringSnapshotRef = useRef(false);
   const skipOverflowBlockRef = useRef(false);
   const promoDeletingRef = useRef(false);
+
+  const PREVIEW_FIELD_REFS = {
+    title: previewTitleRef,
+    subtitle: previewSubtitleRef,
+    description: previewDescriptionRef,
+  } as const;
 
   /** The editors' refs stay here; PromoTextField only receives them. */
   const PANEL_FIELD_REFS = {
@@ -2062,6 +2094,17 @@ export function PromoSection({
   const showTitleInPreview = hasTitle || showContentScaffold;
   const showSubtitleInPreview = hasSubtitle || showContentScaffold;
   const showDescriptionInPreview = hasDescription || showContentScaffold;
+  /** Keyed forms of the three flags above, for the preview's field table. */
+  const previewFieldVisible = {
+    title: showTitleInPreview,
+    subtitle: showSubtitleInPreview,
+    description: showDescriptionInPreview,
+  } as const;
+  const previewFieldHasContent = {
+    title: hasTitle,
+    subtitle: hasSubtitle,
+    description: hasDescription,
+  } as const;
   // The timer is opt-in via "Enable Timer" — it must follow the toggle only,
   // NOT the editing scaffold, so disabling it hides the countdown immediately.
   const showTimerInPreview = config.promoCard.showTimer;
@@ -2532,171 +2575,31 @@ export function PromoSection({
                     ),
                   }}
                 >
-                  {showTitleInPreview && (
-                    <div
-                      ref={previewTitleRef}
-                      contentEditable
-                      suppressContentEditableWarning
-                      /**
-                       * Names the region rather than saying "Enter text here".
-                       *
-                       * The card was rendering as a bare white box: these
-                       * fields are always present so the shape stays visible,
-                       * but with nothing in them and no placeholder attribute
-                       * the CSS resolved attr(data-placeholder) to an empty
-                       * string and drew nothing — the skeleton existed and was
-                       * invisible.
-                       *
-                       * Each names what belongs there, because someone who is
-                       * not a designer looking at an empty card needs to know
-                       * which part is the headline and which is the small
-                       * print, not to be told three times that text goes in.
-                       */
-                      data-placeholder="Your headline"
-                      className={`${blankStart ? "promo-ghost" : ""} ${hasTitle ? "text-base font-normal" : "text-xl font-semibold"} mb-1 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === "title" ? "ring-1 ring-primary/70" : ""}`}
-                      onMouseDown={() => {
-                        activeEditorRef.current = previewTitleRef.current;
-                      }}
-                      onClick={() => {
-                        setShowCardBgPopup(false);
-                        setStylePopupAnchor("card");
-                        if (currentField !== "title") setCurrentField("title");
-                        activeEditorRef.current = previewTitleRef.current;
-                        setTimeout(
-                          () =>
-                            refreshPromoToolbarFormats(previewTitleRef.current),
-                          0,
-                        );
-                      }}
-                      onFocus={() => {
-                        activeEditorRef.current = previewTitleRef.current;
-                      }}
-                      onMouseUp={() => {
-                        refreshPromoToolbarFormats(previewTitleRef.current);
-                      }}
-                      onInput={() => onFieldInput("title")}
-                      onKeyDown={onPromoPreviewKeyDown}
-                      onPaste={(e) => e.preventDefault()}
-                      onDrop={(e) => e.preventDefault()}
-                      style={{
-                        background: getBackgroundStyle(
-                          getPreviewFieldBackground("title"),
-                        ),
-                        color: config.promoCard.style.titleStyle.textColor,
-                        textAlign:
-                          config.promoCard.style.titleStyle.textAlign ||
-                          "center",
-                        caretColor: "transparent",
-                        userSelect: "text",
-                        WebkitUserSelect: "text",
-                        cursor: "text",
-                      }}
-                    />
-                  )}
-
-                  {showSubtitleInPreview && (
-                    <div
-                      ref={previewSubtitleRef}
-                      contentEditable
-                      suppressContentEditableWarning
-                      data-placeholder="A supporting line"
-                      className={`${blankStart ? "promo-ghost" : ""} ${hasSubtitle ? "text-base font-normal" : "text-sm font-medium"} mb-2 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === "subtitle" ? "ring-1 ring-primary/70" : ""}`}
-                      onMouseDown={() => {
-                        // Don't trigger state updates while dragging selection.
-                        activeEditorRef.current = previewSubtitleRef.current;
-                      }}
-                      onClick={() => {
-                        setShowCardBgPopup(false);
-                        setStylePopupAnchor("card");
-                        // Plain click activates subtitle style mode.
-                        if (currentField !== "subtitle")
-                          setCurrentField("subtitle");
-                        activeEditorRef.current = previewSubtitleRef.current;
-                        setTimeout(
-                          () =>
-                            refreshPromoToolbarFormats(
-                              previewSubtitleRef.current,
-                            ),
-                          0,
-                        );
-                      }}
-                      onFocus={() => {
-                        activeEditorRef.current = previewSubtitleRef.current;
-                      }}
-                      onMouseUp={() => {
-                        refreshPromoToolbarFormats(previewSubtitleRef.current);
-                      }}
-                      onInput={() => onFieldInput("subtitle")}
-                      onKeyDown={onPromoPreviewKeyDown}
-                      onPaste={(e) => e.preventDefault()}
-                      onDrop={(e) => e.preventDefault()}
-                      style={{
-                        background: getBackgroundStyle(
-                          getPreviewFieldBackground("subtitle"),
-                        ),
-                        color: config.promoCard.style.subheadingStyle.textColor,
-                        textAlign:
-                          config.promoCard.style.subheadingStyle.textAlign ||
-                          "center",
-                        caretColor: "transparent",
-                        userSelect: "text",
-                        WebkitUserSelect: "text",
-                        cursor: "text",
-                      }}
-                    />
-                  )}
-
-                  {showDescriptionInPreview && (
-                    <div
-                      ref={previewDescriptionRef}
-                      contentEditable
-                      suppressContentEditableWarning
-                      data-placeholder="A little more about the offer"
-                      className={`${blankStart ? "promo-ghost" : ""} ${hasDescription ? "text-base font-normal" : "text-xs"} mb-2 px-2 py-1 rounded break-words cursor-pointer outline-none ${currentField === "description" ? "ring-1 ring-primary/70" : ""}`}
-                      onMouseDown={() => {
-                        activeEditorRef.current = previewDescriptionRef.current;
-                      }}
-                      onClick={() => {
-                        setShowCardBgPopup(false);
-                        setStylePopupAnchor("card");
-                        if (currentField !== "description")
-                          setCurrentField("description");
-                        activeEditorRef.current = previewDescriptionRef.current;
-                        setTimeout(
-                          () =>
-                            refreshPromoToolbarFormats(
-                              previewDescriptionRef.current,
-                            ),
-                          0,
-                        );
-                      }}
-                      onFocus={() => {
-                        activeEditorRef.current = previewDescriptionRef.current;
-                      }}
-                      onMouseUp={() => {
-                        refreshPromoToolbarFormats(
-                          previewDescriptionRef.current,
-                        );
-                      }}
-                      onInput={() => onFieldInput("description")}
-                      onKeyDown={onPromoPreviewKeyDown}
-                      onPaste={(e) => e.preventDefault()}
-                      onDrop={(e) => e.preventDefault()}
-                      style={{
-                        background: getBackgroundStyle(
-                          getPreviewFieldBackground("description"),
-                        ),
-                        color:
-                          config.promoCard.style.descriptionStyle.textColor,
-                        textAlign:
-                          config.promoCard.style.descriptionStyle.textAlign ||
-                          "left",
-                        caretColor: "transparent",
-                        userSelect: "text",
-                        WebkitUserSelect: "text",
-                        cursor: "text",
-                      }}
-                    />
+                  {PREVIEW_TEXT_FIELDS.map(
+                    ({ field, placeholder, emptyClassName, marginClassName, defaultAlign }) =>
+                      previewFieldVisible[field] && (
+                        <PromoPreviewTextField
+                          key={field}
+                          field={field}
+                          editorRef={PREVIEW_FIELD_REFS[field]}
+                          placeholder={placeholder}
+                          hasContent={previewFieldHasContent[field]}
+                          emptyClassName={emptyClassName}
+                          marginClassName={marginClassName}
+                          defaultAlign={defaultAlign}
+                          config={config}
+                          blankStart={blankStart}
+                          currentField={currentField}
+                          background={getPreviewFieldBackground(field)}
+                          activeEditorRef={activeEditorRef}
+                          setShowCardBgPopup={setShowCardBgPopup}
+                          setStylePopupAnchor={setStylePopupAnchor}
+                          setCurrentField={setCurrentField}
+                          refreshPromoToolbarFormats={refreshPromoToolbarFormats}
+                          onFieldInput={onFieldInput}
+                          onPromoPreviewKeyDown={onPromoPreviewKeyDown}
+                        />
+                      ),
                   )}
 
                   {showTimerInPreview && (
