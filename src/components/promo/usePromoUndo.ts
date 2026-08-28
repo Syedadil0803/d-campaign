@@ -12,6 +12,19 @@ export interface PromoSnapshot {
   promoCard: PromoCard;
   currentField: PromoField | null;
   selection: PromoSelectionSnapshot | null;
+  /**
+   * Whether the empty-field ghosts were on screen at this moment.
+   *
+   * Carried rather than recomputed. It is a mode the session is in — "the user
+   * is building a card" — not something the card can be read for, which is why
+   * startFreshCard sets it by hand. Deriving it on restore from
+   * `active || currentField` meant undoing to any step recorded while focus was
+   * outside a text field (a date picker, a colour, the countdown before its
+   * focus had committed) switched the ghosts off, and an empty title and
+   * subtitle vanished from the card even though undo had changed nothing about
+   * them.
+   */
+  showPersistentScaffold: boolean;
 }
 
 interface PromoAppliedRedoSnapshot {
@@ -33,6 +46,8 @@ interface UsePromoUndoArgs {
   syncEditorsFromConfig: (card: PromoCard) => void;
   refreshPromoToolbarFormats: (editor?: HTMLDivElement | null) => void;
   setShowPersistentScaffold: (show: boolean) => void;
+  /** Read at push time so a snapshot records the ghosts as they then were. */
+  showPersistentScaffoldRef: RefObject<boolean>;
   isFreshCardRef: RefObject<boolean>;
   draftPromoCardRef: RefObject<PromoCard | null | undefined>;
   livePromoCardRef: RefObject<PromoCard | null | undefined>;
@@ -75,6 +90,7 @@ export function usePromoUndo({
   syncEditorsFromConfig,
   refreshPromoToolbarFormats,
   setShowPersistentScaffold,
+  showPersistentScaffoldRef,
   isFreshCardRef,
   draftPromoCardRef,
   livePromoCardRef,
@@ -112,6 +128,7 @@ export function usePromoUndo({
       promoCard: clonePromoCard(liveCardRef.current),
       currentField: currentFieldRef.current,
       selection: editor ? getPromoSelectionSnapshot(editor) : null,
+      showPersistentScaffold: showPersistentScaffoldRef.current,
     };
   }
 
@@ -176,6 +193,7 @@ export function usePromoUndo({
       promoCard: clonePromoCard(liveCardRef.current),
       currentField: currentFieldRef.current,
       selection: null,
+      showPersistentScaffold: showPersistentScaffoldRef.current,
     });
   }
 
@@ -279,9 +297,7 @@ export function usePromoUndo({
     // card we just stepped away from.
     liveCardRef.current = nextPromoCard;
     setCurrentField(snapshot.currentField);
-    setShowPersistentScaffold(
-      nextPromoCard.active || Boolean(snapshot.currentField),
-    );
+    setShowPersistentScaffold(snapshot.showPersistentScaffold);
     setConfig({ ...configRef.current, promoCard: nextPromoCard });
     syncEditorsFromConfig(nextPromoCard);
     setTimeout(() => {
@@ -307,6 +323,7 @@ export function usePromoUndo({
       promoCard: clonePromoCard(promoCard),
       currentField: currentFieldRef.current,
       selection: null,
+      showPersistentScaffold: showPersistentScaffoldRef.current,
     };
   }
 

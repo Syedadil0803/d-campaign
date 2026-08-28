@@ -471,6 +471,13 @@ export function PromoSection({
 
   const [showPersistentScaffold, setShowPersistentScaffold] = useState(true);
   /**
+   * The same flag for the history to read at push time. Assigned during render
+   * rather than in an effect, so a push in the very same commit as a change to
+   * the flag still sees the new value.
+   */
+  const showPersistentScaffoldRef = useRef(showPersistentScaffold);
+  showPersistentScaffoldRef.current = showPersistentScaffold;
+  /**
    * Renaming only: the flag itself is a prop now (see the interface above).
    *
    * Revealing the fields one at a time as they were filled was tried and
@@ -1104,6 +1111,7 @@ export function PromoSection({
     syncEditorsFromConfig,
     refreshPromoToolbarFormats,
     setShowPersistentScaffold,
+    showPersistentScaffoldRef,
     isFreshCardRef,
     draftPromoCardRef,
     livePromoCardRef,

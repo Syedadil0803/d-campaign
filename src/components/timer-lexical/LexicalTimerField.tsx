@@ -33,7 +33,7 @@ import {
 } from 'lexical';
 import { TimerEditor } from './TimerEditor';
 import { $isTimerChipNode, TimerChipNode } from './TimerChipNode';
-import type { ChipTarget } from './TimerChipTarget';
+import type { ChipCell, ChipTarget } from './TimerChipTarget';
 import { wrapsAtWidth } from './lineMeasure';
 import {
   $applyTimerStyle,
@@ -101,6 +101,15 @@ export interface LexicalTimerFieldHandle {
    * on screen untouched — the countdown simply could not be undone.
    */
   loadStateJson(json: string): void;
+  /**
+   * Strip every inline style from the countdown — text and chip alike.
+   *
+   * The counterpart of loadStateJson for a snapshot taken before the countdown
+   * was ever styled. Such a card has no state JSON to load, so loadStateJson
+   * had nothing to do and the styling simply stayed on screen: undo stepped
+   * back past a colour or a bold and the countdown kept it.
+   */
+  clearStyles(): void;
   /** Focus the editor (used when the user clicks the surrounding chrome).
    *  Pass the click's clientX so a click next to the chip lands the caret on
    *  the correct side of the countdown. */
@@ -108,6 +117,18 @@ export interface LexicalTimerFieldHandle {
 }
 
 const TIMER_TOKEN = '{timer}';
+
+/** Every styleable cell of the chip, for the whole-chip checks below. */
+const CHIP_CELLS: ChipCell[] = [
+  'days-val',
+  'days-lab',
+  'sep-0',
+  'hours-val',
+  'hours-lab',
+  'sep-1',
+  'mins-val',
+  'mins-lab',
+];
 
 /** Minimal shape of a serialized Lexical node for pruning. */
 interface PrunableNode {
@@ -212,6 +233,51 @@ export const LexicalTimerField = forwardRef<
           // A state this build cannot parse (an older shape, say). Leaving the
           // editor as it is beats clearing the user's countdown.
         }
+      },
+      clearStyles() {
+        const ed = editorRef.current;
+        if (!ed) return;
+        /**
+         * Read before writing. This runs on every restore, including the one
+         * that seeds the editors when a card is first loaded, and an editor
+         * update reports a new state to the host — which would mark a card
+         * unsaved the moment it appeared. Nothing to strip, nothing to do.
+         */
+        let dirty = false;
+        ed.getEditorState().read(() => {
+          dirty =
+            $getRoot()
+              .getAllTextNodes()
+              .some((node) => node.getStyle() !== '' || node.getFormat() !== 0) ||
+            $nodesOfType(TimerChipNode).some((chip) =>
+              // Whole-chip styling and every cell — a colour applied to just
+              // the hours is as much styling as one applied to all of it.
+              CHIP_CELLS.some(
+                (cell) => Object.keys(chip.readStyle(cell)).length > 0,
+              ),
+            );
+        });
+        if (!dirty) return;
+        ed.update(() => {
+          // An empty value deletes the property rather than setting it — see
+          // applyPatchToTextNode in format-commands.
+          const reset: StylePatch = {
+            'font-weight': '',
+            'font-style': '',
+            'font-size': '',
+            color: '',
+          };
+          $getRoot()
+            .getAllTextNodes()
+            .forEach((node) => {
+              node.setStyle('');
+              node.setFormat(0);
+            });
+          $nodesOfType(TimerChipNode).forEach((chip) => {
+            chip.setWholeStyle(reset);
+            CHIP_CELLS.forEach((cell) => chip.setCellStyle(cell, reset));
+          });
+        });
       },
       applyColor(value: string): ActiveFormats {
         const ed = editorRef.current;

@@ -295,6 +295,16 @@ export function usePromoRichText({
        */
       if (pc.timerStateJson) {
         lexicalTimerRef.current?.loadStateJson(pc.timerStateJson);
+      } else {
+        /**
+         * No state to load means this card was never styled — either it
+         * predates the serialized state or the step being restored comes from
+         * before the first style was applied. Either way the countdown on
+         * screen must not keep styling the card does not have, so it is
+         * stripped back rather than left alone. The text itself still comes
+         * from timerText, which the editor reconciles against separately.
+         */
+        lexicalTimerRef.current?.clearStyles();
       }
     }, 0);
   }
