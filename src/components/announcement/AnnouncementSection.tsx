@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { isInvalidRange } from '@/lib/dateRange';
 import { createPortal } from 'react-dom';
-import { Megaphone, MoreVertical, Sparkles, Radio, Infinity as InfinityIcon, MoveLeft, Trash2 } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { CampaignConfig, GradientStyle, defaultConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
@@ -17,10 +17,11 @@ import { whatsAppUrl } from '@/lib/whatsapp';
 import { useEditorHistory } from '@/hooks/useEditorHistory';
 import { EditorSnapshot, LinkSnapshot } from '@/lib/editor/historyManager';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { AnnouncementHeader } from '@/components/announcement/AnnouncementHeader';
+import { AnnouncementPreview } from '@/components/announcement/AnnouncementPreview';
+import { AnnouncementListPanel } from '@/components/announcement/AnnouncementListPanel';
 import {
-  announcementThemes,
   matchAnnouncementTheme,
-  themeBackgroundCss,
   type AnnouncementTheme,
 } from '@/lib/announcement/announcementThemes';
 
@@ -1166,142 +1167,25 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
         </div>
       )}
 
-      {/* Header */}
-      <div className="px-4 py-2 border-border bg-surface/60 flex items-center justify-between">
-        <div className="flex items-center">
-          <div className="p-1 bg-primary/15 rounded-lg mr-3 border border-primary/60"><Megaphone className="w-4 h-4 text-primary" /></div>
-          <div>
-            <h3 className="text-[1.75rem] leading-9 font-bold text-on-surface">Announcement Bar</h3>
-            <p className="mt-2 max-w-2xl text-sm text-on-surface-variant">Top banner for site-wide alerts.</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={
-              config.announcementBar.active
-                ? () => setShowStopConfirm(true)
-                : canReactivate
-                ? () => setShowGoOnAirConfirm(true)
-                : undefined
-            }
-            disabled={!config.announcementBar.active && !canReactivate}
-            aria-pressed={config.announcementBar.active}
-            title={
-              config.announcementBar.active
-                ? 'On air — tap to stop'
-                : canReactivate
-                ? 'Reactivate the same content — go on air now'
-                : 'You have unpublished changes — Save & Publish to go live'
-            }
-            className={`inline-flex flex-none items-center gap-2 rounded-full border px-4 py-[9px] text-[13px] font-medium transition-colors duration-200 ${
-              config.announcementBar.active
-                ? 'border-transparent bg-primary/[0.13] text-primary hover:bg-primary/[0.18] cursor-pointer'
-                : canReactivate
-                ? 'border-border bg-surface-elevated text-on-surface-variant hover:border-primary/50 hover:text-primary cursor-pointer'
-                : 'border-border bg-surface-elevated text-on-surface-variant/40 cursor-not-allowed'
-            }`}
-          >
-            {config.announcementBar.active ? (
-              <>
-                <span className="eq-bars"><i /><i /><i /><i /></span>
-                On air · tap to stop
-              </>
-            ) : (
-              <>
-                <Radio className="w-4 h-4" />
-                Go on air
-              </>
-            )}
-          </button>
-          <div ref={resetMenuRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setShowResetMenu((v) => !v)}
-              aria-haspopup="menu"
-              aria-expanded={showResetMenu}
-              title="More actions"
-              className="inline-flex h-9 w-9 flex-none items-center justify-center rounded-full border border-border bg-surface-elevated text-on-surface-variant transition-colors hover:border-primary/50 hover:text-primary"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
-            {showResetMenu && (
-              <div
-                role="menu"
-                className="absolute right-0 top-full z-30 mt-1 w-48 overflow-hidden rounded-lg border border-border bg-surface-elevated shadow-lg"
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  title="Reset all messages and styling to defaults"
-                  onClick={() => { setShowResetMenu(false); setShowResetConfirm(true); }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-red-500 transition-colors hover:bg-red-500/10"
-                >
-                  <Trash2 className="w-4 h-4 flex-none" />
-                  Start fresh
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <AnnouncementHeader
+        config={config}
+        canReactivate={canReactivate}
+        showResetMenu={showResetMenu}
+        setShowResetMenu={setShowResetMenu}
+        setShowStopConfirm={setShowStopConfirm}
+        setShowGoOnAirConfirm={setShowGoOnAirConfirm}
+        setShowResetConfirm={setShowResetConfirm}
+        resetMenuRef={resetMenuRef}
+      />
 
       <div className="space-y-8">
-        {/* Preview */}
-        <div className="py-4 border-border rounded-md">
-          <h4 className="text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] mb-4">Preview</h4>
-          <div className="w-full bg-surface-elevated border-border rounded overflow-hidden">
-            {/* Preview always shows the content (with looping) whenever there
-                are visible announcements — even when the campaign is stopped.
-                On/off only affects the live site, not this preview. */}
-            {visibleAnnouncements.length > 0 && (
-              <div ref={scrollContainerRef} className="h-10 text-sm font-medium overflow-hidden flex items-center group"
-                style={{
-                  background: getBackgroundStyle(previewBg),
-                  color: config.announcementBar.style.textColor,
-                }}>
-                <div className="animate-scroll-left">
-                  {(() => {
-                    const isLoopOn = config.announcementBar.loop !== false;
-                    const totalSets = isLoopOn ? loopCopies * 2 : 2;
-                    return [...Array(totalSets)].map((_, setIndex) => (
-                      <span key={setIndex} className="inline-flex items-center justify-center"
-                        style={!isLoopOn ? { minWidth: 'var(--set-min-width, 100%)' } : undefined}>
-                        {visibleAnnouncements.map((ann, i) => (
-                          <span key={`${setIndex}-${i}`} className="inline-block px-4">
-                            {ann.url ? (
-                              <a
-                                href={ann.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="animated-underline inline-block"
-                                dangerouslySetInnerHTML={{ __html: ann.text }}
-                              />
-                            ) : (
-                              <span dangerouslySetInnerHTML={{ __html: ann.text }} />
-                            )}
-                          </span>
-                        ))}
-                      </span>
-                    ));
-                  })()}
-                </div>
-              </div>
-            )}
-            {visibleAnnouncements.length === 0 && (
-              // No announcements yet — show the configured background so the
-              // admin can preview/tune the bar's styling before adding text.
-              <div
-                className="h-10 flex items-center justify-center text-sm font-medium"
-                style={{
-                  background: getBackgroundStyle(previewBg),
-                  color: config.announcementBar.style.textColor,
-                }}
-              >
-                <span className="opacity-60">Your announcement will appear here</span>
-              </div>
-            )}
-          </div>
-        </div>
+        <AnnouncementPreview
+          config={config}
+          previewBg={previewBg}
+          visibleAnnouncements={visibleAnnouncements}
+          loopCopies={loopCopies}
+          scrollContainerRef={scrollContainerRef}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
           {/* Left: Input + Chips + Link */}
@@ -1784,201 +1668,25 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
             />
           </div>
 
-          {/* Right: Message List + Style (single card split into equal halves) */}
-          <div className="min-h-0">
-            <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[490px] overflow-hidden transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
-              {/* Header */}
-              <div className="border-b border-border pb-4 mb-5 shrink-0 flex items-center justify-between">
-                <div>
-                  <h4 className="text-2xl font-semibold leading-8 text-on-surface">Manage Announcements</h4>
-                  <p className="mt-2 text-sm text-on-surface-variant">View, reorder, and style your announcement messages.</p>
-                </div>
-                {/* No Undo/Redo buttons here on purpose: editing is Ctrl+Z, and
-                    every list action offers Undo in its own toast. */}
-                <div className="flex items-center gap-0.5">
-                  <button
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={clearAnnouncements}
-                    disabled={config.announcementBar.announcements.length === 0}
-                    className="ml-1 flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-on-surface-variant hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                    title="Remove all messages (Undo to restore)"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Clear
-                  </button>
-                </div>
-              </div>
-              {/* Section 1: Message List */}
-              <div className="flex-1 min-h-0 flex flex-col pr-1">
-                <div className="flex items-center justify-between mb-2 shrink-0">
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">Message List</label>
-                  {config.announcementBar.announcements.length > 0 && (
-                    <span className="text-[11px] text-primary font-medium flex items-center animate-pulse">
-                      💡 hover a chip & click ••• to manage
-                    </span>
-                  )}
-                </div>
-                {config.announcementBar.announcements.length === 0 ? (
-                  <div className="flex-1 flex items-center justify-center text-center text-sm text-on-surface-variant">
-                    Added text from the left input box will be displayed here
-                  </div>
-                ) : (
-                  <div className="campaign-custom-scrollbar flex-1 min-h-0 overflow-y-auto">
-                    <div className="flex flex-wrap gap-2 p-1">
-                      {config.announcementBar.announcements.map((ann, index) => {
-                      // A back-to-front schedule blocks Save and Publish in the
-                      // header. Without marking the message that carries it,
-                      // the header just locks and there is nothing on screen
-                      // saying which of these to open — the promo card gets a
-                      // scroll-and-flash for the same reason.
-                      const rowRangeInvalid = isInvalidRange(ann.startDate, ann.endDate);
-                      return (
-                        <div key={index}
-                          draggable
-                          onDragStart={(e) => {
-                            setDraggedIndex(index);
-                            e.dataTransfer.effectAllowed = 'move';
-                          }}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            e.dataTransfer.dropEffect = 'move';
-                          }}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            if (draggedIndex !== null) reorderAnnouncements(draggedIndex, index);
-                            setDraggedIndex(null);
-                          }}
-                          onDragEnd={() => setDraggedIndex(null)}
-                          onMouseEnter={(e) => {
-                            cancelCloseActionMenu();
-                            const btn = e.currentTarget.querySelector('[data-action-btn]') as HTMLButtonElement;
-                            if (btn) openActionMenu(index, btn);
-                          }}
-                          onMouseLeave={() => {
-                            scheduleCloseActionMenu();
-                          }}
-                          onClick={() => {
-                            if (selectedIndex === index) {
-                              clearSelection();
-                            } else {
-                              const normalizedText = loadAnnouncementIntoSelection(index);
-                              // Blur rather than focus: the user clicked the
-                              // list, so the caret should not jump into the
-                              // editor behind it.
-                              if (richEditorRef.current) {
-                                richEditorRef.current.innerHTML = normalizedText;
-                                richEditorRef.current.blur();
-                              }
-                              window.getSelection()?.removeAllRanges();
-                              detectFormatsForSelectMode(normalizedText);
-                            }
-                          }}
-                          title={rowRangeInvalid ? 'This message ends before it starts — open it and fix or clear the schedule.' : undefined}
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm text-[#5a4138] dark:text-[#dbc1b3] bg-primary/20 group relative cursor-pointer transition-all ${rowRangeInvalid ? 'ring-[1.5px] ring-red-500 dark:ring-red-400' : selectedIndex === index ? 'ring-[1.5px] ring-primary/80 bg-primary/30' : 'hover:bg-primary/25 hover:ring-1 hover:ring-primary/70'} ${draggedIndex === index ? 'opacity-60' : ''}`}>
-                          {rowRangeInvalid && (
-                            <span aria-hidden="true" className="text-red-600 dark:text-red-400 font-bold">!</span>
-                          )}
-                          <span className="flex-1 truncate max-w-[200px]" title={stripHtml(ann.text)}>
-                            {stripHtml(ann.text)}
-                          </span>
-                          <button
-                            type="button"
-                            data-action-btn
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openActionMenu(index, e.currentTarget);
-                            }}
-                            className="text-[#5a4138] dark:text-[#dbc1b3] hover:opacity-80 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                            title="More options"
-                          >
-                            <MoreVertical className="w-3 h-3" />
-                          </button>
-                        </div>
-                      );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Bottom: Loop + Style pinned to bottom */}
-              <div className="shrink-0 mt-auto">
-                {/* Section 2: Loop Toggle */}
-                <div className="flex items-center justify-between pt-5 pb-3 border-t border-border">
-                  <div>
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">Loop</label>
-                    <p className="mt-2 text-sm text-on-surface-variant">Seamless continuous scroll (duplicates content to fill the bar)</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setConfig({
-                        ...config,
-                        announcementBar: { ...config.announcementBar, loop: !(config.announcementBar.loop !== false) },
-                      });
-                      markChanged();
-                    }}
-                    aria-pressed={config.announcementBar.loop !== false}
-                    title={config.announcementBar.loop !== false ? 'Continuous loop' : 'Single pass'}
-                    className={`inline-flex flex-none items-center gap-2 rounded-full border px-4 py-[9px] text-[13px] font-medium cursor-pointer transition-colors duration-200 ${
-                      config.announcementBar.loop !== false
-                        ? 'border-transparent bg-primary/[0.13] text-primary hover:bg-primary/[0.18]'
-                        : 'border-border bg-surface-elevated text-on-surface-variant hover:border-primary/50 hover:text-primary'
-                    }`}
-                  >
-                    {config.announcementBar.loop !== false ? (
-                      <>
-                        <InfinityIcon className="w-4 h-4 loop-spin" />
-                        Continuous
-                      </>
-                    ) : (
-                      <>
-                        <MoveLeft className="w-4 h-4" />
-                        Single pass
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Section 3: Themes — one click for the whole look.
-                    Replaces the old "Background Type Guide", which was a
-                    non-clickable legend explaining solid/linear/radial: it
-                    taught CSS vocabulary instead of letting anyone pick a bar.
-                    The color controls above still fine-tune whatever a theme
-                    sets. */}
-                <div className="border-t border-border pt-4">
-                  <div className="pb-1">
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] mb-1">
-                      Themes
-                    </label>
-                    <p className="mb-1 text-sm text-on-surface-variant">
-                      Click any one to restyle the bar — your message stays as written.
-                    </p>
-                    {/* One scrolling row, not a grid: the panel's height must
-                        not grow with the number of themes, so adding more
-                        scrolls sideways instead of pushing everything down. */}
-                    <div className="campaign-custom-scrollbar flex gap-2 overflow-x-auto px-1.5 pb-3 pt-2">
-                      {announcementThemes.map((theme) => (
-                        <button
-                          key={theme.id}
-                          type="button"
-                          onClick={() => applyAnnouncementTheme(theme)}
-                          title={theme.name}
-                          aria-pressed={activeThemeId === theme.id}
-                          style={{ background: themeBackgroundCss(theme.background) }}
-                          className={`h-8 w-12 shrink-0 rounded-md ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
-                            activeThemeId === theme.id
-                              ? 'ring-2 ring-primary'
-                              : 'ring-1 ring-border hover:ring-primary/60'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-            </div>
-          </div>
+          <AnnouncementListPanel
+            config={config}
+            setConfig={setConfig}
+            markChanged={markChanged}
+            activeThemeId={activeThemeId}
+            applyAnnouncementTheme={applyAnnouncementTheme}
+            selectedIndex={selectedIndex}
+            clearSelection={clearSelection}
+            loadAnnouncementIntoSelection={loadAnnouncementIntoSelection}
+            detectFormatsForSelectMode={detectFormatsForSelectMode}
+            clearAnnouncements={clearAnnouncements}
+            reorderAnnouncements={reorderAnnouncements}
+            draggedIndex={draggedIndex}
+            setDraggedIndex={setDraggedIndex}
+            openActionMenu={openActionMenu}
+            scheduleCloseActionMenu={scheduleCloseActionMenu}
+            cancelCloseActionMenu={cancelCloseActionMenu}
+            richEditorRef={richEditorRef}
+          />
         </div>
       </div>
       {/* Emoji tip toast */}
