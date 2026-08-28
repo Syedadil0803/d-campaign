@@ -1,14 +1,11 @@
 'use client';
 
-import { createPortal } from 'react-dom';
 import { Sparkles } from 'lucide-react';
 import { getBackgroundStyle } from '@/lib/utils';
 import { rgbToHex } from '@/lib/editor/colorUtils';
 import RichTextToolbar from '@/components/shared/RichTextToolbar';
-import { AnnouncementLinkPopup } from '@/components/announcement/AnnouncementLinkPopup';
-import { AnnouncementSchedulePopup } from '@/components/announcement/AnnouncementSchedulePopup';
-import { AnnouncementStylePanel } from '@/components/announcement/AnnouncementStylePanel';
 import { useAnnouncementEditor } from '@/components/announcement/AnnouncementEditorContext';
+import { AnnouncementEditorPopups } from '@/components/announcement/AnnouncementEditorPopups';
 
 /**
  * The left-hand card: the message editor, its toolbar, and the three popups
@@ -21,107 +18,47 @@ import { useAnnouncementEditor } from '@/components/announcement/AnnouncementEdi
  */
 export function AnnouncementEditorPanel() {
   const {
-    actionMenuIndex,
-    actionMenuPos,
-    actionMenuRef,
     activeFormats,
-    annCountryBtnRef,
-    annCountryMenuRef,
-    annCountryPos,
     applyColor,
     applyEditorSnapshot,
-    applyLinkSnapshot,
-    backgroundTypeBtnRef,
-    backgroundTypeMenuRef,
-    backgroundTypePos,
-    cancelCloseActionMenu,
     detectFormats,
-    directionBtnRef,
-    directionMenuRef,
-    directionPos,
     editorDefaultColor,
-    endDateCalendarRef,
-    endDateView,
     ensureDefaultFontSize,
     formatText,
     getEditorSnapshot,
-    getLinkSnapshot,
-    handleMenuAddLink,
-    handleMenuDelete,
-    handleMenuSchedule,
     linkBtnRef,
-    linkPopupRef,
-    linkPos,
     newAnnouncementText,
     pushImmediateState,
-    pushLinkState,
     pushTypingState,
     redoEditor,
-    redoLink,
     richEditorRef,
     saveSelection,
     scheduleBtnRef,
-    scheduleCloseActionMenu,
-    schedulePopupRef,
-    schedulePos,
-    selectedCountryCode,
-    selectedCtaType,
     selectedEndDate,
     selectedIndex,
-    selectedOpenInNewTab,
     selectedStartDate,
     selectedUrl,
-    selectedWhatsappNumber,
     setActiveFormats,
-    setAnnCountryPos,
-    setEndDateView,
-    setSelectedCountryCode,
-    setSelectedCtaType,
-    setSelectedEndDate,
-    setSelectedOpenInNewTab,
-    setSelectedStartDate,
-    setSelectedUrl,
-    setSelectedWhatsappNumber,
-    setShowAnnCountryDropdown,
-    setShowBackgroundTypeDropdown,
-    setShowDirectionDropdown,
-    setShowEndDateCalendar,
     setShowLinkPopup,
     setShowRichToolbar,
     setShowSchedulePopup,
     setShowShortcutsTip,
-    setShowStartDateCalendar,
-    setStartDateView,
     shortcutsTipShown,
-    showAnnCountryDropdown,
-    showBackgroundTypeDropdown,
-    showDirectionDropdown,
-    showEndDateCalendar,
     showLinkPopup,
     showSchedulePopup,
-    showStartDateCalendar,
-    startDateCalendarRef,
-    startDateView,
     undoEditor,
-    undoLink,
     activeFormatsRef,
     addAnnouncement,
     applyFormatToAll,
     applyingFormatRef,
-    bg,
-    closePopupAndFocusEditor,
     detectFormatsForSelectMode,
     isDeletingRef,
     justDeletedStyledRef,
-    linkDeletingRef,
     onRichTextInput,
     openChatGptWithPrompt,
     previewBg,
     restoringSnapshotRef,
     scheduleRangeInvalid,
-    setPreviewDirection,
-    updateBg,
-    updateBgWithHistory,
   } = useAnnouncementEditor();
 
   return (
@@ -489,110 +426,7 @@ export function AnnouncementEditorPanel() {
         </div>
       </div>
 
-      <AnnouncementLinkPopup
-        open={showLinkPopup}
-        position={linkPos}
-        popupRef={linkPopupRef}
-        closePopupAndFocusEditor={closePopupAndFocusEditor}
-        selectedCtaType={selectedCtaType}
-        setSelectedCtaType={setSelectedCtaType}
-        selectedUrl={selectedUrl}
-        setSelectedUrl={setSelectedUrl}
-        selectedOpenInNewTab={selectedOpenInNewTab}
-        setSelectedOpenInNewTab={setSelectedOpenInNewTab}
-        selectedCountryCode={selectedCountryCode}
-        setSelectedCountryCode={setSelectedCountryCode}
-        selectedWhatsappNumber={selectedWhatsappNumber}
-        setSelectedWhatsappNumber={setSelectedWhatsappNumber}
-        showAnnCountryDropdown={showAnnCountryDropdown}
-        setShowAnnCountryDropdown={setShowAnnCountryDropdown}
-        annCountryPos={annCountryPos}
-        setAnnCountryPos={setAnnCountryPos}
-        annCountryBtnRef={annCountryBtnRef}
-        annCountryMenuRef={annCountryMenuRef}
-        linkDeletingRef={linkDeletingRef}
-        getLinkSnapshot={getLinkSnapshot}
-        applyLinkSnapshot={applyLinkSnapshot}
-        pushLinkState={pushLinkState}
-        undoLink={undoLink}
-        redoLink={redoLink}
-      />
-
-      <AnnouncementSchedulePopup
-        open={showSchedulePopup}
-        position={schedulePos}
-        popupRef={schedulePopupRef}
-        closePopupAndFocusEditor={closePopupAndFocusEditor}
-        scheduleRangeInvalid={scheduleRangeInvalid}
-        selectedStartDate={selectedStartDate}
-        setSelectedStartDate={setSelectedStartDate}
-        selectedEndDate={selectedEndDate}
-        setSelectedEndDate={setSelectedEndDate}
-        startDateView={startDateView}
-        setStartDateView={setStartDateView}
-        endDateView={endDateView}
-        setEndDateView={setEndDateView}
-        showStartDateCalendar={showStartDateCalendar}
-        setShowStartDateCalendar={setShowStartDateCalendar}
-        showEndDateCalendar={showEndDateCalendar}
-        setShowEndDateCalendar={setShowEndDateCalendar}
-        startDateCalendarRef={startDateCalendarRef}
-        endDateCalendarRef={endDateCalendarRef}
-      />
-
-      {actionMenuIndex !== null && actionMenuPos && typeof document !== 'undefined' && createPortal(
-        <div
-          ref={actionMenuRef}
-          onMouseDown={(e) => e.stopPropagation()}
-          onMouseEnter={() => cancelCloseActionMenu()}
-          onMouseLeave={() => scheduleCloseActionMenu()}
-          style={{ position: 'absolute', top: actionMenuPos.top, left: actionMenuPos.left, zIndex: 9999 }}
-          className="bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl py-1 w-[180px]"
-        >
-          <button
-            type="button"
-            onMouseDown={(e) => { e.preventDefault(); handleMenuAddLink(actionMenuIndex); }}
-            className="w-full text-left px-3 py-2 text-sm text-on-surface hover:bg-surface-subtle"
-          >
-            Add link
-          </button>
-          <button
-            type="button"
-            onMouseDown={(e) => { e.preventDefault(); handleMenuSchedule(actionMenuIndex); }}
-            className="w-full text-left px-3 py-2 text-sm text-on-surface hover:bg-surface-subtle"
-          >
-            Schedule
-          </button>
-          <div className="my-1 h-px bg-border" />
-          <button
-            type="button"
-            onMouseDown={(e) => { e.preventDefault(); handleMenuDelete(actionMenuIndex); }}
-            className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-primary/10"
-          >
-            Delete
-          </button>
-        </div>,
-        document.body
-      )}
-
-      <AnnouncementStylePanel
-        bg={bg}
-        updateBg={updateBg}
-        updateBgWithHistory={updateBgWithHistory}
-        pushImmediateState={pushImmediateState}
-        getEditorSnapshot={getEditorSnapshot}
-        showBackgroundTypeDropdown={showBackgroundTypeDropdown}
-        setShowBackgroundTypeDropdown={setShowBackgroundTypeDropdown}
-        backgroundTypeBtnRef={backgroundTypeBtnRef}
-        backgroundTypeMenuRef={backgroundTypeMenuRef}
-        backgroundTypePos={backgroundTypePos}
-        showDirectionDropdown={showDirectionDropdown}
-        setShowDirectionDropdown={setShowDirectionDropdown}
-        directionBtnRef={directionBtnRef}
-        directionMenuRef={directionMenuRef}
-        directionPos={directionPos}
-        setPreviewDirection={setPreviewDirection}
-      />
+      <AnnouncementEditorPopups />
     </div>
   );
 }
