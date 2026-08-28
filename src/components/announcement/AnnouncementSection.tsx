@@ -16,6 +16,7 @@ import { AnnouncementStylePanel } from '@/components/announcement/AnnouncementSt
 import { useAnnouncementStyleDropdowns } from '@/components/announcement/useAnnouncementStyleDropdowns';
 import { useAnnouncementPopups } from '@/components/announcement/useAnnouncementPopups';
 import { useAnnouncementSelection } from '@/components/announcement/useAnnouncementSelection';
+import { useAnnouncementRowMenu } from '@/components/announcement/useAnnouncementRowMenu';
 import { whatsAppUrl } from '@/lib/whatsapp';
 import { useEditorHistory } from '@/hooks/useEditorHistory';
 import { EditorSnapshot, LinkSnapshot } from '@/lib/editor/historyManager';
@@ -90,23 +91,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   }
 
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [actionMenuIndex, setActionMenuIndex] = useState<number | null>(null);
-  const [actionMenuPos, setActionMenuPos] = useState<{ top: number; left: number } | null>(null);
-  const actionMenuTimer = useRef<number | null>(null);
-
-  function scheduleCloseActionMenu() {
-    actionMenuTimer.current = window.setTimeout(() => {
-      setActionMenuIndex(null);
-      setActionMenuPos(null);
-    }, 150);
-  }
-
-  function cancelCloseActionMenu() {
-    if (actionMenuTimer.current) {
-      window.clearTimeout(actionMenuTimer.current);
-      actionMenuTimer.current = null;
-    }
-  }
 
   // Popup state
   const [showStopConfirm, setShowStopConfirm] = useState(false);
@@ -201,6 +185,25 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     setShowSchedulePopup(false);
   };
 
+  const {
+    actionMenuIndex,
+    actionMenuPos,
+    actionMenuRef,
+    openActionMenu,
+    scheduleCloseActionMenu,
+    cancelCloseActionMenu,
+    handleMenuAddLink,
+    handleMenuSchedule,
+    handleMenuDelete,
+  } = useAnnouncementRowMenu({
+    setShowLinkPopup,
+    setShowSchedulePopup,
+    selectAnnouncement,
+    // Declared below as a function statement, so it is hoisted and available
+    // here — it needs the toast and the history, which are built after this.
+    removeAnnouncement,
+  });
+
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   selectedIndexRef.current = selectedIndex;
@@ -209,7 +212,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   // Always-current invalid flag for close handlers registered with [] deps
   // (the Escape listener) that would otherwise read a stale value.
   const scheduleRangeInvalidRef = useRef(false);
-  const actionMenuRef = useRef<HTMLDivElement>(null);
 
   const [editorDefaultColor, setEditorDefaultColor] = useState('#1a1c1f');
 
@@ -464,20 +466,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   }, []);
 
   // Click outside to close both popups
-  useEffect(() => {
-    const handleMouseDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (actionMenuIndex !== null && actionMenuRef.current && !actionMenuRef.current.contains(target)) {
-        setActionMenuIndex(null);
-        setActionMenuPos(null);
-      }
-    };
-    document.addEventListener('mousedown', handleMouseDown);
-    return () => document.removeEventListener('mousedown', handleMouseDown);
-    // The styling menus and the two toolbar popups dismiss themselves — see
-    // useAnnouncementStyleDropdowns and useAnnouncementPopups.
-  }, [actionMenuIndex]);
-
 
 
 
@@ -815,39 +803,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     applyingFormatRef.current = false;
     // Update toolbar from the new DOM state
     detectFormatsForSelectMode(editor.innerHTML);
-  }
-
-  function openActionMenu(index: number, button: HTMLButtonElement) {
-    const rect = button.getBoundingClientRect();
-    setActionMenuIndex(index);
-    setActionMenuPos({
-      top: rect.top + window.scrollY,
-      left: rect.right + window.scrollX + 8,
-    });
-    setShowLinkPopup(false);
-    setShowSchedulePopup(false);
-  }
-
-  function handleMenuAddLink(index: number) {
-    openMenuAction(index, 'link');
-  }
-
-  function handleMenuSchedule(index: number) {
-    openMenuAction(index, 'schedule');
-  }
-
-  function openMenuAction(index: number, type: 'link' | 'schedule') {
-    selectAnnouncement(index);
-    setShowLinkPopup(type === 'link');
-    setShowSchedulePopup(type === 'schedule');
-    setActionMenuIndex(null);
-    setActionMenuPos(null);
-  }
-
-  function handleMenuDelete(index: number) {
-    removeAnnouncement(index);
-    setActionMenuIndex(null);
-    setActionMenuPos(null);
   }
 
   function closePopupAndFocusEditor() {
