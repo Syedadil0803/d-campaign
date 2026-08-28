@@ -15,6 +15,7 @@ import {
 } from '@/lib/promo/blankLooks';
 import { whatsAppUrl } from '@/lib/whatsapp';
 import { migrateConfig } from '@/lib/configMigration';
+import { withDefaultStartDate } from '@/lib/promo/promoCardIdentity';
 import { isFirstLoadOfVisit } from '@/lib/visit';
 import { cardIsNotUserWork } from '@/lib/promo/promoAuthorship';
 import { sampleTemplates } from '@/components/promo/SamplePromoTemplates';
@@ -176,7 +177,9 @@ export function useCampaignConfig({
       JSON.stringify(defaultConfig.promoCard),
     ) as CampaignConfig['promoCard'];
     card.style = JSON.parse(JSON.stringify(currentBlankLook())) as CampaignConfig['promoCard']['style'];
-    return card;
+    // defaultConfig carries no dates, so without this a refresh landed on a
+    // card whose Start Date read "Select" — see withDefaultStartDate.
+    return withDefaultStartDate(card);
   }
 
   /**

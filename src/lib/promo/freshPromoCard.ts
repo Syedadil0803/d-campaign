@@ -1,8 +1,7 @@
 import type { PromoCard } from '@/types/campaign';
 import { defaultConfig } from '@/types/campaign';
-import { clonePromoCard } from '@/lib/promo/promoCardIdentity';
+import { clonePromoCard, withDefaultStartDate } from '@/lib/promo/promoCardIdentity';
 import { advanceBlankLook } from '@/lib/promo/blankLooks';
-import { getISODateWithOffset } from '@/lib/utils';
 
 /**
  * The card a cleared or brand-new canvas starts from.
@@ -11,7 +10,9 @@ import { getISODateWithOffset } from '@/lib/utils';
  * defaultConfig, the blank-palette rotation and the clock.
  */
 export function getFreshPromoCard(): PromoCard {
-  return {
+  // withDefaultStartDate supplies the start — the same rule a refresh and a
+  // stored card go through, so "a new card starts today" is written once.
+  return withDefaultStartDate({
     ...clonePromoCard(defaultConfig.promoCard),
     // No design either. Keeping the default gradient meant "clear" cleared
     // the words and left a look nobody had chosen, which then had to be
@@ -45,8 +46,7 @@ export function getFreshPromoCard(): PromoCard {
      * countdown off: it switches on once the schedule is complete, so the
      * end date is both the missing fact and the trigger.
      */
-    startDate: getISODateWithOffset(0),
     endDate: "",
     timerText: "Ends In {timer}",
-  };
+  });
 }

@@ -32,6 +32,26 @@ export function stripHtmlText(html?: string): string {
 // Fill default start/end dates if missing. Must be applied BEFORE a card's
 // baseline is captured — otherwise the date-defaulting effect mutates the
 // card after the baseline, making it look "edited" and wrongly enabling Reset.
+/**
+ * A card with no start date starts today.
+ *
+ * "From today" is the safe assumption — a campaign being built now is one
+ * meant to run now — and it is the only date the app can honestly guess. The
+ * END is deliberately untouched: it is a real decision nobody can make for the
+ * user, and it is also the trigger that switches the countdown on once the
+ * schedule is complete, so filling it in would turn on a timer they never
+ * asked for.
+ *
+ * getFreshPromoCard already assumed this, but blankPromoCard — the card a
+ * refresh lands on — cloned defaultConfig and did not, so the default the
+ * editor opened with survived only until the page was reloaded and the field
+ * came back reading "Select".
+ */
+export function withDefaultStartDate(card: PromoCard): PromoCard {
+  if (card?.startDate) return card;
+  return { ...card, startDate: getISODateWithOffset(0) };
+}
+
 export function withDefaultDates(card: PromoCard): PromoCard {
   if (card.startDate && card.endDate) return card;
   return {

@@ -3,6 +3,7 @@ import {
   TIMER_FIXED_TOKEN,
   normalizeLegacyTimerTokens,
 } from '@/lib/editor/timerUtils';
+import { withDefaultStartDate } from '@/lib/promo/promoCardIdentity';
 
 /**
  * Bringing an older stored config up to date.
@@ -154,6 +155,13 @@ export function migrateConfig(stored: unknown, version: string): CampaignConfig 
 
   // Always normalize announcement background style regardless of version.
   migrated.announcementBar = normalizeAnnouncementBackgroundType(migrated);
+
+  // Every load comes through here, so this is where a card stored without a
+  // start date gets today's — the published copy and the editor copy alike, so
+  // the two still agree and nothing reads as unsaved just for being loaded.
+  if (migrated.promoCard) {
+    migrated.promoCard = withDefaultStartDate(migrated.promoCard);
+  }
   
   // Check version and apply appropriate migrations
   if (!version || version === '1.0') {
