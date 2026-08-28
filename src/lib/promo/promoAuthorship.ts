@@ -62,7 +62,38 @@ export function ourLooks(templates: PromoCard[]): string[] {
   ];
 }
 
-/** Nothing written, and the default styling still in place. */
+/**
+ * The countdown wording nobody chose.
+ *
+ * defaultConfig and getFreshPromoCard capitalise it differently ("Ends in" vs
+ * "Ends In"), so the comparison is case-insensitive rather than letting that
+ * decide whether a card counts as authored.
+ */
+const OUR_TIMER_WORDS = new Set(
+  // '' covers a card that carries no timerText at all, which is as unwritten
+  // as one still carrying ours.
+  ['', defaultConfig.promoCard.timerText, 'Ends In {timer}'].map((t) =>
+    plain(t).toLowerCase(),
+  ),
+);
+
+/**
+ * Nothing written, and the default styling still in place.
+ *
+ * The countdown and the end date count as writing. They were left out, so a
+ * card whose only content was a schedule and a countdown read as blank — and
+ * because "blank" is what stops the app protecting a card, the crash-recovery
+ * copy was cleared and a refresh threw the work away. Typing in the title
+ * survived a reload; setting an end date and wording the countdown did not.
+ *
+ * wordsSignature just below has always counted timerText as content, so the
+ * two answers to "has the user written anything?" in this one file disagreed.
+ *
+ * The START date is deliberately not counted: it is filled in with today for
+ * every new card (see withDefaultStartDate), so counting it would make every
+ * blank canvas look authored and bring back the guards firing on a card
+ * nobody had touched.
+ */
 export function cardIsBlank(card: PromoCard | null | undefined): boolean {
   if (!card) return true;
   return (
@@ -70,6 +101,8 @@ export function cardIsBlank(card: PromoCard | null | undefined): boolean {
     !plain(card.subtitle) &&
     !plain(card.description) &&
     !plain(card.buttonText) &&
+    !card.endDate &&
+    OUR_TIMER_WORDS.has(plain(card.timerText).toLowerCase()) &&
     (lookSignature(card.style) === lookSignature(defaultConfig.promoCard.style) ||
       isBlankLook(card.style))
   );
