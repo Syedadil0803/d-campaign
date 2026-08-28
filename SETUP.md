@@ -19,18 +19,15 @@ cp .env.example .env.local
 DATABASE_URL="postgresql://postgres.wnfcsmtufgumtekhcdhh:YOUR_ACTUAL_PASSWORD@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres"
 ```
 
-## 3️⃣ Run Database Migration
+## 3️⃣ Run Database Migrations
 
-Run the SQL migration file in your Supabase dashboard:
+```bash
+npm run db:apply
+```
 
-1. Go to Supabase Dashboard → SQL Editor
-2. Copy the content from `migrations/001_initial_schema.sql`
-3. Paste and run it
-
-This will:
-- Create the `Dynamic_campaign` schema
-- Create the `campaign_config` table
-- Insert default configuration
+Applies every file in `migrations/` in order — there are three, and all of
+them are needed: the initial schema, then auth and presence, then per-device
+presence. Running only the first leaves the app unable to sign anyone in.
 
 ## 4️⃣ Start the App
 
