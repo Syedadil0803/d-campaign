@@ -18,7 +18,7 @@ import { migrateConfig } from '@/lib/configMigration';
 import { withDefaultStartDate } from '@/lib/promo/promoCardIdentity';
 import { isFirstLoadOfVisit } from '@/lib/visit';
 import { cardIsNotUserWork } from '@/lib/promo/promoAuthorship';
-import { sampleTemplates } from '@/components/promo/SamplePromoTemplates';
+import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
 import { readRecoveryEnvelope, clearRecovery } from '@/lib/recovery';
 
 /**

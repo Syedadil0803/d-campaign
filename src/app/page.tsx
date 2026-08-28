@@ -14,7 +14,7 @@ import { CampaignConfig } from '@/types/campaign';
 import { cardIsNotUserWork } from '@/lib/promo/promoAuthorship';
 import { forgetVisit } from '@/lib/promo/blankLooks';
 import { isBlankLook } from '@/lib/promo/lookSignature';
-import { sampleTemplates } from '@/components/promo/SamplePromoTemplates';
+import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
 import { Header } from '@/components/shell/Header';
 import { Dashboard } from '@/components/dashboard/Dashboard';
 import { AnnouncementSection } from '@/components/announcement/AnnouncementSection';

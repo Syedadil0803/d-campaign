@@ -26,7 +26,7 @@ import { getISODateWithOffset } from '@/lib/utils';
 import {
   ourLooks,
 } from "@/lib/promo/promoAuthorship";
-import { sampleTemplates } from '@/components/promo/SamplePromoTemplates';
+import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
 
 import { isBlankLook } from '@/lib/promo/lookSignature';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';

@@ -6,7 +6,7 @@ import type { CampaignConfig, PromoCard } from '@/types/campaign';
 import { getBackgroundStyle } from '@/lib/utils';
 import { applyTemplateLook } from '@/lib/promo/promoTemplate';
 import { lookSignature } from '@/lib/promo/promoAuthorship';
-import { sampleTemplates } from '@/components/promo/SamplePromoTemplates';
+import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
 import { PopupDropdown } from '@/components/shared/PopupDropdown';
 
 type MenuPosition = { top: number; left: number; width: number } | null;
