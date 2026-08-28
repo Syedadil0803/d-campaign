@@ -108,6 +108,92 @@ export function getTemplateTimerPreviewText(timerText?: string): string {
 }
 
 /**
+ * The eight styleable pieces of the countdown, in the order chipInnerHtml and
+ * TimerChipComponent both emit them. Kept here so the preview can line the
+ * stored per-cell styles up with the spans it just built.
+ */
+const CHIP_CELL_ORDER = [
+  'days-val',
+  'days-lab',
+  'sep-0',
+  'hours-val',
+  'hours-lab',
+  'sep-1',
+  'mins-val',
+  'mins-lab',
+] as const;
+
+/** The chip's style model as TimerChipNode.exportJSON writes it. */
+interface SerializedChipStyle {
+  whole?: Record<string, string>;
+  cells?: Record<string, Record<string, string>>;
+}
+
+/** Find the countdown chip's style model inside a serialized Lexical state. */
+function readChipStyleModel(stateJson: string): SerializedChipStyle | null {
+  try {
+    const parsed = JSON.parse(stateJson) as { root?: unknown };
+    let found: SerializedChipStyle | null = null;
+    const walk = (node: unknown): void => {
+      if (found || !node || typeof node !== 'object') return;
+      const n = node as { type?: string; model?: SerializedChipStyle; children?: unknown[] };
+      if (n.type === 'timer-chip' && n.model) {
+        found = n.model;
+        return;
+      }
+      if (Array.isArray(n.children)) n.children.forEach(walk);
+    };
+    walk(parsed.root);
+    return found;
+  } catch {
+    // Not a state this build can read. The countdown simply previews unstyled,
+    // which is what happened before it was read at all.
+    return null;
+  }
+}
+
+function cssText(css: Record<string, string> | undefined): string {
+  if (!css) return '';
+  return Object.entries(css)
+    .map(([k, v]) => `${k}:${v}`)
+    .join(';');
+}
+
+/**
+ * Paint the countdown's own styling onto an already-built preview.
+ *
+ * The prefix and suffix carry their styles in timerText and come through on
+ * their own. The chip does not: the Lexical field serializes it to a bare
+ * {timer} marker, so its colours, weights and sizes live only in
+ * timerStateJson. Without this the draft, My Published and the saved variants
+ * showed a bold red "Ends in", a bold red "Live In the", and plain grey
+ * numbers between them — styling the user had applied to the whole line.
+ */
+function applyChipStyleToPreview(html: string, stateJson?: string): string {
+  if (!stateJson || typeof DOMParser === 'undefined') return html;
+  const model = readChipStyleModel(stateJson);
+  if (!model) return html;
+
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  const root = doc.body.firstElementChild as HTMLElement | null;
+  const chip = root?.querySelector('[data-timer-fixed]') as HTMLElement | null;
+  if (!root || !chip) return html;
+
+  const whole = cssText(model.whole);
+  if (whole) chip.setAttribute('style', `${chip.getAttribute('style') || ''};${whole}`);
+
+  const pieces = Array.from(chip.children) as HTMLElement[];
+  // Only when the chip has the structure this maps onto. A chip built by an
+  // older shape is left alone rather than styled by guesswork.
+  if (pieces.length !== CHIP_CELL_ORDER.length) return root.innerHTML;
+  pieces.forEach((piece, i) => {
+    const css = cssText(model.cells?.[CHIP_CELL_ORDER[i]]);
+    if (css) piece.setAttribute('style', `${piece.getAttribute('style') || ''};${css}`);
+  });
+  return root.innerHTML;
+}
+
+/**
  * The countdown as a static preview should show it.
  *
  * A card with an end date gets its REAL remaining time — the same figures the
@@ -120,11 +206,16 @@ export function getTemplateTimerPreviewText(timerText?: string): string {
  * this, so a card ending tomorrow claimed two days in the very popup meant to
  * show the user what they had stored.
  */
-export function getPreviewTimerHtml(timerText?: string, endDate?: string): string {
+export function getPreviewTimerHtml(
+  timerText?: string,
+  endDate?: string,
+  timerStateJson?: string,
+): string {
   if (!endDate) return getTemplateTimerPreviewText(timerText);
-  return buildTimerDisplayHtml(timerText || '', calculateTimeRemaining(endDate), {
+  const html = buildTimerDisplayHtml(timerText || '', calculateTimeRemaining(endDate), {
     editorSlots: false,
   });
+  return applyChipStyleToPreview(html, timerStateJson);
 }
 
 /**

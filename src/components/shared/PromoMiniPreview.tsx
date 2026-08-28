@@ -122,7 +122,11 @@ export function PromoMiniPreview({ promoCard, faithful, scaffold }: PromoMiniPre
             textAlign: style.dateStyle.textAlign || "center",
           }}
           dangerouslySetInnerHTML={{
-            __html: getPreviewTimerHtml(promoCard.timerText, promoCard.endDate),
+            __html: getPreviewTimerHtml(
+              promoCard.timerText,
+              promoCard.endDate,
+              promoCard.timerStateJson,
+            ),
           }}
         />
       )}
