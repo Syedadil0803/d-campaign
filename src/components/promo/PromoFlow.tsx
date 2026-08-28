@@ -17,7 +17,8 @@
 
 import { useEffect, useState } from 'react';
 import { PromoSection } from '@/components/promo/PromoSection';
-import { PromoBuildPanel, type BuildStage } from '@/components/promo/PromoBuildPanel';
+import { PromoBuildPanel } from '@/components/promo/PromoBuildPanel';
+import type { BuildStage } from '@/lib/promo/promoBrief';
 import { GuidedTour, markTourSeen, shouldShowTour } from '@/components/tour/GuidedTour';
 import { useSignalEffect } from '@/hooks/useSignalEffect';
 import { PROMO_DRAFT_TOUR, PROMO_TIMER_TOUR } from '@/components/tour/tours';

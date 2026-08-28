@@ -26,9 +26,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft,
-  Maximize2,
-  Minimize2,
   PenLine,
   Sparkles,
   X,
@@ -38,7 +35,10 @@ import type { PromoBrief } from '@/lib/promo/promoAiPrompt';
 import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
 import { PromoMiniPreview } from '@/components/shared/PromoMiniPreview';
 import { PromoBriefStep } from '@/components/promo/PromoBriefStep';
+import { PromoBuildHeader } from '@/components/promo/PromoBuildHeader';
+import { PromoPasteDialog } from '@/components/promo/PromoPasteDialog';
 import { parseAiPromo, applyAiPromo } from '@/lib/promo/promoImport';
+import type { BuildStage } from '@/lib/promo/promoBrief';
 import {
   hasCopy,
   MODES,
@@ -56,7 +56,6 @@ import {
   type AiMode,
 } from '@/lib/promo/promoAiPrompt';
 
-export type BuildStage = 'mode' | 'ai';
 
 interface PromoBuildPanelProps {
   config: CampaignConfig;
@@ -372,64 +371,19 @@ export function PromoBuildPanel({
         role="dialog"
         aria-label="Build your promo card"
       >
-        <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-          {stage === 'ai' && canGoBack ? (
-            <button
-              type="button"
-              onClick={() =>
-                aiStep === 'brief' ? setAiStep('what') : setStage('mode')
-              }
-              aria-label="Back"
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-          ) : (
-            stage === 'ai' && <Sparkles className="h-4 w-4 shrink-0 text-primary" />
-          )}
-          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-on-surface">
-            {stage === 'mode'
-              ? 'How do you want to build it?'
-              : aiStep === 'what'
-                ? cardHasCopy
-                  ? 'What should AI change?'
-                  : 'What should AI create?'
-                : 'Describe your campaign'}
-          </p>
-          {/* Two-dot stepper: enough to show there's a second step, without a
-              "1 of 2" label competing with the title. */}
-          {stage === 'ai' && (
-            <span className="flex shrink-0 items-center gap-1" aria-hidden>
-              <span
-                className={`h-1 rounded-full transition-all ${
-                  aiStep === 'what' ? 'w-3 bg-primary' : 'w-1 bg-border'
-                }`}
-              />
-              <span
-                className={`h-1 rounded-full transition-all ${
-                  aiStep === 'brief' ? 'w-3 bg-primary' : 'w-1 bg-border'
-                }`}
-              />
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            aria-label={expanded ? 'Shrink panel' : 'Expand panel'}
-            title={expanded ? 'Shrink' : 'Expand'}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
-          >
-            {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+        <PromoBuildHeader
+          stage={stage}
+          setStage={setStage}
+          aiStep={aiStep}
+          setAiStep={setAiStep}
+          canGoBack={canGoBack}
+          cardHasCopy={cardHasCopy}
+          mode={mode}
+          brief={brief}
+          expanded={expanded}
+          setExpanded={setExpanded}
+          onClose={onClose}
+        />
 
         <div
           ref={bodyRef}
@@ -545,58 +499,15 @@ export function PromoBuildPanel({
         </div>
       </div>
 
-      {showPaste && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0" onClick={() => setShowPaste(false)} />
-          <div className="relative z-10 w-full max-w-lg rounded-2xl border border-border bg-surface-elevated p-5 text-on-surface shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-base font-semibold">Paste from AI</h2>
-                <p className="mt-1 text-sm text-on-surface-variant">
-                  Paste the JSON your AI tool gave you.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowPaste(false)}
-                aria-label="Close"
-                className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-primary/10 hover:text-primary"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <textarea
-              value={pasteText}
-              onChange={(e) => {
-                setPasteText(e.target.value);
-                if (pasteError) setPasteError('');
-              }}
-              spellCheck={false}
-              rows={7}
-              placeholder='{"title": "Summer Sale", "buttonText": "Shop now", ...}'
-              className="mt-4 w-full resize-y rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-on-surface outline-none focus:border-primary"
-            />
-            {pasteError && <p className="mt-2 text-xs font-medium text-red-500">{pasteError}</p>}
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowPaste(false)}
-                className="rounded-md border border-border px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={applyPaste}
-                disabled={!pasteText.trim()}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Apply to my card
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <PromoPasteDialog
+        showPaste={showPaste}
+        setShowPaste={setShowPaste}
+        pasteText={pasteText}
+        setPasteText={setPasteText}
+        pasteError={pasteError}
+        setPasteError={setPasteError}
+        applyPaste={applyPaste}
+      />
     </>
   );
 }

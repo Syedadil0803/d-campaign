@@ -10,6 +10,15 @@ import type { AiMode, PromoBrief } from '@/lib/promo/promoAiPrompt';
  * where they are read. None of it touches component state.
  */
 
+/**
+ * Which screen the build panel is on: choosing what AI may touch, or briefing
+ * it.
+ *
+ * Here rather than in the panel because the panel's own header names it, and
+ * a header importing a type from the component that renders it is a cycle.
+ */
+export type BuildStage = 'mode' | 'ai';
+
 /** Does the card already carry the user's own copy? */
 export function hasCopy(card: PromoCard): boolean {
   const plain = (h?: string) => String(h ?? '').replace(/<[^>]*>/g, '').trim();
