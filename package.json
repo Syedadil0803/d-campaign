@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push:pg",
@@ -17,7 +17,12 @@
     "presence": "node scripts/presence.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "audit:size": "npx cloc src --by-file --include-lang=TypeScript,\"TypeScript JSX\"",
+    "audit:duplication": "jscpd src",
+    "audit:deps": "knip",
+    "audit:cycles": "madge --circular --extensions ts,tsx --ts-config tsconfig.json src",
+    "audit": "npm run lint && npm run audit:duplication && npm run audit:deps && npm run audit:cycles && npm test"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1060.0",
@@ -51,5 +56,21 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.6.0",
     "vitest": "^4.1.11"
+  },
+  "knip": {
+    "entry": [
+      "src/app/**/*.{ts,tsx}",
+      "scripts/*.mjs"
+    ],
+    "project": [
+      "src/**/*.{ts,tsx}",
+      "scripts/*.mjs",
+      "*.mjs",
+      "*.mts"
+    ],
+    "ignoreDependencies": [
+      "eslint-config-next",
+      "flag-icons"
+    ]
   }
 }

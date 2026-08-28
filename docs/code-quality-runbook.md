@@ -386,3 +386,46 @@ describe('isInvalidRange', () => {
 One habit worth keeping: **when a bug is found, add the case before the fix.**
 Watch it fail, then fix it. A test written afterwards proves the code does
 what it now does; a test written first proves it does what it should.
+
+---
+
+# Running the audit
+
+Every tool has a script, so the numbers in this document can be reproduced by
+someone who did not take them:
+
+```bash
+npm run audit              # lint + duplication + unused code + cycles + tests
+```
+
+Or one at a time:
+
+| | |
+| --- | --- |
+| `npm run lint` | ESLint |
+| `npm run audit:size` | lines per file (fetches cloc through npx) |
+| `npm run audit:duplication` | jscpd |
+| `npm run audit:deps` | knip — unused files, exports and dependencies |
+| `npm run audit:cycles` | madge — circular dependencies |
+| `npm test` | the test suite |
+
+## Two dependencies knip is told to ignore
+
+`package.json` lists `eslint-config-next` and `flag-icons` under
+`knip.ignoreDependencies`. Both are genuinely used; knip cannot see either,
+and the reason is recorded here because JSON cannot hold a comment.
+
+- **`eslint-config-next`** is loaded by `eslint.config.mjs` through
+  `FlatCompat`, which resolves it by name at runtime rather than importing it.
+- **`flag-icons`** is read by `scripts/copy-flags.mjs` as a *path*
+  (`node_modules/flag-icons/flags/4x3/*.svg`), not an import. Only the SVGs it
+  copies into `public/` ship; the package itself never does.
+
+Suppressing a finding is only defensible when the reason is written down. If
+either of these stops being true, the entry should go.
+
+## One script that changed
+
+`lint` was `next lint`, which is deprecated in Next 15 and removed in 16. It
+is now `eslint .` — the same rules, called directly, and visible to knip as a
+real use of ESLint.
