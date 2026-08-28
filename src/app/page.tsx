@@ -26,9 +26,9 @@ import {
   DiscardDraftDialog,
   ReplaceDraftDialog,
 } from '@/components/shell/CampaignDialogs';
-import { migrateConfig } from '@/lib/configMigration';
 import { isFirstLoadOfVisit } from '@/lib/visit';
 import { useCampaignConfig } from '@/hooks/useCampaignConfig';
+import { useCampaignDraft } from '@/hooks/useCampaignDraft';
 import { useToast } from '@/hooks/useToast';
 import { usePromoVariantSaves } from '@/hooks/usePromoVariantSaves';
 import { useCampaignPublishing } from '@/hooks/useCampaignPublishing';
@@ -38,12 +38,10 @@ import {
   normalizePromoForCompare,
   getPromoSignature,
   promoHasVisibleContent,
-  draftHasRestorableWork,
 } from '@/lib/configSignature';
 import {
   describeWhen,
   fetchUnsavedElsewhere,
-  markElsewhereSeen,
   reportUnsaved,
 } from '@/lib/auth/presenceClient';
 import {
@@ -114,11 +112,8 @@ export default function Home() {
   // never shows unpublished draft content as if it were live.
 
 
-  const [pendingDraftAction, setPendingDraftAction] = useState<
-    | { type: 'tab'; tab: 'dashboard' | 'announcement' | 'promo' }
-    | { type: 'logout' }
-    | null
-  >(null);
+
+
 
 
 
@@ -145,17 +140,6 @@ export default function Home() {
     onCancel?: () => void;
   } | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
-  /**
-   * The promo card as it exists in the saved draft.
-   *
-   * `savedDraftSignature` is a JSON signature of the WHOLE config, so it drifts
-   * whenever the app re-normalises HTML by itself — font-size spans, the timer
-   * chip, the auto card width. After a tab switch the editor stopped
-   * recognising that its card WAS the saved draft, and started asking to save
-   * a card that was already saved. Comparing the card itself, field by field,
-   * survives that noise.
-   */
-  const [draftPromoCard, setDraftPromoCard] = useState<CampaignConfig['promoCard'] | null>(null);
   // Which guided-flow step the promo tab is on. Publish is an editor action, so
   // the header hides it while the user is still picking a start or writing copy.
   // Where the promo tab opens. Dashboard's View/Edit act on an existing
@@ -166,32 +150,10 @@ export default function Home() {
   // already up. There is no separate start screen any more.
   const [promoEntryStep, setPromoEntryStep] = useState<'ai' | 'build' | 'editor'>('editor');
   const mainScrollRef = useRef<HTMLElement>(null);
-  const draftSignatureRef = useRef<string | null>(null);
 
 
   const [isConfirming, setIsConfirming] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  // Explicit "Save as draft" — writing in progress, and the replace-confirm
-  // shown when a draft already exists (only one draft slot).
-  const [savingDraft, setSavingDraft] = useState(false);
-  const [confirmReplaceDraft, setConfirmReplaceDraft] = useState(false);
-  // Signature of the draft actually stored in the DB (null = no draft). Kept
-  // in state, not a ref, so the "Save as draft" button can disable itself when
-  // the editor already matches the draft — re-saving identical content only
-  // produces a pointless "Replace saved draft?" prompt.
-  const [savedDraftSignature, setSavedDraftSignature] = useState<string | null>(null);
-  /**
-   * Mirrors savedDraftSignature for the unload handler, which is registered
-   * once and would otherwise read whatever the value was at mount.
-   */
-  const savedDraftSignatureRef = useRef<string | null>(null);
-  savedDraftSignatureRef.current = savedDraftSignature;
-  /** A draft found on load, waiting for the promo editor to be opened. */
-  const offeredDraftRef = useRef<CampaignConfig | null>(null);
-  /** The draft currently being offered in the welcome-back dialog. */
-  const [draftOffer, setDraftOffer] = useState<CampaignConfig | null>(null);
-  /** Asks what to do with a draft that survived a publish, when it differs. */
-  const [postPublishDraft, setPostPublishDraft] = useState(false);
 
   /**
    * What the config hook needs from the draft, and nothing else.
@@ -244,15 +206,196 @@ export default function Home() {
     (cfg: CampaignConfig) => Promise<CampaignConfig>
   >(async (cfg) => cfg);
 
-  const draftPort = {
-    clearDraft,
+
+
+
+
+
+
+  // The published config object (not just its signature) — lets draft checks
+  // compare the announcement against what's live.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  /**
+   * Raise the notification card, once per visit.
+   *
+   * Silent only when the permission is already granted. Denied still gets a
+   * card, because the way it usually happens is someone accepting here and
+   * then hitting Block in the browser's prompt — they wanted this and ended up
+   * without it. What it says changes, though: an Allow button against a denied
+   * permission is a button that does nothing.
+   */
+  useEffect(() => {
+    if (!notificationsSupported()) return;
+    const permission = notificationPermission();
+    if (permission === 'granted') return; // Nothing to ask for.
+    setAskNotifications(permission === 'denied' ? 'blocked' : 'ask');
+  }, []);
+
+  /**
+   * Is any OTHER browser holding unsaved work for this account?
+   *
+   * This browser names itself so the server can leave it out — its own flag is
+   * still up while it holds work, and reporting that back would tell someone
+   * their edits are elsewhere while they are looking at them. A device holding
+   * unsaved work cannot hand it over either, so the answer only ever explains
+   * why that work is not here.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    // Said once a visit — see isFirstLoadOfVisit.
+    if (!isFirstLoadOfVisit()) return;
+
+    fetchUnsavedElsewhere().then((elsewhere) => {
+      if (cancelled || !elsewhere) return;
+      setElsewhereNotice({
+        deviceId: elsewhere.deviceId,
+        deviceLabel: elsewhere.deviceLabel,
+        at: elsewhere.at,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  useEffect(() => {
+    mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeTab]);
+
+  /**
+   * Offer the saved draft once the promo editor is actually open.
+   *
+   * A dialog rather than a toast: this is a question, and a toast is a poor
+   * place to ask one — it times out while the user is still reading, and
+   * answering it means hitting a target that is about to disappear.
+   *
+   * The ref is cleared as it opens, so switching tabs back and forth doesn't
+   * re-ask about a draft already passed on. Declining leaves it saved and
+   * reachable from the My Draft chip.
+   */
+  useEffect(() => {
+    if (activeTab !== 'promo') {
+      // Leaving the tab answers it: the question was about this editor, and a
+      // dialog rendered at page level would otherwise follow the user to the
+      // dashboard and be waiting again on every return. The draft is not
+      // touched — it stays on the My Draft chip.
+      setDraftOffer(null);
+      return;
+    }
+    if (!offeredDraftRef.current) return;
+    setDraftOffer(offeredDraftRef.current);
+    offeredDraftRef.current = null;
+  }, [activeTab]);
+
+  /**
+   * A dashboard action held back because the editor has work that isn't in the
+   * draft. Both entries lead somewhere that replaces the canvas, so the user
+   * is offered the save here rather than losing it silently.
+   */
+  const [pendingDashboardAction, setPendingDashboardAction] = useState<
+    'create' | 'published' | null
+  >(null);
+  // Bumped to open the build panel when the flow is already mounted.
+  const [openBuildSignal, setOpenBuildSignal] = useState(0);
+  // Bumped once the real card lands from the DB. The editor mounts on
+  // defaultConfig, so anything the editor seeds from the card at mount time
+  // would otherwise freeze on the default template's look.
+
+
+  const [promoTimerAutoArmed, setPromoTimerAutoArmed] = useState(false);
+
+
+
+  /**
+   * Unsaved work is sitting in a different browser.
+   *
+   * There is nothing to restore here — that is the whole message. Work that was
+   * never saved as a draft stays in the browser that made it, so the only
+   * honest thing to say is where it is and how to get it back.
+   */
+  const [elsewhereNotice, setElsewhereNotice] = useState<{
+    deviceId: string;
+    deviceLabel: string;
+    at: string | null;
+  } | null>(null);
+
+  /**
+   * The draft is built before the campaign because the campaign needs its
+   * state; the campaign is handed back through this ref, which every draft
+   * function reads at call time.
+   */
+  const campaignRef = useRef<ReturnType<typeof useCampaignConfig> | null>(null);
+
+  const draft = useCampaignDraft({
+    campaignRef,
+    toast,
+    performLogout,
+    setActiveTab,
+    setPromoEntryStep,
+    setRestoreNotice,
+    elsewhereNotice,
+    setElsewhereNotice,
+  });
+  const {
+    savedDraftSignature,
     draftSignatureRef,
-    savedDraftSignatureRef,
+    draftPromoCard,
+    savingDraft,
+    confirmReplaceDraft,
+    setConfirmReplaceDraft,
+    confirmDiscardDraft,
+    setConfirmDiscardDraft,
     offeredDraftRef,
-    setSavedDraftSignature,
-    setDraftPromoCard,
+    draftOffer,
+    setDraftOffer,
+    postPublishDraft,
     setPostPublishDraft,
-  };
+    pendingDraftAction,
+    setPendingDraftAction,
+    promoWorkNotInDraftRef,
+    writeDraftNow,
+    discardDraft,
+    handleDeleteDraft,
+    handleSaveAsDraft,
+    acceptOfferedDraft,
+    clearDraft,
+    saveDraftAndContinue,
+    continueWithoutDraft,
+    dismissWelcomeBack,
+  } = draft;
+
+  const campaign = useCampaignConfig({
+    toast,
+    promoBlankStart,
+    setPromoEntryStep,
+    setRestoreNotice,
+    ensureLivePromoVariant: (cfg: CampaignConfig) =>
+      ensureLiveVariantRef.current(cfg),
+    draftPort: draft,
+  });
+  campaignRef.current = campaign;
 
   const {
     config,
@@ -272,29 +415,18 @@ export default function Home() {
     readyToPublishAnnouncement,
     setReadyToPublishAnnouncement,
     configLoadedSignal,
-    setConfigLoadedSignal,
     editorResetKey,
     setEditorResetKey,
     blankPromoCard,
     markAnnouncementChanged,
     markPromoChanged,
-    resetPromoEditorToDefault,
     loadConfig,
     persistConfig,
-  } = useCampaignConfig({
-    toast,
-    promoBlankStart,
-    setPromoEntryStep,
-    setRestoreNotice,
-    ensureLivePromoVariant: (cfg: CampaignConfig) =>
-      ensureLiveVariantRef.current(cfg),
-    draftPort,
-  });
+    } = campaign;
 
   // Announcement still stages via Save → Publish (promo saves straight to a
   // draft from the tab strip instead, so it has no staged/"ready" state).
   const hasChanges = hasAnnouncementChanges || hasPromoChanges;
-
   // Any pending draft work (unsaved edits OR a staged-but-unpublished
   // announcement) — a live on-air toggle must preserve this, not discard it.
   const pendingDraft = hasChanges || readyToPublishAnnouncement;
@@ -328,17 +460,6 @@ export default function Home() {
     refreshPromoVariants();
   }, [refreshPromoVariants]);
 
-  // The published config object (not just its signature) — lets draft checks
-  // compare the announcement against what's live.
-
-
-
-
-
-
-
-
-
   useEffect(() => {
     loadConfig();
     
@@ -349,7 +470,6 @@ export default function Home() {
       setIsDarkMode(window.matchMedia('(prefers-color-scheme: dark)').matches);
     }
   }, []);
-
 
   useEffect(() => {
     const promoAtRisk = promoWorkNotInDraftRef.current;
@@ -599,49 +719,6 @@ export default function Home() {
   }, []);
 
   /**
-   * Raise the notification card, once per visit.
-   *
-   * Silent only when the permission is already granted. Denied still gets a
-   * card, because the way it usually happens is someone accepting here and
-   * then hitting Block in the browser's prompt — they wanted this and ended up
-   * without it. What it says changes, though: an Allow button against a denied
-   * permission is a button that does nothing.
-   */
-  useEffect(() => {
-    if (!notificationsSupported()) return;
-    const permission = notificationPermission();
-    if (permission === 'granted') return; // Nothing to ask for.
-    setAskNotifications(permission === 'denied' ? 'blocked' : 'ask');
-  }, []);
-
-  /**
-   * Is any OTHER browser holding unsaved work for this account?
-   *
-   * This browser names itself so the server can leave it out — its own flag is
-   * still up while it holds work, and reporting that back would tell someone
-   * their edits are elsewhere while they are looking at them. A device holding
-   * unsaved work cannot hand it over either, so the answer only ever explains
-   * why that work is not here.
-   */
-  useEffect(() => {
-    let cancelled = false;
-    // Said once a visit — see isFirstLoadOfVisit.
-    if (!isFirstLoadOfVisit()) return;
-
-    fetchUnsavedElsewhere().then((elsewhere) => {
-      if (cancelled || !elsewhere) return;
-      setElsewhereNotice({
-        deviceId: elsewhere.deviceId,
-        deviceLabel: elsewhere.deviceLabel,
-        at: elsewhere.at,
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  /**
    * Leaving is never a question any more.
    *
    * The browser's "Leave site?" prompt used to guard this, with the tool
@@ -708,85 +785,6 @@ export default function Home() {
     };
   }, []);
 
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDarkMode]);
-
-  useEffect(() => {
-    mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [activeTab]);
-
-  /**
-   * Offer the saved draft once the promo editor is actually open.
-   *
-   * A dialog rather than a toast: this is a question, and a toast is a poor
-   * place to ask one — it times out while the user is still reading, and
-   * answering it means hitting a target that is about to disappear.
-   *
-   * The ref is cleared as it opens, so switching tabs back and forth doesn't
-   * re-ask about a draft already passed on. Declining leaves it saved and
-   * reachable from the My Draft chip.
-   */
-  useEffect(() => {
-    if (activeTab !== 'promo') {
-      // Leaving the tab answers it: the question was about this editor, and a
-      // dialog rendered at page level would otherwise follow the user to the
-      // dashboard and be waiting again on every return. The draft is not
-      // touched — it stays on the My Draft chip.
-      setDraftOffer(null);
-      return;
-    }
-    if (!offeredDraftRef.current) return;
-    setDraftOffer(offeredDraftRef.current);
-    offeredDraftRef.current = null;
-  }, [activeTab]);
-
-  /** Take up the offered draft — what the old silent restore did, on request. */
-  function acceptOfferedDraft(draft: CampaignConfig) {
-    setDraftOffer(null);
-    setConfig(draft);
-    draftSignatureRef.current = getConfigSignature(draft);
-    setSavedDraftSignature(getConfigSignature(draft));
-    setDraftPromoCard(JSON.parse(JSON.stringify(draft.promoCard)));
-    savedPromoSignatureRef.current = getPromoSignature(draft);
-    setHasAnnouncementChanges(true);
-    setHasPromoChanges(true);
-    setReadyToPublishAnnouncement(true);
-    setPromoEntryStep('editor');
-    setConfigLoadedSignal((n) => n + 1);
-    toast('Picked up where you left off');
-  }
-
-  // Consent before discarding a draft (destructive).
-  const [confirmDiscardDraft, setConfirmDiscardDraft] = useState(false);
-  /**
-   * A dashboard action held back because the editor has work that isn't in the
-   * draft. Both entries lead somewhere that replaces the canvas, so the user
-   * is offered the save here rather than losing it silently.
-   */
-  const [pendingDashboardAction, setPendingDashboardAction] = useState<
-    'create' | 'published' | null
-  >(null);
-  /**
-   * True when the editor holds promo work that is NOT in the saved draft.
-   *
-   * A ref because the dashboard handlers are stable callbacks — reading state
-   * inside them would capture whatever it was when they were created.
-   */
-  const promoWorkNotInDraftRef = useRef(false);
-  // Bumped to open the build panel when the flow is already mounted.
-  const [openBuildSignal, setOpenBuildSignal] = useState(0);
-  // Bumped once the real card lands from the DB. The editor mounts on
-  // defaultConfig, so anything the editor seeds from the card at mount time
-  // would otherwise freeze on the default template's look.
-
-
-  const [promoTimerAutoArmed, setPromoTimerAutoArmed] = useState(false);
-
   /**
    * Rebuild both flags from the card whenever one is loaded.
    *
@@ -825,20 +823,6 @@ export default function Home() {
     // card that already has one must not have its countdown switched on for it.
     setPromoTimerAutoArmed(wearingBlank && !card.endDate);
   }, [configLoadedSignal]);
-
-
-  /**
-   * Unsaved work is sitting in a different browser.
-   *
-   * There is nothing to restore here — that is the whole message. Work that was
-   * never saved as a draft stays in the browser that made it, so the only
-   * honest thing to say is where it is and how to get it back.
-   */
-  const [elsewhereNotice, setElsewhereNotice] = useState<{
-    deviceId: string;
-    deviceLabel: string;
-    at: string | null;
-  } | null>(null);
 
   /**
    * Why the page is leaving, when the app is the one making it leave.
@@ -918,23 +902,6 @@ export default function Home() {
     return null;
   })();
 
-  function dismissWelcomeBack() {
-    /**
-     * Closing it counts as having read it.
-     *
-     * The other device's flag stays exactly as it is — only this browser
-     * records that it has shown this particular batch of work. If that machine
-     * produces newer work the notice returns; otherwise it does not repeat on
-     * every visit, which it did, with nothing the user could do about it.
-     */
-    if (elsewhereNotice) markElsewhereSeen(elsewhereNotice.deviceId, elsewhereNotice.at);
-    setRestoreNotice(null);
-    setDraftOffer(null);
-    setElsewhereNotice(null);
-  }
-
-  // A picker the editor should open as soon as it mounts, set by the
-  // dashboard's "Edit published". Cleared by the editor once acted on.
   const [pendingPromoPopup, setPendingPromoPopup] = useState<'published' | 'draft' | null>(null);
   // The schedule dialog serves two intents, and they end differently:
   //   'new'      → starting a campaign, so it continues to the build panel
@@ -1172,172 +1139,11 @@ export default function Home() {
   );
 
 
-  // Persist the draft only if it carries restorable work — real promo text or a
-  // changed announcement. A fresh/blank promo (even one that replaced a full
-  // published card) is trivially recreatable, so it's not worth a draft.
-  // Returns whether a draft was actually written.
-  // The draft lives in the DB via /api/draft. The DB write is fired without
-  // awaiting (with keepalive so it survives page unload); the decision — save
-  // vs skip, and the returned boolean the callers use for the toast — stays
-  // synchronous so call sites don't change.
-  function saveDraft(
-    cfg: CampaignConfig,
-    options: { markHandled?: boolean } = {},
-  ): boolean {
-    /**
-     * Nothing worth keeping in the editor — so write nothing. It must NOT
-     * clear the slot.
-     *
-     * This used to delete the draft, on the reasoning that a blank card should
-     * not leave a stale one behind. But the two are unrelated: the draft is
-     * whatever was parked there earlier, and an empty canvas says nothing
-     * about it. The unload rescue runs this on every close, so closing the tab
-     * with a cleared canvas silently destroyed a draft the user had saved
-     * days before and never touched in that session.
-     *
-     * Deleting a draft stays where the user can see it: the My Draft popup,
-     * and publishing, which supersedes it.
-     */
-    if (!draftHasRestorableWork(cfg, publishedConfigObjRef.current)) {
-      return false;
-    }
-
-    fetch('/api/draft', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cfg),
-      keepalive: true,
-    }).catch(() => {});
-    setSavedDraftSignature(getConfigSignature(cfg));
-    setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
-    if (options.markHandled !== false) {
-      draftSignatureRef.current = getConfigSignature(cfg);
-    }
-    return true;
-  }
 
 
-  function clearDraft() {
-    fetch('/api/draft', { method: 'DELETE', keepalive: true }).catch(() => {});
-    draftSignatureRef.current = null;
-    setSavedDraftSignature(null);
-    setDraftPromoCard(null);
-  }
 
-  /**
-   * Deleting the saved draft, from the My Draft popup.
-   *
-   * If the canvas is showing exactly that draft, it goes back to what's live —
-   * otherwise the "deleted" work stays on screen, still counts as unsaved, and
-   * every entry point starts offering to save it again. Mirrors what deleting
-   * a live variant already does.
-   *
-   * Edits made since the draft was saved are left alone: those are the user's
-   * current work, not the thing they just deleted.
-   */
-  function handleDeleteDraft() {
-    const deleted = draftPromoCard;
-    const live = publishedConfigObjRef.current;
-    clearDraft();
-    if (!deleted || !live) return;
-    // Normalised for the same reason as everywhere else — otherwise the app's
-    // own HTML rewrites make the canvas look "edited since saving" and the
-    // deleted draft is left sitting on it.
-    const sig = (card: CampaignConfig['promoCard']) =>
-      JSON.stringify(normalizePromoForCompare(card as unknown as Record<string, unknown>));
-    if (sig(configRef.current.promoCard) !== sig(deleted)) return;
 
-    const next: CampaignConfig = {
-      ...configRef.current,
-      promoCard: JSON.parse(JSON.stringify(live.promoCard)),
-    };
-    setConfig(next);
-    configRef.current = next;
-    draftSignatureRef.current = getConfigSignature(next);
-    savedPromoSignatureRef.current = getPromoSignature(next);
-    setHasPromoChanges(getConfigSignature(next) !== publishedConfigRef.current);
-    setEditorResetKey((k) => k + 1);
-  }
 
-  // Explicit "Save as draft" — the ONLY way a draft is ever written now.
-  // Unlike the automatic saveDraft() above, this always writes what's in the
-  // editor: an explicit click means the user wants it saved, blank or not.
-  /**
-   * @param options.keepEditor
-   *   Leave the editor alone after the write. Set by the card-replace consent,
-   *   which saves the outgoing card and then applies the incoming one: the
-   *   reset below lands after the fetch resolves, so it blanked the card that
-   *   had just replaced it and the user was left looking at the skeleton,
-   *   with the draft saved and the template apparently ignored.
-   */
-  function writeDraftNow(options: { keepEditor?: boolean } = {}) {
-    const cfg = configRef.current;
-    setSavingDraft(true);
-    fetch('/api/draft', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cfg),
-    })
-      .then((res) => {
-        if (res.ok) {
-          draftSignatureRef.current = getConfigSignature(cfg);
-          setSavedDraftSignature(getConfigSignature(cfg));
-          setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
-          // Safe in the draft now, so the recovery copy has nothing to rescue.
-          clearRecovery();
-          toast('Saved draft updated');
-          // Parked in My Draft — the editor is free for the next card, unless
-          // something has already been put in it.
-          if (!options.keepEditor) resetPromoEditorToDefault();
-        } else {
-          toast('Couldn’t save your draft', true);
-        }
-      })
-      .catch(() => toast('Couldn’t save your draft', true))
-      .finally(() => setSavingDraft(false));
-  }
-
-  // There's only one draft slot — if it's already occupied, confirm before
-  // overwriting it.
-  async function handleSaveAsDraft() {
-    setSavingDraft(true);
-    let exists = false;
-    try {
-      const res = await fetch('/api/draft');
-      const data = res.ok ? await res.json() : null;
-      exists = Boolean(data?.draft);
-    } catch {
-      // Can't tell — fall through and just write; worst case is an
-      // unconfirmed overwrite, better than silently failing to save.
-    }
-    setSavingDraft(false);
-    if (exists) {
-      setConfirmReplaceDraft(true);
-      return;
-    }
-    writeDraftNow();
-  }
-
-  function completePendingDraftAction(action = pendingDraftAction) {
-    if (!action) return;
-    setPendingDraftAction(null);
-    if (action.type === 'tab') {
-      setActiveTab(action.tab);
-      return;
-    }
-    // Only 'logout' is left, and it means what it says.
-    performLogout();
-  }
-
-  function saveDraftAndContinue() {
-    if (saveDraft(configRef.current)) toast('Saved draft updated');
-    completePendingDraftAction();
-  }
-
-  function continueWithoutDraft() {
-    draftSignatureRef.current = getConfigSignature(configRef.current);
-    completePendingDraftAction();
-  }
 
 
 
@@ -1417,28 +1223,6 @@ export default function Home() {
       });
   }
 
-  async function discardDraft() {
-    clearDraft();
-    setHasAnnouncementChanges(false);
-    setHasPromoChanges(false);
-    setReadyToPublishAnnouncement(false);
-    // Reload published config
-    try {
-      const response = await fetch('/api/config');
-      if (response.ok) {
-        const data = await response.json();
-        const migrated = migrateConfig(data, data.version);
-        setConfig(migrated);
-        draftSignatureRef.current = getConfigSignature(migrated);
-        savedPromoSignatureRef.current = getPromoSignature(migrated);
-        publishedConfigRef.current = getConfigSignature(migrated);
-        publishedConfigObjRef.current = migrated;
-      }
-    } catch (e) {
-      console.error('Failed to reload config:', e);
-    }
-    toast('Saved draft deleted');
-  }
 
 
 
