@@ -2,8 +2,12 @@
 
 import { useRef, useState, type RefObject } from 'react';
 import type { CampaignConfig, PromoCard } from '@/types/campaign';
-import type { useCampaignConfig, RestoreNotice } from '@/hooks/useCampaignConfig';
-import type { PendingDraftAction } from '@/components/shell/campaignShellTypes';
+import type { useCampaignConfig } from '@/hooks/useCampaignConfig';
+import type {
+  ElsewhereNotice,
+  PendingDraftAction,
+  RestoreNotice,
+} from '@/types/campaignShell';
 import {
   getConfigSignature,
   getPromoSignature,
@@ -16,11 +20,6 @@ import { migrateConfig } from '@/lib/configMigration';
 
 type Campaign = ReturnType<typeof useCampaignConfig>;
 
-export interface ElsewhereNotice {
-  deviceId: string;
-  deviceLabel: string;
-  at: string | null;
-}
 
 interface UseCampaignDraftArgs {
   /**

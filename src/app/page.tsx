@@ -28,13 +28,15 @@ import {
 import {
   PostPublishDraftDialog,
   WelcomeBackDialog,
+  DiscardDraftDialog,
+  ReplaceDraftDialog,
+} from '@/components/shell/DraftDialogs';
+import {
   UnsavedWorkDialog,
   VariantSlotFullDialog,
   PublishConfirmDialog,
   DashboardUnsavedDialog,
-  DiscardDraftDialog,
-  ReplaceDraftDialog,
-} from '@/components/shell/CampaignDialogs';
+} from '@/components/shell/UnsavedWorkDialogs';
 import { isFirstLoadOfVisit } from '@/lib/visit';
 import { useCampaignConfig } from '@/hooks/useCampaignConfig';
 import { useCampaignDraft } from '@/hooks/useCampaignDraft';

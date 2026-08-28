@@ -20,23 +20,8 @@ import { isFirstLoadOfVisit } from '@/lib/visit';
 import { cardIsNotUserWork } from '@/lib/promo/promoAuthorship';
 import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
 import { readRecoveryEnvelope, clearRecovery } from '@/lib/recovery';
+import type { RestoreNotice } from '@/types/campaignShell';
 
-/**
- * What this hook needs from the draft, and nothing more.
- *
- * The two own each other's problems — loading a config decides whether to
- * offer a draft back, and saving a draft rewrites the signatures this holds —
- * so one of them has to be built first. This is the smaller surface, declared
- * as a port so the draft hook can be built second and handed in.
- */
-export interface RestoreNotice {
-  /** When the local copy was taken. Empty for copies written before it was recorded. */
-  localSavedAt: string | null;
-  /** When the parked draft was saved, if there is one. Null means there isn't. */
-  draftSavedAt: string | null;
-  /** The draft is newer than the work being restored. */
-  draftIsNewer: boolean;
-}
 
 export interface CampaignDraftPort {
   clearDraft: () => void;

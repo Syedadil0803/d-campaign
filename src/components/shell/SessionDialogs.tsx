@@ -9,7 +9,7 @@ import {
   unblockSteps,
 } from '@/lib/auth/sessionWarning';
 import { IDLE_LIMIT_MS, IDLE_WARNING_LEAD_MS } from '@/hooks/useIdleSignOut';
-import type { WelcomeBackState } from '@/components/shell/CampaignDialogs';
+import type { WelcomeBackState } from '@/types/campaignShell';
 
 /**
  * The two dialogs about the session rather than the work: the sign-out
