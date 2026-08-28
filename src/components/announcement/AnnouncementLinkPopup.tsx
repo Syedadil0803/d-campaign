@@ -211,8 +211,10 @@ export function AnnouncementLinkPopup({
                 const digits = e.target.value
                   .replace(/\D/g, '')
                   .slice(0, maxNationalDigits(selectedCountryCode));
+                // Working copy only, like the URL field above: any typed
+                // national digit makes a link, so writing per keystroke
+                // underlined the message on the first digit.
                 setSelectedWhatsappNumber(digits);
-                updateSelectedDestination({ whatsappNumber: digits });
               }}
               className="block w-full rounded-md border border-border bg-surface p-2 text-sm text-on-surface"
               placeholder="7911123456"
@@ -277,14 +279,16 @@ export function AnnouncementLinkPopup({
           }
         }}
         onChange={(e) => {
-          const nextUrl = e.target.value;
-          setSelectedUrl(nextUrl);
-          if (selectedIndex !== null) {
-            const updated = [...config.announcementBar.announcements];
-            updated[selectedIndex] = { ...updated[selectedIndex], url: nextUrl || undefined, richText: true };
-            setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-            markChanged();
-          }
+          /**
+           * Typed into the working copy only. The message itself is written
+           * when the popup closes — see the commit effect in
+           * AnnouncementSection.
+           *
+           * This used to write to the message on every keystroke, so a single
+           * "h" was already a live URL and the preview bar underlined the
+           * message while the user was still typing the address.
+           */
+          setSelectedUrl(e.target.value);
         }}
         className="block w-full border-border rounded-md p-2 border bg-surface text-on-surface text-sm"
         placeholder="https://example.com"

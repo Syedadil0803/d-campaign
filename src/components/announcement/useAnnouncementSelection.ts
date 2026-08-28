@@ -99,14 +99,34 @@ export function useAnnouncementSelection({
     const updated = [...config.announcementBar.announcements];
     const resolved =
       ctaType === 'whatsapp' ? whatsAppUrl(code, number) : plainUrl || undefined;
-    updated[selectedIndex] = {
-      ...updated[selectedIndex],
+    const current = updated[selectedIndex];
+    const nextAnnouncement = {
+      ...current,
       richText: true,
-      ctaType: ctaType === 'whatsapp' ? 'whatsapp' : undefined,
+      ctaType: ctaType === 'whatsapp' ? ('whatsapp' as const) : undefined,
       url: resolved || undefined,
       whatsappNumber: ctaType === 'whatsapp' ? number || undefined : undefined,
       whatsappCountryCode: ctaType === 'whatsapp' ? code : undefined,
     };
+    /**
+     * Nothing changed, nothing written.
+     *
+     * This runs whenever the link popup closes, which includes opening it and
+     * pressing Escape. Writing the same destination back would still hand the
+     * page a new config object and light up "unsaved changes" for a popup the
+     * user only looked at. richText is left out of the comparison on purpose:
+     * it is a flag the editor sets, not a destination the user chose, and
+     * counting it would make the first look at any plain message dirty.
+     */
+    if (
+      nextAnnouncement.url === current.url &&
+      nextAnnouncement.ctaType === current.ctaType &&
+      nextAnnouncement.whatsappNumber === current.whatsappNumber &&
+      nextAnnouncement.whatsappCountryCode === current.whatsappCountryCode
+    ) {
+      return;
+    }
+    updated[selectedIndex] = nextAnnouncement;
     setConfig({
       ...config,
       announcementBar: { ...config.announcementBar, announcements: updated },
