@@ -1,0 +1,6 @@
+{
+  "//": "Type-checks the tests, which the production tsconfig deliberately excludes — they are not shipped, and Next would otherwise try to compile them. Run: npx tsc -p tsconfig.test.json --noEmit",
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx", "vitest.config.ts", "next-env.d.ts"],
+  "exclude": ["node_modules"]
+}
