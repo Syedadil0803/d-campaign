@@ -6,6 +6,11 @@ import type { CampaignConfig } from '@/types/campaign';
 import { MAX_VERSIONS, type PromoVersion } from '@/lib/promo/promoVersions';
 import type { RestoreNotice } from '@/hooks/useCampaignConfig';
 import type { ElsewhereNotice } from '@/hooks/useCampaignDraft';
+import type {
+  PendingDraftAction,
+  PendingDashboardAction,
+  PendingVariantSave,
+} from '@/components/shell/campaignShellTypes';
 import { describeWhen } from '@/lib/auth/presenceClient';
 import {
 } from '@/lib/auth/sessionWarning';
@@ -21,19 +26,6 @@ import {
  * The state shapes live here too, so the dialog and the state that drives it
  * are defined in one place rather than two.
  */
-
-export type PendingDraftAction =
-  | { type: 'tab'; tab: 'dashboard' | 'announcement' | 'promo' }
-  | { type: 'logout' };
-
-export type PendingDashboardAction = 'create' | 'published';
-
-export interface PendingVariantSave {
-  config: CampaignConfig;
-  versions: PromoVersion[];
-  /** Publish must finish going live after the variant is stored, not just save. */
-  mode: 'save' | 'publish';
-}
 
 export interface PublishConfirm {
   warnings: string[];

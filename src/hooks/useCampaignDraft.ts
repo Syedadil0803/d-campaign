@@ -3,7 +3,7 @@
 import { useRef, useState, type RefObject } from 'react';
 import type { CampaignConfig, PromoCard } from '@/types/campaign';
 import type { useCampaignConfig, RestoreNotice } from '@/hooks/useCampaignConfig';
-import type { PendingDraftAction } from '@/components/shell/CampaignDialogs';
+import type { PendingDraftAction } from '@/components/shell/campaignShellTypes';
 import {
   getConfigSignature,
   getPromoSignature,

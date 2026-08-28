@@ -13,6 +13,8 @@
 
 import { PromoCard, defaultConfig } from '@/types/campaign';
 import { lookSignature } from '@/lib/promo/lookSignature';
+import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
+import { INDUSTRIES, withIndustryCopy } from '@/lib/promo/industryCopy';
 
 export { lookSignature };
 import { blankLookSignatures, isBlankLook } from '@/lib/promo/lookSignature';
@@ -44,13 +46,37 @@ function wordsSignature(card: PromoCard): string {
   });
 }
 
+const TEMPLATE_CARDS = sampleTemplates.map((t) => t.promoCard as PromoCard);
+
+/**
+ * Every set of words the app hands out.
+ *
+ * Not just the twelve templates as written: Template Hub offers each one in
+ * the chosen trade's wording, so a plumber's "Emergency Call-Out" is as much
+ * ours as the template's own copy. Leaving those out meant picking a template
+ * with a trade selected produced a card the tool then guarded as the user's
+ * own work — every word of which we had written — so Clear Canvas asked
+ * permission to throw away something nobody had authored.
+ *
+ * Built once. Twelve templates across nine trades is a hundred and eight
+ * signatures, and it can never change at runtime.
+ */
+const OUR_WORDS: Set<string> = new Set([
+  ...TEMPLATE_CARDS.map(wordsSignature),
+  ...sampleTemplates.flatMap((t) =>
+    INDUSTRIES.map((industry) =>
+      wordsSignature(withIndustryCopy(t.promoCard as PromoCard, t.id, industry.id)),
+    ),
+  ),
+]);
+
 /**
  * Every look the app hands out: the templates, plus the default card's own.
  *
  * The default belongs here for the same reason the templates do — nobody
  * chose it.
  */
-export function ourLooks(templates: PromoCard[]): string[] {
+export function ourLooks(templates: PromoCard[] = TEMPLATE_CARDS): string[] {
   return [
     ...templates.map((t) => lookSignature(t.style)),
     lookSignature(defaultConfig.promoCard.style),
@@ -118,11 +144,10 @@ export function cardIsBlank(card: PromoCard | null | undefined): boolean {
  */
 export function cardIsUntouchedTemplate(
   card: PromoCard | null | undefined,
-  templates: PromoCard[],
+  templates: PromoCard[] = TEMPLATE_CARDS,
 ): boolean {
   if (!card) return false;
-  const words = wordsSignature(card);
-  const wordsAreOurs = templates.some((t) => wordsSignature(t) === words);
+  const wordsAreOurs = OUR_WORDS.has(wordsSignature(card));
   if (!wordsAreOurs) return false;
   return ourLooks(templates).includes(lookSignature(card.style));
 }
@@ -136,7 +161,7 @@ export function cardIsUntouchedTemplate(
  */
 export function cardIsNotUserWork(
   card: PromoCard | null | undefined,
-  templates: PromoCard[],
+  templates: PromoCard[] = TEMPLATE_CARDS,
 ): boolean {
   return cardIsBlank(card) || cardIsUntouchedTemplate(card, templates);
 }
