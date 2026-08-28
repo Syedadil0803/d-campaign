@@ -53,6 +53,12 @@ import {
 import type { LexicalTimerFieldHandle } from '@/components/timer-lexical/LexicalTimerField';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { getRequiredCardWidth } from '@/lib/promo/promoMeasure';
+import {
+  overwritesDraftCopy,
+  savesToDraftCopy,
+  REASSURANCE_BODY,
+  CONTINUE_ANYWAY,
+} from '@/lib/promo/cardReplaceCopy';
 import { clonePromoCard, withDefaultDates, cardSignature } from '@/lib/promo/promoCardIdentity';
 import { readHiddenFieldInfos, hideFieldInfo } from '@/lib/promo/fieldInfoNotes';
 import { PromoVersionsPopup } from '@/components/promo/PromoVersionsPopup';
@@ -1495,24 +1501,12 @@ export function PromoSection({
     if (verdict.kind === 'overwrites-draft') {
       setCardActionConfirm({
         ...opts,
-        title: 'Replace your saved draft?',
-        body: (
-          <>
-            Applying {incoming} will replace your current card. Your current card contains changes
-            made after your last save, and continuing will save it to{' '}
-            <span className="font-semibold text-on-surface">My Draft</span>, replacing the previous
-            version.
-          </>
-        ),
-        confirmLabel: 'Save and continue',
+        ...overwritesDraftCopy(incoming),
         onConfirm: () => {
           saveOutgoingCardToDraft();
           action();
         },
-        // Saving is the safe default, not the only way through: the draft on
-        // disk may be the copy worth keeping, and forcing it to be overwritten
-        // to get past this dialog destroys the very thing it protects.
-        secondaryLabel: 'Continue anyway',
+        secondaryLabel: CONTINUE_ANYWAY,
         onSecondary: action,
       });
       return;
@@ -1521,9 +1515,7 @@ export function PromoSection({
     if (verdict.kind === 'reassure') {
       setCardActionConfirm({
         ...opts,
-        body:
-          opts.reassuranceBody ??
-          "This only changes the card you're editing. What's live on your website stays up until you publish again.",
+        body: opts.reassuranceBody ?? REASSURANCE_BODY,
         onConfirm: action,
       });
       return;
@@ -1536,22 +1528,14 @@ export function PromoSection({
 
     setCardActionConfirm({
       ...opts,
-      title: 'Save this card as a draft?',
-      body: (
-        <>
-          Applying {incoming} will replace your current card, which has not been saved. Continuing
-          will save it to <span className="font-semibold text-on-surface">My Draft</span> so a copy
-          is kept.
-        </>
-      ),
-      confirmLabel: 'Save and continue',
+      ...savesToDraftCopy(incoming),
       onConfirm: () => {
         saveOutgoingCardToDraft();
         action();
       },
       // Discards the current card without keeping a copy. Offered because some
       // cards are not worth a draft slot, and the cap is five.
-      secondaryLabel: 'Continue anyway',
+      secondaryLabel: CONTINUE_ANYWAY,
       onSecondary: action,
     });
   }
