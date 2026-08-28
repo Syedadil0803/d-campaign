@@ -16,7 +16,6 @@ import {
 import { isInvalidRange } from '@/lib/dateRange';
 import { getFreshPromoCard } from '@/lib/promo/freshPromoCard';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
-import { useMirroredHtml } from '@/components/promo/useMirroredHtml';
 import { usePromoDropdowns } from '@/components/promo/usePromoDropdowns';
 import { usePromoPopupFlags } from '@/components/promo/usePromoPopupFlags';
 import { usePromoVersions } from '@/components/promo/usePromoVersions';
@@ -40,7 +39,6 @@ import {
 } from "@/lib/promo/promoVersions";
 import {
   buildTimerDisplayHtml,
-  refreshTimerValueSpans,
   calculateTimeRemaining as calcTimerRemaining,
 } from "@/lib/editor/timerUtils";
 import type { LexicalTimerFieldHandle } from '@/components/timer-lexical/LexicalTimerField';
@@ -52,6 +50,8 @@ import { PromoThemeRow } from '@/components/promo/PromoThemeRow';
 import { PromoEditorStyles } from '@/components/promo/PromoEditorStyles';
 import { PromoSectionDialogs } from '@/components/promo/PromoSectionDialogs';
 import { usePromoCardLifecycle } from '@/components/promo/usePromoCardLifecycle';
+import { usePromoPreviewFit } from '@/components/promo/usePromoPreviewFit';
+import { usePromoEditorSync } from '@/components/promo/usePromoEditorSync';
 import { PromoEditorToolbar } from '@/components/promo/PromoEditorToolbar';
 import { PromoPreviewHeader } from '@/components/promo/PromoPreviewHeader';
 import {
@@ -375,6 +375,8 @@ export function PromoSection(props: PromoSectionProps) {
   const subtitleRef = useRef<HTMLDivElement>(null);
   const descRef = useRef<HTMLDivElement>(null);
   const lastValidHtmlRef = useRef<Record<string, string>>({ title: '', subtitle: '', description: '' });
+  // Shared by the sync hook and the rich-text hook — see usePromoEditorSync.
+  const lastSyncedPromoRef = useRef<string | null>(null);
   const buttonRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<HTMLDivElement>(null);
   // Imperative handle on the Lexical timer editor used by the panel side.
@@ -407,52 +409,8 @@ export function PromoSection(props: PromoSectionProps) {
     closeAllPromoDropdowns,
   } = dropdowns;
 
-  const promoCardRef = useRef<HTMLDivElement>(null);
-  const [cardWidth, setCardWidth] = useState(config.promoCard.cardWidth || 400);
-  // Auto-fit: scale the preview card down so a tall card (or a short/zoomed
-  // window) always shows the FULL card in the frame — never clipped or scrolled.
-  const [previewZoom, setPreviewZoom] = useState(1);
-  const previewZoomRef = useRef(1);
-  useEffect(() => { previewZoomRef.current = previewZoom; }, [previewZoom]);
-  useEffect(() => {
-    const card = promoCardRef.current;
-    const frame = card?.closest('.campaign-card-surface') as HTMLElement | null;
-    if (!card || !frame) return;
-    let raf = 0;
-    const measure = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const applied = previewZoomRef.current || 1;
-        // getBoundingClientRect reflects the applied zoom; divide it out to get
-        // the card's natural (un-zoomed) height.
-        const natural = card.getBoundingClientRect().height / applied;
-        const avail = frame.clientHeight - 40; // frame padding (p-5 = 20px each)
-        let z = 1;
-        if (avail > 0 && natural > avail) z = Math.max(0.5, avail / natural);
-        z = Math.round(z * 1000) / 1000;
-        setPreviewZoom((prev) => (Math.abs(prev - z) > 0.005 ? z : prev));
-      });
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(frame);
-    // Observe an ancestor too so a window/zoom change that resizes the layout
-    // (but not the frame's own box synchronously) still triggers a re-fit.
-    const outer = frame.parentElement;
-    if (outer) ro.observe(outer);
-    window.addEventListener('resize', measure);
-    // visualViewport fires on browser zoom (Cmd +/-), which a plain resize
-    // listener can miss — this is the case that left the card overflowing.
-    const vv = window.visualViewport;
-    if (vv) vv.addEventListener('resize', measure);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', measure);
-      if (vv) vv.removeEventListener('resize', measure);
-      cancelAnimationFrame(raf);
-    };
-     
-  }, [config.promoCard, cardWidth]);
+  const { promoCardRef, cardWidth, setCardWidth, previewZoom } =
+    usePromoPreviewFit({ config, setConfig });
 
   // End Date field wrapper — the fallback guard scrolls here and flashes its
   // inline error if the user tries to save with an invalid range.
@@ -757,113 +715,25 @@ export function PromoSection(props: PromoSectionProps) {
     onCardReplaced?.();
   }
 
-  useEffect(() => {
-     
-  }, [config.promoCard]);
-
-  // Populate editors from config on mount
-  const lastSyncedPromoRef = useRef<string | null>(null);
-  useEffect(() => {
-    const sig = JSON.stringify({
-      t: config.promoCard.title,
-      s: config.promoCard.subtitle,
-      d: config.promoCard.description,
-      b: config.promoCard.buttonText,
-    });
-    if (sig === lastSyncedPromoRef.current) return;
-    lastSyncedPromoRef.current = sig;
-    if (titleRef.current)
-      titleRef.current.innerHTML = config.promoCard.title || "";
-    if (subtitleRef.current)
-      subtitleRef.current.innerHTML = config.promoCard.subtitle || "";
-    if (descRef.current)
-      descRef.current.innerHTML = config.promoCard.description || "";
-    if (buttonRef.current)
-      buttonRef.current.innerHTML = config.promoCard.buttonText || "";
-    lastValidHtmlRef.current = {
-      title: config.promoCard.title || '',
-      subtitle: config.promoCard.subtitle || '',
-      description: config.promoCard.description || '',
-    };
-    setCardWidth(config.promoCard.cardWidth || getRequiredCardWidth(
-      [
-        { html: config.promoCard.title || '', field: 'title' },
-        { html: config.promoCard.subtitle || '', field: 'subtitle' },
-        { html: config.promoCard.description || '', field: 'description' },
-      ],
-      config.promoCard.showTimer
-        ? buildTimerDisplayHtml(
-            config.promoCard.timerText ?? '',
-            calcTimerRemaining(config.promoCard.endDate || ''),
-          )
-        : '',
-    ));
-     
-  }, [config.promoCard.title, config.promoCard.subtitle, config.promoCard.description, config.promoCard.buttonText, config.promoCard.cardWidth, config.promoCard.timerText, config.promoCard.showTimer, config.promoCard.endDate]);
-
-  // The preview renders at the local `cardWidth`, but only `config.promoCard.cardWidth`
-  // gets persisted and published to R2 (and read by the live widget). Those can drift:
-  // the width is recomputed into local state on load / text edits / timer changes, yet
-  // it's only written back to config on some of those paths. Mirror the displayed width
-  // into config here so publishing always saves the number the user actually sees — and
-  // the site matches the tool. No-op (stable) once they already agree.
-  useEffect(() => {
-    if (cardWidth && cardWidth !== config.promoCard.cardWidth) {
-      setConfig({ ...config, promoCard: { ...config.promoCard, cardWidth } });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardWidth]);
-
-  // Keep the preview's editors in step with the card without re-rendering
-  // them, so a selection being held is not thrown away. See useMirroredHtml.
-  useMirroredHtml(previewTitleRef, config.promoCard.title);
-  useMirroredHtml(previewSubtitleRef, config.promoCard.subtitle);
-  useMirroredHtml(previewDescriptionRef, config.promoCard.description);
-  useMirroredHtml(
+  usePromoEditorSync({
+    config,
+    titleRef,
+    subtitleRef,
+    descRef,
+    buttonRef,
+    timerRef,
+    previewTitleRef,
+    previewSubtitleRef,
+    previewDescriptionRef,
     previewButtonRef,
-    config.promoCard.buttonText,
-    config.promoCard.showButton,
-  );
-
-  // Structural sync: prefix/suffix HTML + the fixed countdown chip. Numbers are
-  // refreshed separately (tick effect below) so typing never resets the caret.
-  useEffect(() => {
-    syncTimerElement(
-      previewTimerRef.current,
-      config.promoCard.timerText ?? "",
-      config.promoCard.endDate || "",
-      activeEditorRef.current,
-    );
-    // showTimer is a dep so the preview repopulates when the timer is toggled
-    // back on (the element unmounts/remounts empty otherwise).
-  }, [
-    config.promoCard.timerText,
-    config.promoCard.endDate,
-    config.promoCard.showTimer,
-  ]);
-
-  useEffect(() => {
-    syncTimerElement(
-      timerRef.current,
-      config.promoCard.timerText ?? "",
-      config.promoCard.endDate || "",
-      activeEditorRef.current,
-    );
-  }, [config.promoCard.timerText, config.promoCard.endDate, config.promoCard.showTimer]);
-
-  // Live tick: update only the fixed chip's text in-place (no innerHTML reset,
-  // so the caret and any prefix/suffix styling are preserved while editing).
-  useEffect(() => {
-    const value = calcTimerRemaining(config.promoCard.endDate || "");
-    [timerRef.current, previewTimerRef.current].forEach((el) => {
-      if (!el) return;
-      // Don't write into the editor being typed in — updating the number spans
-      // resets the caret to the start (typing feels jumpy). It resumes ticking
-      // once focus leaves.
-      if (el === activeEditorRef.current || document.activeElement === el) return;
-      refreshTimerValueSpans(el, value);
-    });
-  }, [currentTime, config.promoCard.endDate]);
+    previewTimerRef,
+    activeEditorRef,
+    lastValidHtmlRef,
+    lastSyncedPromoRef,
+    setCardWidth,
+    currentTime,
+    syncTimerElement,
+  });
 
   useEffect(() => {
     // The preview popup is always shown now, so keep the field scaffold visible
