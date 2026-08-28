@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { isInvalidRange } from '@/lib/dateRange';
 import { createPortal } from 'react-dom';
 import { Sparkles } from 'lucide-react';
@@ -13,6 +13,8 @@ import { Toast, TOAST_ACTION_MS, type ToastAction } from '@/components/shared/To
 import { AnnouncementLinkPopup } from '@/components/announcement/AnnouncementLinkPopup';
 import { AnnouncementSchedulePopup } from '@/components/announcement/AnnouncementSchedulePopup';
 import { AnnouncementStylePanel } from '@/components/announcement/AnnouncementStylePanel';
+import { useAnnouncementStyleDropdowns } from '@/components/announcement/useAnnouncementStyleDropdowns';
+import { useAnnouncementPopups } from '@/components/announcement/useAnnouncementPopups';
 import { whatsAppUrl } from '@/lib/whatsapp';
 import { useEditorHistory } from '@/hooks/useEditorHistory';
 import { EditorSnapshot, LinkSnapshot } from '@/lib/editor/historyManager';
@@ -115,7 +117,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   const [showResetMenu, setShowResetMenu] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const resetMenuRef = useRef<HTMLDivElement>(null);
-  const [showLinkPopup, setShowLinkPopup] = useState(false);
   // WhatsApp destination for the selected message: the same picker the promo
   // card uses, so a number typed here behaves the same way there.
   const [selectedCtaType, setSelectedCtaType] = useState<'link' | 'whatsapp'>('link');
@@ -129,17 +130,40 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   } | null>(null);
   const annCountryBtnRef = useRef<HTMLButtonElement>(null);
   const annCountryMenuRef = useRef<HTMLDivElement>(null);
-  const [showSchedulePopup, setShowSchedulePopup] = useState(false);
-  const [showStartDateCalendar, setShowStartDateCalendar] = useState(false);
-  const [showEndDateCalendar, setShowEndDateCalendar] = useState(false);
-  const [startDateView, setStartDateView] = useState<Date>(new Date());
-  const [endDateView, setEndDateView] = useState<Date>(new Date());
-  const [linkPos, setLinkPos] = useState<{ top: number; left: number } | null>(null);
-  const [schedulePos, setSchedulePos] = useState<{ top: number; left: number } | null>(null);
-  const [showBackgroundTypeDropdown, setShowBackgroundTypeDropdown] = useState(false);
-  const [showDirectionDropdown, setShowDirectionDropdown] = useState(false);
-  const [backgroundTypePos, setBackgroundTypePos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const [directionPos, setDirectionPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const {
+    showBackgroundTypeDropdown,
+    setShowBackgroundTypeDropdown,
+    showDirectionDropdown,
+    setShowDirectionDropdown,
+    backgroundTypePos,
+    directionPos,
+    backgroundTypeBtnRef,
+    backgroundTypeMenuRef,
+    directionBtnRef,
+    directionMenuRef,
+  } = useAnnouncementStyleDropdowns();
+  const {
+    showLinkPopup,
+    setShowLinkPopup,
+    showSchedulePopup,
+    setShowSchedulePopup,
+    showStartDateCalendar,
+    setShowStartDateCalendar,
+    showEndDateCalendar,
+    setShowEndDateCalendar,
+    startDateView,
+    setStartDateView,
+    endDateView,
+    setEndDateView,
+    linkPos,
+    schedulePos,
+    linkBtnRef,
+    scheduleBtnRef,
+    linkPopupRef,
+    schedulePopupRef,
+    startDateCalendarRef,
+    endDateCalendarRef,
+  } = useAnnouncementPopups({ selectedStartDate, selectedEndDate });
 
   const richEditorRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -147,20 +171,10 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   selectedIndexRef.current = selectedIndex;
   const configRef = useRef(config);
   configRef.current = config;
-  const linkBtnRef = useRef<HTMLButtonElement>(null);
-  const scheduleBtnRef = useRef<HTMLButtonElement>(null);
-  const linkPopupRef = useRef<HTMLDivElement>(null);
-  const schedulePopupRef = useRef<HTMLDivElement>(null);
-  const startDateCalendarRef = useRef<HTMLDivElement>(null);
-  const endDateCalendarRef = useRef<HTMLDivElement>(null);
   // Always-current invalid flag for close handlers registered with [] deps
   // (the Escape listener) that would otherwise read a stale value.
   const scheduleRangeInvalidRef = useRef(false);
   const actionMenuRef = useRef<HTMLDivElement>(null);
-  const backgroundTypeBtnRef = useRef<HTMLButtonElement>(null);
-  const backgroundTypeMenuRef = useRef<HTMLDivElement>(null);
-  const directionBtnRef = useRef<HTMLButtonElement>(null);
-  const directionMenuRef = useRef<HTMLDivElement>(null);
 
   const [editorDefaultColor, setEditorDefaultColor] = useState('#1a1c1f');
 
@@ -387,49 +401,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     }
   }, [config.announcementBar.announcements, config.announcementBar.active, config.announcementBar.loop, loopCopies]);
 
-  // Position link popup below its button
-  useLayoutEffect(() => {
-    if (showLinkPopup && linkBtnRef.current) {
-      const rect = linkBtnRef.current.getBoundingClientRect();
-      setLinkPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
-    }
-  }, [showLinkPopup]);
-
-  // Position schedule popup below its button
-  useLayoutEffect(() => {
-    if (showSchedulePopup && scheduleBtnRef.current) {
-      const rect = scheduleBtnRef.current.getBoundingClientRect();
-      setSchedulePos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
-    }
-  }, [showSchedulePopup]);
-
-  useLayoutEffect(() => {
-    if (showBackgroundTypeDropdown && backgroundTypeBtnRef.current) {
-      const rect = backgroundTypeBtnRef.current.getBoundingClientRect();
-      setBackgroundTypePos({ top: rect.bottom + 6, left: rect.left, width: rect.width });
-    }
-  }, [showBackgroundTypeDropdown]);
-
-  useLayoutEffect(() => {
-    if (showDirectionDropdown && directionBtnRef.current) {
-      const rect = directionBtnRef.current.getBoundingClientRect();
-      const menuWidth = 180;
-      const menuHeight = 320;
-      const spaceRight = window.innerWidth - rect.right;
-      const left = spaceRight >= menuWidth + 10 ? rect.right + 6 : rect.left - menuWidth - 6;
-      // Offset: increase this value to move menu down, decrease to move up
-      const verticalOffset = 80;
-      const top = rect.bottom - menuHeight + verticalOffset;
-      setDirectionPos({ top, left, width: menuWidth });
-    }
-  }, [showDirectionDropdown]);
-
-  useEffect(() => {
-    if (showSchedulePopup) return;
-    setShowStartDateCalendar(false);
-    setShowEndDateCalendar(false);
-  }, [showSchedulePopup]);
-
   // Delete selected announcement on Delete/Backspace key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -461,37 +432,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (
-        showLinkPopup &&
-        linkPopupRef.current && !linkPopupRef.current.contains(target) &&
-        linkBtnRef.current && !linkBtnRef.current.contains(target)
-      ) {
-        setShowLinkPopup(false);
-      }
-      if (
-        showSchedulePopup &&
-        // Don't close on outside-click while the range is invalid — the user
-        // must fix it or press Clear (mirrors the blocked Done button).
-        !isInvalidRange(selectedStartDate, selectedEndDate) &&
-        schedulePopupRef.current && !schedulePopupRef.current.contains(target) &&
-        scheduleBtnRef.current && !scheduleBtnRef.current.contains(target)
-      ) {
-        setShowSchedulePopup(false);
-      }
-      if (
-        showBackgroundTypeDropdown &&
-        backgroundTypeMenuRef.current && !backgroundTypeMenuRef.current.contains(target) &&
-        backgroundTypeBtnRef.current && !backgroundTypeBtnRef.current.contains(target)
-      ) {
-        setShowBackgroundTypeDropdown(false);
-      }
-      if (
-        showDirectionDropdown &&
-        directionMenuRef.current && !directionMenuRef.current.contains(target) &&
-        directionBtnRef.current && !directionBtnRef.current.contains(target)
-      ) {
-        setShowDirectionDropdown(false);
-      }
       if (actionMenuIndex !== null && actionMenuRef.current && !actionMenuRef.current.contains(target)) {
         setActionMenuIndex(null);
         setActionMenuPos(null);
@@ -499,7 +439,9 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     };
     document.addEventListener('mousedown', handleMouseDown);
     return () => document.removeEventListener('mousedown', handleMouseDown);
-  }, [showLinkPopup, showSchedulePopup, showBackgroundTypeDropdown, showDirectionDropdown, actionMenuIndex, selectedStartDate, selectedEndDate]);
+    // The styling menus and the two toolbar popups dismiss themselves — see
+    // useAnnouncementStyleDropdowns and useAnnouncementPopups.
+  }, [actionMenuIndex]);
 
 
 
