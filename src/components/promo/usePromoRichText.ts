@@ -38,6 +38,7 @@ import {
 } from '@/lib/promo/promoEditorSelection';
 import {
 } from "@/components/timer-lexical/lineMeasure";
+import { collectTextNodes } from '@/lib/editor/textNodes';
 
 type RichTextApi = ReturnType<typeof useRichTextEditor>;
 type Editor = RefObject<HTMLDivElement | null>;
@@ -200,16 +201,7 @@ export function usePromoRichText({
     const container = document.createElement("div");
     container.innerHTML = html;
 
-    const textNodes: Node[] = [];
-    function findTextNodes(node: Node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent?.replace(/\u200B/g, "").trim();
-        if (text) textNodes.push(node);
-      } else {
-        node.childNodes.forEach(findTextNodes);
-      }
-    }
-    findTextNodes(container);
+    const textNodes = collectTextNodes(container);
 
     if (textNodes.length === 0) {
       setActiveFormats({

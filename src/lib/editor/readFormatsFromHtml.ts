@@ -1,6 +1,7 @@
 import { rgbToHex } from '@/lib/editor/colorUtils';
 import { fontSizeToLabel } from '@/lib/editor/fontSizeUtils';
 import type { ActiveFormats } from '@/hooks/useRichTextEditor';
+import { collectTextNodes } from '@/lib/editor/textNodes';
 
 /**
  * What the toolbar should show for a whole block of editor HTML.
@@ -19,16 +20,7 @@ export function readFormatsFromHtml(html: string, defaultColor: string): ActiveF
   container.innerHTML = html;
 
   // Collect all text nodes with actual content
-  const textNodes: Node[] = [];
-  function findTextNodes(node: Node) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent?.replace(/\u200B/g, '').trim();
-      if (text) textNodes.push(node);
-    } else {
-      node.childNodes.forEach(findTextNodes);
-    }
-  }
-  findTextNodes(container);
+  const textNodes = collectTextNodes(container);
 
   if (textNodes.length === 0) {
     return { bold: false, italic: false, size: 'md', color: defaultColor };

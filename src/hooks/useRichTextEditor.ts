@@ -24,6 +24,7 @@
 import { useState, useRef, useCallback, Dispatch, SetStateAction } from 'react';
 import { applyInlineColor, rgbToHex } from '@/lib/editor/colorUtils';
 import { FONT_SIZE_MAP, fontSizeToLabel, applyFontSize, wrapBareTextWithFontSize } from '@/lib/editor/fontSizeUtils';
+import { collectTextNodes } from '@/lib/editor/textNodes';
 
 // ============================================================
 // Types
@@ -167,16 +168,7 @@ export function useRichTextEditor(
       const tempDiv = document.createElement('div');
       tempDiv.appendChild(fragment);
 
-      const textNodes: Node[] = [];
-      function findTextNodes(node: Node) {
-        if (node.nodeType === Node.TEXT_NODE) {
-          const text = node.textContent?.replace(/\u200B/g, '').trim();
-          if (text) textNodes.push(node);
-        } else {
-          node.childNodes.forEach(findTextNodes);
-        }
-      }
-      findTextNodes(tempDiv);
+      const textNodes = collectTextNodes(tempDiv);
 
       if (textNodes.length > 0) {
         let allBold = true;
