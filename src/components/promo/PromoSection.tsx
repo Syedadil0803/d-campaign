@@ -51,7 +51,6 @@ import {
   calculateTimeRemaining as calcTimerRemaining,
 } from "@/lib/editor/timerUtils";
 import type { LexicalTimerFieldHandle } from '@/components/timer-lexical/LexicalTimerField';
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { getRequiredCardWidth } from '@/lib/promo/promoMeasure';
 import {
   overwritesDraftCopy,
@@ -61,10 +60,9 @@ import {
 } from '@/lib/promo/cardReplaceCopy';
 import { clonePromoCard, withDefaultDates, cardSignature } from '@/lib/promo/promoCardIdentity';
 import { readHiddenFieldInfos, hideFieldInfo } from '@/lib/promo/fieldInfoNotes';
-import { PromoVersionsPopup } from '@/components/promo/PromoVersionsPopup';
-import { PromoDraftPopup } from '@/components/promo/PromoDraftPopup';
-import { PromoTemplatesPopup } from '@/components/promo/PromoTemplatesPopup';
 import { PromoThemeRow } from '@/components/promo/PromoThemeRow';
+import { PromoEditorStyles } from '@/components/promo/PromoEditorStyles';
+import { PromoSectionDialogs } from '@/components/promo/PromoSectionDialogs';
 import { PromoEditorToolbar } from '@/components/promo/PromoEditorToolbar';
 import { PromoPreviewHeader } from '@/components/promo/PromoPreviewHeader';
 import {
@@ -1314,34 +1312,79 @@ export function PromoSection({
   }
 
   // Apply a saved version to the live card — click-to-apply, like a template.
-  function applyVersion(version: PromoVersion) {
-    setBlankStart(false); // a design has arrived
+  /**
+   * Put a card on the canvas in place of the one there now.
+   *
+   * The one place a whole card is installed. Applying a template, applying a
+   * saved variant and restoring the draft each did this themselves — eleven
+   * identical steps written out three times, differing only in how the card is
+   * derived and what the toast says. They had already drifted: restoring a
+   * draft did not announce the replacement, so the countdown hint appeared for
+   * a template and a variant but not for a draft, and nothing recorded whether
+   * that was a decision.
+   *
+   * Every step here exists because installing a card invalidates something the
+   * old one owned: the history belongs to a card that is gone, the theme strip
+   * reverts to a design that is no longer applied, and the undo offer must
+   * hold the moment before any of it moved.
+   */
+  function installPromoCard(
+    next: PromoCard,
+    opts: {
+      /** The toast to show. Its Undo restores everything captured here. */
+      message: string;
+      /** Which saved variant this card is, or null when it is not one. */
+      versionId?: string | null;
+      /** Only the variant route has the popup open to close. */
+      closeVersionsPopup?: boolean;
+      /**
+       * Tell the page a design arrived, which reveals the countdown hint.
+       * Explicit because the three routes disagreed about it by accident.
+       */
+      announceReplacement?: boolean;
+    },
+  ) {
     const before = capturePromoRestorePoint();
+    // A design has arrived, so the blank-canvas mode ends.
+    setBlankStart(false);
     // Leaving a fresh card → undo lands on its EDITED state (getPromoSnapshot).
     // Leaving a template/variant → undo lands on its CLEAN baseline.
     isFreshCardRef.current = false;
     promoAppliedRedoRef.current = null;
+    // The steps on the stack belong to the card being replaced.
     promoHistory.clear();
+    setConfig({ ...configRef.current, promoCard: next });
+    syncEditorsFromConfig(next);
+    markChanged();
+    setPromoAppliedCardBaseline(next);
+    const versionId = opts.versionId ?? null;
+    setSelectedVersionId(versionId);
+    onSelectedVersionChange?.(versionId);
+    if (opts.closeVersionsPopup) setShowVersionsPopup(false);
+    toastWithUndo(opts.message, before);
+    if (opts.announceReplacement) onCardReplaced?.();
+  }
+
+  function applyVersion(version: PromoVersion) {
     // Same rule as templates: a variant contributes its design and its copy,
     // not its schedule. Its dates belong to the campaign that already ran, so
     // dragging them onto the card being edited silently re-dates it — and on a
     // past variant those dates are usually in the past.
     const current = configRef.current.promoCard;
-    const restored = withDefaultDates({
-      ...clonePromoCard(version.promoCard),
-      active: false,
-      startDate: current.startDate || version.promoCard.startDate,
-      endDate: current.endDate || version.promoCard.endDate,
-    });
-    setConfig({ ...configRef.current, promoCard: restored });
-    syncEditorsFromConfig(restored);
-    markChanged();
-    setPromoAppliedCardBaseline(restored);
-    setSelectedVersionId(version.id);
-    onSelectedVersionChange?.(version.id);
-    setShowVersionsPopup(false);
-    toastWithUndo(`Variant applied: ${version.label}`, before);
-    onCardReplaced?.();
+    installPromoCard(
+      withDefaultDates({
+        ...clonePromoCard(version.promoCard),
+        active: false,
+        startDate: current.startDate || version.promoCard.startDate,
+        endDate: current.endDate || version.promoCard.endDate,
+      }),
+      {
+        message: `Variant applied: ${version.label}`,
+        versionId: version.id,
+        closeVersionsPopup: true,
+        announceReplacement: true,
+      },
+    );
   }
 
   // Fetch the single saved draft from the DB and open the My Draft popup. We
@@ -1373,19 +1416,13 @@ export function PromoSection({
 
   // Load the saved draft's promo card back into the editor.
   function restoreDraftPromoCard(card: PromoCard) {
-    setBlankStart(false); // a design has arrived
-    const before = capturePromoRestorePoint();
-    isFreshCardRef.current = false;
-    promoAppliedRedoRef.current = null;
-    promoHistory.clear();
-    const restored = clonePromoCard(card);
-    setConfig({ ...configRef.current, promoCard: restored });
-    syncEditorsFromConfig(restored);
-    markChanged();
-    setPromoAppliedCardBaseline(restored);
-    setSelectedVersionId(null);
-    onSelectedVersionChange?.(null);
-    toastWithUndo('Saved draft loaded into the editor', before);
+    installPromoCard(clonePromoCard(card), {
+      message: 'Saved draft loaded into the editor',
+      // Deliberately NOT announced: this route never revealed the countdown
+      // hint, and preserving that is a decision rather than the oversight it
+      // was while the sequence existed in three copies.
+      announceReplacement: false,
+    });
   }
 
   /**
@@ -1397,11 +1434,6 @@ export function PromoSection({
    * confirmCardReplace, which stays quiet when there's nothing to lose.
    */
   function applyTemplate(template: PromoCard, templateName: string) {
-    const before = capturePromoRestorePoint();
-    setBlankStart(false); // a design has arrived
-    isFreshCardRef.current = false;
-    promoAppliedRedoRef.current = null;
-    promoHistory.clear();
     // Delegates to applyTemplateFull so the schedule survives. Cloning the
     // template wholesale here reset startDate/endDate to the template's own
     // sample dates (every one ships "today"), wiping the dates the user chose
@@ -1411,14 +1443,10 @@ export function PromoSection({
       applyTemplateFull(configRef.current.promoCard, template),
     );
     cloned.timerText = serializeTimerHtml(cloned.timerText ?? "");
-    setConfig({ ...configRef.current, promoCard: cloned });
-    syncEditorsFromConfig(cloned);
-    markChanged();
-    setPromoAppliedCardBaseline(cloned);
-    setSelectedVersionId(null);
-    onSelectedVersionChange?.(null);
-    toastWithUndo(`Template applied: ${templateName}`, before);
-    onCardReplaced?.();
+    installPromoCard(cloned, {
+      message: `Template applied: ${templateName}`,
+      announceReplacement: true,
+    });
   }
 
 
@@ -1827,143 +1855,43 @@ export function PromoSection({
         </div>
       </div>
 
-      {/* Stop Campaign Confirmation — immediate (no save/publish needed) */}
-      <ConfirmDialog
-        open={showStopConfirm}
-        title="Switch off this campaign?"
-        confirmLabel="Yes, switch off"
-        tone="danger"
-        onCancel={() => setShowStopConfirm(false)}
-        onConfirm={confirmStopCampaign}
-      >
-        <p className="mt-2 text-sm text-on-surface-variant">
-          If you switch off the campaign, the entire campaign stops displaying on your website. Are you sure you want to do it?
-        </p>
-        <p className="mt-2 text-xs text-on-surface-variant/80">
-          You can switch it back on anytime with <strong>Go on air</strong> — as long as the content hasn&apos;t changed. New content needs Save &amp; Publish.
-        </p>
-      </ConfirmDialog>
-
-      {/* Go On Air Confirmation — reactivate the same published content */}
-      <ConfirmDialog
-        open={showGoOnAirConfirm}
-        title="Go on air?"
-        confirmLabel="Yes, go on air"
-        onCancel={() => setShowGoOnAirConfirm(false)}
-        onConfirm={confirmGoOnAir}
-      >
-        <p className="mt-2 text-sm text-on-surface-variant">
-          This puts the same campaign back on your website right away — no need to save or publish again.
-        </p>
-      </ConfirmDialog>
-
-      {/* Paste-from-AI import */}
-      {/* Sample Templates popup — shows the same 6 cards; click one to apply */}
-      {showTemplatesPopup && (
-        <PromoTemplatesPopup
-          currentCard={configRef.current.promoCard}
-          showBack={templatesFromBuild && Boolean(onTemplatesBack)}
-          onBack={() => {
-            setShowTemplatesPopup(false);
-            setTemplatesFromBuild(false);
-            onTemplatesBack?.();
-          }}
-          // Closing always clears the came-from-build flag; every exit did
-          // that separately before, and one of them forgetting would have
-          // stranded a Back button with nowhere to go.
-          onClose={() => {
-            setShowTemplatesPopup(false);
-            setTemplatesFromBuild(false);
-          }}
-          onStartFresh={startFreshPromoCard}
-          onApplyTemplate={applyTemplate}
-          confirmCardReplace={confirmCardReplace}
-        />
-      )}
-
-      {/* My Draft popup — the single saved, unpublished draft. */}
-      {showDraftPopup && (
-        <PromoDraftPopup
-          draftCard={draftPopupCard}
-          loading={draftPopupLoading}
-          currentCard={config.promoCard}
-          confirmingDelete={confirmDeleteDraft}
-          onClose={() => setShowDraftPopup(false)}
-          onAskDelete={setConfirmDeleteDraft}
-          onDelete={deleteDraft}
-          onRestore={restoreDraftPromoCard}
-          confirmCardReplace={confirmCardReplace}
-        />
-      )}
-
-      {/* Versions popup — save / restore / delete up to MAX_VERSIONS snapshots */}
-      {showVersionsPopup && (
-        <PromoVersionsPopup
-          versions={versions}
-          livePromoCard={livePromoCard}
-          currentCard={config.promoCard}
-          pendingDeleteId={pendingDeleteId}
-          isLiveVersion={isLiveVersion}
-          liveCardIsUnlisted={liveCardIsUnlisted}
-          onClose={() => setShowVersionsPopup(false)}
-          onApply={applyVersion}
-          onDelete={handleDeleteVersion}
-          onAskDelete={setPendingDeleteId}
-          onStopLive={() => setShowStopConfirm(true)}
-          confirmCardReplace={confirmCardReplace}
-        />
-      )}
-      <style jsx global>{`
-        /* Letter-spacing is not a supported styling concept (no control for it).
-           A few sample templates hard-coded it; neutralize it in the live preview
-           so the tool renders plain — matching the widget, which also drops it. */
-        .promo-live-preview,
-        .promo-live-preview * {
-          letter-spacing: normal !important;
-        }
-        .promo-standard-editor,
-        .promo-standard-editor * {
-          color: rgb(var(--on-surface)) !important;
-          font-size: 14px !important;
-          font-weight: 400 !important;
-          font-style: normal !important;
-          letter-spacing: normal !important;
-          line-height: 1.5 !important;
-          text-decoration: none !important;
-          text-transform: none !important;
-          text-align: left !important;
-          background: transparent !important;
-        }
-        /* Per-side "Enter text here" placeholders around the fixed countdown.
-           Scoped to the panel editor only — never shown in the live preview.
-           inline-block so the empty slot is a focusable box (caret can land at
-           the very start, before the countdown). */
-        [data-timer-prefix],
-        [data-timer-suffix] {
-          display: inline-block;
-          vertical-align: baseline;
-          min-width: 1px;
-        }
-        .promo-standard-editor [data-timer-prefix]:empty::before {
-          content: "Enter text here ";
-          color: #dbc1b2;
-          opacity: 0.6;
-          pointer-events: none;
-          user-select: none;
-        }
-        .promo-standard-editor [data-timer-suffix]:empty::after {
-          content: " Enter text here";
-          color: #dbc1b2;
-          opacity: 0.6;
-          pointer-events: none;
-          user-select: none;
-        }
-        /* Dim the fixed (non-editable) countdown in the INPUT BOX only, so it
-           reads as locked. Preview is untouched (real styling shown there). */
-        .promo-standard-editor [data-timer-fixed] {
-          opacity: 0.55;
-        }
-      `}</style>
+      <PromoSectionDialogs
+        showStopConfirm={showStopConfirm}
+        setShowStopConfirm={setShowStopConfirm}
+        confirmStopCampaign={confirmStopCampaign}
+        showGoOnAirConfirm={showGoOnAirConfirm}
+        setShowGoOnAirConfirm={setShowGoOnAirConfirm}
+        confirmGoOnAir={confirmGoOnAir}
+        showTemplatesPopup={showTemplatesPopup}
+        setShowTemplatesPopup={setShowTemplatesPopup}
+        templatesFromBuild={templatesFromBuild}
+        setTemplatesFromBuild={setTemplatesFromBuild}
+        onTemplatesBack={onTemplatesBack}
+        startFreshPromoCard={startFreshPromoCard}
+        applyTemplate={applyTemplate}
+        showDraftPopup={showDraftPopup}
+        setShowDraftPopup={setShowDraftPopup}
+        draftPopupCard={draftPopupCard}
+        draftPopupLoading={draftPopupLoading}
+        confirmDeleteDraft={confirmDeleteDraft}
+        setConfirmDeleteDraft={setConfirmDeleteDraft}
+        deleteDraft={deleteDraft}
+        restoreDraftPromoCard={restoreDraftPromoCard}
+        showVersionsPopup={showVersionsPopup}
+        setShowVersionsPopup={setShowVersionsPopup}
+        versions={versions}
+        livePromoCard={livePromoCard}
+        pendingDeleteId={pendingDeleteId}
+        setPendingDeleteId={setPendingDeleteId}
+        isLiveVersion={isLiveVersion}
+        liveCardIsUnlisted={liveCardIsUnlisted}
+        applyVersion={applyVersion}
+        handleDeleteVersion={handleDeleteVersion}
+        config={config}
+        configRef={configRef}
+        confirmCardReplace={confirmCardReplace}
+      />
+      <PromoEditorStyles />
       </>
     </PromoEditorProvider>
   );
