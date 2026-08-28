@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PromoCard } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
-import { getPreviewTimerHtml } from "@/lib/editor/timerUtils";
+import { getPreviewTimerHtml } from "@/lib/editor/timerPreview";
 
 interface PromoMiniPreviewProps {
   promoCard: PromoCard;
