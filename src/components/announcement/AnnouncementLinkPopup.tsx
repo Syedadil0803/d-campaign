@@ -2,7 +2,6 @@
 
 import type { RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import type { CampaignConfig } from '@/types/campaign';
 import type { LinkSnapshot } from '@/lib/editor/historyManager';
 import {
   whatsAppUrl,
@@ -19,10 +18,6 @@ interface AnnouncementLinkPopupProps {
   closePopupAndFocusEditor: () => void;
 
   /** Which announcement in the list the popup is editing. */
-  selectedIndex: number | null;
-  config: CampaignConfig;
-  setConfig: (config: CampaignConfig) => void;
-  markChanged: () => void;
 
   selectedCtaType: 'link' | 'whatsapp';
   setSelectedCtaType: (kind: 'link' | 'whatsapp') => void;
@@ -34,12 +29,6 @@ interface AnnouncementLinkPopupProps {
   setSelectedCountryCode: (code: string) => void;
   selectedWhatsappNumber: string;
   setSelectedWhatsappNumber: (number: string) => void;
-  updateSelectedDestination: (next: {
-    ctaType?: 'link' | 'whatsapp';
-    url?: string;
-    whatsappNumber?: string;
-    whatsappCountryCode?: string;
-  }) => void;
 
   /** Country picker inside the WhatsApp half. */
   showAnnCountryDropdown: boolean;
@@ -71,10 +60,6 @@ export function AnnouncementLinkPopup({
   position,
   popupRef,
   closePopupAndFocusEditor,
-  selectedIndex,
-  config,
-  setConfig,
-  markChanged,
   selectedCtaType,
   setSelectedCtaType,
   selectedUrl,
@@ -85,7 +70,6 @@ export function AnnouncementLinkPopup({
   setSelectedCountryCode,
   selectedWhatsappNumber,
   setSelectedWhatsappNumber,
-  updateSelectedDestination,
   showAnnCountryDropdown,
   setShowAnnCountryDropdown,
   annCountryPos,
@@ -176,7 +160,7 @@ export function AnnouncementLinkPopup({
               }}
               onSelect={(v) => {
                 setSelectedCountryCode(v);
-                updateSelectedDestination({ whatsappCountryCode: v });
+
                 setShowAnnCountryDropdown(false);
               }}
               buttonRef={annCountryBtnRef}
@@ -299,16 +283,7 @@ export function AnnouncementLinkPopup({
           type="checkbox"
           id="openInNewTab"
           checked={selectedOpenInNewTab}
-          onChange={(e) => {
-            const nextValue = e.target.checked;
-            setSelectedOpenInNewTab(nextValue);
-            if (selectedIndex !== null) {
-              const updated = [...config.announcementBar.announcements];
-              updated[selectedIndex] = { ...updated[selectedIndex], openInNewTab: nextValue || undefined, richText: true };
-              setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-              markChanged();
-            }
-          }}
+          onChange={(e) => setSelectedOpenInNewTab(e.target.checked)}
           className="w-4 h-4 rounded border-border text-primary"
         />
         <label htmlFor="openInNewTab" className="ml-2 text-xs text-on-surface cursor-pointer">Open in new tab</label>
@@ -321,22 +296,11 @@ export function AnnouncementLinkPopup({
           <button
             onMouseDown={(e) => {
               e.preventDefault();
+              // Clears what is being edited. The message keeps its old
+              // destination until Update, like every other field in here.
               setSelectedUrl('');
               setSelectedWhatsappNumber('');
               setSelectedOpenInNewTab(true);
-              if (selectedIndex !== null) {
-                const updated = [...config.announcementBar.announcements];
-                updated[selectedIndex] = {
-                  ...updated[selectedIndex],
-                  url: undefined,
-                  openInNewTab: undefined,
-                  whatsappNumber: undefined,
-                  whatsappCountryCode: undefined,
-                  richText: true,
-                };
-                setConfig({ ...config, announcementBar: { ...config.announcementBar, announcements: updated } });
-                markChanged();
-              }
             }}
             className="text-xs text-primary hover:opacity-80"
           >

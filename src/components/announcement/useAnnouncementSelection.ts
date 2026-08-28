@@ -3,12 +3,9 @@
 import { useRef, useState, type RefObject } from 'react';
 import type { CampaignConfig } from '@/types/campaign';
 import { wrapBareTextWithFontSize } from '@/lib/editor/richTextUtils';
-import { whatsAppUrl } from '@/lib/whatsapp';
 
 interface UseAnnouncementSelectionArgs {
   config: CampaignConfig;
-  setConfig: (config: CampaignConfig) => void;
-  markChanged: () => void;
   setNewAnnouncementText: (text: string) => void;
   setShowRichToolbar: (show: boolean) => void;
   richEditorRef: RefObject<HTMLDivElement | null>;
@@ -35,8 +32,6 @@ interface UseAnnouncementSelectionArgs {
  */
 export function useAnnouncementSelection({
   config,
-  setConfig,
-  markChanged,
   setNewAnnouncementText,
   setShowRichToolbar,
   richEditorRef,
@@ -75,63 +70,6 @@ export function useAnnouncementSelection({
       richEditorRef.current.blur();
     }
     window.getSelection()?.removeAllRanges();
-  }
-
-  /**
-   * Write the selected message's destination.
-   *
-   * `url` stays the one field the website reads, so a WhatsApp CTA is stored
-   * as its derived wa.me link; the raw number and dialling code ride along
-   * only so reopening the popup can repopulate the picker.
-   */
-  function updateSelectedDestination(next: {
-    ctaType?: 'link' | 'whatsapp';
-    url?: string;
-    whatsappNumber?: string;
-    whatsappCountryCode?: string;
-  }) {
-    if (selectedIndex === null) return;
-    const ctaType = next.ctaType ?? selectedCtaType;
-    const number = next.whatsappNumber ?? selectedWhatsappNumber;
-    const code = next.whatsappCountryCode ?? selectedCountryCode;
-    const plainUrl = next.url ?? selectedUrl;
-
-    const updated = [...config.announcementBar.announcements];
-    const resolved =
-      ctaType === 'whatsapp' ? whatsAppUrl(code, number) : plainUrl || undefined;
-    const current = updated[selectedIndex];
-    const nextAnnouncement = {
-      ...current,
-      richText: true,
-      ctaType: ctaType === 'whatsapp' ? ('whatsapp' as const) : undefined,
-      url: resolved || undefined,
-      whatsappNumber: ctaType === 'whatsapp' ? number || undefined : undefined,
-      whatsappCountryCode: ctaType === 'whatsapp' ? code : undefined,
-    };
-    /**
-     * Nothing changed, nothing written.
-     *
-     * This runs whenever the link popup closes, which includes opening it and
-     * pressing Escape. Writing the same destination back would still hand the
-     * page a new config object and light up "unsaved changes" for a popup the
-     * user only looked at. richText is left out of the comparison on purpose:
-     * it is a flag the editor sets, not a destination the user chose, and
-     * counting it would make the first look at any plain message dirty.
-     */
-    if (
-      nextAnnouncement.url === current.url &&
-      nextAnnouncement.ctaType === current.ctaType &&
-      nextAnnouncement.whatsappNumber === current.whatsappNumber &&
-      nextAnnouncement.whatsappCountryCode === current.whatsappCountryCode
-    ) {
-      return;
-    }
-    updated[selectedIndex] = nextAnnouncement;
-    setConfig({
-      ...config,
-      announcementBar: { ...config.announcementBar, announcements: updated },
-    });
-    markChanged();
   }
 
   /**
@@ -207,7 +145,6 @@ export function useAnnouncementSelection({
     annCountryMenuRef,
     selectedIndexRef,
     clearSelection,
-    updateSelectedDestination,
     loadAnnouncementIntoSelection,
     selectAnnouncement,
   };

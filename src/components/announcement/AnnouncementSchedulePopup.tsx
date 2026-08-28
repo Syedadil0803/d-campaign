@@ -2,7 +2,6 @@
 
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import { createPortal } from 'react-dom';
-import type { CampaignConfig } from '@/types/campaign';
 import { formatDateLabel } from '@/lib/calendarDates';
 import { InlineCalendar } from '@/components/announcement/InlineCalendar';
 
@@ -15,10 +14,6 @@ interface AnnouncementSchedulePopupProps {
   scheduleRangeInvalid: boolean;
 
   /** Which announcement in the list the popup is editing. */
-  selectedIndex: number | null;
-  config: CampaignConfig;
-  setConfig: (config: CampaignConfig) => void;
-  markChanged: () => void;
 
   selectedStartDate: string;
   setSelectedStartDate: (iso: string) => void;
@@ -55,10 +50,6 @@ export function AnnouncementSchedulePopup({
   popupRef,
   closePopupAndFocusEditor,
   scheduleRangeInvalid,
-  selectedIndex,
-  config,
-  setConfig,
-  markChanged,
   selectedStartDate,
   setSelectedStartDate,
   selectedEndDate,
@@ -75,23 +66,6 @@ export function AnnouncementSchedulePopup({
   endDateCalendarRef,
 }: AnnouncementSchedulePopupProps) {
   if (!open || !position || typeof document === 'undefined') return null;
-
-  /** Write one scheduling field back to the announcement being edited. */
-  function updateSelected(patch: { startDate?: string; endDate?: string }) {
-    if (selectedIndex === null) return;
-    const updated = [...config.announcementBar.announcements];
-    updated[selectedIndex] = {
-      ...updated[selectedIndex],
-      startDate: 'startDate' in patch ? patch.startDate || undefined : updated[selectedIndex].startDate,
-      endDate: 'endDate' in patch ? patch.endDate || undefined : updated[selectedIndex].endDate,
-      richText: true,
-    };
-    setConfig({
-      ...config,
-      announcementBar: { ...config.announcementBar, announcements: updated },
-    });
-    markChanged();
-  }
 
   return createPortal(
     <div
@@ -154,7 +128,6 @@ export function AnnouncementSchedulePopup({
                 keyPrefix="start"
                 onSelect={(iso) => {
                   setSelectedStartDate(iso);
-                  updateSelected({ startDate: iso });
                   setShowStartDateCalendar(false);
                 }}
               />
@@ -202,7 +175,6 @@ export function AnnouncementSchedulePopup({
                 keyPrefix="end"
                 onSelect={(iso) => {
                   setSelectedEndDate(iso);
-                  updateSelected({ endDate: iso });
                   setShowEndDateCalendar(false);
                 }}
               />
@@ -223,7 +195,6 @@ export function AnnouncementSchedulePopup({
               e.preventDefault();
               setSelectedStartDate('');
               setSelectedEndDate('');
-              updateSelected({ startDate: '', endDate: '' });
             }}
             className="text-xs text-primary hover:opacity-80"
           >

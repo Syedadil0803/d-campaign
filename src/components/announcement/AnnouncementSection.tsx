@@ -164,13 +164,10 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     annCountryMenuRef,
     selectedIndexRef,
     clearSelection,
-    updateSelectedDestination,
     loadAnnouncementIntoSelection,
     selectAnnouncement,
   } = useAnnouncementSelection({
     config,
-    setConfig,
-    markChanged,
     setNewAnnouncementText,
     setShowRichToolbar,
     richEditorRef,
@@ -204,34 +201,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     setShowSchedulePopup(false);
   };
 
-  /**
-   * The destination reaches the message when the link popup closes, not while
-   * it is being typed.
-   *
-   * Both fields in that popup used to write straight to the announcement on
-   * every keystroke, and any non-empty url makes the preview bar render the
-   * message as a link — so a half-typed "h", or the first digit of a WhatsApp
-   * number, underlined the message before the user had finished the address.
-   *
-   * Written here rather than on the Done button because Done is only one of
-   * four ways out: the ×, an outside click and Escape all close the popup too,
-   * and hanging the write on each of them is the duplication that this file
-   * keeps being bitten by. Watching the flag catches every route.
-   *
-   * selectedIndex being null means the selection was cleared rather than the
-   * popup dismissed, and there is no message to write to — which is also why
-   * clearing does not commit a half-typed address.
-   */
-  const linkPopupWasOpenRef = useRef(false);
-  useEffect(() => {
-    const wasOpen = linkPopupWasOpenRef.current;
-    linkPopupWasOpenRef.current = showLinkPopup;
-    if (!wasOpen || showLinkPopup) return;
-    updateSelectedDestination({});
-    // updateSelectedDestination reads the working copy it should write, and is
-    // re-created every render; listing it would run this on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showLinkPopup]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   selectedIndexRef.current = selectedIndex;
@@ -1466,10 +1435,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
               position={linkPos}
               popupRef={linkPopupRef}
               closePopupAndFocusEditor={closePopupAndFocusEditor}
-              selectedIndex={selectedIndex}
-              config={config}
-              setConfig={setConfig}
-              markChanged={markChanged}
               selectedCtaType={selectedCtaType}
               setSelectedCtaType={setSelectedCtaType}
               selectedUrl={selectedUrl}
@@ -1480,7 +1445,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
               setSelectedCountryCode={setSelectedCountryCode}
               selectedWhatsappNumber={selectedWhatsappNumber}
               setSelectedWhatsappNumber={setSelectedWhatsappNumber}
-              updateSelectedDestination={updateSelectedDestination}
               showAnnCountryDropdown={showAnnCountryDropdown}
               setShowAnnCountryDropdown={setShowAnnCountryDropdown}
               annCountryPos={annCountryPos}
@@ -1501,10 +1465,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
               popupRef={schedulePopupRef}
               closePopupAndFocusEditor={closePopupAndFocusEditor}
               scheduleRangeInvalid={scheduleRangeInvalid}
-              selectedIndex={selectedIndex}
-              config={config}
-              setConfig={setConfig}
-              markChanged={markChanged}
               selectedStartDate={selectedStartDate}
               setSelectedStartDate={setSelectedStartDate}
               selectedEndDate={selectedEndDate}
