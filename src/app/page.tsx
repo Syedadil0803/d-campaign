@@ -465,19 +465,14 @@ export default function Home() {
   }, [config, hasAnnouncementChanges]);
 
   /**
-   * Keep the account's one-bit answer to "is work sitting unsaved somewhere?"
-   * current.
+   * Tells the server one bit: is work sitting unsaved somewhere.
    *
-   * This is the only thing the server is told about unsaved work. Not the
-   * card — that is the point of it being unsaved, and copying it up on every
-   * edit would both cost a round trip per keystroke and quietly keep something
-   * the user never asked us to keep. A boolean, the browser it is in, and when:
-   * enough for another device to explain itself, and nothing more.
+   * A boolean, which browser, and when — never the card itself. Uploading
+   * unsaved work would keep something the user never asked us to keep.
    *
-   * Sent on the change, never on a timer, and `false` only when this browser
-   * was the one that said `true`. Reporting "all clear" unconditionally would
-   * let a second device wipe out the first device's claim just by loading the
-   * editor, which is exactly the warning this exists to give.
+   * `false` is sent only by the browser that said `true`. Otherwise a second
+   * device clears the first one's claim just by opening the editor, which is
+   * the warning this exists to give.
    */
   useEffect(() => {
     const atRisk =
@@ -509,21 +504,12 @@ export default function Home() {
   });
 
   /**
-   * Leaving is never a question any more.
+   * Closing the tab asks nothing. The work is written to disk before the page
+   * goes, and offered back on the way in — the same path a crash takes.
    *
-   * The browser's "Leave site?" prompt used to guard this, with the tool
-   * offering a draft to anyone who cancelled. It went because it was answering
-   * the wrong question. Closing a tab is not a decision about the work — most
-   * of the time it is a machine going to sleep, a window being tidied, or a
-   * shutdown — and a prompt there asks people to make a call about something
-   * they were not thinking about, at the one moment they are trying to be
-   * elsewhere. Worse, it could only ever be a warning: the browser will not
-   * say which button was pressed, so the tool had to guess, and answering
-   * Leave threw the work away on the strength of that guess.
-   *
-   * What replaces it is the same thing that already handles a crash: the work
-   * is on disk before the page goes, and it comes back on the way in. Nothing
-   * is asked, and nothing is lost.
+   * There is deliberately no "Leave site?" prompt. The browser never says
+   * which button was pressed, so the tool would have to guess, and guessing
+   * wrong throws the work away.
    */
   useEffect(() => {
     const preserveWork = () => {
@@ -572,19 +558,15 @@ export default function Home() {
   }, []);
 
   /**
-   * Rebuild both flags from the card whenever one is loaded.
+   * Rebuild both flags from the card each time one loads.
    *
    * They are React state, so a reload wipes them — and a reload is exactly
-   * when work comes back. Typing a title, closing the tool and returning
-   * restored the card but not the fact that its canvas had been cleared, so
-   * the countdown and button outlines were missing from a card that plainly
-   * still needed them.
-   *
-   * Both are readable from the card, which is the real record: a card still
+   * when work comes back. Read them from the card instead: a card still
    * wearing the blank look has had no design chosen, and one with no end date
-   * has a schedule left to finish. Deriving them here means every path that
-   * loads a card — recovery, draft, published, a fresh page — gets the same
-   * answer without having to remember to set anything.
+   * has a schedule left to finish.
+   *
+   * Deriving here means every route in — recovery, draft, published, fresh —
+   * gets the same answer without having to remember to set anything.
    */
   useEffect(() => {
     if (!configLoadedSignal) return;
@@ -634,17 +616,15 @@ export default function Home() {
    */
 
   /**
-   * The notification card, and which of two things it has to say.
+   * The notification card has two things to say.
    *
-   * 'ask' is the offer, shown before the browser's own prompt so that "Not
-   * now" costs nothing — it dismisses ours and returns next visit, and the
-   * real prompt is only ever reached by someone who chose Allow.
+   * 'ask' comes before the browser's own prompt, so "Not now" costs nothing —
+   * only someone who chose Allow ever reaches the real one, and a browser prompt
+   * can be answered only once.
    *
-   * 'blocked' is the awkward middle: they chose Allow here and then Block in
-   * the browser. They asked for this and do not have it, so staying silent
-   * would strand them — but the offer cannot be repeated either, because a
-   * denied permission makes requestPermission() resolve instantly without
-   * prompting. All that is left to do is say where the switch is.
+   * 'blocked' is Allow here, then Block in the browser. The offer cannot be
+   * repeated (a denied permission resolves instantly without prompting), so all
+   * that is left is to say where the switch is.
    */
   const [askNotifications, setAskNotifications] = useState<
     'ask' | 'blocked' | 'enabled' | null
@@ -655,18 +635,15 @@ export default function Home() {
   /** Lets the dialog's button reach the timer that owns the countdown. */
 
   /**
-   * Everything worth saying about arriving, gathered into one answer.
+   * One dialog for arriving, not three.
    *
-   * Three facts can be true at once: this browser rescued edits from a session
-   * that ended, a draft is parked, and another device is holding unsaved work
-   * of its own. They were up to three dialogs queued behind one another, so
-   * the second device — the awkward case, where all three apply — greeted
-   * people with a stack of boxes describing one situation from three angles.
+   * Three things can be true at once: edits were rescued, a draft is parked, and
+   * another device holds unsaved work. As separate dialogs they stacked up and
+   * described one situation from three angles.
    *
-   * The lead is whichever fact needs acting on soonest: rescued edits first,
-   * because they are already on the canvas; then a parked draft, which is a
-   * real question; then work stranded on another device, which is only ever
-   * news. The others become lines underneath.
+   * The lead is whatever needs acting on soonest — rescued edits (already on the
+   * canvas), then the parked draft (a real question), then the other device
+   * (only ever news). The rest become lines underneath.
    */
   const welcomeBack = (() => {
     if (activeTab !== 'promo') return null;
@@ -1023,15 +1000,12 @@ export default function Home() {
   /**
    * Is there a promo card worth publishing right now?
    *
-   * True either when the card differs from what was published, or when
-   * nothing is on air at all. The second half is the point: selecting a card
-   * from My Published while the campaign is stopped changes nothing about the
-   * content, so the ordinary comparison says "no changes" and Publish stayed
-   * dark — leaving the one button that puts a card back on the website unlit
-   * with a perfectly good card on screen.
+   * True when the card differs from what is published, OR when nothing is on air
+   * at all. The second half matters: picking a card from My Published while the
+   * campaign is stopped changes no content, so a plain comparison says "no
+   * changes" and leaves the one button that puts it back on the site unlit.
    *
-   * Guarded on the card having content, so a blank canvas with nothing live
-   * does not light Publish for something there is nothing to publish.
+   * Requires content, so a blank canvas does not light Publish.
    */
   const promoWorthPublishing =
     hasPromoChanges ||
@@ -1108,15 +1082,13 @@ export default function Home() {
   /**
    * Is there anything in the editor the user would lose?
    *
-   * Not the same question as "is the config dirty", which is what this used to
-   * be asked as in three separate places. Some load paths put a blank canvas up
-   * deliberately — the draft offer does — and the dirty flag follows it, so the
-   * welcome-back dialog warned about losing "unsaved changes" that were a blank
-   * card the app had just created. That reads as a threat and makes people
-   * hesitate over a decision that costs nothing.
+   * Not the same as "is the config dirty". Some load paths blank the canvas
+   * deliberately — the draft offer does — and the dirty flag follows, which
+   * had the welcome-back dialog warning about losing a blank card the app had
+   * just created.
    *
    * The promo half is the authorship test: a blank canvas, an untouched
-   * template and a card already in the draft are all things nobody would miss.
+   * template, or a card already in the draft are all nothing to lose.
    */
   const editorWorkAtRisk = () =>
     promoWorkNotInDraftRef.current ||
