@@ -1,12 +1,7 @@
 import { FIRST_BLANK_LOOK } from '@/lib/promo/blankLooks';
+import type { GradientStyle, PromoStyle } from '@/types/promoStyle';
 
-export interface GradientStyle {
-  type: 'solid' | 'linear' | 'radial';
-  startColor: string;
-  endColor: string;
-  direction?: string;
-  midpoint?: number;
-}
+export type { GradientStyle, PromoStyle } from '@/types/promoStyle';
 
 export interface Announcement {
   text: string;
@@ -63,37 +58,7 @@ export interface PromoCard {
    *  `timerText` string can't express. Source of truth for the editor +
    *  read-only preview render. */
   timerStateJson?: string;
-  style: {
-    position: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
-    background: GradientStyle;
-    textColor: string;
-    titleStyle: {
-      background: GradientStyle;
-      textColor: string;
-      textAlign?: 'left' | 'center' | 'right';
-    };
-    subheadingStyle: {
-      background: GradientStyle;
-      textColor: string;
-      textAlign?: 'left' | 'center' | 'right';
-    };
-    descriptionStyle: {
-      background: GradientStyle;
-      textColor: string;
-      textAlign?: 'left' | 'center' | 'right';
-    };
-    dateStyle: {
-      background: GradientStyle;
-      textColor: string;
-      textAlign?: 'left' | 'center' | 'right';
-      fontSize?: number;
-    };
-    buttonStyle: {
-      background: GradientStyle;
-      textColor: string;
-      textAlign?: 'left' | 'center' | 'right';
-    };
-  };
+  style: PromoStyle;
 }
 
 export interface CampaignConfig {

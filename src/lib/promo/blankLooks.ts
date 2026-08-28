@@ -1,8 +1,8 @@
-// Type-only, so types/campaign.ts can import FIRST_BLANK_LOOK back from here
-// without a runtime circular import. Type imports are erased at compile time.
-import type { PromoCard } from '@/types/campaign';
-
-type PromoStyle = PromoCard['style'];
+// From types/promoStyle, not types/campaign. The campaign types import a
+// palette back from here, so naming them would be a cycle — a type-only one,
+// erased at compile time, but a cycle the module graph still reports and a
+// reader still has to hold in their head.
+import type { PromoStyle } from '@/types/promoStyle';
 
 /* ------------------------------------------------------------------ *
  *  THE BLANK CANVAS PALETTES — edit these by hand

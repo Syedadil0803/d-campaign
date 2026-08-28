@@ -18,16 +18,12 @@ import {
 } from 'lexical';
 import * as React from 'react';
 import { TimerChipComponent } from './TimerChipComponent';
+import type { ChipStyleModel, Css } from './chipStyle';
+
+export type { ChipStyleModel, Css } from './chipStyle';
 import type { ChipCell } from './TimerChipTarget';
 
 /** Kebab-case CSS map (so it maps 1:1 to setProperty / React style). */
-export type Css = Record<string, string>;
-export interface ChipStyleModel {
-  /** Applies to the whole chip. */
-  whole?: Css;
-  /** Per-cell overrides (each number, word, and colon). */
-  cells?: Partial<Record<ChipCell, Css>>;
-}
 
 export type SerializedTimerChipNode = Spread<
   { endDate: string; model: ChipStyleModel },

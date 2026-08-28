@@ -9,7 +9,7 @@
 
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import type { ChipStyleModel, Css } from './TimerChipNode';
+import type { ChipStyleModel, Css } from './chipStyle';
 import { useTimerChipTarget, type ChipCell } from './TimerChipTarget';
 
 interface Props {
