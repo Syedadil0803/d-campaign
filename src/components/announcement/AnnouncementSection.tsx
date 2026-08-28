@@ -2,15 +2,20 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { isInvalidRange } from '@/lib/dateRange';
+import { visibleAnnouncements } from '@/lib/announcement/announcementWindow';
+import { buildAnnouncementAiPrompt, chatGptUrl } from '@/lib/announcement/announcementAiPrompt';
+import { readFormatsFromHtml } from '@/lib/editor/readFormatsFromHtml';
 import { CampaignConfig, GradientStyle, defaultConfig } from '@/types/campaign';
 import { stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
-import { rgbToHex, fontSizeToLabel } from '@/lib/editor/richTextUtils';
+import { rgbToHex } from '@/lib/editor/richTextUtils';
 import { Toast, TOAST_ACTION_MS, type ToastAction } from '@/components/shared/Toast';
 import { useAnnouncementStyleDropdowns } from '@/components/announcement/useAnnouncementStyleDropdowns';
 import { useAnnouncementPopups } from '@/components/announcement/useAnnouncementPopups';
 import { useAnnouncementSelection } from '@/components/announcement/useAnnouncementSelection';
 import { useAnnouncementRowMenu } from '@/components/announcement/useAnnouncementRowMenu';
+import { useAnnouncementSnapshots } from '@/components/announcement/useAnnouncementSnapshots';
+import { useToast } from '@/hooks/useToast';
 import { AnnouncementEditorPanel } from '@/components/announcement/AnnouncementEditorPanel';
 import {
     AnnouncementEditorProvider,
@@ -18,7 +23,6 @@ import {
 } from '@/components/announcement/AnnouncementEditorContext';
 import { whatsAppUrl } from '@/lib/whatsapp';
 import { useEditorHistory } from '@/hooks/useEditorHistory';
-import { EditorSnapshot, LinkSnapshot } from '@/lib/editor/historyManager';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { AnnouncementHeader } from '@/components/announcement/AnnouncementHeader';
 import { AnnouncementPreview } from '@/components/announcement/AnnouncementPreview';
@@ -125,13 +129,9 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     selectedIndex,
     setSelectedIndex,
     selectedUrl,
-    setSelectedUrl,
     selectedOpenInNewTab,
-    setSelectedOpenInNewTab,
     selectedStartDate,
-    setSelectedStartDate,
     selectedEndDate,
-    setSelectedEndDate,
     selectedCtaType,
     selectedWhatsappNumber,
     selectedCountryCode,
@@ -193,145 +193,31 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     commit: commitHistory,
   } = history;
 
-  // Snapshot helpers
-  function getEditorSnapshot(): EditorSnapshot {
-    const bg = config.announcementBar.style.background;
-    return {
-      html: richEditorRef.current?.innerHTML || '',
-      bgType: bg.type || 'solid',
-      bgStartColor: bg.startColor || '',
-      bgEndColor: bg.endColor || '',
-      bgDirection: bg.direction || 'to right',
-      bgMidpoint: bg.midpoint ?? 50,
-      link: selectedUrl,
-      openInNewTab: selectedOpenInNewTab,
-      startDate: selectedStartDate,
-      endDate: selectedEndDate,
-    };
-  }
-
-  function applyEditorSnapshot(snapshot: EditorSnapshot) {
-    restoringSnapshotRef.current = true;
-    // Restore editor HTML
-    if (richEditorRef.current) {
-      richEditorRef.current.innerHTML = snapshot.html;
-      // Place cursor inside the deepest last node (so typing inherits styles)
-      const sel = window.getSelection();
-      if (sel) {
-        sel.removeAllRanges();
-        const range = document.createRange();
-        let lastNode: Node = richEditorRef.current;
-        while (lastNode.lastChild) lastNode = lastNode.lastChild;
-        if (lastNode.nodeType === Node.TEXT_NODE) {
-          range.setStart(lastNode, lastNode.textContent?.length || 0);
-          range.collapse(true);
-        } else {
-          range.selectNodeContents(richEditorRef.current);
-          range.collapse(false);
-        }
-        sel.addRange(range);
-      }
-    }
-    setNewAnnouncementText(snapshot.html);
-    // Restore formats from the HTML (source of truth)
-    if (snapshot.html) {
-      detectFormatsForSelectMode(snapshot.html);
-    } else {
-      setActiveFormats({ bold: false, italic: false, size: 'md', color: editorDefaultColor });
-    }
-    // Restore background
-    setConfig({
-      ...config,
-      announcementBar: {
-        ...config.announcementBar,
-        style: {
-          ...config.announcementBar.style,
-          background: {
-            ...config.announcementBar.style.background,
-            type: snapshot.bgType as CampaignConfig['announcementBar']['style']['background']['type'],
-            startColor: snapshot.bgStartColor,
-            endColor: snapshot.bgEndColor,
-            direction: snapshot.bgDirection,
-            midpoint: snapshot.bgMidpoint,
-          },
-        },
-      },
-    });
-    // Restore link/schedule
-    setSelectedUrl(snapshot.link);
-    setSelectedOpenInNewTab(snapshot.openInNewTab);
-    setSelectedStartDate(snapshot.startDate);
-    setSelectedEndDate(snapshot.endDate);
-    // Allow next tick to complete before re-enabling history
-    setTimeout(() => { restoringSnapshotRef.current = false; }, 0);
-  }
-
-  function getLinkSnapshot(): LinkSnapshot {
-    return { link: selectedUrl, openInNewTab: selectedOpenInNewTab };
-  }
-
-  function applyLinkSnapshot(snapshot: LinkSnapshot) {
-    setSelectedUrl(snapshot.link);
-    setSelectedOpenInNewTab(snapshot.openInNewTab);
-  }
-
-  // Toast state
-  const [toast, setToast] = useState<{
-    show: boolean;
-    message: string;
-    isError: boolean;
-    action: ToastAction | null;
-  }>({ show: false, message: '', isError: false, action: null });
-  const toastTimerRef = useRef<number | null>(null);
-
-  function hideToast() {
-    if (toastTimerRef.current) {
-      window.clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = null;
-    }
-    setToast({ show: false, message: '', isError: false, action: null });
-  }
+  const {
+    restoringSnapshotRef,
+    getEditorSnapshot,
+    applyEditorSnapshot,
+    getLinkSnapshot,
+    applyLinkSnapshot,
+  } = useAnnouncementSnapshots({
+    config,
+    setConfig,
+    richEditorRef,
+    editorDefaultColor,
+    setActiveFormats,
+    setNewAnnouncementText,
+    selection,
+  });
 
   /**
-   * `action` turns the toast into a one-tap recovery offer. It gets a longer
-   * life than a plain confirmation — long enough to read and reach, still short
-   * enough that the offer clearly expires with the toast.
+   * The shared toast, not a private copy.
+   *
+   * This file carried its own — the same state, the same single timer, the
+   * same "an action gets a longer life" rule — written out again with the
+   * arguments in a different order. Two implementations of one behaviour is
+   * how they drift.
    */
-  function showToast(
-    message: string,
-    isError = false,
-    duration = 2500,
-    action?: ToastAction,
-  ) {
-    if (toastTimerRef.current) {
-      window.clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = null;
-    }
-    setToast({
-      show: true,
-    message,
-    isError,
-      action: action
-        ? {
-            label: action.label,
-            onClick: () => {
-              hideToast();
-              action.onClick();
-            },
-          }
-        : null,
-    });
-    toastTimerRef.current = window.setTimeout(
-    hideToast,
-      action ? TOAST_ACTION_MS : duration,
-    ) as unknown as number;
-  }
-
-  useEffect(() => {
-    return () => {
-      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-    };
-  }, []);
+  const { showToast, toastMessage, toastIsError, toastAction, toast } = useToast();
 
   useEffect(() => {
     const color = getThemeOnSurfaceHex();
@@ -418,7 +304,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
         });
         clearSelection();
         markChanged();
-        showToast('Announcement deleted', false, 2500, undoListAction(previous));
+        toast('Announcement deleted', false, undoListAction(previous));
       }
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -484,7 +370,13 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     clearSelection();
     detectFormats();
     markChanged();
-    showToast(selectedIndex !== null ? 'Announcement updated' : 'Announcement added');
+    toast(
+      selectedIndex !== null ? 'Announcement updated' : 'Announcement added',
+      false,
+      undefined,
+      // The shared default is 3000; this message kept its own 2500.
+      2500,
+    );
   }
 
   function removeAnnouncement(index: number) {
@@ -505,7 +397,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     }
 
     markChanged();
-    showToast('Announcement deleted', false, 2500, undoListAction(previous));
+    toast('Announcement deleted', false, undoListAction(previous));
   }
 
   // Empties the message list; recoverable from its toast.
@@ -521,7 +413,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     });
     clearSelection();
     markChanged();
-    showToast('All announcements cleared', false, 2500, undoListAction(previous));
+    toast('All announcements cleared', false, undoListAction(previous));
   }
 
   // Full reset of the draft to defaults (messages + styling). Confirm-gated and
@@ -547,7 +439,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     markChanged();
     // A whole-bar wipe — styling included — so its Undo puts the whole bar
     // back, not just the messages.
-    showToast('Started fresh — messages and styling reset to defaults', false, 2500, {
+    toast('Started fresh — messages and styling reset to defaults', false, {
       label: 'Undo',
       onClick: () => {
         setConfig({ ...configRef.current, announcementBar: previousBar });
@@ -592,7 +484,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
       setSelectedIndex(currentSelectedIndex + 1);
     }
     markChanged();
-    showToast('Order changed', false, 2500, undoListAction(previous));
+    toast('Order changed', false, undoListAction(previous));
   }
 
   // ── Undo/Redo keyboard shortcut (custom history, suppress native) ──
@@ -670,70 +562,11 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
 
 
   function detectFormatsForSelectMode(html: string) {
-    const container = document.createElement('div');
-    container.innerHTML = html;
-
-    // Collect all text nodes with actual content
-    const textNodes: Node[] = [];
-    function findTextNodes(node: Node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent?.replace(/\u200B/g, '').trim();
-        if (text) textNodes.push(node);
-      } else {
-        node.childNodes.forEach(findTextNodes);
-      }
-    }
-    findTextNodes(container);
-
-    if (textNodes.length === 0) {
-      setActiveFormats({ bold: false, italic: false, size: 'md', color: editorDefaultColor });
-      return;
-    }
-
-    const sizes = new Set<string>();
-    const colors = new Set<string>();
-    let allBold = true;
-    let allItalic = true;
-
-    textNodes.forEach((textNode) => {
-      let foundSize = false;
-      let foundColor = false;
-      let isBold = false;
-      let isItalic = false;
-
-      // Walk up from text node to find effective styles
-      let node: HTMLElement | null = textNode.parentElement;
-      while (node && node !== container) {
-        if (!foundSize && node.style.fontSize) {
-          const label = fontSizeToLabel(node.style.fontSize);
-          if (label) { sizes.add(label); foundSize = true; }
-        }
-        if (!foundColor && node.style.color) {
-          const c = node.style.color;
-          colors.add(c.startsWith('rgb') ? rgbToHex(c) : c);
-          foundColor = true;
-        }
-        const tag = node.tagName;
-        if (tag === 'B' || tag === 'STRONG') isBold = true;
-        if (tag === 'I' || tag === 'EM') isItalic = true;
-        node = node.parentElement;
-      }
-
-      if (!isBold) allBold = false;
-      if (!isItalic) allItalic = false;
-    });
-
-    setActiveFormats({
-      bold: allBold,
-      italic: allItalic,
-      size: sizes.size === 1 ? [...sizes][0] : (sizes.size === 0 ? 'md' : ''),
-      color: colors.size === 1 ? [...colors][0] : (colors.size === 0 ? editorDefaultColor : ''),
-    });
+    setActiveFormats(readFormatsFromHtml(html, editorDefaultColor));
   }
 
   // ── Apply format to entire content (selection mode) ──
   const applyingFormatRef = useRef(false);
-  const restoringSnapshotRef = useRef(false);
   const activeFormatsRef = useRef(activeFormats);
   activeFormatsRef.current = activeFormats;
   const isDeletingRef = useRef(false);
@@ -845,16 +678,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   }
 
   function openChatGptWithPrompt() {
-    const plainText = stripHtml(newAnnouncementText || richEditorRef.current?.innerHTML || '').trim() || 'your announcement';
-    const prompt = [
-      'Write 2-3 short, catchy website announcement banners.',
-      'Keep it concise, friendly, and promotional.',
-      'Include 1-2 relevant emojis.',
-      `Base text: ${plainText}`,
-    ].join('\n');
-
-    const url = `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    const plainText = stripHtml(newAnnouncementText || richEditorRef.current?.innerHTML || '').trim();
+    window.open(chatGptUrl(buildAnnouncementAiPrompt(plainText)), '_blank', 'noopener,noreferrer');
   }
 
   const bg = config.announcementBar.style.background;
@@ -862,27 +687,13 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   const activeThemeId = matchAnnouncementTheme(bg, config.announcementBar.style.textColor);
   const [previewDirection, setPreviewDirection] = useState<string | null>(null);
   const previewBg = previewDirection ? { ...bg, direction: previewDirection } : bg;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
   // Invalid schedule for the message being edited = both dates set and start is
   // after end. Mirrors the Promo schedule: calendars don't gray out the other
   // field; instead we show an inline error and block the popup's Done action.
   const scheduleRangeInvalid = isInvalidRange(selectedStartDate, selectedEndDate);
   scheduleRangeInvalidRef.current = scheduleRangeInvalid;
 
-  const isAnnouncementInWindow = (startDate?: string, endDate?: string) => {
-    if (!startDate && !endDate) return true;
-    const start = startDate ? new Date(startDate) : new Date(0);
-    start.setHours(0, 0, 0, 0);
-    const end = endDate ? new Date(endDate) : new Date(8640000000000000);
-    end.setHours(23, 59, 59, 999);
-    return today >= start && today <= end;
-  };
-
-  const visibleAnnouncements = config.announcementBar.announcements.filter((ann) =>
-    isAnnouncementInWindow(ann.startDate, ann.endDate)
-  );
+  const visible = visibleAnnouncements(config.announcementBar.announcements);
 
 
 
@@ -938,10 +749,10 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     <AnnouncementEditorProvider value={editorApi}>
     <section className="rounded-2xl border-border overflow-hidden">
       <Toast
-        show={toast.show}
-        message={toast.message}
-        isError={toast.isError}
-        action={toast.action}
+        show={showToast}
+        message={toastMessage}
+        isError={toastIsError}
+        action={toastAction}
         actionDurationMs={TOAST_ACTION_MS}
       />
 
@@ -1022,7 +833,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
         <AnnouncementPreview
           config={config}
           previewBg={previewBg}
-          visibleAnnouncements={visibleAnnouncements}
+          visibleAnnouncements={visible}
           loopCopies={loopCopies}
           scrollContainerRef={scrollContainerRef}
         />

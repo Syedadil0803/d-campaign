@@ -8,20 +8,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CampaignConfig } from '@/types/campaign';
 import { getBackgroundStyle } from '@/lib/utils';
+import { isAnnouncementInWindow } from '@/lib/announcement/announcementWindow';
 
 // Constant visual speed regardless of how much content there is.
 const SCROLL_SPEED_PX_PER_SEC = 60;
 
-function isInWindow(startDate?: string, endDate?: string): boolean {
-  if (!startDate && !endDate) return true;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const start = startDate ? new Date(startDate) : new Date(0);
-  start.setHours(0, 0, 0, 0);
-  const end = endDate ? new Date(endDate) : new Date(8640000000000000);
-  end.setHours(23, 59, 59, 999);
-  return today >= start && today <= end;
-}
 
 export function AnnouncementBarPreview({
   bar,
@@ -32,7 +23,7 @@ export function AnnouncementBarPreview({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const isLoopOn = bar.loop !== false;
-  const visible = bar.announcements.filter((a) => isInWindow(a.startDate, a.endDate));
+  const visible = bar.announcements.filter((a) => isAnnouncementInWindow(a.startDate, a.endDate));
 
   // Match the Announcement tab: compute how many copies fill the bar and set a
   // duration proportional to content width so the scroll speed stays constant.
