@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   writeRecovery,
   clearRecovery,
@@ -104,6 +104,17 @@ const IDLE_WARNING_LEAD_MS = 30_000;
 
 
 
+
+/**
+ * The template cards, built once.
+ *
+ * sampleTemplates is a module constant, so mapping it inside the component
+ * allocated a fresh twelve-element array on every render for a value that can
+ * never change.
+ */
+const TEMPLATE_CARDS = sampleTemplates.map(
+  (t) => t.promoCard as CampaignConfig['promoCard'],
+);
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'announcement' | 'promo'>('dashboard');
@@ -1294,7 +1305,18 @@ export default function Home() {
    * to save work into a draft the user had just deleted. A refresh "fixed" it
    * only because reloading recomputed everything from scratch.
    */
-  promoWorkNotInDraftRef.current = (() => {
+  /**
+   * Recomputed only when one of the cards it compares actually changes.
+   *
+   * This ran in the render body, so every keystroke in the editor re-ran the
+   * whole comparison: a deep normalise and stringify of the current card, the
+   * published card, the draft, and EVERY saved variant, plus the authorship
+   * check, which walks all twelve templates twice — once for their words and
+   * once for their looks. With ten saved cards that is roughly forty full-card
+   * serialisations per character typed, to answer a question whose inputs had
+   * not moved.
+   */
+  promoWorkNotInDraftRef.current = useMemo(() => {
     // Normalised, like every other comparison: a raw stringify counts the
     // app's own rewrites (the injected default font-size span, zero-width
     // characters, the re-serialised timer, the auto cardWidth) as edits — so
@@ -1317,10 +1339,10 @@ export default function Home() {
      */
     const worthProtecting = !cardIsNotUserWork(
       config.promoCard,
-      sampleTemplates.map((t) => t.promoCard as CampaignConfig['promoCard']),
+      TEMPLATE_CARDS,
     );
     return worthProtecting && differsFromLive && differsFromDraft && differsFromSaved;
-  })();
+  }, [config.promoCard, publishedConfig.promoCard, draftPromoCard, promoVariants]);
 
   return (
     <div className="campaign-page-bg flex h-screen text-on-surface">
