@@ -1,54 +1,103 @@
-# 🎨 Frontend - Campaign Admin Panel
+# Campaign Admin
 
-Next.js React application for campaign management UI.
+The tool the operator uses to write, schedule and publish the promo card and
+announcement bar that appear on the live website.
 
-## Setup
+Next.js 15 (App Router) · React 19 · TypeScript 5.6 · Tailwind 3.4 ·
+PostgreSQL via Drizzle · Cloudflare R2 · Lexical for the countdown editor.
 
-1. Install dependencies:
+---
+
+## Running it
+
 ```bash
 npm install
+cp .env.example .env.local     # then fill in the values
+npm run dev                    # http://localhost:3000
 ```
 
-2. Create `.env.local` file:
+`.env.local` holds the database URL, the R2 credentials and the session
+secret. It is git-ignored and must never be committed — `.env.example` lists
+the keys without their values.
+
+---
+
+## What ships, and what does not
+
+This matters for a production deploy and for anyone auditing the app. **The
+only things that reach the server are `dependencies` and the built output of
+`src/`.**
+
+| Reaches production | Stays behind |
+| --- | --- |
+| `src/` — excluding `*.test.ts` | `*.test.ts` (excluded in `tsconfig.json`) |
+| `public/` | `docs/` |
+| `dependencies` in `package.json` | `devDependencies` |
+| `migrations/` (run against the DB, not served) | `scripts/` (operator tooling) |
+
+A production install takes none of the dev tooling:
+
 ```bash
-cp .env.example .env.local
+npm ci --omit=dev
 ```
 
-Edit `.env.local`:
-```
-NEXT_PUBLIC_API_URL=http://localhost:4000
-```
+Every quality tool — `vitest`, `jscpd`, `knip`, `madge`, `eslint`,
+`typescript` — is a devDependency. So is `flag-icons`: only the SVGs
+`scripts/copy-flags.mjs` copies into `public/` ship, never the package.
 
-3. Run development server:
-```bash
-npm run dev
+**Never committed** (all covered by `.gitignore`): `.env*.local`, `.next/`,
+`coverage/`, `node_modules/`, `*.tsbuildinfo`, `.DS_Store`. If you see these
+in the folder they are local build output — they regenerate, and deleting
+them is always safe.
+
+---
+
+## Layout
+
 ```
-
-Frontend runs on http://localhost:3000
-
-## File Structure
-
-```
-frontend/
-├── src/
-│   ├── app/
-│   │   ├── page.tsx         ← Main admin page
-│   │   ├── layout.tsx       ← Root layout
-│   │   └── globals.css      ← Global styles
-│   ├── components/          ← React components
-│   │   ├── Header.tsx
-│   │   ├── Dashboard.tsx
-│   │   ├── AnnouncementSection.tsx
-│   │   ├── PromoSection.tsx
-│   │   ├── SamplePromoTemplates.tsx
-│   │   └── Toast.tsx
-│   ├── lib/
-│   │   └── utils.ts         ← Helper functions
-│   └── types/
-│       └── campaign.ts      ← TypeScript types
-└── package.json
+src/
+├── app/              routes and API handlers — page.tsx is the shell
+├── components/
+│   ├── promo/        the promo card editor
+│   ├── announcement/ the announcement bar editor
+│   ├── timer-lexical/the countdown field (a Lexical editor)
+│   ├── dashboard/    the landing view
+│   ├── shell/        header and the dialogs the page opens
+│   └── shared/       used by more than one of the above
+├── hooks/            state shared across the two editors
+├── lib/              the rules: pure functions, no React
+├── services/         one layer above the repository
+├── repositories/     the only place SQL is written
+└── types/            shapes shared across the app
 ```
 
-## Important
+The line worth knowing: **`lib/` holds the decisions and touches no React.**
+That is what makes those rules testable, and it is where the tests are
+pointed — see `docs/code-quality-runbook.md`.
 
-Make sure the backend server is running on port 4000 before starting the frontend!
+---
+
+## Commands
+
+| | |
+| --- | --- |
+| `npm run dev` | development server |
+| `npm run build` | production build (also type-checks) |
+| `npm test` | run the tests |
+| `npm run test:watch` | tests, re-running on change |
+| `npm run test:coverage` | tests with a coverage report |
+| `npm run lint` | ESLint |
+| `npm run db:apply` | apply migrations |
+| `npm run seed:user` | create the first operator account |
+| `npm run flags` | refresh the country flag SVGs in `public/` |
+
+---
+
+## Documentation
+
+| | |
+| --- | --- |
+| `SETUP.md` | first-time setup, in detail |
+| `docs/code-quality-runbook.md` | the quality tooling, the tests, and how to reproduce every figure |
+| `docs/security-and-compliance-testing.md` | security testing |
+| `docs/undo-and-recovery.md` | how undo and crash recovery work |

@@ -267,3 +267,122 @@ npx cloc src --by-file --include-lang=TypeScript > security-reports/cloc-before.
 Save the "before" output before any code moves. The comparison at the end is
 only worth something if the starting point was recorded rather than
 remembered.
+
+---
+
+# Tests
+
+## Install
+
+```bash
+npm i -D vitest @vitest/coverage-v8
+```
+
+Both are devDependencies. Neither is bundled — a production install
+(`npm ci --omit=dev`) fetches neither, and `next build` never compiles a test
+file, because `tsconfig.json` excludes `*.test.ts`. `tsconfig.test.json`
+type-checks them separately:
+
+```bash
+npx tsc -p tsconfig.test.json --noEmit
+```
+
+## Running
+
+```bash
+npm test              # once
+npm run test:watch    # re-runs on change, while working
+npm run test:coverage # with a coverage report
+```
+
+Six suites, 56 cases, under half a second. `coverage/` is git-ignored.
+
+## What is tested, and why only that
+
+The suites cover `src/lib/` — the shared decision logic, pure functions with
+no React in them:
+
+| File | What it decides |
+| --- | --- |
+| `promo/promoAuthorship.ts` | did the user write this, or did we hand it to them |
+| `promo/cardReplaceConsent.ts` | should replacing the card ask, and what should it ask |
+| `promo/promoCardIdentity.ts` | what a card *is*, and what it starts as |
+| `promo/lookSignature.ts` | when two designs count as the same |
+| `announcement/announcementWindow.ts` | which messages are live right now |
+| `dateRange.ts` | when an end date is before its start |
+
+This is not an arbitrary choice. Of the defects in the register, **24 of 43
+came from one rule living in two places** — the two copies drifting apart, and
+nobody noticing because both looked reasonable. Those rules now exist once
+each, and these tests are what stops them quietly growing a second copy again.
+
+Each case is one that **was wrong at some point**, so the files read as the
+history of what this code got wrong rather than as a checklist. Two worth
+knowing about:
+
+- `cardReplaceConsent` pins the **order** of its branches, not just its
+  outcomes. Several defects were a check that had drifted above or below
+  another and so became unreachable, which the outcomes alone cannot show.
+- The countdown's arithmetic asserts that hours never reaches 24 and that an
+  unreadable date gives zero rather than `NaN`.
+
+The suite earned itself on the first run: it found a live defect where an
+announcement with a start date and **no end date never displayed at all**,
+when it was set to run indefinitely. "Forever" had been written as the largest
+date JavaScript can hold, and the next line widened it past the maximum into
+`Invalid Date`. Manual testing had never caught it because the symptom is
+silence.
+
+## Coverage
+
+```bash
+npm run test:coverage
+```
+
+| | |
+| --- | --- |
+| Lines | 97% |
+| Statements | 95% |
+| Branches | 90% |
+| Functions | 93% |
+
+**Read the scope before quoting the number.** `vitest.config.mts` lists the
+files it covers, and that list is exactly the decision logic above.
+`lib/editor/timerUtils.ts` is deliberately outside it even though one of its
+functions is tested: the rest builds markup through `DOMParser` and needs a
+browser environment to exercise at all. Counting those lines as untested would
+say the decision logic is thinly covered when it is not — and leaving them out
+without saying so would be worse. They are a later phase, with jsdom.
+
+## What is not covered
+
+Stated plainly, because an auditor will ask and a partial answer reads worse
+than a complete one:
+
+- **React components** — no rendering tests. The editors are exercised by hand.
+- **The countdown's markup builders** — need a DOM environment.
+- **API routes and the database layer** — no integration tests.
+- **End to end** — nothing drives a browser.
+
+The order that would add the most safety next is the countdown's markup
+builders, then the API routes.
+
+## Adding a test
+
+Put it beside the code as `<name>.test.ts`. Import through the `@/` alias, the
+same way the app does, so the test exercises what actually ships:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { isInvalidRange } from '@/lib/dateRange';
+
+describe('isInvalidRange', () => {
+  it('rejects an end before the start', () => {
+    expect(isInvalidRange('2026-05-10', '2026-05-01')).toBe(true);
+  });
+});
+```
+
+One habit worth keeping: **when a bug is found, add the case before the fix.**
+Watch it fail, then fix it. A test written afterwards proves the code does
+what it now does; a test written first proves it does what it should.
