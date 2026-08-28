@@ -759,3 +759,32 @@ export function extractTimerValues(html: string): { hh: string; mm: string; ss: 
   
   return result;
 }
+
+/**
+ * Rewrites a countdown element to match the stored text, unless the user is
+ * typing in it.
+ *
+ * Both the panel's timer field and the card preview need this, and both had
+ * their own copy of it. Module level rather than inside the component so its
+ * identity is stable — the two effects that call it list only the campaign
+ * values they watch, and a function rebuilt on every render would have had to
+ * join those lists and rebuild the element far more often than the text
+ * actually changes.
+ *
+ * The guard is the important line. Replacing innerHTML while the caret is in
+ * the element moves the caret to the start, so an element being typed in is
+ * left alone and picks up the change when focus leaves.
+ */
+export function syncTimerElement(
+  el: HTMLElement | null,
+  timerText: string,
+  endDate: string,
+  activeEditor: HTMLElement | null,
+): void {
+  if (!el) return;
+  if (el === activeEditor || document.activeElement === el) return;
+  const nextHtml = buildTimerDisplayHtml(timerText, calculateTimeRemaining(endDate));
+  if (el.innerHTML !== nextHtml) {
+    el.innerHTML = nextHtml;
+  }
+}

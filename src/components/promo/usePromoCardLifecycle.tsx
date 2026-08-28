@@ -3,12 +3,11 @@
 import type { RefObject } from 'react';
 import type { CampaignConfig, PromoCard } from '@/types/campaign';
 import type { PromoVersion } from '@/lib/promo/promoVersions';
-import type { PromoSectionProps } from '@/components/promo/PromoSection';
+import type { PromoSectionProps } from '@/components/promo/promoSectionProps';
 import type { PromoCardAction } from '@/components/promo/PromoCardActionDialog';
 import type { usePromoUndo } from '@/components/promo/usePromoUndo';
 import type { usePromoVersions } from '@/components/promo/usePromoVersions';
 import type { usePromoPopupFlags } from '@/components/promo/usePromoPopupFlags';
-import type { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
 import { clonePromoCard, cardSignature, withDefaultDates } from '@/lib/promo/promoCardIdentity';
 import { cardReplaceConsent } from '@/lib/promo/cardReplaceConsent';
 import { applyTemplateFull } from '@/lib/promo/promoTemplate';
@@ -35,7 +34,6 @@ interface UsePromoCardLifecycleArgs {
   undo: ReturnType<typeof usePromoUndo>;
   versionsApi: ReturnType<typeof usePromoVersions>;
   popupFlags: ReturnType<typeof usePromoPopupFlags>;
-  styling: ReturnType<typeof usePromoFieldStyling>;
 
   configRef: RefObject<CampaignConfig>;
   setConfig: (config: CampaignConfig | ((prev: CampaignConfig) => CampaignConfig)) => void;
@@ -69,7 +67,6 @@ export function usePromoCardLifecycle({
   undo,
   versionsApi,
   popupFlags,
-  styling,
   configRef,
   setConfig,
   markChanged,

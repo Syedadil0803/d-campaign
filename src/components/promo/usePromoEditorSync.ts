@@ -7,6 +7,7 @@ import { getRequiredCardWidth } from '@/lib/promo/promoMeasure';
 import {
   buildTimerDisplayHtml,
   refreshTimerValueSpans,
+  syncTimerElement,
   calculateTimeRemaining as calcTimerRemaining,
 } from '@/lib/editor/timerUtils';
 
@@ -39,12 +40,6 @@ interface UsePromoEditorSyncArgs {
   setCardWidth: (width: number) => void;
   /** Ticks once a second; the countdown's numbers follow it. */
   currentTime: number;
-  syncTimerElement: (
-    el: HTMLDivElement | null,
-    timerText: string,
-    endDate: string,
-    activeEditor: HTMLDivElement | null,
-  ) => void;
 }
 
 /**
@@ -75,7 +70,6 @@ export function usePromoEditorSync({
   lastSyncedPromoRef,
   setCardWidth,
   currentTime,
-  syncTimerElement,
 }: UsePromoEditorSyncArgs) {
   // Populate editors from config on mount
   useEffect(() => {

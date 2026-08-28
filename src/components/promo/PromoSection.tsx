@@ -13,7 +13,6 @@ import {
   PromoEditorProvider,
   type PromoEditorApi,
 } from '@/components/promo/PromoEditorContext';
-import { isInvalidRange } from '@/lib/dateRange';
 import { getFreshPromoCard } from '@/lib/promo/freshPromoCard';
 import { usePromoFieldStyling } from '@/components/promo/usePromoFieldStyling';
 import { usePromoDropdowns } from '@/components/promo/usePromoDropdowns';
@@ -22,10 +21,9 @@ import { usePromoVersions } from '@/components/promo/usePromoVersions';
 import { usePromoRichText } from '@/components/promo/usePromoRichText';
 import {
 } from "lucide-react";
-import { CampaignConfig, PromoCard, PromoField } from '@/types/campaign';
+import { PromoCard, PromoField } from '@/types/campaign';
 import { getISODateWithOffset } from '@/lib/utils';
 import {
-  lookSignature,
   ourLooks,
 } from "@/lib/promo/promoAuthorship";
 import { sampleTemplates } from '@/components/promo/SamplePromoTemplates';
@@ -45,13 +43,16 @@ import type { LexicalTimerFieldHandle } from '@/components/timer-lexical/Lexical
 import { getRequiredCardWidth } from '@/lib/promo/promoMeasure';
 import {
 } from '@/lib/promo/cardReplaceCopy';
-import { readHiddenFieldInfos, hideFieldInfo } from '@/lib/promo/fieldInfoNotes';
 import { PromoThemeRow } from '@/components/promo/PromoThemeRow';
 import { PromoEditorStyles } from '@/components/promo/PromoEditorStyles';
 import { PromoSectionDialogs } from '@/components/promo/PromoSectionDialogs';
 import { usePromoCardLifecycle } from '@/components/promo/usePromoCardLifecycle';
 import { usePromoPreviewFit } from '@/components/promo/usePromoPreviewFit';
 import { usePromoEditorSync } from '@/components/promo/usePromoEditorSync';
+import { usePromoThemeBaseline } from '@/components/promo/usePromoThemeBaseline';
+import { usePromoScheduleUi } from '@/components/promo/usePromoScheduleUi';
+import { useFieldInfoNotes } from '@/components/promo/useFieldInfoNotes';
+import type { PromoSectionProps } from '@/components/promo/promoSectionProps';
 import { PromoEditorToolbar } from '@/components/promo/PromoEditorToolbar';
 import { PromoPreviewHeader } from '@/components/promo/PromoPreviewHeader';
 import {
@@ -66,128 +67,9 @@ import {
   TIMER_MAX_CONTENT_WIDTH,
 } from "@/components/timer-lexical/lineMeasure";
 
-export interface PromoSectionProps {
-  config: CampaignConfig;
-  // Accepts a value OR a functional updater (React useState setter). The
-  // functional form matters where two setConfig calls fire in one batch (timer
-  // onChange + onStateJson) and must merge instead of clobber via a stale closure.
-  setConfig: (config: CampaignConfig | ((prev: CampaignConfig) => CampaignConfig)) => void;
-  markChanged: () => void;
-  toast: (
-    message: string,
-    isError?: boolean,
-    action?: { label: string; onClick: () => void },
-    durationMs?: number,
-  ) => void;
-  onSelectedVersionChange?: (versionId: string | null) => void;
-  /**
-   * Bumped once the real card arrives from the DB. The editor mounts on
-   * defaultConfig, so anything seeded from the card at mount time (the Themes
-   * revert point) has to be re-seeded when the actual card lands.
-   */
-  configLoadedSignal?: number;
-  // "Go on air" is a one-click reactivation, only when the current content
-  // matches what's published (same content, not new/edited).
-  canReactivate: boolean;
-  /**
-   * The promo card currently PUBLISHED to the website.
-   *
-   * "Live" in My Published is a fact about the site, not about the editor —
-   * it was previously derived from whichever variant matched the canvas, so
-   * editing anything made the Live marker vanish from a campaign that was
-   * still serving to visitors.
-   */
-  livePromoCard?: PromoCard;
-  /**
-   * The promo card as saved in My Draft.
-   *
-   * Compared field-by-field rather than trusting `draftUpToDate`, which is a
-   * whole-config signature and drifts on HTML the app re-normalises itself.
-   */
-  draftPromoCard?: PromoCard | null;
-  /** A different card just landed on the canvas (template, variant, fresh). */
-  /** A different card landed on the canvas. */
-  onCardReplaced?: () => void;
-  /** The user has actually edited the countdown — they know where it lives. */
-  onTimerEdited?: () => void;
-  /**
-   * The timer just switched itself on because a schedule was entered. Lets the
-   * flow point at the countdown, which has only now appeared and is the one
-   * field edited on the card rather than on the left.
-   */
-  onTimerAutoEnabled?: () => void;
-  /**
-   * "The canvas was cleared and nothing has been chosen since" — owned above
-   * this component.
-   *
-   * It lived here as local state until switching tabs unmounted the editor and
-   * took it with it: coming back, a cleared card lost its countdown and button
-   * outlines and appeared to shrink. The flag describes the card, which
-   * outlives this component, so it belongs where the card does.
-   */
-  blankStart: boolean;
-  onBlankStartChange: (value: boolean) => void;
-  /**
-   * May the countdown switch itself on once the schedule is complete?
-   *
-   * Separate from `blankStart` because the two answer different questions.
-   * Clearing the canvas leaves the end date missing, so filling it in later is
-   * the user supplying the one fact the countdown needs — switching it on
-   * there is a convenience. Create new asks for both dates up front, before
-   * the card has been seen, so the same rule would decide for them.
-   *
-   * Both flows produce a blank card, which is why one flag cannot serve both.
-   */
-  timerAutoArmed: boolean;
-  onTimerAutoArmedChange: (value: boolean) => void;
-  // Immediate on/off (no Save → Publish) — the page persists the status change.
-  onStop: () => void;
-  onGoOnAir: () => void;
-  // Bumped by the page when the user attempts to save/publish while the date
-  // range is invalid — triggers the scroll-to + flash fallback guard.
-  dateErrorPing?: number;
-  // True when there are unsaved edits or a saved-but-unpublished draft. Drives
-  // whether card-replacing actions (Start Fresh / Variant / Template) ask for
-  // consent — we only warn when there's pending work that would be lost.
-  hasUnsavedChanges: boolean;
-  // Which top-level tab is active, and how to switch — used by the tab strip
-  // above the preview.
-  // Explicit "Save as draft" — the only way a draft is written now. Saves the
-  // FULL editor state (announcement + promo), not just this promo card.
-  /**
-   * Increment to open Template Hub from outside — used by the build panel's
-   * "Write it myself", so a new card is designed in the same picker as every
-   * other template change.
-   */
-  openTemplatesSignal?: number;
-  /** Returns to the build panel from the templates popup, when it opened it. */
-  onTemplatesBack?: () => void;
-  /**
-   * A picker to open as soon as the editor is on screen, from the dashboard.
-   *
-   * An intent rather than a counter: the dashboard sets it in the same batch
-   * that switches tabs, so this component MOUNTS with the request already
-   * pending. A counter can't say "act now" across a mount — on first render
-   * there's no previous value to have incremented from.
-   */
-  pendingPopup?: 'published' | 'draft' | null;
-  /** Called once the pending popup has been opened, so it fires only once. */
-  onPendingPopupHandled?: () => void;
-  onSaveDraft: () => void;
-  /** Saves the draft immediately, skipping the replace-confirm dialog. */
-  onSaveDraftDirect?: (options?: { keepEditor?: boolean }) => void;
-  savingDraft: boolean;
-  // Deletes the single saved draft slot (called from the My Draft popup).
-  onDeleteDraft: () => void;
-  /** Editor content already matches the stored draft — nothing new to save. */
-  draftUpToDate: boolean;
-  /** A draft is already stored, so saving overwrites it rather than creating one. */
-  draftExists: boolean;
-  /** Takes the live card off the site AND clears it from the published config. */
-  onRemoveLive: () => void;
-  /** Opens the AI step for the card being edited. Omitted = chip not shown. */
-  onUseAi?: () => void;
-}
+
+
+
 
 
 
@@ -199,35 +81,14 @@ export interface PromoSectionProps {
 
 
 /**
- * Rewrites a countdown element to match the stored text, unless the user is
- * typing in it.
+ * The template cards and every look the app hands out, built once.
  *
- * Both the panel's timer field and the card preview need this, and both had
- * their own copy of it. Module level rather than inside the component so its
- * identity is stable — the two effects that call it list only the campaign
- * values they watch, and a function rebuilt on every render would have had to
- * join those lists and rebuild the element far more often than the text
- * actually changes.
- *
- * The guard is the important line. Replacing innerHTML while the caret is in
- * the element moves the caret to the start, so an element being typed in is
- * left alone and picks up the change when focus leaves.
+ * Both derive from module constants, so computing them inside the component
+ * rebuilt a twelve-element array and re-signed twelve looks on every render —
+ * for values that cannot change.
  */
-function syncTimerElement(
-  el: HTMLElement | null,
-  timerText: string,
-  endDate: string,
-  activeEditor: HTMLElement | null,
-): void {
-  if (!el) return;
-  if (el === activeEditor || document.activeElement === el) return;
-  const nextHtml = buildTimerDisplayHtml(timerText, calcTimerRemaining(endDate));
-  if (el.innerHTML !== nextHtml) {
-    el.innerHTML = nextHtml;
-  }
-}
-
-
+const TEMPLATE_CARDS = sampleTemplates.map((t) => t.promoCard as PromoCard);
+const OUR_LOOKS = ourLooks(TEMPLATE_CARDS);
 
 export function PromoSection(props: PromoSectionProps) {
   // Named rather than destructured in the signature: the card-lifecycle
@@ -296,7 +157,6 @@ export function PromoSection(props: PromoSectionProps) {
    * already there is not it appearing, and announcing it then greeted every
    * visit to the Promo tab with the same message.
    */
-  const ownSwatchWasVisibleRef = useRef<boolean | null>(null);
 
   /** Measured height of the field style panel, for keeping it in the canvas. */
   const fieldPopupHeightRef = useRef(0);
@@ -332,13 +192,8 @@ export function PromoSection(props: PromoSectionProps) {
    * away from the thing just clicked.
    */
   const [styleWarning, setStyleWarning] = useState<string | null>(null);
-  const [fieldInfoPopup, setFieldInfoPopup] = useState<'title' | 'subtitle' | 'description' | null>(null);
-  const [hiddenFieldInfos, setHiddenFieldInfos] = useState<Set<string>>(readHiddenFieldInfos);
-  /** Closes the note and remembers not to offer it again. */
-  function dismissFieldInfo(field: string) {
-    setFieldInfoPopup(null);
-    setHiddenFieldInfos((current) => hideFieldInfo(current, field));
-  }
+  const fieldInfo = useFieldInfoNotes();
+  const { hiddenFieldInfos, setFieldInfoPopup } = fieldInfo;
 
   const configRef = useRef(config);
   configRef.current = config;
@@ -414,8 +269,6 @@ export function PromoSection(props: PromoSectionProps) {
 
   // End Date field wrapper — the fallback guard scrolls here and flashes its
   // inline error if the user tries to save with an invalid range.
-  const endDateFieldRef = useRef<HTMLDivElement>(null);
-  const [dateErrorFlash, setDateErrorFlash] = useState(false);
   // Consent before a card-replacing action (Start Fresh / apply Variant / apply Template).
   const [cardActionConfirm, setCardActionConfirm] =
     useState<PromoCardAction | null>(null);
@@ -467,57 +320,6 @@ export function PromoSection(props: PromoSectionProps) {
     setPendingDeleteId,
   } = versionsApi;
 
-  /**
-   * The design to return to, shown as the first chip in the Themes strip.
-   *
-   * It follows every look you CHOOSE — a template, a variant, the saved draft,
-   * a fresh card, an AI palette, or colors you pick by hand — and ignores only
-   * the theme chips. So it always means "the design that's mine", and the
-   * swatch only ever undoes theme browsing.
-   *
-   * It used to be re-seeded by hand at each of five places a card could land,
-   * which had two consequences: applying an AI palette wasn't one of them, so
-   * the swatch pointed at the look from before the AI and quietly undid it; and
-   * colors picked by hand were never recorded, so one click on the swatch threw
-   * them away — while its tooltip promised it only undid themes. One rule, fed
-   * by the style itself, can't miss a route the way a list of call sites can.
-   */
-  const [themeBaseline, setThemeBaseline] = useState<PromoCard['style']>(
-    () => config.promoCard.style,
-  );
-
-  /**
-   * Set for the one action that must NOT move the baseline: sampling a theme.
-   * The revert swatch sets it too — landing back on your own design shouldn't
-   * re-record it.
-   */
-  const samplingThemeRef = useRef(false);
-
-
-  useEffect(() => {
-    if (samplingThemeRef.current) {
-      samplingThemeRef.current = false;
-      return;
-    }
-    setThemeBaseline(config.promoCard.style);
-  }, [config.promoCard.style]);
-
-  /**
-   * True when the card is wearing the design you chose rather than a theme you
-   * are trying. It decides which single swatch in the Themes strip is marked.
-   */
-  const onOwnDesign =
-    JSON.stringify(themeBaseline) === JSON.stringify(config.promoCard.style);
-
-  /**
-   * The editor mounts on defaultConfig and the real card arrives a moment
-   * later, so the seed above captures the DEFAULT template's look — the revert
-   * chip then showed a design the user never chose, and lit up as "current".
-   * Re-seed from the card that actually loaded.
-   */
-  useSignalEffect(configLoadedSignal, () => {
-    setThemeBaseline(configRef.current.promoCard.style);
-  });
 
 
   // Opened from outside (the build panel's "Write it myself"). Guarded on > 0
@@ -543,8 +345,6 @@ export function PromoSection(props: PromoSectionProps) {
 
 
 
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
 
 
   // Single hook instance — activeEditorRef is swapped on focus
@@ -650,8 +450,8 @@ export function PromoSection(props: PromoSectionProps) {
 
 
 
-  const TEMPLATE_CARDS = sampleTemplates.map((t) => t.promoCard as PromoCard);
-  const OUR_LOOKS = ourLooks(TEMPLATE_CARDS);
+
+
 
 
 
@@ -732,7 +532,6 @@ export function PromoSection(props: PromoSectionProps) {
     lastSyncedPromoRef,
     setCardWidth,
     currentTime,
-    syncTimerElement,
   });
 
   useEffect(() => {
@@ -826,22 +625,7 @@ export function PromoSection(props: PromoSectionProps) {
 
 
 
-  // Invalid schedule = both dates set and start is after end. Drives the
-  // in-field error, the red End Date border, and the disabled Save/Publish CTA.
-  const promoDateRangeInvalid = isInvalidRange(
-    config.promoCard.startDate,
-    config.promoCard.endDate,
-  );
-
-  // Fallback guard: when the page reports a blocked save/publish attempt, scroll
-  // the End Date field into view and flash its inline error (no toast).
-  useEffect(() => {
-    if (!dateErrorPing) return;
-    endDateFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setDateErrorFlash(true);
-    const t = setTimeout(() => setDateErrorFlash(false), 1200);
-    return () => clearTimeout(t);
-  }, [dateErrorPing]);
+  const scheduleUi = usePromoScheduleUi({ config, dateErrorPing });
 
   // True when the timer — measured with its CURRENT countdown — can't fit one
   // line at the widest card. Drives the persistent "Field limit reached" note
@@ -1093,6 +877,31 @@ export function PromoSection(props: PromoSectionProps) {
     // empty — leaving Clear enabled on an empty card and treating it as work.
     isBlankLook(config.promoCard.style);
 
+  const {
+    themeBaseline,
+    setThemeBaseline,
+    samplingThemeRef,
+    onOwnDesign,
+    baselineIsATheme,
+    hasCurrentDesign,
+  } = usePromoThemeBaseline({
+    style: config.promoCard.style,
+    canvasIsEmpty,
+    ourLooks: OUR_LOOKS,
+    toast,
+  });
+
+  /**
+   * The editor mounts on defaultConfig and the real card arrives a moment
+   * later, so the seed above captures the DEFAULT template's look — the revert
+   * chip then showed a design the user never chose, and lit up as "current".
+   * Re-seed from the card that actually loaded.
+   */
+  useSignalEffect(configLoadedSignal, () => {
+    setThemeBaseline(configRef.current.promoCard.style);
+  });
+
+
   /**
    * Everything that replaces the whole card — templates, variants, the draft,
    * clearing the canvas, deleting a variant.
@@ -1107,7 +916,6 @@ export function PromoSection(props: PromoSectionProps) {
     undo,
     versionsApi,
     popupFlags,
-    styling,
     configRef,
     setConfig,
     markChanged,
@@ -1132,49 +940,6 @@ export function PromoSection(props: PromoSectionProps) {
     applyTemplate,
     confirmCardReplace,
   } = lifecycle;
-  /**
-   * Is there a design of the user's OWN to hold on to?
-   *
-   * Two cases where there isn't, and both make the swatch noise:
-   *
-   * An empty canvas has nothing to return to — the button would restore
-   * blankness.
-   *
-   * A design taken straight from a template is already on screen as one of
-   * the theme swatches beside it, so showing it again under "Current Design"
-   * offers a trip back to somewhere the user never left, and reads as two
-   * different things that happen to look identical.
-   *
-   * The themes take that space in either case.
-   */
-  const baselineIsATheme = OUR_LOOKS.includes(lookSignature(themeBaseline));
-  const hasCurrentDesign = !canvasIsEmpty && !baselineIsATheme;
-
-  /**
-   * Say where the design went, the moment it becomes a swatch.
-   *
-   * The line under the themes row explains the same thing and stays put, but
-   * it only helps someone already looking there. The toast is what tells a
-   * user who is watching the card that their design was kept rather than
-   * overwritten.
-   */
-  useEffect(() => {
-    const wasVisible = ownSwatchWasVisibleRef.current;
-    ownSwatchWasVisibleRef.current = hasCurrentDesign;
-    // First render only records the state; it has not appeared, it just is.
-    if (wasVisible === null) return;
-    if (!wasVisible && hasCurrentDesign) {
-      toast(
-        'Your design is saved as the first swatch — tap it to come back',
-        false,
-        undefined,
-        // Longer than the default: this asks the user to go and find
-        // something, and three seconds is gone before the eye has left the
-        // toast to look for it.
-        8000,
-      );
-    }
-  }, [hasCurrentDesign, toast]);
 
 
   /**
@@ -1256,6 +1021,8 @@ export function PromoSection(props: PromoSectionProps) {
    */
   const editorApi: PromoEditorApi = {
     ...richText,
+    ...scheduleUi,
+    ...fieldInfo,
     ...styling,
     ...popupFlags,
     ...versionsApi,
@@ -1292,21 +1059,11 @@ export function PromoSection(props: PromoSectionProps) {
     panelFieldRefs: PANEL_FIELD_REFS,
     buttonRef,
     timerRef,
-    fieldInfoPopup,
-    setFieldInfoPopup,
-    dismissFieldInfo,
     cardActionConfirm,
     setCardActionConfirm,
     pushPromoState,
     pushPromoStateFromConfig,
     liveCardRef,
-    showStartDatePicker,
-    setShowStartDatePicker,
-    showEndDatePicker,
-    setShowEndDatePicker,
-    endDateFieldRef,
-    promoDateRangeInvalid,
-    dateErrorFlash,
     timerLimitReached,
   };
 
