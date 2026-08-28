@@ -17,14 +17,33 @@ type Announcement = CampaignConfig['announcementBar']['announcements'][number];
  * impossible.
  */
 export function isAnnouncementInWindow(startDate?: string, endDate?: string): boolean {
-  if (!startDate && !endDate) return true;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const start = startDate ? new Date(startDate) : new Date(0);
-  start.setHours(0, 0, 0, 0);
-  const end = endDate ? new Date(endDate) : new Date(8640000000000000);
-  end.setHours(23, 59, 59, 999);
-  return today >= start && today <= end;
+
+  /**
+   * Each end is checked only if it was set, rather than substituted with a
+   * sentinel date and compared anyway.
+   *
+   * The sentinel was what broke it. "Forever" was new Date(8640000000000000),
+   * the largest date JavaScript can hold — and the next line widened it to the
+   * end of its day, which overflowed it to Invalid Date. Every comparison
+   * against Invalid Date is false, so a message with a start and no end never
+   * appeared at all, when it was set to run indefinitely.
+   *
+   * Not checking an absent bound says the same thing and cannot overflow.
+   */
+  if (startDate) {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    if (today < start) return false;
+  }
+  if (endDate) {
+    const end = new Date(endDate);
+    // The whole of the last day: a campaign ending today runs until tonight.
+    end.setHours(23, 59, 59, 999);
+    if (today > end) return false;
+  }
+  return true;
 }
 
 /** The messages that would show on the site right now. */
