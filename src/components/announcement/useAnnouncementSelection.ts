@@ -2,7 +2,7 @@
 
 import { useRef, useState, type RefObject } from 'react';
 import type { CampaignConfig } from '@/types/campaign';
-import { wrapBareTextWithFontSize } from '@/lib/editor/richTextUtils';
+import { wrapBareTextWithFontSize } from '@/lib/editor/fontSizeUtils';
 
 interface UseAnnouncementSelectionArgs {
   config: CampaignConfig;

@@ -5,7 +5,7 @@
  * the caret is doing and put it back afterwards. Every one takes the editor
  * element it should act on, so none of them needs the component's state.
  */
-import { rgbToHex } from '@/lib/editor/richTextUtils';
+import { rgbToHex } from '@/lib/editor/colorUtils';
 
 /** What an unstyled editor shows, so a colour swatch has something to report. */
 export const PROMO_EDITOR_DEFAULT_COLOR = '#ffffff';

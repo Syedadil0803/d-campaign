@@ -8,7 +8,7 @@ import { readFormatsFromHtml } from '@/lib/editor/readFormatsFromHtml';
 import { CampaignConfig, GradientStyle, defaultConfig } from '@/types/campaign';
 import { stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
-import { rgbToHex } from '@/lib/editor/richTextUtils';
+import { rgbToHex } from '@/lib/editor/colorUtils';
 import { Toast, TOAST_ACTION_MS, type ToastAction } from '@/components/shared/Toast';
 import { useAnnouncementStyleDropdowns } from '@/components/announcement/useAnnouncementStyleDropdowns';
 import { useAnnouncementPopups } from '@/components/announcement/useAnnouncementPopups';

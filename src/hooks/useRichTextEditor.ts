@@ -22,14 +22,8 @@
  */
 
 import { useState, useRef, useCallback, Dispatch, SetStateAction } from 'react';
-import {
-  FONT_SIZE_MAP,
-  fontSizeToLabel,
-  applyFontSize,
-  applyInlineColor,
-  wrapBareTextWithFontSize,
-  rgbToHex,
-} from '@/lib/editor/richTextUtils';
+import { applyInlineColor, rgbToHex } from '@/lib/editor/colorUtils';
+import { FONT_SIZE_MAP, fontSizeToLabel, applyFontSize, wrapBareTextWithFontSize } from '@/lib/editor/fontSizeUtils';
 
 // ============================================================
 // Types

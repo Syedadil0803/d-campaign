@@ -3,7 +3,7 @@
 import { createPortal } from 'react-dom';
 import { Sparkles } from 'lucide-react';
 import { getBackgroundStyle } from '@/lib/utils';
-import { rgbToHex } from '@/lib/editor/richTextUtils';
+import { rgbToHex } from '@/lib/editor/colorUtils';
 import RichTextToolbar from '@/components/shared/RichTextToolbar';
 import { AnnouncementLinkPopup } from '@/components/announcement/AnnouncementLinkPopup';
 import { AnnouncementSchedulePopup } from '@/components/announcement/AnnouncementSchedulePopup';

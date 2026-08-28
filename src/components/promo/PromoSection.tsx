@@ -31,8 +31,7 @@ import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
 import { isBlankLook } from '@/lib/promo/lookSignature';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { useSignalEffect } from '@/hooks/useSignalEffect';
-import {
-} from "@/lib/editor/richTextUtils";
+
 import {
 } from "@/lib/promo/promoVersions";
 import {

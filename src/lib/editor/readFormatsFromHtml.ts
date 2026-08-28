@@ -1,4 +1,5 @@
-import { fontSizeToLabel, rgbToHex } from '@/lib/editor/richTextUtils';
+import { rgbToHex } from '@/lib/editor/colorUtils';
+import { fontSizeToLabel } from '@/lib/editor/fontSizeUtils';
 import type { ActiveFormats } from '@/hooks/useRichTextEditor';
 
 /**

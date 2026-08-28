@@ -15,11 +15,8 @@ import {
 } from "@/lib/promo/promoAuthorship";
 
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
-import {
-  wrapBareTextWithFontSize,
-  rgbToHex,
-  fontSizeToLabel,
-} from "@/lib/editor/richTextUtils";
+import { rgbToHex } from '@/lib/editor/colorUtils';
+import { wrapBareTextWithFontSize, fontSizeToLabel } from '@/lib/editor/fontSizeUtils';
 import {
 } from "@/lib/promo/promoVersions";
 import {

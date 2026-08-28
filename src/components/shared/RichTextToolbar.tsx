@@ -10,7 +10,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import PresetColorPicker from '@/components/shared/PresetColorPicker';
-import { FONT_SIZE_DISPLAY_MAP } from '@/lib/editor/richTextUtils';
+import { FONT_SIZE_DISPLAY_MAP } from '@/lib/editor/fontSizeUtils';
 
 interface ActiveFormats {
   bold: boolean;

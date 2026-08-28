@@ -11,8 +11,8 @@
 
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { PRESET_COLORS } from '@/lib/editor/richTextUtils';
-import { hexToRgbValues, rgbToHsv, hsvToRgb, rgbToHexString } from '@/lib/editor/richTextUtils';
+import { PRESET_COLORS } from '@/lib/editor/colorUtils';
+import { hexToRgbValues, rgbToHsv, hsvToRgb, rgbToHexString } from '@/lib/editor/colorUtils';
 
 interface PresetColorPickerProps {
   /** The button element that triggered the picker — used to position the dropdown */
