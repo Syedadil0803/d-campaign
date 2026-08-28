@@ -31,6 +31,7 @@ import {
   type LexicalEditor,
   type TextNode,
 } from 'lexical';
+import { HISTORIC_TAG } from 'lexical';
 import { TimerEditor } from './TimerEditor';
 import {
   parseStorageHtml,
@@ -105,6 +106,29 @@ export interface LexicalTimerFieldHandle {
    * on screen untouched — the countdown simply could not be undone.
    */
   loadStateJson(json: string): void;
+  /**
+   * The editor's state right now, for the undo stack to hold.
+   *
+   * An EditorState, not the serialized JSON. Three reasons, and each is a bug
+   * the JSON caused: it is available SYNCHRONOUSLY, so a push records the
+   * moment it happens rather than whatever onStateJson last reported; it
+   * carries the selection, so a restore puts the caret back where it was; and
+   * it is the same object Lexical restores, so nothing is re-parsed.
+   */
+  getEditorState(): EditorState | null;
+  /**
+   * The state as it was BEFORE the most recent change.
+   *
+   * The countdown reports a change only once the change is already in it, so a
+   * step recorded from that callback has to reach one further back — the same
+   * reason pushPromoStateFromConfig reads the config rather than the editor.
+   */
+  getPreviousEditorState(): EditorState | null;
+  /**
+   * Put a state back, atomically, tagged as history so the change it provokes
+   * is recognised as an echo rather than an edit.
+   */
+  restoreEditorState(state: EditorState): void;
   /**
    * Strip every inline style from the countdown — text and chip alike.
    *
@@ -194,6 +218,8 @@ export const LexicalTimerField = forwardRef<
   // Latest timerText prop, mirrored into a ref so handleChange can
   // short-circuit "we just synced this in" without depending on a closure.
   const lastSyncedTextRef = useRef<string>(timerText);
+  /** The state before the most recent change — see getPreviousEditorState. */
+  const previousStateRef = useRef<EditorState | null>(null);
   // The current chip styling target, mirrored out of the editor context so
   // the app's external toolbar (driven through this imperative handle) can
   // route style commands to the targeted cell / whole chip.
@@ -223,6 +249,15 @@ export const LexicalTimerField = forwardRef<
           result = $currentFormats(targetRef.current);
         });
         return result;
+      },
+      getEditorState(): EditorState | null {
+        return editorRef.current?.getEditorState() ?? null;
+      },
+      getPreviousEditorState(): EditorState | null {
+        return previousStateRef.current;
+      },
+      restoreEditorState(state: EditorState) {
+        editorRef.current?.setEditorState(state, { tag: HISTORIC_TAG });
       },
       loadStateJson(json: string) {
         const ed = editorRef.current;
@@ -465,8 +500,24 @@ export const LexicalTimerField = forwardRef<
     [],
   );
 
-  const handleChange = (state: EditorState, editor: LexicalEditor) => {
+  const handleChange = (
+    state: EditorState,
+    editor: LexicalEditor,
+    tags: Set<string>,
+  ) => {
     editorRef.current = editor;
+    /**
+     * A restore, not an edit.
+     *
+     * Recognised by the tag the restore carried rather than by a flag on a
+     * timer, which the callback could outrun — the flag was cleared on a
+     * setTimeout and this fires whenever Lexical commits.
+     */
+    if (tags.has(HISTORIC_TAG)) {
+      // Still record it: the next edit's "before" is this restored state.
+      previousStateRef.current = state;
+      return;
+    }
     // Full-fidelity state JSON (carries text + chip cell styles). The ZWSP
     // caret slot ChipGuardPlugin maintains is presentation chrome and must
     // NOT reach storage: if it did, merely opening the editor would emit a
@@ -487,6 +538,8 @@ export const LexicalTimerField = forwardRef<
       lastSyncedTextRef.current = html;
       onChange(html);
     });
+    // Last, so everything above still sees the state this change replaced.
+    previousStateRef.current = state;
   };
 
   // External text sync: when the panel inputs (or any outside source) change

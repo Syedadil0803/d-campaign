@@ -754,6 +754,7 @@ export function PromoSection(props: PromoSectionProps) {
     onSelectedVersionChange,
     onCardReplaced,
     restoringSnapshotRef,
+    lexicalTimerRef,
     toast,
     templateCards: TEMPLATE_CARDS,
   });

@@ -16,7 +16,6 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
-import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import {
   $getRoot,
@@ -52,7 +51,7 @@ interface TimerEditorProps {
    *  fidelity) instead of building fresh from initialContent. */
   initialStateJson?: string;
   /** Fires on every editor state change with the serialized JSON document. */
-  onChange?: (state: EditorState, editor: LexicalEditor) => void;
+  onChange?: (state: EditorState, editor: LexicalEditor, tags: Set<string>) => void;
   /** Fires ONCE on mount with the underlying Lexical editor — used by host
    *  components that need an imperative handle before any edit has happened
    *  (e.g. to push prop updates into the document tree). */
@@ -181,7 +180,13 @@ export function TimerEditor({
           }
           ErrorBoundary={LexicalErrorBoundary}
         />
-        <HistoryPlugin />
+        {/* No HistoryPlugin.
+            The countdown shares one undo timeline with the rest of the card,
+            owned by usePromoUndo. Lexical's own history would be a second
+            timeline on the same keystroke: its root handler calls
+            preventDefault but not stopPropagation, so a Ctrl+Z here undid
+            inside the editor AND then had a whole-card snapshot written over
+            the top of it. */}
         {/* Keeps the chip undeletable. */}
         <ChipGuardPlugin />
         {/* 1-line limit: reverts edits that grow the timer onto a 2nd line

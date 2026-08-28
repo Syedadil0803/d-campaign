@@ -266,7 +266,15 @@ export function usePromoRichText({
     });
   }
 
-  function syncEditorsFromConfig(pc: PromoCard) {
+  /**
+   * Write the stored card back into the editors.
+   *
+   * `skipTimer` is passed by an undo that is restoring the countdown from the
+   * step's own EditorState. Without it this would run a moment later on a
+   * timeout and put the card's JSON over the top of the restore — the JSON has
+   * no caret and is a change behind.
+   */
+  function syncEditorsFromConfig(pc: PromoCard, options: { skipTimer?: boolean } = {}) {
     setTimeout(() => {
       if (titleRef.current) titleRef.current.innerHTML = pc.title || "";
       if (subtitleRef.current)
@@ -290,7 +298,9 @@ export function usePromoRichText({
        * carried one has nothing to load, and clearing the editor would be
        * worse than leaving it.
        */
-      if (pc.timerStateJson) {
+      if (options.skipTimer) {
+        // The countdown is being restored from a history step instead.
+      } else if (pc.timerStateJson) {
         lexicalTimerRef.current?.loadStateJson(pc.timerStateJson);
       } else {
         /**

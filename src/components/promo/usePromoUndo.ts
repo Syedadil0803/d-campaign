@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, type RefObject } from 'react';
+import type { EditorState } from 'lexical';
 import type { CampaignConfig, PromoCard, PromoField } from '@/types/campaign';
 import type { PromoSelectionSnapshot } from '@/lib/promo/promoEditorSelection';
 import { UndoStack } from '@/lib/editor/undoStack';
@@ -25,6 +26,21 @@ export interface PromoSnapshot {
    * them.
    */
   showPersistentScaffold: boolean;
+  /**
+   * The countdown's editor state at this moment, or null when it had not
+   * mounted yet.
+   *
+   * Held as Lexical's own EditorState rather than the card's timerStateJson.
+   * The JSON is written asynchronously by onStateJson, so a push could record
+   * the state from BEFORE the change it was meant to precede; it has the caret
+   * slot pruned out of it, so a restore could not put the caret back; and it
+   * has to be re-parsed. The state object has none of those problems and is
+   * what Lexical restores natively.
+   *
+   * timerStateJson stays on the card — it is what gets saved. It is simply not
+   * what the history reads.
+   */
+  timerEditorState: EditorState | null;
 }
 
 interface PromoAppliedRedoSnapshot {
@@ -43,7 +59,7 @@ interface UsePromoUndoArgs {
   activeEditorRef: RefObject<HTMLDivElement | null>;
   getActivePromoEditor: () => HTMLDivElement | null;
   getFieldRef: (field: PromoField | null) => RefObject<HTMLDivElement | null> | null;
-  syncEditorsFromConfig: (card: PromoCard) => void;
+  syncEditorsFromConfig: (card: PromoCard, options?: { skipTimer?: boolean }) => void;
   refreshPromoToolbarFormats: (editor?: HTMLDivElement | null) => void;
   setShowPersistentScaffold: (show: boolean) => void;
   /** Read at push time so a snapshot records the ghosts as they then were. */
@@ -61,6 +77,12 @@ interface UsePromoUndoArgs {
    * hook is built before this one.
    */
   restoringSnapshotRef: RefObject<boolean>;
+  /** Reads and restores the countdown's editor state. */
+  lexicalTimerRef: RefObject<{
+    getEditorState: () => EditorState | null;
+    getPreviousEditorState: () => EditorState | null;
+    restoreEditorState: (state: EditorState) => void;
+  } | null>;
   toast: (message: string, isError?: boolean, action?: { label: string; onClick: () => void }, durationMs?: number) => void;
 }
 
@@ -100,6 +122,7 @@ export function usePromoUndo({
   onSelectedVersionChange,
   onCardReplaced,
   restoringSnapshotRef,
+  lexicalTimerRef,
   toast,
 }: UsePromoUndoArgs) {
   const promoHistory = useRef(new UndoStack<PromoSnapshot>()).current;
@@ -129,6 +152,7 @@ export function usePromoUndo({
       currentField: currentFieldRef.current,
       selection: editor ? getPromoSelectionSnapshot(editor) : null,
       showPersistentScaffold: showPersistentScaffoldRef.current,
+      timerEditorState: lexicalTimerRef.current?.getEditorState() ?? null,
     };
   }
 
@@ -223,6 +247,9 @@ export function usePromoUndo({
       currentField: currentFieldRef.current,
       selection: null,
       showPersistentScaffold: showPersistentScaffoldRef.current,
+      // One further back, for the same reason the card comes from the config:
+      // the countdown reports a change once it already holds it.
+      timerEditorState: lexicalTimerRef.current?.getPreviousEditorState() ?? null,
     };
     if (pushIsRedundant(snapshot)) return;
     promoAppliedRedoRef.current = null;
@@ -331,7 +358,20 @@ export function usePromoUndo({
     setCurrentField(snapshot.currentField);
     setShowPersistentScaffold(snapshot.showPersistentScaffold);
     setConfig({ ...configRef.current, promoCard: nextPromoCard });
-    syncEditorsFromConfig(nextPromoCard);
+    syncEditorsFromConfig(nextPromoCard, {
+      skipTimer: Boolean(snapshot.timerEditorState),
+    });
+    /**
+     * The countdown is put back from the state the step captured, not from the
+     * card's JSON — so its wording, its per-word styling, the chip's cell
+     * colours and the caret all come back in one atomic update.
+     *
+     * Only when the step has one. A step recorded before the editor mounted
+     * has none, and syncEditorsFromConfig's JSON path is right for that.
+     */
+    if (snapshot.timerEditorState) {
+      lexicalTimerRef.current?.restoreEditorState(snapshot.timerEditorState);
+    }
     setTimeout(() => {
       const ref = getFieldRef(snapshot.currentField);
       activeEditorRef.current = ref?.current || null;
@@ -356,6 +396,7 @@ export function usePromoUndo({
       currentField: currentFieldRef.current,
       selection: null,
       showPersistentScaffold: showPersistentScaffoldRef.current,
+      timerEditorState: lexicalTimerRef.current?.getEditorState() ?? null,
     };
   }
 
