@@ -1,9 +1,9 @@
 import { FIRST_BLANK_LOOK } from '@/lib/promo/blankLooks';
 import type { GradientStyle, PromoStyle } from '@/types/promoStyle';
 
-export type { GradientStyle, PromoStyle } from '@/types/promoStyle';
+export type { GradientStyle } from '@/types/promoStyle';
 
-export interface Announcement {
+interface Announcement {
   text: string;
   /**
    * Where the message points. For a WhatsApp CTA this holds the derived

@@ -7,8 +7,8 @@
  * 3,000 lines around it.
  */
 
-export const STYLE_POPUP_WIDTH = 280;
-export const STYLE_POPUP_GAP = 40;
+const STYLE_POPUP_WIDTH = 280;
+const STYLE_POPUP_GAP = 40;
 
 /** Assumed panel height for the very first frame, before it can be measured. */
 export const STYLE_POPUP_FALLBACK_HEIGHT = 260;

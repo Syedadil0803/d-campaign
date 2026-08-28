@@ -1,7 +1,7 @@
 import type { PromoCard } from '@/types/campaign';
 
 /** The five text fields a trade swaps; everything else the template keeps. */
-export type Copy = Pick<
+type Copy = Pick<
   PromoCard,
   'title' | 'subtitle' | 'description' | 'buttonText' | 'timerText'
 >;

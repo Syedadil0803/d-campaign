@@ -23,7 +23,7 @@ import { readRecoveryEnvelope, clearRecovery } from '@/lib/recovery';
 import type { RestoreNotice } from '@/types/campaignShell';
 
 
-export interface CampaignDraftPort {
+interface CampaignDraftPort {
   clearDraft: () => void;
   draftSignatureRef: { current: string | null };
   savedDraftSignatureRef: { current: string | null };

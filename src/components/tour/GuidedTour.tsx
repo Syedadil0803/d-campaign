@@ -29,7 +29,7 @@ import { ArrowRight, Check, X } from 'lucide-react';
 
 export type TourPlacement = 'top' | 'bottom' | 'left' | 'right';
 
-export interface TourStep {
+interface TourStep {
   /** Value of the target's `data-tour` attribute. */
   anchor: string;
   title: string;
@@ -85,14 +85,6 @@ export function markTourSeen(tour: TourDefinition) {
   }
 }
 
-/** Clears the "seen" flag — handy for QA and a "replay tour" menu item. */
-export function resetTour(tour: TourDefinition) {
-  try {
-    localStorage.removeItem(storageKey(tour));
-  } catch {
-    /* nothing to do */
-  }
-}
 
 interface Box {
   top: number;

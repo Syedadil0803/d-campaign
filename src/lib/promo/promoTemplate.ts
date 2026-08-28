@@ -87,20 +87,6 @@ export function applyTemplateFull(current: PromoCard, template: PromoCard): Prom
  * `canvasIsEmpty` — the two disagreeing is what made Clear Canvas offer to
  * clear a card that looked blank.
  */
-export function isCardEmpty(card: PromoCard): boolean {
-  const blank = (html?: string) =>
-    !String(html ?? '')
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/[​‌‍﻿]/g, '')
-      .trim();
-  return (
-    blank(card.title) &&
-    blank(card.subtitle) &&
-    blank(card.description) &&
-    blank(card.buttonText)
-  );
-}
 
 /**
  * The look a card wears before anyone has chosen one.
@@ -127,9 +113,6 @@ export function isCardEmpty(card: PromoCard): boolean {
  * Cloned rather than aliased so a caller mutating a card's style cannot reach
  * back and rewrite what "blank" means for everyone else.
  */
-export const BLANK_LOOK: PromoStyle = JSON.parse(
-  JSON.stringify(FIRST_BLANK_LOOK),
-) as PromoStyle;
 
 
 

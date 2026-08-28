@@ -32,7 +32,7 @@ export const FONT_SIZE_DISPLAY_MAP: Record<string, string> = {
   xxl: '2XL',
 };
 
-export const FONT_SIZE_LABEL_MAP: Record<string, string> = {
+const FONT_SIZE_LABEL_MAP: Record<string, string> = {
   '0.75rem': 'xs',
   '0.875rem': 'sm',
   '1rem': 'md',

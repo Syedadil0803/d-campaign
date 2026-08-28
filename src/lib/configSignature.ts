@@ -126,7 +126,7 @@ export function normalizePromoForCompare(card: Record<string, unknown>) {
  * which is why typing a character and deleting it again left "unsaved
  * changes" lit: the content was back to where it started, the markup was not.
  */
-export function normalizeAnnouncementsForCompare(
+function normalizeAnnouncementsForCompare(
   bar: Record<string, unknown>,
 ): Record<string, unknown> {
   const announcements = bar.announcements;

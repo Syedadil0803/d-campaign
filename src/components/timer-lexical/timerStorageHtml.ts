@@ -13,7 +13,7 @@ import { $isTimerChipNode } from './TimerChipNode';
  * expands. Numbers are never written — they would be wrong a second later.
  */
 
-export const TIMER_TOKEN = '{timer}';
+const TIMER_TOKEN = '{timer}';
 
 export function parseStorageHtml(html: string): { prefix: string; suffix: string } {
   if (!html) return { prefix: '', suffix: '' };
@@ -39,7 +39,7 @@ export function parseStorageHtml(html: string): { prefix: string; suffix: string
   return { prefix: stripTags(html), suffix: '' };
 }
 
-export function stripTags(s: string): string {
+function stripTags(s: string): string {
   return s
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')
@@ -89,13 +89,13 @@ export function serializeStorageHtml(): string {
   return `${prefix}${TIMER_TOKEN}${suffix}`;
 }
 
-export function escapeHtml(s: string): string {
+function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 }
 
-export function escapeAttr(s: string): string {
+function escapeAttr(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 }

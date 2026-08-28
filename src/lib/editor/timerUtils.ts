@@ -162,9 +162,6 @@ function chipDisplayStyle(userStyle: string): string {
   return `${user ? user + '; ' : ''}white-space:nowrap;user-select:text;-webkit-user-select:text;`;
 }
 
-/** The numeric segments inside the fixed block, keyed for live updates. */
-export const TIMER_VALUE_KINDS = ['days', 'hours', 'mins'] as const;
-
 function timerSegmentText(kind: string, v: TimerValue): string {
   const bad = [v.hours, v.minutes, v.seconds, v.days ?? 0].some(Number.isNaN);
   if (bad) return '--';

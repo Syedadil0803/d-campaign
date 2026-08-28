@@ -160,7 +160,3 @@ export async function markLiveVersion(id: string | null): Promise<PromoVersion[]
   return next;
 }
 
-/** Remove all versions. */
-export async function clearVersions(): Promise<void> {
-  await write([]);
-}

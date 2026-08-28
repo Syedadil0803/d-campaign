@@ -39,7 +39,7 @@ import {
 // Public props
 // ============================================================
 
-export interface TimerEditorInitialContent {
+interface TimerEditorInitialContent {
   prefixText?: string;
   suffixText?: string;
   endDate: string;

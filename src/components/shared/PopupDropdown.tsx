@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 
-export type PopupDropdownOption = {
+type PopupDropdownOption = {
   label: string;
   value: string;
   /** Leading visual — the country picker passes a flag image. */

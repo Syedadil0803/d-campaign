@@ -192,14 +192,14 @@ export const EXTRA_QUESTION: BriefQuestion = {
 };
 
 /** Answers are stored as one readable phrase — chips are just a fast way to build it. */
-export function answerParts(answer: string | undefined): string[] {
+function answerParts(answer: string | undefined): string[] {
   return (answer ?? '')
     .split(',')
     .map((part) => part.trim())
     .filter(Boolean);
 }
 
-export function sameChip(a: string, b: string): boolean {
+function sameChip(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
 }
 
