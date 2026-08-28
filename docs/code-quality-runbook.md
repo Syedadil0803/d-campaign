@@ -295,7 +295,12 @@ npm run test:watch    # re-runs on change, while working
 npm run test:coverage # with a coverage report
 ```
 
-Six suites, 56 cases, under half a second. `coverage/` is git-ignored.
+Seven suites, 80 cases, about a second. `coverage/` is git-ignored.
+
+Only the countdown's markup suite needs a DOM. It says so itself with a
+`@vitest-environment jsdom` comment at the top of the file, rather than the
+config making every suite pay for jsdom — which keeps it visible in the file
+which code genuinely needs a browser.
 
 ## What is tested, and why only that
 
@@ -341,18 +346,16 @@ npm run test:coverage
 
 | | |
 | --- | --- |
-| Lines | 97% |
-| Statements | 95% |
-| Branches | 90% |
+| Lines | 92% |
+| Statements | 89% |
+| Branches | 81% |
 | Functions | 93% |
 
 **Read the scope before quoting the number.** `vitest.config.mts` lists the
-files it covers, and that list is exactly the decision logic above.
-`lib/editor/timerUtils.ts` is deliberately outside it even though one of its
-functions is tested: the rest builds markup through `DOMParser` and needs a
-browser environment to exercise at all. Counting those lines as untested would
-say the decision logic is thinly covered when it is not — and leaving them out
-without saying so would be worse. They are a later phase, with jsdom.
+files it covers: the shared decision logic, plus `lib/editor/timerUtils.ts`
+now that its markup builders are covered too. The figure fell from 97% to 92%
+when the countdown was added, which is the honest direction — a bigger,
+harder surface, measured rather than left out.
 
 ## What is not covered
 
@@ -360,12 +363,11 @@ Stated plainly, because an auditor will ask and a partial answer reads worse
 than a complete one:
 
 - **React components** — no rendering tests. The editors are exercised by hand.
-- **The countdown's markup builders** — need a DOM environment.
 - **API routes and the database layer** — no integration tests.
 - **End to end** — nothing drives a browser.
 
-The order that would add the most safety next is the countdown's markup
-builders, then the API routes.
+The order that would add the most safety next is the API routes, then a small
+end-to-end pass over sign in, edit, save draft, publish.
 
 ## Adding a test
 
