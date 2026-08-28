@@ -656,6 +656,7 @@ export function PromoSection({
   const styling = usePromoFieldStyling({
     config,
     setConfig,
+    liveCardRef,
     markChanged,
     pushPromoState: (options?: { replace?: boolean }) =>
       pushPromoStateRef.current(options),

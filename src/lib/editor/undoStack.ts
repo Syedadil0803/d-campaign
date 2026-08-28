@@ -98,6 +98,11 @@ export class UndoStack<T> {
     this.lastPushAt = 0;
   }
 
+  /** The step currently on top, without removing it. */
+  peek(): T | undefined {
+    return this.past[this.past.length - 1];
+  }
+
   /** Depth, for tests and debugging. */
   get size(): number {
     return this.past.length;

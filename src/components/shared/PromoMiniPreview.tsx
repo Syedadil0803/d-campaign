@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PromoCard } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
-import { getTemplateTimerPreviewText } from "@/lib/editor/timerUtils";
+import { getPreviewTimerHtml } from "@/lib/editor/timerUtils";
 
 interface PromoMiniPreviewProps {
   promoCard: PromoCard;
@@ -122,7 +122,7 @@ export function PromoMiniPreview({ promoCard, faithful, scaffold }: PromoMiniPre
             textAlign: style.dateStyle.textAlign || "center",
           }}
           dangerouslySetInnerHTML={{
-            __html: getTemplateTimerPreviewText(promoCard.timerText),
+            __html: getPreviewTimerHtml(promoCard.timerText, promoCard.endDate),
           }}
         />
       )}

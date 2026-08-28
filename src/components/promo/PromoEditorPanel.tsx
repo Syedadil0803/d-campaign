@@ -38,6 +38,7 @@ export function PromoEditorPanel() {
     smartPaste,
     setConfig,
     markChanged,
+    liveCardRef,
     showStartDatePicker,
     setShowStartDatePicker,
     showEndDatePicker,
@@ -157,6 +158,7 @@ export function PromoEditorPanel() {
       <PromoScheduleAndTimer
         config={config}
         setConfig={setConfig}
+        liveCardRef={liveCardRef}
         markChanged={markChanged}
         pushPromoState={pushPromoState}
         updateField={updateField}

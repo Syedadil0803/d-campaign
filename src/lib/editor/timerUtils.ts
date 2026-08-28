@@ -95,7 +95,9 @@ function formatTimerText(template: string, timerValue: TimerValue): string {
  * Get preview timer text for templates (shows sample values)
  */
 export function getTemplateTimerPreviewText(timerText?: string): string {
-  const sampleValue = { hours: 24, minutes: 18, seconds: 7, days: 2 };
+  // Hours never reaches 24 in a real countdown — it rolls into days — so a
+  // sample showing 24 advertised a value the site can never display.
+  const sampleValue = { hours: 23, minutes: 18, seconds: 7, days: 2 };
   const template = normalizeLegacyTimerTokens(timerText || 'Ends in {timer}');
   // New fixed-block templates: swap the {timer} marker for sample countdown words.
   if (template.includes(TIMER_FIXED_TOKEN)) {
@@ -103,6 +105,24 @@ export function getTemplateTimerPreviewText(timerText?: string): string {
   }
   // Legacy token templates fallback.
   return formatTimerText(template, sampleValue);
+}
+
+/**
+ * The countdown as a static preview should show it.
+ *
+ * A card with an end date gets its REAL remaining time — the same figures the
+ * editor canvas and the live site show, through the same builder, so the three
+ * cannot disagree. Only a card without one falls back to sample numbers, which
+ * is the Template Hub: a template is a design, not a campaign, and has no date
+ * to count to.
+ *
+ * My Draft, My Published and the saved variants all showed the sample before
+ * this, so a card ending tomorrow claimed two days in the very popup meant to
+ * show the user what they had stored.
+ */
+export function getPreviewTimerHtml(timerText?: string, endDate?: string): string {
+  if (!endDate) return getTemplateTimerPreviewText(timerText);
+  return buildTimerDisplayHtml(timerText || '', calculateTimeRemaining(endDate));
 }
 
 /**

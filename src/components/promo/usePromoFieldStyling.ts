@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, type RefObject } from 'react';
-import type { CampaignConfig, GradientStyle, PromoField } from '@/types/campaign';
+import type { CampaignConfig, GradientStyle, PromoCard, PromoField } from '@/types/campaign';
 import { STYLE_KEY_MAP, type FieldStyle } from '@/lib/promo/promoStyleKeys';
 import {
   fieldStylePopupPosition,
@@ -36,6 +36,13 @@ interface UsePromoFieldStylingArgs {
 
   /** Everything the panel is positioned against. */
   promoCardRef: RefObject<HTMLDivElement | null>;
+  /**
+   * The card ahead of React. usePromoUndo takes its snapshots from this, so
+   * every write has to move it in the same breath as setConfig — otherwise a
+   * second change landing in the same event snapshots the card as it was two
+   * changes ago.
+   */
+  liveCardRef: RefObject<PromoCard>;
   fieldPopupHeightRef: RefObject<number>;
   previewFieldRefs: Record<PromoField, RefObject<HTMLDivElement | null>>;
 }
@@ -62,6 +69,7 @@ export function usePromoFieldStyling({
   refreshPromoToolbarFormats,
   ensureDefaultFontSize,
   promoCardRef,
+  liveCardRef,
   fieldPopupHeightRef,
   previewFieldRefs,
 }: UsePromoFieldStylingArgs) {
@@ -75,18 +83,17 @@ export function usePromoFieldStyling({
     pushPromoState();
     const key = STYLE_KEY_MAP[currentField];
     const style = config.promoCard.style[key];
-    setConfig({
-      ...config,
-      promoCard: {
-        ...config.promoCard,
-        style: {
-          ...config.promoCard.style,
-          [key]: mergeBackground
-            ? { ...style, background: { ...style.background, ...(next as Partial<GradientStyle>) } }
-            : { ...style, ...next },
-        },
+    const nextPromoCard = {
+      ...config.promoCard,
+      style: {
+        ...config.promoCard.style,
+        [key]: mergeBackground
+          ? { ...style, background: { ...style.background, ...(next as Partial<GradientStyle>) } }
+          : { ...style, ...next },
       },
-    });
+    };
+    liveCardRef.current = nextPromoCard;
+    setConfig({ ...config, promoCard: nextPromoCard });
     markChanged();
   }
 
@@ -106,16 +113,15 @@ export function usePromoFieldStyling({
   /** Card-level background update. */
   function updateCardBg(patch: Partial<GradientStyle>) {
     pushPromoState();
-    setConfig({
-      ...config,
-      promoCard: {
-        ...config.promoCard,
-        style: {
-          ...config.promoCard.style,
-          background: { ...config.promoCard.style.background, ...patch },
-        },
+    const nextPromoCard = {
+      ...config.promoCard,
+      style: {
+        ...config.promoCard.style,
+        background: { ...config.promoCard.style.background, ...patch },
       },
-    });
+    };
+    liveCardRef.current = nextPromoCard;
+    setConfig({ ...config, promoCard: nextPromoCard });
     markChanged();
   }
 

@@ -23,6 +23,8 @@ interface PromoScheduleAndTimerProps {
   showEndDatePicker: boolean;
   setShowEndDatePicker: (open: boolean) => void;
   endDateFieldRef: RefObject<HTMLDivElement | null>;
+  /** The card ahead of React — see usePromoUndo.getPromoSnapshot. */
+  liveCardRef: RefObject<PromoCard>;
   promoDateRangeInvalid: boolean;
   dateErrorFlash: boolean;
 
@@ -55,6 +57,7 @@ export function PromoScheduleAndTimer({
   showEndDatePicker,
   setShowEndDatePicker,
   endDateFieldRef,
+  liveCardRef,
   promoDateRangeInvalid,
   dateErrorFlash,
   timerRef,
@@ -84,6 +87,14 @@ export function PromoScheduleAndTimer({
                 startDate: nextValue,
                 ...(nextValue ? { showTimer: true } : {}),
               };
+              // Moved with the config, not after it: usePromoUndo snapshots
+              // this ref, so leaving it behind makes the next step record the
+              // card as it was before the date was picked.
+              liveCardRef.current = nextPromoCard;
+              // Moved with the config, not after it: usePromoUndo snapshots
+              // this ref, so leaving it behind makes the next step record the
+              // card as it was before the date was picked.
+              liveCardRef.current = nextPromoCard;
               setConfig({ ...config, promoCard: nextPromoCard });
               markChanged();
             }}

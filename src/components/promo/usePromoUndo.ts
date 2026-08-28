@@ -145,10 +145,40 @@ export function usePromoUndo({
    * swap itself is off-limits, and that's handled by clearing the stack.
    */
 
+  /**
+   * Would this push add a step that goes nowhere?
+   *
+   * The stack records the state BEFORE each action, so if the step already on
+   * top holds this exact card then nothing landed between the two pushes, and
+   * undoing to either lands in the same place. The user meets these as a
+   * Ctrl+Z that visibly does nothing and has to be pressed twice.
+   *
+   * Time-based coalescing cannot catch them: every style, colour and date
+   * change pushes with `force`, which bypasses the window deliberately, so two
+   * of them a second apart both land however identical they are.
+   *
+   * The whole card is compared, not cardSignature — that strips the HTML and
+   * omits the dates, so it would call a bold or a new end date "the same" and
+   * throw away a real step. A card built by a different route may serialise its
+   * keys in another order and compare unequal; that only means a redundant step
+   * survives, which is the safe way round.
+   */
+  function pushIsRedundant(snapshot: PromoSnapshot): boolean {
+    const top = promoHistory.peek();
+    return (
+      !!top &&
+      JSON.stringify(top.promoCard) === JSON.stringify(snapshot.promoCard)
+    );
+  }
+
   function pushPromoState(options: { replace?: boolean } = {}) {
     if (restoringSnapshotRef.current) return;
+    const snapshot = getPromoSnapshot();
+    // Before the redo branch is dropped, not after: an action that changed
+    // nothing must not cost the user their redo.
+    if (pushIsRedundant(snapshot)) return;
     promoAppliedRedoRef.current = null;
-    promoHistory.push(getPromoSnapshot(), { force: options.replace });
+    promoHistory.push(snapshot, { force: options.replace });
   }
 
   /**
@@ -188,13 +218,15 @@ export function usePromoUndo({
    */
   function pushPromoStateFromConfig() {
     if (restoringSnapshotRef.current) return;
-    promoAppliedRedoRef.current = null;
-    promoHistory.push({
+    const snapshot: PromoSnapshot = {
       promoCard: clonePromoCard(liveCardRef.current),
       currentField: currentFieldRef.current,
       selection: null,
       showPersistentScaffold: showPersistentScaffoldRef.current,
-    });
+    };
+    if (pushIsRedundant(snapshot)) return;
+    promoAppliedRedoRef.current = null;
+    promoHistory.push(snapshot);
   }
 
   function capturePromoRestorePoint(): PromoRestorePoint {
