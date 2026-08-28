@@ -25,6 +25,7 @@ import { PromoCard, PromoField } from '@/types/campaign';
 import { getISODateWithOffset } from '@/lib/utils';
 import {
   ourLooks,
+  timerWordingIsOurs,
 } from "@/lib/promo/promoAuthorship";
 import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
 
@@ -856,9 +857,17 @@ export function PromoSection(props: PromoSectionProps) {
    * timer does not count as work. The timer can also arm itself when dates are
    * set, which is why enabling it is not the test: only text someone typed is.
    */
-  const hasTimerText = hasVisibleContent(
-    (config.promoCard.timerText || '').replace(/\{timer\}/gi, ''),
-  );
+  /**
+   * Wording the user put on the countdown — not the wording we shipped.
+   *
+   * The default is "Ends In {timer}", which strips to "Ends In" and read as
+   * writing, so Clear and Save as draft stayed enabled on a canvas nobody had
+   * touched. timerWordingIsOurs is the same test cardIsBlank uses, so the two
+   * cannot disagree about it again.
+   */
+  const hasTimerText =
+    !timerWordingIsOurs(config.promoCard.timerText) &&
+    hasVisibleContent((config.promoCard.timerText || '').replace(/\{timer\}/gi, ''));
   // Nothing to save, nothing to clear: no visible text in any field AND the
   // style is still the fresh default. Styling-only work counts as work, so it
   // must keep both actions enabled — same test as startFreshPromoCard's no-op

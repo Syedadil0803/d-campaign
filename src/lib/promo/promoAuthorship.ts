@@ -104,6 +104,19 @@ const OUR_TIMER_WORDS = new Set(
 );
 
 /**
+ * Is this countdown still wearing the wording we shipped?
+ *
+ * Exported because two places ask it. cardIsBlank asks to decide whether a
+ * card is worth protecting; the editor asks to decide whether Clear should be
+ * enabled. They had their own answers, and the editor's counted the default
+ * "Ends In {timer}" as writing — so Clear stayed lit on a canvas nobody had
+ * touched.
+ */
+export function timerWordingIsOurs(timerText?: string): boolean {
+  return OUR_TIMER_WORDS.has(plain(timerText).toLowerCase());
+}
+
+/**
  * Nothing written, and the default styling still in place.
  *
  * The countdown and the end date count as writing. They were left out, so a
@@ -128,7 +141,7 @@ export function cardIsBlank(card: PromoCard | null | undefined): boolean {
     !plain(card.description) &&
     !plain(card.buttonText) &&
     !card.endDate &&
-    OUR_TIMER_WORDS.has(plain(card.timerText).toLowerCase()) &&
+    timerWordingIsOurs(card.timerText) &&
     (lookSignature(card.style) === lookSignature(defaultConfig.promoCard.style) ||
       isBlankLook(card.style))
   );

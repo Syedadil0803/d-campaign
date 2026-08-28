@@ -441,12 +441,9 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const promoAtRisk = promoWorkNotInDraftRef.current;
-    const announcementAtRisk =
-      hasAnnouncementChanges &&
-      draftSignatureRef.current !== getConfigSignature(config);
+    const atRisk = editorWorkAtRisk();
 
-    if (!promoAtRisk && !announcementAtRisk) {
+    if (!atRisk) {
       /**
        * Nothing at risk means nothing to recover — so the copy goes.
        *
@@ -530,11 +527,7 @@ export default function Home() {
    */
   useEffect(() => {
     const preserveWork = () => {
-      const atRisk =
-        promoWorkNotInDraftRef.current ||
-        (hasAnnouncementChangesRef.current &&
-          draftSignatureRef.current !== getConfigSignature(configRef.current));
-      if (!atRisk) return;
+      if (!editorWorkAtRisk()) return;
 
       // Synchronous, so it completes while the page still exists — the
       // debounced autosave may have up to 800ms of edits still pending.
@@ -973,11 +966,7 @@ export default function Home() {
      * be lost, and stopping someone on the way out for it teaches them to
      * click through the one time it matters.
      */
-    const promoAtRisk = promoWorkNotInDraftRef.current;
-    const announcementAtRisk =
-      hasAnnouncementChanges &&
-      draftSignatureRef.current !== getConfigSignature(configRef.current);
-    if (promoAtRisk || announcementAtRisk) {
+    if (editorWorkAtRisk()) {
       setPendingDraftAction({ type: 'logout' });
       return;
     }
@@ -1116,6 +1105,25 @@ export default function Home() {
     return worthProtecting && differsFromLive && differsFromDraft && differsFromSaved;
   }, [config.promoCard, publishedConfig.promoCard, draftPromoCard, promoVariants]);
 
+  /**
+   * Is there anything in the editor the user would lose?
+   *
+   * Not the same question as "is the config dirty", which is what this used to
+   * be asked as in three separate places. Some load paths put a blank canvas up
+   * deliberately — the draft offer does — and the dirty flag follows it, so the
+   * welcome-back dialog warned about losing "unsaved changes" that were a blank
+   * card the app had just created. That reads as a threat and makes people
+   * hesitate over a decision that costs nothing.
+   *
+   * The promo half is the authorship test: a blank canvas, an untouched
+   * template and a card already in the draft are all things nobody would miss.
+   */
+  const editorWorkAtRisk = () =>
+    promoWorkNotInDraftRef.current ||
+    (hasAnnouncementChangesRef.current &&
+      draftSignatureRef.current !== getConfigSignature(configRef.current));
+
+
   return (
     <div className="campaign-page-bg flex h-screen text-on-surface">
       <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -1236,7 +1244,7 @@ export default function Home() {
       <WelcomeBackDialog
         welcomeBack={welcomeBack}
         draftOffer={draftOffer}
-        hasChanges={hasChanges}
+        editorWorkAtRisk={editorWorkAtRisk()}
         acceptOfferedDraft={acceptOfferedDraft}
         dismissWelcomeBack={dismissWelcomeBack}
       />

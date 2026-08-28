@@ -183,14 +183,19 @@ export function PostPublishDraftDialog({
 export function WelcomeBackDialog({
   welcomeBack,
   draftOffer,
-  hasChanges,
+  editorWorkAtRisk,
   acceptOfferedDraft,
   dismissWelcomeBack,
 }: {
   /** Null when nothing is being offered back; otherwise why it is showing. */
   welcomeBack: WelcomeBackState;
   draftOffer: CampaignConfig | null;
-  hasChanges: boolean;
+  /**
+   * True only when the editor holds something the user would lose — not
+   * merely when the config is dirty. Accepting the draft replaces the whole
+   * editor, so the warning has to be honest about whether that costs anything.
+   */
+  editorWorkAtRisk: boolean;
   acceptOfferedDraft: (draft: CampaignConfig) => void;
   dismissWelcomeBack: () => void;
 }) {
@@ -323,7 +328,7 @@ export function WelcomeBackDialog({
           </p>
         )}
         {welcomeBack.mode === 'draft' &&
-          (hasChanges ? (
+          (editorWorkAtRisk ? (
             <p className="mt-4 text-xs text-amber-600 dark:text-amber-500">
               The editor has unsaved changes. Opening the draft replaces them.
             </p>
@@ -341,7 +346,7 @@ export function WelcomeBackDialog({
                 onClick={dismissWelcomeBack}
                 className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
               >
-                {hasChanges ? 'Keep my unsaved changes' : 'Start something new'}
+                {editorWorkAtRisk ? 'Keep my unsaved changes' : 'Start something new'}
               </button>
               <button
                 type="button"
