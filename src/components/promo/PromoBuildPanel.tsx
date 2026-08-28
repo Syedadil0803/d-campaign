@@ -28,7 +28,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   PenLine,
   Sparkles,
-  X,
 } from 'lucide-react';
 import { CampaignConfig, PromoCard } from '@/types/campaign';
 import type { PromoBrief } from '@/lib/promo/promoAiPrompt';
@@ -45,8 +44,6 @@ import {
   CONTENT_QUESTIONS,
   COLOR_QUESTION,
   EXTRA_QUESTION,
-  chipIsOn,
-  toggleChip,
   type BriefQuestion,
 } from '@/lib/promo/promoBrief';
 import {

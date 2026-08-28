@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { PromoCard } from '@/types/campaign';
-import { getBackgroundStyle, getISODateWithOffset } from '@/lib/utils';
+import { getBackgroundStyle } from '@/lib/utils';
 import { getTemplateTimerPreviewText } from '@/lib/editor/timerPreview';
 import { INDUSTRIES, withIndustryCopy } from '@/lib/promo/industryCopy';
 import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';

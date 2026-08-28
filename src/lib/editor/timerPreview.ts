@@ -1,4 +1,3 @@
-import type { TimerValue } from '@/lib/editor/timerUtils';
 import {
   TIMER_FIXED_TOKEN,
   buildTimerDisplayHtml,

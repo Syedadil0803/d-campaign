@@ -7,7 +7,6 @@
 
 import { jsonrepair } from 'jsonrepair';
 import type { PromoCard, GradientStyle } from '@/types/campaign';
-import { PROMO_COPY_STYLE_GUIDE } from '@/lib/promo/promoCopyStyle';
 
 // A section background: either a single hex (→ solid) or a gradient pair.
 type AiBg = string | { from?: string; to?: string; direction?: string; type?: string };

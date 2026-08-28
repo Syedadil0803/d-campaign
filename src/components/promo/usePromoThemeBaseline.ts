@@ -81,7 +81,7 @@ export function usePromoThemeBaseline({
         8000,
       );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [hasCurrentDesign, toast]);
 
   return {

@@ -1,5 +1,3 @@
-import type { PromoCard } from '@/types/campaign';
-import { getISODateWithOffset } from '@/lib/utils';
 
 /**
  * The cards Template Hub offers, as data.

@@ -289,7 +289,6 @@ export function Dashboard({
       <DashboardLifecycleCards
         promo={promo}
         ann={ann}
-        now={now}
         endMs={endMs}
         ended={ended}
         promoUncreated={promoUncreated}

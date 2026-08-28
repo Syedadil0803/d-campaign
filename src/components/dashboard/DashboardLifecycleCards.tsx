@@ -27,8 +27,6 @@ import {
 interface DashboardLifecycleCardsProps {
   promo: CampaignConfig['promoCard'];
   ann: CampaignConfig['announcementBar'];
-  /** Null until the clock has ticked once on the client. */
-  now: Date | null;
   /** End of the promo's last day, in ms. Null when it has no end date. */
   endMs: number | null;
   ended: boolean;
@@ -64,7 +62,6 @@ interface DashboardLifecycleCardsProps {
 export function DashboardLifecycleCards({
   promo,
   ann,
-  now,
   endMs,
   ended,
   promoUncreated,

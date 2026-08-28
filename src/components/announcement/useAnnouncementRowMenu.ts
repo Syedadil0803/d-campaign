@@ -91,7 +91,7 @@ export function useAnnouncementRowMenu({
     };
     document.addEventListener('mousedown', handleMouseDown);
     return () => document.removeEventListener('mousedown', handleMouseDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [actionMenuIndex]);
 
   // The grace timer must not outlive the section, or it fires into an

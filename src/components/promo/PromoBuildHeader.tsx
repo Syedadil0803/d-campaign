@@ -30,8 +30,6 @@ export function PromoBuildHeader({
   setAiStep,
   canGoBack,
   cardHasCopy,
-  mode,
-  brief,
   expanded,
   setExpanded,
   onClose,

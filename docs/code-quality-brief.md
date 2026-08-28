@@ -1,7 +1,13 @@
 # Campaign Admin Tool — Code Quality Brief
 
-Context pack for planning the code quality review. Every number here was
-measured from the repository at commit `a2a4645`, not estimated.
+Written before the work as a plan; updated after it with what actually
+happened. The five sections are the five questions that were asked, and each
+now carries both the position at the start and the position now.
+
+Every number was measured, not estimated. The "before" figures come from
+commit `a2a4645` (25 August). The "after" figures were measured at commit
+`eee901b` and every one can be reproduced with the commands in
+`code-quality-runbook.md`.
 
 ---
 
@@ -227,15 +233,23 @@ The corrected figure counts server code only:
 The other 95% is front end, and **44% of the entire codebase sits in three
 files**:
 
-| File | Lines |
-|---|---|
-| `src/components/PromoSection.tsx` | 6,306 |
-| `src/app/page.tsx` | 3,431 |
-| `src/components/AnnouncementSection.tsx` | 2,637 |
+| File | Lines (25 Aug) | Lines now |
+|---|---|---|
+| `src/components/promo/PromoSection.tsx` | 6,306 | **748** |
+| `src/app/page.tsx` | 3,431 | **744** |
+| `src/components/announcement/AnnouncementSection.tsx` | 2,637 | **714** |
 
-These are not components. Each is an entire feature in a single file. This is
-where the work is, and the quality effort should be aimed almost entirely at
-the front end.
+These were not components. Each was an entire feature in a single file. That
+was where the work was, and the effort went almost entirely to the front end.
+
+**What replaced them.** Not one big file split into smaller big files: the
+three features are now roughly ninety modules, each named for the one thing it
+decides or draws. The test applied at every seam was not length but coupling —
+how many things a group needs from outside it. Under about twelve inputs it is
+a module; past twenty-five it is a keyhole, and cutting there makes the code
+harder to change, not easier. One extraction was measured at thirty-nine
+inputs and abandoned rather than shipped; it became viable only after the
+duplication underneath it was removed, at which point it needed twelve.
 
 `src/app/page.tsx` is a special case: it is not a feature, it is shared state
 that every feature reaches into. It will be pulled apart by whichever feature
@@ -301,6 +315,13 @@ So today the only automated quality gate is the compiler. That eliminates a
 whole class of bugs and says nothing at all about structure, duplication or
 dead code — which is precisely what is being asked about.
 
+**Since.** ESLint 9 is installed and configured (flat config, `eslint-config-next`
+pinned to the framework's major version), enforcing SonarQube's S104 file-length
+rule at 750 lines. `knip`, `jscpd` and `madge` cover dead code, duplication and
+the dependency graph. `vitest` runs the tests. Every one is a devDependency: a
+production install takes none of them, and the shipped bundle is unchanged by
+all of them.
+
 ### The gap this plan has to answer for: there are no tests
 
 **Zero test files. No test framework in `package.json`.** Not Jest, not Vitest,
@@ -328,6 +349,32 @@ to be taken rather than assumed:
 Option 1 is the recommendation: it scales with the work instead of preceding
 all of it, and each slice arrives with its own evidence that behaviour did not
 change. Whichever is chosen, the refactor should not start before it is decided.
+
+**What happened.** Neither option 1 nor 2, in the end, and the reason is worth
+recording because it was not the plan.
+
+The safety net during the work was the compiler plus manual verification after
+every commit — option 3, with the risk accepted. What made that defensible was
+the shape of the changes rather than the discipline: extractions were verified
+by hashing each moved function before and after and requiring the bytes to
+match, so "did this move change behaviour" was answered mechanically rather
+than by reading. Where a move could not be byte-identical, the difference was
+stated in the commit.
+
+Forty-three defects were found and fixed during the work. Every one was found
+by hand, which is the honest measure of what the absence of tests cost.
+
+Tests came at the end rather than the beginning, and were aimed by the defect
+data rather than by coverage: **24 of the 43 defects came from one rule living
+in two places**, so the suite covers those rules, which are now single and
+pure. Fifty-six cases across six suites; 97% line coverage of that logic.
+
+The suite justified itself on its first run by finding a live defect nobody had
+noticed: an announcement with a start date and no end date never displayed at
+all, when it was set to run indefinitely. "Forever" had been written as the
+largest date JavaScript can hold, and the next line pushed it past the maximum
+into `Invalid Date`, against which every comparison is false. Manual testing
+had never caught it because the symptom is silence.
 
 ### Proposed toolchain
 
@@ -385,6 +432,84 @@ code moves. That snapshot is the first task.
 
 Tool output is written to `security-reports/`, ignored locally via
 `.git/info/exclude`. Nothing generated lands in the repository.
+
+---
+
+## Outcome — measured
+
+Every figure reproducible with the commands in `code-quality-runbook.md`.
+
+| | 25 Aug | Now | |
+|---|---|---|---|
+| Files | 78 | 194 | |
+| Lines of TypeScript | 20,960 | 24,497 | comments and modules added |
+| Largest file | 4,935 | **748** | −85% |
+| Files over 750 lines (SonarQube S104) | 6 | **0** | |
+| Files over 400 lines | 12 | **4** | |
+| Functions over 7 parameters (S107) | — | **0** | |
+| ESLint errors | 31 | **0** | |
+| ESLint warnings | 63 | **11** | all deliberate `exhaustive-deps` on refs |
+| Duplicated lines | 580 (2.03%) | **235 (0.68%)** | |
+| Duplicated blocks | 50 | **21** | |
+| Circular dependencies | 2 | **0** | |
+| Unused exports | 36 | **0** | |
+| Tests | 0 | **56** | 97% of the decision logic |
+
+**Distribution, which says more than the maximum.** Median file 84 lines, 90%
+under 276, 95% under 322. That is the shape that matters: not that the biggest
+file shrank, but that a large file is now unusual rather than normal.
+
+### The four files still over 400
+
+`PromoSection` 748, `page.tsx` 744, `AnnouncementSection` 714,
+`usePromoRichText` 641. Each is an orchestrator that already has six to eight
+modules extracted from it. Taking them lower means seams of twenty-five to
+forty inputs — shorter files, more coupling, harder to change. They were left
+deliberately, and that is a defensible position rather than unfinished work.
+
+### What the defect data actually says
+
+Forty-three defects were found, fixed and recorded with symptom, reproduction
+and root cause. **Twenty-four came from a single pattern: one rule implemented
+in two places, the copies drifting, and nobody noticing because both looked
+reasonable.**
+
+Examples, each a separate incident: the schedule-window rule in the editor and
+the dashboard; the card-is-blank rule in the authorship check and the editor's
+Clear button; the countdown wording rule fixed in one place and not the other;
+`FIELD_MAX_LINES` missing a field in four places; three copies of the sequence
+that installs a card; two undo systems on the same keystroke.
+
+This is the finding to carry forward. **File length was not the disease — it
+was where duplicates could hide unnoticed.** The line counts made them
+findable; consolidating the rules is what removed them. Any future standard
+should be written against duplication and coupling, with length as the signal
+that invites a look rather than the thing being fixed.
+
+### Standard proposed
+
+Three tiers rather than one number, derived from this codebase rather than
+borrowed:
+
+| | |
+|---|---|
+| **750 lines** | enforced by the linter — objective, and it fires |
+| **400 lines** | a review prompt, not a gate: "what are the two things in here?" Matches the observed p90 of 276 |
+| **Coupling** | the real gate. Under ~12 inputs across a seam is a module; past ~25 it is a keyhole and splitting makes things worse |
+
+### What remains
+
+Stated because a partial answer reads worse than a complete one:
+
+- **59 functions over 100 lines and 39 over cognitive complexity 15**
+  (SonarQube S138 and S3776). Mostly React components, where a long JSX return
+  trips the rule without being a real problem. The job is calibrating and
+  writing down the threshold, not refactoring.
+- **No tests for React components, the countdown's markup builders, the API
+  routes, or end-to-end.** The next most valuable is the markup builders,
+  which need a browser environment.
+- **11 dependency vulnerabilities** (`next`, `postgres`, `sharp`, `drizzle`),
+  none introduced by the quality tooling and all predating this work.
 
 ---
 
