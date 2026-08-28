@@ -122,7 +122,9 @@ export function getTemplateTimerPreviewText(timerText?: string): string {
  */
 export function getPreviewTimerHtml(timerText?: string, endDate?: string): string {
   if (!endDate) return getTemplateTimerPreviewText(timerText);
-  return buildTimerDisplayHtml(timerText || '', calculateTimeRemaining(endDate));
+  return buildTimerDisplayHtml(timerText || '', calculateTimeRemaining(endDate), {
+    editorSlots: false,
+  });
 }
 
 /**
@@ -463,7 +465,21 @@ export function refreshTimerValueSpans(rootEl: HTMLElement, v: TimerValue): void
  * word/number can be styled independently; existing per-word styles and the
  * block's live numbers are preserved. If no block exists, one is appended.
  */
-export function buildTimerDisplayHtml(storedHtml: string, timerValue: TimerValue): string {
+export function buildTimerDisplayHtml(
+  storedHtml: string,
+  timerValue: TimerValue,
+  /**
+   * Wrap the text either side of the countdown in the editor's slot spans.
+   *
+   * On for the panel input, which needs them to hang its per-side "Enter text
+   * here" placeholders on. Off for a static preview: the slots are styled
+   * `display: inline-block`, and CSS collapses a trailing space at the end of
+   * an inline-block box — so "Ends in " lost its space and the countdown butted
+   * straight against the word.
+   */
+  options: { editorSlots?: boolean } = {},
+): string {
+  const { editorSlots = true } = options;
   let html = normalizeLegacyTimerTokens(storedHtml || '');
   if (!html.includes(TIMER_FIXED_TOKEN) && !/data-timer-fixed/i.test(html)) {
     html = (html ? html + ' ' : '') + TIMER_FIXED_TOKEN;
@@ -527,7 +543,7 @@ export function buildTimerDisplayHtml(storedHtml: string, timerValue: TimerValue
   // {timer} token sat inside another element (e.g. bold/colored copy), the chip
   // is nested — insertBefore(root, …) would throw, so skip the slot wrapping and
   // just render the chip where it is.
-  if (firstChip && firstChip.parentNode === root) {
+  if (editorSlots && firstChip && firstChip.parentNode === root) {
     const prefix = doc.createElement('span');
     prefix.setAttribute('data-timer-prefix', '');
     while (root.firstChild && root.firstChild !== firstChip) {
