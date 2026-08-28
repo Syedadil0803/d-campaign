@@ -1,21 +1,15 @@
 /**
  * Ready-made looks for the announcement bar.
  *
- * Replaces the old "Background Type Guide", which showed three swatches
- * labelled Solid / Linear / Radial — a legend teaching CSS vocabulary before
- * anyone could see a result. A theme sets the whole look at once (background
- * AND text color), so the choice is "which bar do I want" rather than "which
- * gradient function should I pick".
- *
- * Text colors are paired to their background here on purpose: picking a
- * background alone is how you end up with dark text on a dark bar. Every pair
- * below clears WCAG AA for the bar's text size.
+ * A theme sets background AND text colour together, so the choice is "which
+ * bar do I want" rather than "which gradient function should I pick". Pairing
+ * them is deliberate: choosing a background alone is how you get dark text on
+ * a dark bar. Every pair clears WCAG AA at the bar's text size.
  *
  * On `midpoint`: the renderer holds startColor FLAT until midpoint%, then
- * blends to endColor (see getBackgroundStyle). So `midpoint: 0` is a true
- * edge-to-edge blend, and a higher value pushes the color change later —
- * useful for a bar that stays one color behind the text and shifts at the
- * end. It is NOT a midpoint in the usual gradient sense.
+ * blends to endColor (see getBackgroundStyle). So 0 is a true edge-to-edge
+ * blend and a higher value pushes the change later. It is NOT a midpoint in
+ * the usual gradient sense.
  */
 
 import { GradientStyle } from '@/types/campaign';

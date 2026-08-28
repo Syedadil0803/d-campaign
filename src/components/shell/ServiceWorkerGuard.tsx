@@ -9,24 +9,19 @@ const OUR_WORKER_URL = '/sw.js';
  * Owns the service worker on this origin: registers ours, evicts everyone
  * else's.
  *
- * The app used to ship no worker at all, and this component removed every
- * registration it found. That was right at the time — a service worker belongs
- * to the ORIGIN, not the project, so any other app previously served from the
- * same localhost port left its worker installed and in charge here. It then
- * answered this app's requests from its own cache, handing back chunks from a
- * different build: the page died with "Cannot read properties of undefined
- * (reading 'call')", the console showed a 404 for an sw.js this project never
- * had, and a hard reload appeared to fix it because that path alone bypasses
- * the worker.
+ * A service worker belongs to the ORIGIN, not the project. Any other app once
+ * served from the same localhost port leaves its worker installed and in
+ * charge here, answering our requests from its own cache with chunks from a
+ * different build — the page dies on "Cannot read properties of undefined
+ * (reading 'call')", and a hard reload appears to fix it only because that
+ * path bypasses the worker.
  *
- * Now the app is installable, it has a worker of its own, and "unregister
- * everything" would delete it on the very next load — the tool would be
- * installable exactly once and then quietly stop being. So the sweep is
- * targeted by script URL: foreign workers go, ours stays.
+ * So the sweep is targeted BY SCRIPT URL. Unregistering everything would
+ * delete our own worker on the next load, and the tool would be installable
+ * exactly once.
  *
- * Two separate components — one registering, one evicting — would race over
- * the same registry and the outcome would depend on which effect ran first.
- * One owner, one decision.
+ * One component does both. Split in two they would race over the same
+ * registry, and the winner would depend on effect order.
  */
 export function ServiceWorkerGuard() {
   useEffect(() => {

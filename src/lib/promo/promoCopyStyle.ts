@@ -1,21 +1,19 @@
 /**
  * The house typography for promo copy, written as prompt text.
  *
- * Every built-in template composes its lines the same way: the title is a bold
- * name with a small all-caps kicker beside it, the subtitle drops a big number
- * between two small phrases, the description stays plain. That mix of sizes and
- * weights inside a single line is most of what makes a template look designed
- * rather than typed.
+ * Every built-in template composes lines the same way: a bold name with a
+ * small all-caps kicker, a big number between two small phrases, a plain
+ * description. That mix of sizes inside one line is most of what makes a
+ * template look designed rather than typed.
  *
  * Both AI prompts used to say only "you may use light inline HTML", which a
- * model reads as permission it doesn't have to use — so generated cards came
- * back as three flat sentences and looked nothing like the templates sitting
- * next to them in the picker. These are the actual patterns from
- * SamplePromoTemplates, quoted so the model has something to copy.
+ * model reads as permission it need not take — so cards came back as three
+ * flat sentences beside templates that did not look like them. These are the
+ * actual patterns, quoted so the model has something to copy.
  *
- * Shared by both prompts so the two can't drift apart. The examples use SINGLE
- * quotes in HTML attributes because the prompt asks for JSON, and the importer's
- * sanitizer keeps exactly these tags (strong/em/span with font-size and color).
+ * Shared by both prompts so they cannot drift. Examples use SINGLE quotes in
+ * attributes because the prompt asks for JSON, and the importer's sanitizer
+ * keeps exactly these tags.
  */
 export const PROMO_COPY_STYLE_GUIDE: string[] = [
   '── HOW THE COPY SHOULD LOOK ──',

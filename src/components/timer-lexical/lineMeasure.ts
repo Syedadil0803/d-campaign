@@ -8,27 +8,21 @@
 
 /** True if `el`'s content occupies more than one line at its CURRENT width.
  *
- *  Counts how many distinct BASELINES the fragments sit on. Text on one line
- *  shares a baseline, so the fragments' bottoms line up however much their
- *  font sizes differ; text on two lines has two groups of bottoms, a line
+ *  Counts how many distinct BASELINES the fragments sit on: one line shares a
+ *  baseline however much font sizes differ, two lines give two groups a line
  *  apart.
  *
- *  Bottoms rather than tops or heights, and that took two wrong answers to
- *  arrive at. Comparing the spread of TOPS against the shortest fragment
- *  reverted edits with the box half empty, because mixed font sizes spread the
- *  tops while the shortest fragment made the tolerance smallest. Comparing it
- *  against the tallest fragment then missed real wraps, because once content
- *  wraps one of the measured rectangles becomes two lines tall and the
+ *  Bottoms, not tops or heights — and both alternatives were tried and are
+ *  wrong. Spread of TOPS against the shortest fragment reverted edits with the
+ *  box half empty, because mixed sizes spread the tops. Against the TALLEST it
+ *  missed real wraps, because a wrapped rectangle is two lines tall and the
  *  tolerance grows exactly when it should not.
  *
- *  Measured from a real timer: fitting, bottoms were [253, 255] — one line
- *  despite fragments 19px and 24px tall. Wrapped, they were [251, 275, 277] —
- *  the split is unmistakable and neither font size nor a tall rectangle
- *  disturbs it.
+ *  Measured on a real timer: fitting, bottoms were [253, 255] despite 19px and
+ *  24px fragments. Wrapped: [251, 275, 277].
  *
- *  The tolerance groups bottoms that differ by less than half the shortest
- *  fragment, which is far below a line height and far above the pixel or two
- *  that descenders and inline-block padding move a baseline by. */
+ *  The tolerance groups bottoms differing by less than half the shortest
+ *  fragment — far below a line height, far above what descenders move. */
 function isMultiline(el: HTMLElement): boolean {
   if (typeof document === 'undefined') return false;
   const range = document.createRange();

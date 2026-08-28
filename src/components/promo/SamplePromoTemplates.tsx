@@ -39,23 +39,17 @@ const WIDGET_FONT_STACK =
 /**
  * One template in the gallery, drawn at the size it will really be.
  *
- * The tile used to render the card at whatever width the grid column happened
- * to be — roughly 300px at three columns, against a real card of 440. The
- * template headlines carry inline `font-size` in **rem**, which is relative to
- * the document root and therefore completely indifferent to how narrow its
- * container is: a 1.6rem word is 25.6px in a 300px tile exactly as it is in a
- * 440px card. Nothing about a narrower column makes that text smaller, so it
- * simply wrapped, and a one-line headline became two.
+ * Laid out at the card's true width, then scaled to fit the tile. Template
+ * headlines carry font-size in **rem**, which is relative to the document root
+ * and indifferent to its container — a 1.6rem word is 25.6px in a 300px tile
+ * exactly as in a 440px card. Drawn at column width it simply wrapped, and a
+ * one-line headline became two.
  *
- * So the card is laid out at its true width and the whole thing is scaled to
- * fit. `zoom` rather than `transform: scale()` because zoom scales layout too
- * — the tile's height follows on its own, with no second measurement to keep
- * in step — and because the live preview already solves its own fitting
- * problem this way.
+ * `zoom`, not `transform: scale()`: zoom scales layout too, so the tile's
+ * height follows on its own with no second measurement to keep in step.
  *
- * The line breaks are now correct by construction rather than by tuning. Type
- * a longer headline into any template and the tile keeps agreeing with the
- * card, because it is the same layout at the same width, just smaller.
+ * The line breaks are correct by construction — same layout, same width, just
+ * smaller — so a longer headline keeps the tile agreeing with the card.
  */
 function TemplateTile({
   template,

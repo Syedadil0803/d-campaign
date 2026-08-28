@@ -1,26 +1,21 @@
 /**
  * The editor's own overflow measurement — the "virtual mirror".
  *
- * Renders the field's HTML into a hidden element at the card's content width
- * and asks whether it is wider than the space available. Used by the promo
- * editor to refuse a style that would break the card, and to decide whether
- * the card needs its wider 440 layout.
+ * Renders a field's HTML into a hidden element at the card's content width and
+ * asks whether it is too wide. Used to refuse a style that would break the
+ * card, and to decide whether the card needs its wider 440 layout.
  *
- * ── This is not the only overflow check in the codebase ──
+ * ── WARNING: this is not the only overflow check ──
  *
- * lib/promoFit.ts has fieldOverflows(), which page.tsx uses. The two answer
- * the same question by different means and can disagree:
+ * lib/promoFit.ts has fieldOverflows(), used by page.tsx. The two answer the
+ * same question differently and CAN DISAGREE:
  *
- *   promoFit    measures HEIGHT, allows wrapping, and fails a field when it
- *               exceeds its line allowance
- *   this file   measures WIDTH with white-space:nowrap, and fails a field
- *               when it will not fit on one line
+ *   promoFit    measures HEIGHT, allows wrapping, fails past a line allowance
+ *   this file   measures WIDTH with nowrap, fails if it will not fit one line
  *
  * A subtitle allowed two lines passes promoFit and fails here. Neither is
- * wrong on its own; having both is. They are left as they are because
- * choosing one changes what the editor accepts, which is a product decision
- * rather than a tidying one — but nothing should be built on top of either
- * until that decision is made.
+ * wrong alone; having both is. Choosing one changes what the editor accepts —
+ * a product decision. Until it is made, build nothing on top of either.
  */
 
 export type MeasuredField = 'title' | 'subtitle' | 'description' | 'button';

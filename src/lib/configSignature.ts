@@ -46,20 +46,19 @@ function normalizeForCompare(html: unknown): unknown {
 /**
  * The countdown's stored editor state, reduced to the ONE thing it adds.
  *
- * timerStateJson is a serialized Lexical state, rewritten every time the editor
- * reports a change, and Lexical splits text into different nodes while
- * rendering identically. Comparing it raw meant applying a saved variant
- * stopped the card matching the published copy over a difference nobody could
- * see, and Publish stayed lit for good.
+ * timerStateJson is a serialized Lexical state, rewritten on every reported
+ * change, and Lexical splits text into different nodes while rendering
+ * identically. Compared raw, applying a saved variant stopped the card
+ * matching the published copy over a difference nobody could see, and Publish
+ * stayed lit for good.
  *
- * The wording is already compared, through timerText. All this state adds is
- * the per-cell chip styling that timerText cannot express — so that is all
- * that survives here. Everything else is presentation the app rewrites.
+ * The wording is already compared through timerText. All this state adds is
+ * the per-cell chip styling timerText cannot express, so that is all that
+ * survives here.
  *
- * Absence is not a difference. A card published before it carried a state at
- * all reduces to the same empty result as a card whose countdown is unstyled,
- * because neither expresses a styling choice — that was the second half of the
- * same bug.
+ * Absence is not a difference: a card published before this existed reduces to
+ * the same empty result as one whose countdown is unstyled. Neither expresses
+ * a choice.
  */
 function normalizeTimerStateForCompare(json: unknown): unknown {
   if (typeof json !== 'string' || !json) return '';

@@ -172,20 +172,17 @@ export function usePromoUndo({
   /**
    * Would this push add a step that goes nowhere?
    *
-   * The stack records the state BEFORE each action, so if the step already on
-   * top holds this exact card then nothing landed between the two pushes, and
-   * undoing to either lands in the same place. The user meets these as a
-   * Ctrl+Z that visibly does nothing and has to be pressed twice.
+   * The stack records the state BEFORE each action, so if the step on top holds
+   * this exact card, nothing landed between the two pushes. The user meets these
+   * as a Ctrl+Z that visibly does nothing and has to be pressed twice.
    *
-   * Time-based coalescing cannot catch them: every style, colour and date
-   * change pushes with `force`, which bypasses the window deliberately, so two
-   * of them a second apart both land however identical they are.
+   * Time coalescing cannot catch them: every style, colour and date change
+   * pushes with `force`, which bypasses the window deliberately.
    *
-   * The whole card is compared, not cardSignature — that strips the HTML and
-   * omits the dates, so it would call a bold or a new end date "the same" and
-   * throw away a real step. A card built by a different route may serialise its
-   * keys in another order and compare unequal; that only means a redundant step
-   * survives, which is the safe way round.
+   * The WHOLE card is compared, not cardSignature — that strips HTML and omits
+   * dates, so it would call a bold or a new end date "the same" and throw away a
+   * real step. Different key order compares unequal, which only lets a redundant
+   * step survive: the safe way round.
    */
   function pushIsRedundant(snapshot: PromoSnapshot): boolean {
     const top = promoHistory.peek();

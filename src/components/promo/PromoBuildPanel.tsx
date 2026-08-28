@@ -4,24 +4,19 @@
  * The build panel — how a promo card gets started, over the editor.
  *
  * Two stages:
- *   'mode' → Write myself or Generate with AI (new card, after the dashboard
- *            has asked for the schedule)
+ *   'mode' → Write myself, or Generate with AI
  *   'ai'   → write a brief, take the prompt away, bring the reply back
  *
- * "Write myself" hands off to the editor's own Template Hub rather than
- * showing a second, smaller template grid here.
+ * "Write myself" hands off to the editor's Template Hub rather than showing a
+ * second template grid here.
  *
- * The brief screen is a numbered stepper because the flow genuinely leaves the
- * app and comes back: write a brief → copy the prompt → paste it into ChatGPT,
- * Claude or Gemini → bring the reply back. Numbers make that hand-off legible
- * in a way a flat form doesn't, and steps 2 and 3 stay dimmed until the prompt
- * has been copied, so the panel also shows where you are. Explanations stay to
- * one line each — the earlier version's paragraphs are what made it scroll.
+ * The brief is a numbered stepper because the flow genuinely leaves the app
+ * and comes back. Steps 2 and 3 stay dimmed until the prompt is copied, so the
+ * panel shows where you are.
  *
- * Mini tucks into the canvas corner and leaves the editor's own preview
- * visible beside it. Expanded covers the canvas outright — the card behind is
- * hidden rather than dimmed — and carries its own copy of the card in a
- * right-hand column so it stays in view while AI fills it in.
+ * Mini tucks into the canvas corner and leaves the editor's preview visible.
+ * Expanded covers the canvas and carries its own copy of the card, so it stays
+ * in view while AI fills it in.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';

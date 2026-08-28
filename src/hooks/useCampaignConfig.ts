@@ -110,26 +110,18 @@ export function useCampaignConfig({
   /**
    * Drafting is manual — except when the work is about to be lost.
    *
-   * On tab close or refresh we take one rescue copy so unsaved work survives,
-   * and warn with the native prompt.
-   *
-   * The test is whether anything would actually be lost, which is a narrower
-   * question than "has anything changed".
-   *
-   * Comparing against the published card alone was wrong, and so was
-   * comparing against the saved draft alone: a card can equally be sitting in
-   * My Published, and one the user never authored — a blank canvas, an
-   * untouched template — is not worth stopping anybody over. The promo half
-   * reuses the check the dashboard already makes, which weighs all three
-   * places a card can be recovered from and whether it is the user's work at
-   * all.
+   * On tab close or refresh, take one rescue copy and warn with the native
+   * prompt. The test is whether anything would actually be LOST, which is
+   * narrower than "has anything changed": a card can sit in My Published, and a
+   * blank canvas or untouched template is nobody's work. The promo half reuses
+   * the dashboard's check, which weighs all three places a card is recoverable
+   * from.
    *
    * A prompt that fires when there is nothing to lose is one people learn to
-   * click through without reading, which costs more than it saves.
+   * click through, which costs more than it saves.
    *
-   * Nothing is written on the way out. The local copy is for moving around
-   * inside the tool, not for closing it: if the user is told their work may be
-   * lost and leaves anyway, quietly keeping it makes the warning a lie.
+   * Nothing is written on the way out. If the user is warned and leaves anyway,
+   * quietly keeping the work would make the warning a lie.
    */
   /**
    * Keep a local copy of work in progress, continuously.
