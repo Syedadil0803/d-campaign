@@ -7,7 +7,7 @@ import { Sparkles } from 'lucide-react';
 import { CampaignConfig, GradientStyle, defaultConfig } from '@/types/campaign';
 import { getBackgroundStyle, stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
-import { wrapBareTextWithFontSize, rgbToHex, fontSizeToLabel } from '@/lib/editor/richTextUtils';
+import { rgbToHex, fontSizeToLabel } from '@/lib/editor/richTextUtils';
 import RichTextToolbar from '@/components/shared/RichTextToolbar';
 import { Toast, TOAST_ACTION_MS, type ToastAction } from '@/components/shared/Toast';
 import { AnnouncementLinkPopup } from '@/components/announcement/AnnouncementLinkPopup';
@@ -15,6 +15,7 @@ import { AnnouncementSchedulePopup } from '@/components/announcement/Announcemen
 import { AnnouncementStylePanel } from '@/components/announcement/AnnouncementStylePanel';
 import { useAnnouncementStyleDropdowns } from '@/components/announcement/useAnnouncementStyleDropdowns';
 import { useAnnouncementPopups } from '@/components/announcement/useAnnouncementPopups';
+import { useAnnouncementSelection } from '@/components/announcement/useAnnouncementSelection';
 import { whatsAppUrl } from '@/lib/whatsapp';
 import { useEditorHistory } from '@/hooks/useEditorHistory';
 import { EditorSnapshot, LinkSnapshot } from '@/lib/editor/historyManager';
@@ -50,12 +51,9 @@ function getThemeOnSurfaceHex(): string {
 
 export function AnnouncementSection({ config, setConfig, markChanged, canReactivate, onStop, onGoOnAir }: AnnouncementSectionProps) {
   const [newAnnouncementText, setNewAnnouncementText] = useState('');
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  // Declared up here because useAnnouncementSelection takes it.
+  const richEditorRef = useRef<HTMLDivElement>(null);
 
-  const [selectedUrl, setSelectedUrl] = useState('');
-  const [selectedOpenInNewTab, setSelectedOpenInNewTab] = useState(true);
-  const [selectedStartDate, setSelectedStartDate] = useState('');
-  const [selectedEndDate, setSelectedEndDate] = useState('');
   const [showShortcutsTip, setShowShortcutsTip] = useState(false);
   const shortcutsTipShown = useRef(false);
   // Nothing reads this — only the setter is called. Left in place because
@@ -119,17 +117,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   const resetMenuRef = useRef<HTMLDivElement>(null);
   // WhatsApp destination for the selected message: the same picker the promo
   // card uses, so a number typed here behaves the same way there.
-  const [selectedCtaType, setSelectedCtaType] = useState<'link' | 'whatsapp'>('link');
-  const [selectedWhatsappNumber, setSelectedWhatsappNumber] = useState('');
-  const [selectedCountryCode, setSelectedCountryCode] = useState('+44');
-  const [showAnnCountryDropdown, setShowAnnCountryDropdown] = useState(false);
-  const [annCountryPos, setAnnCountryPos] = useState<{
-    top: number;
-    left: number;
-    width: number;
-  } | null>(null);
-  const annCountryBtnRef = useRef<HTMLButtonElement>(null);
-  const annCountryMenuRef = useRef<HTMLDivElement>(null);
   const {
     showBackgroundTypeDropdown,
     setShowBackgroundTypeDropdown,
@@ -142,6 +129,54 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     directionBtnRef,
     directionMenuRef,
   } = useAnnouncementStyleDropdowns();
+  /**
+   * Filled in below, once the popups hook exists.
+   *
+   * The two hooks need each other — the popups take the selection's dates so
+   * the schedule popup can refuse to close on an invalid range, and clearing
+   * the selection has to shut both popups. One of them has to be built first,
+   * so the later half is reached through a ref. Event-time only: nothing reads
+   * it during a render.
+   */
+  const closeToolbarPopupsRef = useRef<(() => void) | null>(null);
+  const {
+    selectedIndex,
+    setSelectedIndex,
+    selectedUrl,
+    setSelectedUrl,
+    selectedOpenInNewTab,
+    setSelectedOpenInNewTab,
+    selectedStartDate,
+    setSelectedStartDate,
+    selectedEndDate,
+    setSelectedEndDate,
+    selectedCtaType,
+    setSelectedCtaType,
+    selectedWhatsappNumber,
+    setSelectedWhatsappNumber,
+    selectedCountryCode,
+    setSelectedCountryCode,
+    showAnnCountryDropdown,
+    setShowAnnCountryDropdown,
+    annCountryPos,
+    setAnnCountryPos,
+    annCountryBtnRef,
+    annCountryMenuRef,
+    selectedIndexRef,
+    clearSelection,
+    updateSelectedDestination,
+    loadAnnouncementIntoSelection,
+    selectAnnouncement,
+  } = useAnnouncementSelection({
+    config,
+    setConfig,
+    markChanged,
+    setNewAnnouncementText,
+    setShowRichToolbar,
+    richEditorRef,
+    detectFormatsForSelectMode,
+    closeToolbarPopupsRef,
+  });
   const {
     showLinkPopup,
     setShowLinkPopup,
@@ -164,10 +199,12 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     startDateCalendarRef,
     endDateCalendarRef,
   } = useAnnouncementPopups({ selectedStartDate, selectedEndDate });
+  closeToolbarPopupsRef.current = () => {
+    setShowLinkPopup(false);
+    setShowSchedulePopup(false);
+  };
 
-  const richEditorRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const selectedIndexRef = useRef<number | null>(null);
   selectedIndexRef.current = selectedIndex;
   const configRef = useRef(config);
   configRef.current = config;
@@ -683,108 +720,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     };
   }, []);
 
-  // ── Clear all selection/editing state ──
-  function clearSelection() {
-    setSelectedIndex(null);
-    setNewAnnouncementText('');
-    setSelectedUrl('');
-    setSelectedOpenInNewTab(true);
-    setSelectedStartDate('');
-    setSelectedEndDate('');
-    setShowRichToolbar(true);
-    setShowLinkPopup(false);
-    setShowSchedulePopup(false);
-    if (richEditorRef.current) {
-      richEditorRef.current.innerHTML = '';
-      richEditorRef.current.blur();
-    }
-    window.getSelection()?.removeAllRanges();
-  }
 
-  /**
-   * Write the selected message's destination.
-   *
-   * `url` stays the one field the website reads, so a WhatsApp CTA is stored
-   * as its derived wa.me link; the raw number and dialling code ride along
-   * only so reopening the popup can repopulate the picker.
-   */
-  function updateSelectedDestination(next: {
-    ctaType?: 'link' | 'whatsapp';
-    url?: string;
-    whatsappNumber?: string;
-    whatsappCountryCode?: string;
-  }) {
-    if (selectedIndex === null) return;
-    const ctaType = next.ctaType ?? selectedCtaType;
-    const number = next.whatsappNumber ?? selectedWhatsappNumber;
-    const code = next.whatsappCountryCode ?? selectedCountryCode;
-    const plainUrl = next.url ?? selectedUrl;
 
-    const updated = [...config.announcementBar.announcements];
-    const resolved =
-      ctaType === 'whatsapp' ? whatsAppUrl(code, number) : plainUrl || undefined;
-    updated[selectedIndex] = {
-      ...updated[selectedIndex],
-      richText: true,
-      ctaType: ctaType === 'whatsapp' ? 'whatsapp' : undefined,
-      url: resolved || undefined,
-      whatsappNumber: ctaType === 'whatsapp' ? number || undefined : undefined,
-      whatsappCountryCode: ctaType === 'whatsapp' ? code : undefined,
-    };
-    setConfig({
-      ...config,
-      announcementBar: { ...config.announcementBar, announcements: updated },
-    });
-    markChanged();
-  }
-
-  /**
-   * Copies one announcement's fields into the selection state, and returns its
-   * text with a font size applied if it had none.
-   *
-   * Shared by the two ways of selecting: the editor's own select, which then
-   * focuses the editor and puts the caret at the end, and clicking a pill in
-   * the list, which deliberately does the opposite — blurs and clears the
-   * selection so the list stays where the user is looking.
-   *
-   * Only the loading is shared. What happens to focus afterwards is the whole
-   * difference between the two, so it stays at each call site where it can be
-   * read.
-   */
-  function loadAnnouncementIntoSelection(index: number): string {
-    const ann = config.announcementBar.announcements[index];
-    setSelectedIndex(index);
-    setSelectedUrl(ann.url || '');
-    setSelectedCtaType(ann.ctaType === 'whatsapp' ? 'whatsapp' : 'link');
-    setSelectedWhatsappNumber(ann.whatsappNumber || '');
-    setSelectedCountryCode(ann.whatsappCountryCode || '+44');
-    setSelectedOpenInNewTab(ann.openInNewTab !== undefined ? ann.openInNewTab : true);
-    setSelectedStartDate(ann.startDate || '');
-    setSelectedEndDate(ann.endDate || '');
-    const normalizedText = ann.richText ? ann.text : wrapBareTextWithFontSize(ann.text);
-    setNewAnnouncementText(normalizedText);
-    return normalizedText;
-  }
-
-  // ── Select announcement (load into editor in edit mode) ──
-  function selectAnnouncement(index: number) {
-    const normalizedText = loadAnnouncementIntoSelection(index);
-    setShowRichToolbar(true);
-    if (richEditorRef.current) {
-      richEditorRef.current.innerHTML = normalizedText;
-      richEditorRef.current.focus();
-      // Place cursor at end
-      const sel = window.getSelection();
-      if (sel) {
-        sel.removeAllRanges();
-        const range = document.createRange();
-        range.selectNodeContents(richEditorRef.current);
-        range.collapse(false);
-        sel.addRange(range);
-      }
-    }
-    detectFormatsForSelectMode(normalizedText);
-  }
 
   function detectFormatsForSelectMode(html: string) {
     const container = document.createElement('div');
