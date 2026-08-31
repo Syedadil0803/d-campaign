@@ -49,12 +49,19 @@ const MIRROR_MAX_WIDTH = 384;
  * Virtual Mirror measurement.
  * Checks if html overflows at a given width against the field's max lines.
  */
-function measureOverflowAtWidth(html: string, field: MeasuredField, width: number): boolean {
+function measureOverflowAtWidth(
+  html: string,
+  field: MeasuredField,
+  width: number,
+  lineAllowance?: number,
+): boolean {
   if (!html || typeof document === 'undefined') return false;
   const plainText = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim();
   if (!plainText) return false;
 
-  const maxLines = FIELD_MAX_LINES[field] || 1;
+  // Callers that ask a different question pass their own allowance. The card
+  // width decision uses 1 for every field; the style checks keep the field's.
+  const maxLines = lineAllowance ?? (FIELD_MAX_LINES[field] || 1);
   const usableWidth = width - (FIELD_INSET[field] ?? 0);
 
   const ghost = document.createElement('div');
@@ -133,9 +140,21 @@ export function getRequiredCardWidth(
   fields: { html: string; field: 'title' | 'subtitle' | 'description' }[],
   timerHtml = '',
 ): number {
+  // Width first, then wrapping — for every field, not just the title.
+  //
+  // The allowance here is 1, not the field's own. Measured against the field's
+  // allowance, the subtitle filled both its lines at 400 and only then widened
+  // the card, and the description filled all three. The title looked like the
+  // odd one out purely because its allowance is already 1.
+  //
+  // Reading a wrapped line at 400 when 440 was available is the wrong trade:
+  // the card has the room, so the words should use it before taking another
+  // line. This does mean most cards carrying a description sit at 440, since a
+  // description over about fifty characters wraps at 400 — the wide card is
+  // now the normal one and 400 is for genuinely short copy.
   for (const { html, field } of fields) {
     if (!html) continue;
-    if (measureOverflowAtWidth(html, field, MIRROR_MIN_WIDTH)) {
+    if (measureOverflowAtWidth(html, field, MIRROR_MIN_WIDTH, 1)) {
       return 440;
     }
   }
