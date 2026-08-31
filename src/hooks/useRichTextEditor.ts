@@ -208,34 +208,52 @@ export function useRichTextEditor(
       italic = document.queryCommandState('italic');
     }
 
-    // Font-size: Walk up the DOM from the anchor node to find the nearest
-    // element with an explicit font-size style. Default to 'md' (1rem).
-    let size = 'md';
-    if (selection?.anchorNode) {
-      let node: Node | null = selection.anchorNode;
+    // Size and color describe the WHOLE selection, the same way bold and
+    // italic already do above.
+    //
+    // Both used to walk up from the anchor node alone, which reports the
+    // FIRST character's value. Select red text and blue text together and the
+    // swatch showed red, as though red applied throughout — then picking a
+    // size re-applied that red to the lot. Every text node in the range has
+    // to agree; when they disagree the control shows nothing ('') rather than
+    // one arbitrary member of the set.
+    const nearest = (from: Node, read: (el: HTMLElement) => string): string => {
+      let node: Node | null = from;
       while (node && node !== document.body) {
-        if (node instanceof HTMLElement && node.style.fontSize) {
-          const label = fontSizeToLabel(node.style.fontSize);
-          if (label) size = label;
-          break;
+        if (node instanceof HTMLElement) {
+          const value = read(node);
+          if (value) return value;
         }
         node = node.parentNode;
       }
-    }
+      return '';
+    };
+    const sizeAt = (node: Node): string =>
+      fontSizeToLabel(nearest(node, (el) => el.style.fontSize)) || 'md';
+    const colorAt = (node: Node): string => {
+      const raw = nearest(node, (el) => el.style.color);
+      if (!raw) return defaultColor;
+      return raw.startsWith('rgb') ? rgbToHex(raw) : raw;
+    };
 
-    // Color: Walk up the DOM to find the nearest element with an
-    // explicit color style. Normalize rgb() to hex.
+    let size = 'md';
     let color = defaultColor;
-    if (selection?.anchorNode) {
-      let cNode: Node | null = selection.anchorNode;
-      while (cNode && cNode !== document.body) {
-        if (cNode instanceof HTMLElement && cNode.style.color) {
-          const raw = cNode.style.color;
-          color = raw.startsWith('rgb') ? rgbToHex(raw) : raw;
-          break;
-        }
-        cNode = cNode.parentNode;
-      }
+    const spanned =
+      selection && selection.rangeCount > 0 && !selection.isCollapsed
+        ? collectTextNodes(editor).filter((node) =>
+            selection.getRangeAt(0).intersectsNode(node),
+          )
+        : [];
+
+    if (spanned.length > 0) {
+      const sizes = new Set(spanned.map(sizeAt));
+      const colors = new Set(spanned.map(colorAt));
+      size = sizes.size === 1 ? [...sizes][0] : '';
+      color = colors.size === 1 ? [...colors][0] : '';
+    } else if (selection?.anchorNode) {
+      // Collapsed caret, or a range holding no text: report where it sits.
+      size = sizeAt(selection.anchorNode);
+      color = colorAt(selection.anchorNode);
     }
 
     setActiveFormats({ bold, italic, size, color });

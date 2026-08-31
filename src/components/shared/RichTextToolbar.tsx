@@ -93,9 +93,16 @@ export default function RichTextToolbar({
             }}
           >
             <span className="text-xs font-bold leading-none">A</span>
-            <span 
-              className="block w-4 h-1 rounded-sm mt-0.5"
-              style={{ backgroundColor: activeFormats.color }}
+            {/*
+              An empty color means the selection holds more than one, so the
+              bar is left unpainted rather than showing whichever colour came
+              first. A hairline keeps the control the same size either way.
+            */}
+            <span
+              className={`block w-4 h-1 rounded-sm mt-0.5 ${
+                activeFormats.color ? '' : 'border border-dashed border-current opacity-50'
+              }`}
+              style={activeFormats.color ? { backgroundColor: activeFormats.color } : undefined}
             />
           </button>
 
@@ -160,7 +167,7 @@ export default function RichTextToolbar({
               aria-haspopup="listbox"
               aria-expanded={showSizeDropdown}
             >
-              <span>{FONT_SIZE_DISPLAY_MAP[activeFormats.size || 'md'] ?? 'MD'}</span>
+              <span>{activeFormats.size ? (FONT_SIZE_DISPLAY_MAP[activeFormats.size] ?? 'MD') : '\u2014'}</span>
               <svg
                 className={`h-3 w-3 shrink-0 text-on-surface-variant transition-transform duration-200 ${
                   showSizeDropdown ? 'rotate-180' : 'rotate-0'
@@ -183,14 +190,14 @@ export default function RichTextToolbar({
                   <button
                     key={value}
                     role="option"
-                    aria-selected={(activeFormats.size || 'md') === value}
+                    aria-selected={activeFormats.size === value}
                     onMouseDown={(e) => {
                       e.preventDefault();
                       handleFormat(`size-${value}`);
                       setShowSizeDropdown(false);
                     }}
                     className={`block w-full rounded px-2 py-1 text-left text-xs transition-colors hover:bg-primary/10 ${
-                      (activeFormats.size || 'md') === value
+                      activeFormats.size === value
                         ? 'font-semibold text-primary'
                         : 'text-on-surface'
                     }`}
@@ -219,7 +226,7 @@ export default function RichTextToolbar({
               title="Font Size"
             >
               <span>
-                {FONT_SIZE_DISPLAY_MAP[activeFormats.size || 'md'] ?? '16'}
+                {activeFormats.size ? (FONT_SIZE_DISPLAY_MAP[activeFormats.size] ?? '16') : '\u2014'}
               </span>
               <svg className={`h-3 w-3 flex-shrink-0 text-on-surface-variant transition-transform duration-200 ${showSizeDropdown ? 'rotate-180' : 'rotate-0'}`} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M6 8l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
@@ -242,7 +249,7 @@ export default function RichTextToolbar({
                         setShowSizeDropdown(false);
                       }}
                       className={`block w-full rounded px-2 py-1 text-left text-[11px] transition-colors ${
-                        (activeFormats.size || 'md') === size.value ? 'text-primary' : 'text-on-surface'
+                        activeFormats.size === size.value ? 'text-primary' : 'text-on-surface'
                       } hover:bg-surface-subtle`}
                     >
                       {size.label}
