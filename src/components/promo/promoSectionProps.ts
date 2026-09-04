@@ -125,6 +125,7 @@ export interface PromoSectionProps {
   draftExists: boolean;
   /** Takes the live card off the site AND clears it from the published config. */
   onRemoveLive: () => void;
+  /** Reopens the setup dialog from the editor, to change the schedule. */
   /** Opens the AI step for the card being edited. Omitted = chip not shown. */
   onUseAi?: () => void;
 }

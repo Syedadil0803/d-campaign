@@ -6,6 +6,7 @@ import { usePromoEditor } from '@/components/promo/PromoEditorContext';
 import { PromoCardActionDialog } from '@/components/promo/PromoCardActionDialog';
 import { PromoTextField } from '@/components/promo/PromoTextField';
 import { PromoScheduleAndTimer } from '@/components/promo/PromoScheduleAndTimer';
+import { isOpenEnded } from '@/lib/promo/promoSchedule';
 import { PromoCtaSettings } from '@/components/promo/PromoCtaSettings';
 import { SegmentedToggle } from '@/components/promo/SegmentedToggle';
 import { PANEL_TEXT_FIELDS } from '@/components/promo/panelTextFields';
@@ -56,6 +57,31 @@ export function PromoEditorPanel() {
     closeAllPromoDropdowns,
     getDropdownPosition,
   } = usePromoEditor();
+
+  const openEndedSchedule = isOpenEnded(config.promoCard);
+
+  /**
+   * Switch the schedule mode from the section's pill.
+   *
+   * To open-ended: drop the end date and the countdown it fed (a countdown
+   * needs an end to reach). To fixed: leave the end date empty so its picker
+   * prompts for one — nothing is chosen for the user. liveCardRef moves with
+   * the config (the usePromoUndo invariant) and the step is pushed so the
+   * switch can be undone.
+   */
+  function setScheduleMode(nextOpenEnded: boolean) {
+    if (nextOpenEnded === openEndedSchedule) return;
+    pushPromoState();
+    const card = config.promoCard;
+    const next = nextOpenEnded
+      ? { ...card, scheduleMode: 'openEnded' as const, endDate: '', showTimer: false }
+      // Custom dates: don't switch the countdown on here — the auto-arm effect
+      // enables it (and fires the card hint) once the dates are complete.
+      : { ...card, scheduleMode: 'range' as const };
+    liveCardRef.current = next;
+    setConfig({ ...config, promoCard: next });
+    markChanged();
+  }
 
   return (
     <div className="campaign-custom-scrollbar w-[30%] min-h-0 shrink-0 overflow-y-auto overflow-x-hidden pr-4 space-y-5">
@@ -134,28 +160,74 @@ export function PromoEditorPanel() {
         />
       ))}
 
+      {/* An open-ended campaign has no end and no countdown, so the section
+          says what it actually does rather than promising timing it has not. */}
+      {/* One heading for the whole schedule section. The pill below governs
+          it — the same control language as the countdown toggle further down,
+          so the section reads as one system with two switches. The heading
+          says it once; the pill's own labels carry the rest, so nothing is
+          repeated. */}
+      {/* Section title stays clean at the top. Required sits on the Duration
+          sub-heading below, parallel to the countdown's Optional — not on the
+          high section heading, where it would read as the whole thing being a
+          warning. */}
       <div className="!mt-8">
         <h4 className="text-2xl font-semibold leading-8 text-on-surface">
-          Campaign Schedule &amp; Timing
+          Campaign Schedule
         </h4>
+        {openEndedSchedule && (
+          <p className="mt-1 text-sm text-on-surface-variant">
+            Set when the card goes live below.
+          </p>
+        )}
       </div>
 
-      {/* Sub-section 1 — the system action: when the campaign auto-runs. */}
-      <div className="!mt-6">
-        <div className="flex items-center gap-2">
-          <h5 className="text-base font-semibold text-on-surface">
-            Campaign Duration
-          </h5>
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-            Required
-          </span>
+      {/* Toggle sits directly under the title so it holds its place when the
+          mode switches. Full-width — its two options self-label, no dead space. */}
+      <div className="!mt-4 flex rounded-lg border border-border bg-surface-subtle p-0.5">
+        {[
+          { open: false, label: 'Custom dates' },
+          { open: true, label: 'Open-ended' },
+        ].map((opt) => {
+          const active = openEndedSchedule === opt.open;
+          return (
+            <button
+              key={opt.label}
+              type="button"
+              onClick={() => setScheduleMode(opt.open)}
+              aria-pressed={active}
+              className={`flex-1 rounded-md px-3.5 py-2 text-xs font-semibold transition-colors ${
+                active
+                  ? 'bg-primary text-on-primary shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Custom dates only: Open-ended has no fixed duration, so its guidance is
+          the one-line description under the section heading above instead. */}
+      {!openEndedSchedule && (
+        <div className="!mt-5">
+          <div className="flex items-center gap-2">
+            <h5 className="text-base font-semibold text-on-surface">
+              Campaign Duration
+            </h5>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+              Required
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-on-surface-variant">
+            Set when the card goes live, and how long it stays.
+          </p>
         </div>
-        <p className="mt-1 text-sm text-on-surface-variant">
-          Set when this campaign will automatically start running and stop running.
-        </p>
-      </div>
+      )}
 
-      <PromoScheduleAndTimer
+      <div className="!mt-5">
+        <PromoScheduleAndTimer
         config={config}
         setConfig={setConfig}
         liveCardRef={liveCardRef}
@@ -172,7 +244,8 @@ export function PromoEditorPanel() {
         timerRef={timerRef}
         timerLimitReached={timerLimitReached}
         openFieldStylePopup={openFieldStylePopup}
-      />
+        />
+      </div>
 
       <div className="!mt-8">
         <h4 className="text-2xl font-semibold leading-8 text-on-surface">

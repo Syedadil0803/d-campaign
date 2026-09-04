@@ -20,6 +20,8 @@ import { Dashboard } from '@/components/dashboard/Dashboard';
 import { AnnouncementSection } from '@/components/announcement/AnnouncementSection';
 import { PromoFlow } from '@/components/promo/PromoFlow';
 import { PromoSetupDialog } from '@/components/promo/PromoSetupDialog';
+import { usePromoSetupDialog, type ScheduleAnswer } from '@/components/promo/usePromoSetupDialog';
+import { hasCompleteSchedule } from '@/lib/promo/promoSchedule';
 import { Toast, TOAST_ACTION_MS } from '@/components/shared/Toast';
 import {
   IdleCountdownDialog,
@@ -43,7 +45,6 @@ import { useCampaignDraft } from '@/hooks/useCampaignDraft';
 import { useToast } from '@/hooks/useToast';
 import { usePromoVariantSaves } from '@/hooks/usePromoVariantSaves';
 import { useCampaignPublishing } from '@/hooks/useCampaignPublishing';
-import { getISODateWithOffset } from '@/lib/utils';
 import {
   getConfigSignature,
   normalizePromoForCompare,
@@ -665,10 +666,7 @@ export default function Home() {
   // The schedule dialog serves two intents, and they end differently:
   //   'new'      → starting a campaign, so it continues to the build panel
   //   'schedule' → an existing card just missing dates, so it returns to work
-  const [createIntent, setCreateIntent] = useState<'new' | 'schedule'>('new');
-  const [showCreateSetup, setShowCreateSetup] = useState(false);
-  const [createStart, setCreateStart] = useState('');
-  const [createEnd, setCreateEnd] = useState('');
+  const setup = usePromoSetupDialog(() => configRef.current.promoCard);
   /** Bumped to remount the editors so they re-read a reverted config. */
 
   // Invalid promo schedule = both dates set and start is after end. Blocks
@@ -742,12 +740,9 @@ export default function Home() {
           pc,
           sampleTemplates.map((t) => t.promoCard as CampaignConfig['promoCard']),
         );
-        if (!nothingToSchedule && (!pc.startDate || !pc.endDate)) {
-          setCreateIntent('schedule');
-          setCreateStart(pc.startDate || getISODateWithOffset(0));
-          setCreateEnd(pc.endDate || '');
-          setShowCreateSetup(true);
-        }
+        // An open-ended card is complete with a start date alone, so asking
+        // it for an end date would prompt on every visit to the tab.
+        if (!nothingToSchedule && !hasCompleteSchedule(pc)) setup.openForCard();
       }
       setActiveTab(tab);
     },
@@ -778,12 +773,7 @@ export default function Home() {
   }, []);
 
   /** The actual create flow, once nothing is at risk. */
-  const startCreatePromo = useCallback(() => {
-    setCreateIntent('new');
-    setCreateStart(getISODateWithOffset(0));
-    setCreateEnd('');
-    setShowCreateSetup(true);
-  }, []);
+  const startCreatePromo = setup.openForNewCard;
 
   /**
    * Dashboard → the editor with a picker already open.
@@ -833,7 +823,10 @@ export default function Home() {
    * the build panel up. The dashboard asks WHEN; the editor asks HOW, next to
    * the card that the answer applies to.
    */
-  function startNewPromo() {
+  function startNewPromo(answer?: ScheduleAnswer) {
+    // The dialog hands over its answer, because it sets that answer and calls
+    // this in the same tick — reading it back here would see the old one.
+    const { scheduleMode: mode, startDate: start, endDate: end } = answer ?? setup.current();
     /**
      * "Create new" starts from a blank card, not from whatever was last on the
      * canvas. Keeping the old card meant AI wrote on top of a previous
@@ -844,7 +837,7 @@ export default function Home() {
      * The schedule-only path (an existing card missing dates) leaves the card
      * alone: nothing about that flow says "start over".
      */
-    const startingFresh = createIntent === 'new';
+    const startingFresh = setup.intent === 'new';
 
     setConfig((prev) => ({
       ...prev,
@@ -855,10 +848,20 @@ export default function Home() {
             // creating a new one must never take the live campaign down.
             active: prev.promoCard.active,
             stoppedByUser: prev.promoCard.stoppedByUser,
-            startDate: createStart,
-            endDate: createEnd,
+            startDate: start,
+            endDate: end,
+            scheduleMode: mode,
+            // An open-ended campaign has no end to count towards, so a
+            // countdown left on from a previous answer would render nothing.
+            ...(mode === 'openEnded' ? { showTimer: false } : {}),
           }
-        : { ...prev.promoCard, startDate: createStart, endDate: createEnd },
+        : {
+            ...prev.promoCard,
+            startDate: start,
+            endDate: end,
+            scheduleMode: mode,
+            ...(mode === 'openEnded' ? { showTimer: false, timerText: '' } : {}),
+          },
     }));
     markPromoChanged();
     if (startingFresh) {
@@ -873,12 +876,12 @@ export default function Home() {
     // Remount so the contentEditable fields re-read the blank card; without it
     // the old text stays visible even though state has been replaced.
     if (startingFresh) setEditorResetKey((k) => k + 1);
-    setShowCreateSetup(false);
+    setup.setVisible(false);
     // "Create new" always continues to the build panel — that's the point of
     // it. The schedule-only prompt returns to the card it interrupted, unless
     // that card is blank, in which case building is what comes next anyway.
     const hasContent = promoHasVisibleContent(configRef.current.promoCard);
-    const goToBuild = createIntent === 'new' || !hasContent;
+    const goToBuild = setup.intent === 'new' || !hasContent;
     setPromoEntryStep(goToBuild ? 'build' : 'editor');
     // Covers the case where the promo tab is already open: initialStep is only
     // read at mount, so without this the dialog closed onto nothing.
@@ -1280,17 +1283,19 @@ export default function Home() {
       {/* First-run campaign setup, opened from the dashboard's "Create promo
           card". Same dialog the guided flow uses, so the questions asked are
           identical wherever a campaign starts. */}
-      {showCreateSetup && (
+      {setup.visible && (
         <PromoSetupDialog
           sourceLabel="a blank card"
           scheduleOnly
           onContinue={startNewPromo}
-          startDate={createStart}
-          endDate={createEnd}
-          onChangeStart={setCreateStart}
-          onChangeEnd={setCreateEnd}
+          startDate={setup.startDate}
+          endDate={setup.endDate}
+          scheduleMode={setup.mode}
+          onChangeMode={setup.setMode}
+          onChangeStart={setup.setStartDate}
+          onChangeEnd={setup.setEndDate}
           onChoose={() => startNewPromo()}
-          onClose={() => setShowCreateSetup(false)}
+          onClose={() => setup.setVisible(false)}
         />
       )}
 

@@ -471,7 +471,10 @@ export function PromoSection(props: PromoSectionProps) {
     // schedule, which put the dates straight back the moment they were
     // cleared — and a complete schedule is exactly what switches the countdown
     // on. Clearing has to leave them empty for the user to set.
-    const freshCard = getFreshPromoCard();
+    // The schedule kind survives a clear: it belongs to the campaign, not to
+    // the words and design being thrown away. Losing it here put the end date
+    // and the countdown back on a campaign the user had said has neither.
+    const freshCard = getFreshPromoCard(configRef.current.promoCard.scheduleMode);
     // If the card is already fresh, do nothing — no toast, no "unsaved changes"
     // flip. "Already fresh" = no visible text in any field AND the style matches
     // the fresh style. We deliberately ignore dates, live flags, and the exact
@@ -1019,7 +1022,6 @@ export function PromoSection(props: PromoSectionProps) {
   } as const;
   // The timer is opt-in via "Enable Timer" — it must follow the toggle only,
   // NOT the editing scaffold, so disabling it hides the countdown immediately.
-  const showTimerInPreview = config.promoCard.showTimer;
   const showButtonInPreview = config.promoCard.showButton;
 
   /**
@@ -1053,7 +1055,6 @@ export function PromoSection(props: PromoSectionProps) {
     cardWidth,
     setCardWidth,
     computeCardWidth,
-    showTimerInPreview,
     showButtonInPreview,
     previewFieldVisible,
     previewFieldHasContent,

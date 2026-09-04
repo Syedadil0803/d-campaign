@@ -9,7 +9,7 @@ import { advanceBlankLook } from '@/lib/promo/blankLooks';
  * Lived in PromoSection but reads none of its state — every value comes from
  * defaultConfig, the blank-palette rotation and the clock.
  */
-export function getFreshPromoCard(): PromoCard {
+export function getFreshPromoCard(scheduleMode?: PromoCard['scheduleMode']): PromoCard {
   // withDefaultStartDate supplies the start — the same rule a refresh and a
   // stored card go through, so "a new card starts today" is written once.
   return withDefaultStartDate({
@@ -48,5 +48,7 @@ export function getFreshPromoCard(): PromoCard {
      */
     endDate: "",
     timerText: "Ends In {timer}",
+    // Carried through: how the campaign runs is not part of what "clear" clears.
+    scheduleMode,
   });
 }

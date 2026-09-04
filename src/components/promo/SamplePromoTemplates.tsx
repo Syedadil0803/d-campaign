@@ -8,6 +8,8 @@ import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
 
 interface SamplePromoTemplatesProps {
   onApplyTemplate: (template: PromoCard, templateName: string) => void;
+  /** An open-ended campaign has no end date, so its cards show no countdown. */
+  hideTimer: boolean;
 }
 
 
@@ -56,12 +58,14 @@ function TemplateTile({
   card,
   index,
   isVisible,
+  hideTimer,
   onApply,
 }: {
   template: (typeof sampleTemplates)[number];
   card: PromoCard;
   index: number;
   isVisible: boolean;
+  hideTimer: boolean;
   /** Handed the very card that is on screen, so what you click is what you get. */
   onApply: (card: PromoCard, templateName: string) => void;
 }) {
@@ -149,15 +153,17 @@ function TemplateTile({
             }}
             dangerouslySetInnerHTML={{ __html: card.description }}
           />
-          <div
-            className="text-xs mb-4 px-2 py-1 rounded break-words"
-            style={{
-              background: getBackgroundStyle(template.promoCard.style.dateStyle.background),
-              color: template.promoCard.style.dateStyle.textColor,
-              textAlign: template.promoCard.style.dateStyle.textAlign || 'center',
-            }}
-            dangerouslySetInnerHTML={{ __html: getTemplateTimerPreviewText(card.timerText) }}
-          />
+          {!hideTimer && (
+            <div
+              className="text-xs mb-4 px-2 py-1 rounded break-words"
+              style={{
+                background: getBackgroundStyle(template.promoCard.style.dateStyle.background),
+                color: template.promoCard.style.dateStyle.textColor,
+                textAlign: template.promoCard.style.dateStyle.textAlign || 'center',
+              }}
+              dangerouslySetInnerHTML={{ __html: getTemplateTimerPreviewText(card.timerText) }}
+            />
+          )}
           <div className={template.promoCard.buttonFullWidth ? '' : 'flex justify-center'}>
             <button
               className={`py-2 px-4 rounded-lg text-sm font-semibold ${template.promoCard.buttonFullWidth ? 'w-full' : ''}`}
@@ -175,7 +181,7 @@ function TemplateTile({
 }
 
 
-export function SamplePromoTemplates({ onApplyTemplate }: SamplePromoTemplatesProps) {
+export function SamplePromoTemplates({ onApplyTemplate, hideTimer }: SamplePromoTemplatesProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   /**
    * Which trade's sample wording the cards are showing.
@@ -294,6 +300,7 @@ export function SamplePromoTemplates({ onApplyTemplate }: SamplePromoTemplatesPr
             card={withIndustryCopy(template.promoCard as PromoCard, template.id, industryId)}
             index={index}
             isVisible={visibleTemplateIds.has(template.id)}
+            hideTimer={hideTimer}
             onApply={onApplyTemplate}
           />
         ))}

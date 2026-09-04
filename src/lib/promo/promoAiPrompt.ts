@@ -13,6 +13,7 @@
 
 import { PromoCard } from '@/types/campaign';
 import { PROMO_COPY_STYLE_GUIDE } from '@/lib/promo/promoCopyStyle';
+import { isOpenEnded } from '@/lib/promo/promoSchedule';
 import { GradientStyle } from '@/types/campaign';
 
 /** Human-readable color for a section, so the model can judge contrast. */
@@ -70,6 +71,9 @@ export function buildGuidedPromoPrompt({
 }: GuidedPromptOptions): string {
   const keepDesign = mode === 'copy';
   const keepContent = mode === 'design';
+  // No end date means no countdown, so the model is not asked to write one —
+  // timer copy it returned would be dropped without ever being shown.
+  const noTimer = isOpenEnded(card);
   const plain = (html?: string) =>
     String(html ?? '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
   const s = card.style;
@@ -102,7 +106,7 @@ export function buildGuidedPromoPrompt({
   if (!keepContent) {
     add('What is being promoted', brief?.offer);
     add('Audience and tone', brief?.tone);
-    add('Countdown', brief?.timer);
+    if (!noTimer) add('Countdown', brief?.timer);
     add('Call to action', brief?.cta);
   }
   if (!keepDesign) add('Colors', brief?.colors);
@@ -110,8 +114,9 @@ export function buildGuidedPromoPrompt({
 
   const lines: string[] = [
     'Act as my Head of Marketing for an ecommerce promo card — a small floating',
-    'widget on my website with a title, subtitle, description, an optional',
-    'countdown timer and an optional CTA button.',
+    'widget on my website with a title, subtitle, description,',
+    ...(noTimer ? [] : ['an optional countdown timer and']),
+    'an optional CTA button.',
     '',
     'Do NOT ask me any questions. Everything you need is below; reply with the',
     'JSON object described at the end and nothing else.',
@@ -217,12 +222,18 @@ export function buildGuidedPromoPrompt({
     '',
     'The card is SMALL, so keep copy tight and it will never overflow:',
     'title = ONE short line, subtitle = at most 2 short lines, description = at',
-    'most 3 short lines, timerText = {timer} plus AT MOST FOUR SHORT WORDS.',
+    ...(noTimer
+      ? ['most 3 short lines. This campaign has no end date, so do NOT return a']
+      : ['most 3 short lines, timerText = {timer} plus AT MOST FOUR SHORT WORDS.']),
+    ...(noTimer ? ['timer: always set "showTimer": false.'] : []),
     'Shorter is better. The TITLE is the hook — make it creative and',
     'distinctive, never a flat generic label.',
     '',
-    'Always fill title, subtitle and description. The timer and button are',
-    'optional: use "showTimer": false or "showButton": false to drop them.',
+    ...(noTimer
+      ? ['Always fill title, subtitle and description. The button is optional:',
+         'use "showButton": false to drop it.']
+      : ['Always fill title, subtitle and description. The timer and button are',
+         'optional: use "showTimer": false or "showButton": false to drop them.']),
     '',
     'Reply with ONLY a JSON object (no prose, no code fences) using these keys:',
     '{',

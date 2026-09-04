@@ -9,6 +9,7 @@
 
 import { PromoCard } from '@/types/campaign';
 import { FIELD_STYLE_KEYS } from '@/lib/promo/promoStyleKeys';
+import { isOpenEnded } from '@/lib/promo/promoSchedule';
 
 /** Fields that carry the card's look. Everything else is content or scheduling. */
 type PromoStyle = PromoCard['style'];
@@ -67,6 +68,8 @@ export function applyTemplateLook(current: PromoCard, template: PromoCard): Prom
  * new campaign from a template, where there's no user writing to preserve.
  */
 export function applyTemplateFull(current: PromoCard, template: PromoCard): PromoCard {
+  const openEnded = isOpenEnded(current);
+
   return {
     ...JSON.parse(JSON.stringify(template)) as PromoCard,
     // Never let a template switch the campaign on; publishing does that.
@@ -74,7 +77,11 @@ export function applyTemplateFull(current: PromoCard, template: PromoCard): Prom
     stoppedByUser: current.stoppedByUser,
     // Keep the user's own schedule rather than the template's sample dates.
     startDate: current.startDate || template.startDate,
-    endDate: current.endDate || template.endDate,
+    endDate: openEnded ? '' : current.endDate || template.endDate,
+    scheduleMode: current.scheduleMode,
+    // The same templates are offered either way; an open-ended campaign takes
+    // the design without the countdown, which it has no end date to run.
+    ...(openEnded ? { showTimer: false, timerText: '', timerStateJson: undefined } : {}),
   };
 }
 

@@ -14,6 +14,7 @@ import { isInvalidRange } from '@/lib/dateRange';
 import { ArrowRight, CalendarDays, PenLine, Sparkles, X } from 'lucide-react';
 import { PromoDatePicker } from '@/components/promo/PromoDatePicker';
 import { toLocalISODate } from '@/lib/utils';
+import type { PromoCard } from '@/types/campaign';
 
 export type BuildMethod = 'ai' | 'manual';
 
@@ -48,10 +49,23 @@ interface PromoSetupDialogProps {
    * asked afterwards — in the editor, next to the card it applies to.
    */
   scheduleOnly?: boolean;
-  /** Confirm handler for scheduleOnly mode. */
-  onContinue?: () => void;
+  /**
+   * Confirm handler for scheduleOnly mode.
+   *
+   * The answer is passed rather than read back from state: the buttons set it
+   * and continue in the same tick, so a caller reading its own state would
+   * still see the previous one.
+   */
+  onContinue?: (answer?: {
+    scheduleMode: NonNullable<PromoCard['scheduleMode']>;
+    startDate: string;
+    endDate: string;
+  }) => void;
   startDate: string;
   endDate: string;
+  /** 'openEnded' runs from the start date until someone stops it. */
+  scheduleMode: PromoCard['scheduleMode'];
+  onChangeMode: (mode: NonNullable<PromoCard['scheduleMode']>) => void;
   onChangeStart: (v: string) => void;
   onChangeEnd: (v: string) => void;
   onChoose: (method: BuildMethod) => void;
@@ -65,6 +79,8 @@ export function PromoSetupDialog({
   onContinue,
   startDate,
   endDate,
+  scheduleMode,
+  onChangeMode,
   onChangeStart,
   onChangeEnd,
   onChoose,
@@ -73,8 +89,12 @@ export function PromoSetupDialog({
   const [showError, setShowError] = useState(false);
   const [customDates, setCustomDates] = useState(false);
   const todayISO = toLocalISODate(new Date());
-  const rangeInvalid = isInvalidRange(startDate, endDate);
-  const incomplete = !startDate || !endDate;
+  // An open-ended campaign has no end to be before, so neither check applies.
+  const openEnded = scheduleMode === 'openEnded';
+  // The dates below belong to a scheduled campaign, so they follow the answer.
+  const scheduled = !openEnded;
+  const rangeInvalid = !openEnded && isInvalidRange(startDate, endDate);
+  const incomplete = !startDate || (!openEnded && !endDate);
   const scheduleReady = !rangeInvalid && !incomplete;
 
   /**
@@ -84,23 +104,39 @@ export function PromoSetupDialog({
    * until endDate + 24h), so a range of 14th–16th is three days, not two.
    */
   const runLength = useMemo(() => {
-    if (!scheduleReady) return null;
+    if (!scheduleReady || openEnded) return null;
     const ms =
       new Date(`${endDate}T00:00:00`).getTime() - new Date(`${startDate}T00:00:00`).getTime();
     return Math.round(ms / 86_400_000) + 1;
-  }, [startDate, endDate, scheduleReady]);
+  }, [startDate, endDate, scheduleReady, openEnded]);
 
   const summary = useMemo(() => {
     if (!scheduleReady) return null;
     const fmt = (d: string) =>
       new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    if (openEnded) return 'Runs from today · until you stop it';
     const when = startDate > todayISO ? 'Scheduled' : 'Runs';
     return `${when} ${fmt(startDate)} → ${fmt(endDate)}${
       runLength ? ` · ${runLength} day${runLength > 1 ? 's' : ''}` : ''
     }`;
-  }, [startDate, endDate, scheduleReady, runLength, todayISO]);
+  }, [startDate, endDate, scheduleReady, runLength, todayISO, openEnded]);
+
+  function chooseRange() {
+    setShowError(false);
+    onChangeMode('range');
+    if (!startDate) onChangeStart(todayISO);
+  }
+
+  function chooseOpenEnded() {
+    setShowError(false);
+    onChangeMode('openEnded');
+    // The end date goes with the mode: a date nothing reads would stay on the card.
+    onChangeEnd('');
+    if (!startDate) onChangeStart(todayISO);
+  }
 
   function setRunLength(days: number) {
+    onChangeMode('range');
     const start = startDate || todayISO;
     const end = new Date(`${start}T00:00:00`);
     // days - 1: the start day counts. "3 days" starting today is today,
@@ -151,85 +187,153 @@ export function PromoSetupDialog({
         </div>
 
         <div className="p-6">
-          {/* 1 — when it runs */}
-          <div className="mb-2 flex items-center gap-2">
-            {stepBadge(1, scheduleReady)}
-            <p className="text-sm font-semibold text-on-surface">When should it run?</p>
-          </div>
-          <p className="mb-3 text-xs text-on-surface-variant">
-            Starts today by default. Use <span className="font-medium">Custom dates</span> to
-            schedule it ahead — it stays off your site until the start date.
+          {/* One screen, two options, one Continue.
+              Asking "do you want to schedule?" first made the user answer a
+              question before they knew what the tool did. This tells them what
+              is on offer instead, and a single primary action keeps it obvious
+              what to press — two Continues would make them choose twice.
+
+              Each option is a div, not a button: the date pickers inside it are
+              buttons of their own, and a button cannot contain a button. Only
+              the heading row is clickable. */}
+          <p className="text-sm font-semibold text-on-surface">
+            Schedule this as per your dates
+          </p>
+          <p className="mb-3 mt-1 text-xs text-on-surface-variant">
+            Choose one of the two ways to run it.
           </p>
 
-          {/* Standalone pills, solid-filled when chosen. A tint was too quiet:
-              picking "3 days" left the chip looking untouched, and the schedule
-              is the only thing this dialog asks for. */}
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {DURATIONS.map((d) => {
-              const on = !customDates && runLength === d.days;
-              return (
-                <button
-                  key={d.days}
-                  type="button"
-                  onClick={() => {
-                    setCustomDates(false);
-                    setRunLength(d.days);
-                  }}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
-                    on
-                      ? 'border-primary bg-primary text-on-primary shadow-sm'
-                      : 'border-border text-on-surface-variant hover:border-primary/70 hover:text-primary'
-                  }`}
-                >
-                  {d.label}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setCustomDates(true)}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
-                customDates
-                  ? 'border-primary bg-primary text-on-primary shadow-sm'
-                  : 'border-border text-on-surface-variant hover:border-primary/70 hover:text-primary'
-              }`}
-            >
+          <div
+            role="radio"
+            aria-checked={scheduled}
+            tabIndex={0}
+            onClick={chooseRange}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                chooseRange();
+              }
+            }}
+            className={`cursor-pointer rounded-xl border p-4 transition-colors ${
+              scheduled
+                ? 'border-primary/60 bg-primary/[0.05]'
+                : 'border-border hover:border-primary/40'
+            }`}
+          >
+            <p className="flex items-center gap-2 text-sm font-semibold text-on-surface">
+              {stepBadge(1, scheduled)}
               Custom dates
-            </button>
+            </p>
+            <p className="mt-1 pl-8 text-xs text-on-surface-variant">
+              It goes live on the start date and comes off on the end date by itself.
+            </p>
+
+            <div className="mt-3 flex flex-wrap gap-1.5 pl-8">
+              {DURATIONS.map((d) => {
+                const on = scheduled && !customDates && runLength === d.days;
+                return (
+                  <button
+                    key={d.days}
+                    type="button"
+                    onClick={() => {
+                      setCustomDates(false);
+                      setRunLength(d.days);
+                    }}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                      on
+                        ? 'border-primary bg-primary text-on-primary shadow-sm'
+                        : 'border-border text-on-surface-variant hover:border-primary/70 hover:text-primary'
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => {
+                  onChangeMode('range');
+                  setCustomDates(true);
+                }}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
+                  customDates && scheduled
+                    ? 'border-primary bg-primary text-on-primary shadow-sm'
+                    : 'border-border text-on-surface-variant hover:border-primary/70 hover:text-primary'
+                }`}
+              >
+                Pick dates
+              </button>
+            </div>
+
+            {scheduled && customDates && (
+              <div className="mt-3 grid grid-cols-2 gap-3 pl-8">
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
+                    Start date
+                  </label>
+                  <PromoDatePicker
+                    value={startDate}
+                    onChange={(v) => {
+                      setShowError(false);
+                      onChangeStart(v);
+                    }}
+                    minDate={todayISO}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
+                    End date
+                  </label>
+                  <PromoDatePicker
+                    value={endDate}
+                    onChange={(v) => {
+                      setShowError(false);
+                      onChangeEnd(v);
+                    }}
+                    align="right"
+                    minDate={todayISO}
+                    invalid={rangeInvalid}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
-          {customDates && (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
-                Start date
-              </label>
-              <PromoDatePicker
-                value={startDate}
-                onChange={(v) => {
-                  setShowError(false);
-                  onChangeStart(v);
-                }}
-                minDate={todayISO}
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
-                End date
-              </label>
-              <PromoDatePicker
-                value={endDate}
-                onChange={(v) => {
-                  setShowError(false);
-                  onChangeEnd(v);
-                }}
-                align="right"
-                minDate={todayISO}
-                invalid={rangeInvalid}
-              />
-            </div>
+          <div className="h-3" />
+
+          <div
+            role="radio"
+            aria-checked={openEnded}
+            tabIndex={0}
+            onClick={chooseOpenEnded}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                chooseOpenEnded();
+              }
+            }}
+            className={`cursor-pointer rounded-xl border p-4 transition-colors ${
+              openEnded
+                ? 'border-primary/60 bg-primary/[0.05]'
+                : 'border-border hover:border-primary/40'
+            }`}
+          >
+            <p className="flex items-center gap-2 text-sm font-semibold text-on-surface">
+              {stepBadge(2, openEnded)}
+              Open-ended
+            </p>
+            <p className="mt-1 pl-8 text-xs text-on-surface-variant">
+              Starts today with no end date. You can always change the start date later.
+            </p>
+
+            {openEnded && (
+              <p className="mt-3 ml-8 rounded-lg bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-400">
+                Note: this campaign will keep running until you take it off the site
+                yourself from the dashboard.
+              </p>
+            )}
           </div>
-          )}
+
 
           {/* A backwards range is reported immediately: it blurs step 2, so
               waiting for a click that can't happen left the user stuck with no
@@ -241,7 +345,7 @@ export function PromoSetupDialog({
             </p>
           ) : showError && incomplete ? (
             <p className="mt-2 text-xs font-medium text-red-500">
-              Set a start and end date to continue.
+              {openEnded ? 'Set a start date to continue.' : 'Set a start and end date to continue.'}
             </p>
           ) : (
             summary && (
@@ -267,7 +371,7 @@ export function PromoSetupDialog({
                     setShowError(true);
                     return;
                   }
-                  onContinue?.();
+                  onContinue?.({ scheduleMode: scheduleMode ?? 'range', startDate, endDate });
                 }}
                 disabled={!scheduleReady}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
@@ -345,7 +449,9 @@ export function PromoSetupDialog({
             <p className="mt-3 text-center text-xs text-on-surface-variant">
               {rangeInvalid
                 ? 'Fix the dates to continue.'
-                : 'Pick how long it runs to continue.'}
+                : openEnded
+                  ? 'Pick a start date to continue.'
+                  : 'Pick how long it runs to continue.'}
             </p>
           )}
           </>

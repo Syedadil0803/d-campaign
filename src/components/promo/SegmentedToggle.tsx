@@ -9,14 +9,18 @@ export function SegmentedToggle({
   onChange,
   offLabel = "Off",
   onLabel = "On",
+  // Wider labels than Off/On (e.g. a mode selector) need room; the thumb is
+  // always half the track, so the track just has to fit both words.
+  widthClass = "w-[96px]",
 }: {
   value: boolean;
   onChange: (next: boolean) => void;
   offLabel?: string;
   onLabel?: string;
+  widthClass?: string;
 }) {
   return (
-    <div className="relative flex w-[96px] items-center rounded-full border border-border bg-surface-subtle p-0.5 text-[11px] font-semibold">
+    <div className={`relative flex ${widthClass} items-center rounded-full border border-border bg-surface-subtle p-0.5 text-[11px] font-semibold`}>
       <span
         aria-hidden
         className={`absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full shadow-sm will-change-transform transition-[transform,background-color] duration-300 ease-in-out ${

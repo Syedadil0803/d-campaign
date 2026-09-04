@@ -7,6 +7,7 @@ import { PromoPreviewTextField } from '@/components/promo/PromoPreviewTextField'
 import { PromoPreviewTimer } from '@/components/promo/PromoPreviewTimer';
 import { PromoPreviewButton } from '@/components/promo/PromoPreviewButton';
 import { PromoSkeletonGhosts } from '@/components/promo/PromoSkeletonGhosts';
+import { isOpenEnded } from '@/lib/promo/promoSchedule';
 import { PromoFieldStylePanel } from '@/components/promo/PromoFieldStylePanel';
 import { PromoCardBackgroundPopup } from '@/components/promo/PromoCardBackgroundPopup';
 import { PREVIEW_TEXT_FIELDS } from '@/components/promo/previewTextFields';
@@ -36,7 +37,6 @@ export function PromoCanvas() {
     cardWidth,
     setCardWidth,
     computeCardWidth,
-    showTimerInPreview,
     showButtonInPreview,
     previewFieldVisible,
     previewFieldHasContent,
@@ -87,6 +87,15 @@ export function PromoCanvas() {
     popupEditableFields,
     configLoadedSignal,
   } = usePromoEditor();
+
+  // Derived from the card, and only this component reads it — so it is worked
+  // out here rather than handed across the editor context.
+  // A countdown needs an end date to count towards — never render one without,
+  // whatever the stored showTimer flag says (guards loaded/legacy cards too).
+  const showTimerInPreview =
+    config.promoCard.showTimer &&
+    !isOpenEnded(config.promoCard) &&
+    Boolean(config.promoCard.endDate);
 
   return (
       <div
@@ -203,6 +212,7 @@ export function PromoCanvas() {
                 showButtonInPreview={showButtonInPreview}
                 textColor={config.promoCard.style.textColor}
                 endDate={config.promoCard.endDate}
+                openEnded={isOpenEnded(config.promoCard)}
               />
 
               {showButtonInPreview && (

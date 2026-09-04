@@ -154,6 +154,10 @@ export function useCampaignConfig({
       JSON.stringify(defaultConfig.promoCard),
     ) as CampaignConfig['promoCard'];
     card.style = JSON.parse(JSON.stringify(currentBlankLook())) as CampaignConfig['promoCard']['style'];
+    // Keep the schedule mode the editor is on. Clearing after save or publish
+    // must not silently drop an Open-ended campaign back to Custom dates — the
+    // mode belongs to how the user was working, not to the card's content.
+    card.scheduleMode = configRef.current.promoCard.scheduleMode;
     // defaultConfig carries no dates, so without this a refresh landed on a
     // card whose Start Date read "Select" — see withDefaultStartDate.
     return withDefaultStartDate(card);

@@ -9,6 +9,8 @@ interface PromoSkeletonGhostsProps {
   textColor: string;
   /** Decides which of the two countdown instructions is the outstanding one. */
   endDate: string;
+  /** An open-ended campaign has no countdown, so it gets no ghost for one. */
+  openEnded: boolean;
 }
 
 /**
@@ -30,12 +32,13 @@ export function PromoSkeletonGhosts({
   showButtonInPreview,
   textColor,
   endDate,
+  openEnded,
 }: PromoSkeletonGhostsProps) {
   if (!blankStart) return null;
 
   return (
     <>
-      {!showTimerInPreview && (
+      {!showTimerInPreview && !openEnded && (
         <div
           className="mb-2 rounded border border-dashed px-2 py-1.5 text-center text-xs"
           style={{

@@ -1,10 +1,11 @@
 'use client';
 
 import type { RefObject } from 'react';
-import { Palette } from 'lucide-react';
+import { Info, Palette } from 'lucide-react';
 import type { CampaignConfig, PromoCard } from '@/types/campaign';
 import type { PromoField } from '@/types/campaign';
 import { toLocalISODate } from '@/lib/utils';
+import { isOpenEnded } from '@/lib/promo/promoSchedule';
 import { PromoDatePicker } from '@/components/promo/PromoDatePicker';
 import { SegmentedToggle } from '@/components/promo/SegmentedToggle';
 
@@ -64,9 +65,23 @@ export function PromoScheduleAndTimer({
   timerLimitReached,
   openFieldStylePopup,
 }: PromoScheduleAndTimerProps) {
+  // No end date and no countdown: both need something to count towards. The
+  // mode is switched by the pill above (PromoEditorPanel); this renders the
+  // fields that match it.
+  const openEnded = isOpenEnded(config.promoCard);
+  // A countdown counts towards the end date, so it can only be on when one
+  // is set — never auto, never by hand without it.
+  const canUseTimer = Boolean(config.promoCard.endDate);
+
   return (
     <>
-      <div className="grid grid-cols-2 gap-3">
+      <div
+        className="grid gap-4"
+        // Inline, not an arbitrary Tailwind class: a running dev server does not
+        // always JIT-generate grid-cols-[...] on edit, so it can silently no-op.
+        // No-end: narrow date, wide info. Custom: two equal date pickers.
+        style={{ gridTemplateColumns: openEnded ? '150px minmax(0, 1fr)' : '1fr 1fr' }}
+      >
         <div>
           <label className="block text-sm font-semibold text-on-surface mb-2">
             Start Date
@@ -85,12 +100,9 @@ export function PromoScheduleAndTimer({
               const nextPromoCard = {
                 ...config.promoCard,
                 startDate: nextValue,
-                ...(nextValue ? { showTimer: true } : {}),
+                // Picking a start date does NOT arm the countdown — it needs
+                // an end date to count towards, which the end field sets.
               };
-              // Moved with the config, not after it: usePromoUndo snapshots
-              // this ref, so leaving it behind makes the next step record the
-              // card as it was before the date was picked.
-              liveCardRef.current = nextPromoCard;
               // Moved with the config, not after it: usePromoUndo snapshots
               // this ref, so leaving it behind makes the next step record the
               // card as it was before the date was picked.
@@ -100,6 +112,7 @@ export function PromoScheduleAndTimer({
             }}
           />
         </div>
+        {!openEnded ? (
         <div ref={endDateFieldRef}>
           <label className="block text-sm font-semibold text-on-surface mb-2">
             End Date
@@ -122,8 +135,16 @@ export function PromoScheduleAndTimer({
               const nextPromoCard = {
                 ...config.promoCard,
                 endDate: nextValue,
-                ...(nextValue ? { showTimer: true } : {}),
+                // Do NOT switch the countdown on here — that would pre-empt the
+                // auto-arm effect, which is what fires the card hint. Setting the
+                // end date lets that effect enable it and beep. Only force it off
+                // when the end date is cleared, to hold the no-end rule.
+                ...(nextValue ? {} : { showTimer: false }),
               };
+              // Same invariant as Start Date: liveCardRef moves with the
+              // config, not after it, or the next edit's undo push snapshots
+              // this end date as it was before the change.
+              liveCardRef.current = nextPromoCard;
               setConfig({ ...config, promoCard: nextPromoCard });
               markChanged();
             }}
@@ -138,10 +159,32 @@ export function PromoScheduleAndTimer({
             </p>
           )}
         </div>
+        ) : (
+          <div>
+            {/* Invisible label reserves the same height as "Start Date", so the
+                panel top lines up with the picker top in the other column. */}
+            <span aria-hidden className="invisible mb-2 block text-sm font-semibold">
+              End Date
+            </span>
+            {/* Same height (h-11) as the date field beside it. No date here —
+                the Start Date field right next to it already shows it. */}
+            <div className="flex h-11 items-center gap-2 rounded-lg bg-primary/[0.06] px-3 text-[11px] leading-tight text-on-surface-variant">
+              <Info className="h-4 w-4 flex-shrink-0 text-primary" />
+              <span>
+                <b className="font-semibold text-on-surface">No end date.</b> Runs until you take
+                it off from the dashboard.
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sub-section 2 — the optional visual feature: a countdown clock.
+          Absent for an open-ended campaign: a countdown needs an end date to
+          count towards, and there is none.
           Divider + pt-8 matches the app's section-divider convention. */}
+      {!openEnded && (
+      <>
       <div className="!mt-8 flex items-center justify-between gap-4 border-t border-border pt-8">
         <div>
           <div className="flex items-center gap-2">
@@ -156,10 +199,20 @@ export function PromoScheduleAndTimer({
             Show a dynamic countdown clock on the promo card to create urgency.
           </p>
         </div>
-        <SegmentedToggle
-          value={config.promoCard.showTimer}
-          onChange={(v) => updateField('showTimer', v)}
-        />
+        {canUseTimer ? (
+          <SegmentedToggle
+            value={config.promoCard.showTimer}
+            onChange={(v) => updateField('showTimer', v)}
+          />
+        ) : (
+          <div className="group relative">
+            <SegmentedToggle value={false} onChange={() => {}} />
+            <div className="pointer-events-none absolute inset-0 cursor-not-allowed rounded-full bg-surface/40" />
+            <div className="pointer-events-none absolute right-0 top-full z-10 mt-2 w-56 rounded-lg border border-border bg-surface-elevated p-2 text-[11px] leading-relaxed text-on-surface opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+              Set an end date first — the countdown needs one to count towards.
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Timer Text — unlike title / subtitle / description, the editor is NOT
@@ -210,6 +263,8 @@ export function PromoScheduleAndTimer({
           </p>
         )}
       </div>
+      </>
+      )}
     </>
   );
 }

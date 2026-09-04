@@ -49,6 +49,17 @@ export interface PromoCard {
   cardWidth?: number;
   startDate: string;
   endDate: string;
+  /**
+   * How the campaign is scheduled.
+   *
+   * 'openEnded' runs from startDate until someone stops it, so it carries no
+   * end date and no countdown — a countdown needs something to count towards.
+   *
+   * Absent means 'range', which is every card made before this existed. An
+   * empty endDate is NOT open-ended: that is a range campaign nobody finished
+   * scheduling, and Publish still refuses it.
+   */
+  scheduleMode?: 'range' | 'openEnded';
   showTimer: boolean;
   showButton: boolean;
   stoppedByUser?: boolean;

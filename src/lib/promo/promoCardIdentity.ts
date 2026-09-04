@@ -8,6 +8,7 @@
  */
 import { PromoCard } from '@/types/campaign';
 import { getISODateWithOffset } from '@/lib/utils';
+import { isOpenEnded } from '@/lib/promo/promoSchedule';
 
 export function clonePromoCard(card: PromoCard): PromoCard {
   return JSON.parse(JSON.stringify(card)) as PromoCard;
@@ -53,6 +54,9 @@ export function withDefaultStartDate(card: PromoCard): PromoCard {
 }
 
 export function withDefaultDates(card: PromoCard): PromoCard {
+  // An open-ended campaign has no end by choice. Filling one in would hand it
+  // back a schedule it deliberately does not have, and arm the countdown.
+  if (isOpenEnded(card)) return withDefaultStartDate(card);
   if (card.startDate && card.endDate) return card;
   return {
     ...card,

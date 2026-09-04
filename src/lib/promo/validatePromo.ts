@@ -2,6 +2,7 @@ import type { PromoCard } from '@/types/campaign';
 import { toLocalISODate } from '@/lib/utils';
 import { whatsAppLooksShort } from '@/lib/whatsapp';
 import { fieldOverflows } from '@/lib/promo/promoFit';
+import { isOpenEnded } from '@/lib/promo/promoSchedule';
 
 /**
  * What the user should know before a promo card goes live.
@@ -30,7 +31,18 @@ export function validatePromo(promoCard: PromoCard): string[] {
   });
 
   // 2. Schedule — publishing turns the card On Air, so it will run.
-  if (!pc.startDate || !pc.endDate) {
+  const openEnded = isOpenEnded(pc);
+
+  if (openEnded) {
+    // No end to reach, so the only question is whether it has started.
+    if (!pc.startDate) {
+      warnings.push('Start date is not set');
+    } else if (pc.startDate <= toLocalISODate(new Date())) {
+      warnings.push(`Campaign will run from ${formatDate(pc.startDate)} until you stop it (starts immediately)`);
+    } else {
+      warnings.push(`Campaign is scheduled from ${formatDate(pc.startDate)} until you stop it`);
+    }
+  } else if (!pc.startDate || !pc.endDate) {
     warnings.push('Start date or end date is not set');
   } else {
     // Local, not UTC: east of Greenwich a UTC "today" is still yesterday
@@ -47,7 +59,7 @@ export function validatePromo(promoCard: PromoCard): string[] {
   }
 
   // 3. Timer text
-  if (pc.showTimer) {
+  if (pc.showTimer && !openEnded) {
     const timerPlain = strip(pc.timerText || '').replace(/\{timer\}/gi, '').trim();
     if (!timerPlain) warnings.push('Timer has no prefix or suffix — you can add text like "Ends in" or "Hurry!" around the countdown');
   }

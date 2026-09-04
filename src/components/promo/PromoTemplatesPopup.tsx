@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import type { PromoCard } from '@/types/campaign';
 import { SamplePromoTemplates } from '@/components/promo/SamplePromoTemplates';
 import { applyTemplateFull } from '@/lib/promo/promoTemplate';
+import { isOpenEnded } from '@/lib/promo/promoSchedule';
 import { X, ArrowLeft, FilePlus2 } from 'lucide-react';
 
 /**
@@ -121,6 +122,7 @@ export function PromoTemplatesPopup({
         </div>
         <div className="campaign-custom-scrollbar overflow-y-auto p-6">
           <SamplePromoTemplates
+            hideTimer={isOpenEnded(currentCard)}
             onApplyTemplate={(template, name) => {
               onClose();
               confirmCardReplace(() => onApplyTemplate(template, name), {

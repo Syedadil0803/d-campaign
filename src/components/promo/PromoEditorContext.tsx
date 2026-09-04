@@ -37,6 +37,7 @@ export interface PromoEditorApi
   currentField: PromoField | null;
   setCurrentField: (field: PromoField | null) => void;
   updateField: <K extends keyof PromoCard>(field: K, value: PromoCard[K]) => void;
+  /** Reopens the setup dialog, so the schedule can be answered again. */
 
   /** Editor elements. Owned here so the per-field line limit can measure them. */
   promoCardRef: Editor;
@@ -52,7 +53,6 @@ export interface PromoEditorApi
   cardWidth: number;
   setCardWidth: (width: number) => void;
   computeCardWidth: (promo: PromoCard) => number;
-  showTimerInPreview: boolean;
   showButtonInPreview: boolean;
   previewFieldVisible: Record<'title' | 'subtitle' | 'description', boolean>;
   previewFieldHasContent: Record<'title' | 'subtitle' | 'description', boolean>;
