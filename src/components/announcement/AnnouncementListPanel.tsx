@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { RefObject } from 'react';
 import { Clock, Infinity as InfinityIcon, MoreVertical, Trash2, TriangleAlert } from 'lucide-react';
 import type { CampaignConfig } from '@/types/campaign';
@@ -44,6 +45,7 @@ export function AnnouncementListPanel({
   richEditorRef,
 }: AnnouncementListPanelProps) {
   const announcements = config.announcementBar.announcements;
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   const hasInvalid = announcements.some((a) => isInvalidRange(a.startDate, a.endDate));
   const hasNoEnd = announcements.some((a) => ['openEndedCurrent', 'openEndedFuture'].includes(announcementScheduleState(a.startDate, a.endDate)));
@@ -54,28 +56,55 @@ export function AnnouncementListPanel({
     <div className="relative min-h-0">
       <div className="absolute inset-0 rounded-2xl border border-border campaign-card-surface p-6 shadow-sm flex flex-col overflow-hidden transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
 
-        <div className="flex items-start justify-between gap-3 border-b border-border pb-4 mb-4 shrink-0">
-          <div className="min-w-0">
-            <h4 className="text-xl font-semibold leading-7 text-on-surface">Manage Announcements</h4>
-            <p className="mt-0.5 text-sm text-on-surface-variant">View, reorder, and manage your messages.</p>
-          </div>
-          <button
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={clearAnnouncements}
-            disabled={announcements.length === 0}
-            className="flex items-center gap-1 shrink-0 rounded px-2 py-1 text-[11px] font-medium text-on-surface-variant/60 hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed mt-0.5"
-            title="Remove all messages (Undo to restore)"
-          >
-            <Trash2 className="w-3 h-3" />
-            Clear All
-          </button>
+        <div className="border-b border-border pb-4 mb-4 shrink-0">
+          <h4 className="text-xl font-semibold leading-7 text-on-surface">Manage Announcements</h4>
+          <p className="mt-0.5 text-sm text-on-surface-variant">View, reorder, and manage your messages.</p>
         </div>
 
         <div className="min-h-0 flex flex-col">
           <div className="flex items-center justify-between h-5 mb-3 shrink-0">
-            <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-[0.08em] leading-none">
-              Message List
-            </label>
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-[0.08em] leading-none">
+                Message List{announcements.length > 0 ? ` (${announcements.length})` : ''}
+              </label>
+
+              {announcements.length > 0 && (
+                confirmingClear ? (
+                  <span className="flex items-center gap-1.5 text-[11px] leading-none">
+                    <span className="text-on-surface-variant/70">Clear all?</span>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => { clearAnnouncements(); setConfirmingClear(false); }}
+                      className="font-medium text-rose-500 hover:text-rose-600 transition-colors"
+                    >
+                      Yes
+                    </button>
+                    <span className="text-on-surface-variant/30">/</span>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setConfirmingClear(false)}
+                      className="font-medium text-on-surface-variant/60 hover:text-on-surface transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setConfirmingClear(true)}
+                    className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
+                    title="Remove all messages"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Clear All
+                  </button>
+                )
+              )}
+            </div>
+
             <div className="flex items-center gap-2.5 text-[10px] text-on-surface-variant/65 leading-none">
               {hasInvalid && (
                 <span className="flex items-center gap-0.5" title="Ends before it starts — fix or clear the schedule.">
