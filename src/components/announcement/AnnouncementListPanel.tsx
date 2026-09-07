@@ -1,23 +1,14 @@
 'use client';
 
 import type { RefObject } from 'react';
-import { Infinity as InfinityIcon, MoreVertical, MoveLeft, Trash2 } from 'lucide-react';
+import { CalendarCheck, Clock, Infinity as InfinityIcon, MoreVertical, Trash2, TriangleAlert } from 'lucide-react';
 import type { CampaignConfig } from '@/types/campaign';
 import { stripHtml } from '@/lib/utils';
 import { isInvalidRange } from '@/lib/dateRange';
-import {
-  announcementThemes,
-  themeBackgroundCss,
-  type AnnouncementTheme,
-} from '@/lib/announcement/announcementThemes';
+import { announcementScheduleState } from '@/lib/announcement/announcementWindow';
 
 interface AnnouncementListPanelProps {
   config: CampaignConfig;
-  setConfig: (config: CampaignConfig) => void;
-  markChanged: () => void;
-  /** Which swatch the current background matches, or null when it is custom. */
-  activeThemeId: string | null;
-  applyAnnouncementTheme: (theme: AnnouncementTheme) => void;
   selectedIndex: number | null;
   clearSelection: () => void;
   loadAnnouncementIntoSelection: (index: number) => string;
@@ -34,16 +25,12 @@ interface AnnouncementListPanelProps {
 }
 
 /**
- * The right-hand card: the message list (select, reorder, per-row menu) above
- * the styling controls. Editing itself lives in the left panel — this side
- * only chooses what is being edited and how the bar looks.
+ * The right-hand card: the message list (select, reorder, per-row menu) with the
+ * loop toggle pinned below. Editing lives in the left panel; the bar's look is
+ * set in the Bar Appearance section.
  */
 export function AnnouncementListPanel({
   config,
-  setConfig,
-  markChanged,
-  activeThemeId,
-  applyAnnouncementTheme,
   selectedIndex,
   clearSelection,
   loadAnnouncementIntoSelection,
@@ -58,31 +45,49 @@ export function AnnouncementListPanel({
   richEditorRef,
 }: AnnouncementListPanelProps) {
   return (
-    <div className="min-h-0">
-      <div className="rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[490px] overflow-hidden transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
+    // The card fills this cell absolutely, so its messages scroll inside rather
+    // than growing the row — the left (editor) card sets the shared height.
+    <div className="relative min-h-0">
+      <div className="absolute inset-0 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col overflow-hidden transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
         {/* Header */}
-        <div className="border-b border-border pb-4 mb-5 shrink-0 flex items-center justify-between">
-          <div>
-            <h4 className="text-2xl font-semibold leading-8 text-on-surface">Manage Announcements</h4>
-            <p className="mt-2 text-sm text-on-surface-variant">View, reorder, and style your announcement messages.</p>
-          </div>
-          {/* No Undo/Redo buttons here on purpose: editing is Ctrl+Z, and
-              every list action offers Undo in its own toast. */}
-          <div className="flex items-center gap-0.5">
+        <div className="border-b border-border pb-4 mb-5 shrink-0">
+          <h4 className="text-2xl font-semibold leading-8 text-on-surface">Manage Announcements</h4>
+          <p className="mt-2 text-sm text-on-surface-variant">View, reorder, and style your announcement messages.</p>
+        </div>
+        {/* Section 1: Message List */}
+        <div className="flex-1 min-h-0 flex flex-col pr-1">
+          {/* Legend + Clear: what the row glyphs mean, and the destructive action, live together
+              so both sit right above the list they act on rather than up in the card header. */}
+          <div className="flex items-center justify-between gap-2 mb-2 shrink-0 flex-wrap">
+            <div className="flex items-center gap-3 text-[11px] text-on-surface-variant">
+              <span className="flex items-center gap-1" title="This message ends before it starts — open it and fix or clear the schedule.">
+                <TriangleAlert className="w-3 h-3 text-red-500" />
+                Invalid range
+              </span>
+              <span className="flex items-center gap-1" title="Runs until you switch it off — colour shows live (emerald) vs starts later (amber).">
+                <InfinityIcon className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                No end date
+              </span>
+              <span className="flex items-center gap-1" title="Scheduled to start later">
+                <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                Starts later
+              </span>
+              <span className="flex items-center gap-1" title="Live now — ends on its date">
+                <CalendarCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                Live, has end date
+              </span>
+            </div>
             <button
               onMouseDown={(e) => e.preventDefault()}
               onClick={clearAnnouncements}
               disabled={config.announcementBar.announcements.length === 0}
-              className="ml-1 flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-on-surface-variant hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="flex items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium text-on-surface-variant hover:text-red-500 hover:bg-red-500/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
               title="Remove all messages (Undo to restore)"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Clear
             </button>
           </div>
-        </div>
-        {/* Section 1: Message List */}
-        <div className="flex-1 min-h-0 flex flex-col pr-1">
           <div className="flex items-center justify-between mb-2 shrink-0">
             <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">Message List</label>
             {config.announcementBar.announcements.length > 0 && (
@@ -105,6 +110,14 @@ export function AnnouncementListPanel({
                 // saying which of these to open — the promo card gets a
                 // scroll-and-flash for the same reason.
                 const rowRangeInvalid = isInvalidRange(ann.startDate, ann.endDate);
+                // One glyph per row — colour = on air (emerald live / amber
+                // queued), shape = does it end (∞ never / calendar-clock bounded),
+                // plus an emerald ring while live. The reasoning behind the
+                // standard lives on AnnouncementScheduleState in announcementWindow.
+                const schedState = announcementScheduleState(ann.startDate, ann.endDate);
+                const isGreen = schedState === 'current' || schedState === 'openEndedCurrent';
+                const neverEnds = schedState === 'openEndedCurrent' || schedState === 'openEndedFuture';
+                const startsLater = schedState === 'future' || schedState === 'openEndedFuture';
                 return (
                   <div key={index}
                     draggable
@@ -147,10 +160,26 @@ export function AnnouncementListPanel({
                       }
                     }}
                     title={rowRangeInvalid ? 'This message ends before it starts — open it and fix or clear the schedule.' : undefined}
-                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm text-[#5a4138] dark:text-[#dbc1b3] bg-primary/20 group relative cursor-pointer transition-all ${rowRangeInvalid ? 'ring-[1.5px] ring-red-500 dark:ring-red-400' : selectedIndex === index ? 'ring-[1.5px] ring-primary/80 bg-primary/30' : 'hover:bg-primary/25 hover:ring-1 hover:ring-primary/70'} ${draggedIndex === index ? 'opacity-60' : ''}`}>
+                    className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm text-[#5a4138] dark:text-[#dbc1b3] bg-primary/20 group relative cursor-pointer transition-all ${rowRangeInvalid ? 'ring-[1.5px] ring-red-500 dark:ring-red-400' : selectedIndex === index ? 'ring-[1.5px] ring-primary/80 bg-primary/30' : isGreen ? 'ring-1 ring-emerald-500/50 hover:ring-emerald-500/80' : 'hover:bg-primary/25 hover:ring-1 hover:ring-primary/70'} ${draggedIndex === index ? 'opacity-60' : ''}`}>
                     {rowRangeInvalid && (
                       <span aria-hidden="true" className="text-red-600 dark:text-red-400 font-bold">!</span>
                     )}
+                    {neverEnds ? (
+                      <span
+                        title={startsLater ? 'Starts later, then runs until you switch it off' : 'Live now — runs until you switch it off'}
+                        className={`flex shrink-0 ${startsLater ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}
+                      >
+                        <InfinityIcon className="w-3 h-3" aria-label="No end date" />
+                      </span>
+                    ) : schedState === 'future' ? (
+                      <span title="Scheduled to start later" className="flex shrink-0 text-amber-600 dark:text-amber-400">
+                        <Clock className="w-3 h-3" aria-label="Starts later" />
+                      </span>
+                    ) : schedState === 'current' ? (
+                      <span title="Live now — ends on its date" className="flex shrink-0 text-emerald-600 dark:text-emerald-400">
+                        <CalendarCheck className="w-3 h-3" aria-label="Live now, ends on its date" />
+                      </span>
+                    ) : null}
                     <span className="flex-1 truncate max-w-[200px]" title={stripHtml(ann.text)}>
                       {stripHtml(ann.text)}
                     </span>
@@ -172,83 +201,6 @@ export function AnnouncementListPanel({
               </div>
             </div>
           )}
-        </div>
-
-        {/* Bottom: Loop + Style pinned to bottom */}
-        <div className="shrink-0 mt-auto">
-          {/* Section 2: Loop Toggle */}
-          <div className="flex items-center justify-between pt-5 pb-3 border-t border-border">
-            <div>
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em]">Loop</label>
-              <p className="mt-2 text-sm text-on-surface-variant">Seamless continuous scroll (duplicates content to fill the bar)</p>
-            </div>
-            <button
-              onClick={() => {
-                setConfig({
-                  ...config,
-                  announcementBar: { ...config.announcementBar, loop: !(config.announcementBar.loop !== false) },
-                });
-                markChanged();
-              }}
-              aria-pressed={config.announcementBar.loop !== false}
-              title={config.announcementBar.loop !== false ? 'Continuous loop' : 'Single pass'}
-              className={`inline-flex flex-none items-center gap-2 rounded-full border px-4 py-[9px] text-[13px] font-medium cursor-pointer transition-colors duration-200 ${
-                config.announcementBar.loop !== false
-                  ? 'border-transparent bg-primary/[0.13] text-primary hover:bg-primary/[0.18]'
-                  : 'border-border bg-surface-elevated text-on-surface-variant hover:border-primary/50 hover:text-primary'
-              }`}
-            >
-              {config.announcementBar.loop !== false ? (
-                <>
-                  <InfinityIcon className="w-4 h-4 loop-spin" />
-                  Continuous
-                </>
-              ) : (
-                <>
-                  <MoveLeft className="w-4 h-4" />
-                  Single pass
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Section 3: Themes — one click for the whole look.
-              Replaces the old "Background Type Guide", which was a
-              non-clickable legend explaining solid/linear/radial: it
-              taught CSS vocabulary instead of letting anyone pick a bar.
-              The color controls above still fine-tune whatever a theme
-              sets. */}
-          <div className="border-t border-border pt-4">
-            <div className="pb-1">
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] mb-1">
-                Themes
-              </label>
-              <p className="mb-1 text-sm text-on-surface-variant">
-                Click any one to restyle the bar — your message stays as written.
-              </p>
-              {/* One scrolling row, not a grid: the panel's height must
-                  not grow with the number of themes, so adding more
-                  scrolls sideways instead of pushing everything down. */}
-              <div className="campaign-custom-scrollbar flex gap-2 overflow-x-auto px-1.5 pb-3 pt-2">
-                {announcementThemes.map((theme) => (
-                  <button
-                    key={theme.id}
-                    type="button"
-                    onClick={() => applyAnnouncementTheme(theme)}
-                    title={theme.name}
-                    aria-pressed={activeThemeId === theme.id}
-                    style={{ background: themeBackgroundCss(theme.background) }}
-                    className={`h-8 w-12 shrink-0 rounded-md ring-offset-2 ring-offset-surface transition-all hover:scale-105 ${
-                      activeThemeId === theme.id
-                        ? 'ring-2 ring-primary'
-                        : 'ring-1 ring-border hover:ring-primary/60'
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-
-          </div>
         </div>
       </div>
     </div>

@@ -33,7 +33,7 @@ import {
  */
 
 
-export const IDLE_LIMIT_MS = 60_000;
+export const IDLE_LIMIT_MS = 300_000; // 5 minutes of inactivity
 
 /**
  * How much of that is spent counting down in front of the user.
@@ -86,7 +86,7 @@ export function useIdleSignOut({
    * and only then is anything attempted that can fail. If the logout request
    * never lands, the work is still on disk and the next visit restores it.
    *
-   * A minute before that, the countdown appears. It is a dialog in the page,
+   * A short time before that (IDLE_WARNING_LEAD_MS), the countdown appears. It is a dialog in the page,
    * which everyone gets, plus a desktop notification for anyone who granted
    * permission and has switched to another window — the case where the dialog
    * alone would be invisible and the sign-out would arrive unexplained.

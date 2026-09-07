@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { isInvalidRange } from '@/lib/dateRange';
 import { visibleAnnouncements } from '@/lib/announcement/announcementWindow';
+import { marqueeDurationSeconds, DEFAULT_PX_PER_SEC } from '@/lib/announcement/scrollSpeed';
 import { buildAnnouncementAiPrompt, chatGptUrl } from '@/lib/announcement/announcementAiPrompt';
 import { readFormatsFromHtml } from '@/lib/editor/readFormatsFromHtml';
 import { CampaignConfig, GradientStyle, defaultConfig } from '@/types/campaign';
@@ -27,6 +28,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { AnnouncementHeader } from '@/components/announcement/AnnouncementHeader';
 import { AnnouncementPreview } from '@/components/announcement/AnnouncementPreview';
 import { AnnouncementListPanel } from '@/components/announcement/AnnouncementListPanel';
+import { AnnouncementAppearance } from '@/components/announcement/AnnouncementAppearance';
 import {
     matchAnnouncementTheme,
   type AnnouncementTheme,
@@ -237,10 +239,23 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     // observer to be torn down and rebuilt.
   }, [setActiveFormats]);
 
-  // Marquee layout: calculate copies for loop mode, or set min-width for non-loop
-  // Also dynamically compute --scroll-duration so speed (px/s) stays constant
-  const SCROLL_SPEED_PX_PER_SEC = 60; // constant visual speed regardless of content length
+  // Recompute the marquee when the window resizes: the duration is derived from
+  // the measured travel distance, which changes with the bar's width.
+  const [resizeTick, setResizeTick] = useState(0);
+  useEffect(() => {
+    let frame = 0;
+    const onResize = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setResizeTick((t) => t + 1));
+    };
+    window.addEventListener('resize', onResize);
+    return () => { window.removeEventListener('resize', onResize); cancelAnimationFrame(frame); };
+  }, []);
 
+  // Marquee layout: copies for loop mode, or min-width for a single pass, plus a
+  // --scroll-duration derived from a fixed px/sec so the reading pace is the same
+  // on every screen (see scrollSpeed.ts). 0 px/sec pauses the scroll.
+  const pxPerSec = config.announcementBar.speed ?? DEFAULT_PX_PER_SEC;
   useEffect(() => {
     // Preview loops in both states — don't gate the marquee calc on active.
     if (!scrollContainerRef.current) return;
@@ -248,41 +263,42 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     const containerWidth = container.clientWidth;
     if (containerWidth <= 0) return;
 
-    const isLoopOn = config.announcementBar.loop !== false;
+    const track = container.querySelector('.animate-scroll-left') as HTMLElement | null;
+    if (!track) return;
 
-    if (isLoopOn) {
-      // Loop ON: figure out how many copies of the announcement set fill the container
-      const track = container.querySelector('.animate-scroll-left') as HTMLElement;
-      if (!track) return;
+    // Apply the paused/playing DOM state before measuring: paused hides all but
+    // one copy, so a width read while still paused would be too small and the
+    // resumed scroll would race.
+    const paused = pxPerSec <= 0;
+    container.classList.toggle('announcement-paused', paused);
+    track.dataset.pxPerSec = String(pxPerSec); // inspectable in DevTools Elements
+
+    const halfWidth = track.scrollWidth / 2;
+    if (halfWidth <= 0) return;
+
+    if (paused) {
+      // Centre the single visible copy only if it fits.
+      const firstSet = track.firstElementChild as HTMLElement | null;
+      const contentWidth = firstSet ? firstSet.scrollWidth : 0;
+      container.classList.toggle('paused-fits', contentWidth > 0 && contentWidth <= containerWidth);
+      return;
+    }
+    container.classList.remove('paused-fits');
+
+    if (config.announcementBar.loop !== false) {
       // Track has loopCopies * 2 total copies. One visual half = loopCopies copies.
-      const halfWidth = track.scrollWidth / 2;
-      if (halfWidth <= 0) return;
-      const oneSetWidth = halfWidth / loopCopies; // width of one announcement set
+      const oneSetWidth = halfWidth / loopCopies;
       if (oneSetWidth <= 0) return;
       const needed = Math.max(1, Math.ceil(containerWidth / oneSetWidth));
-      if (needed !== loopCopies) {
-        setLoopCopies(needed);
-      }
-
-      // Set duration proportional to content width so speed stays constant.
-      // The animation moves translateX(-50%) = halfWidth pixels.
-      // duration = halfWidth / speed  →  longer content = longer duration = same speed.
-      const duration = Math.max(5, halfWidth / SCROLL_SPEED_PX_PER_SEC);
-      track.style.setProperty('--scroll-duration', `${duration.toFixed(1)}s`);
+      if (needed !== loopCopies) setLoopCopies(needed);
     } else {
-      // Loop OFF: set min-width so duplicate stays off-screen
       container.style.setProperty('--set-min-width', `${containerWidth}px`);
       setLoopCopies(1);
-
-      // Also compute duration for non-loop mode based on full track width
-      const track = container.querySelector('.animate-scroll-left') as HTMLElement;
-      if (track) {
-        const halfWidth = track.scrollWidth / 2;
-        const duration = Math.max(5, halfWidth / SCROLL_SPEED_PX_PER_SEC);
-        track.style.setProperty('--scroll-duration', `${duration.toFixed(1)}s`);
-      }
     }
-  }, [config.announcementBar.announcements, config.announcementBar.active, config.announcementBar.loop, loopCopies]);
+
+    const duration = marqueeDurationSeconds(halfWidth, pxPerSec);
+    track.style.setProperty('--scroll-duration', `${duration.toFixed(1)}s`);
+  }, [config.announcementBar.announcements, config.announcementBar.active, config.announcementBar.loop, pxPerSec, loopCopies, resizeTick]);
 
   // Delete selected announcement on Delete/Backspace key
   useEffect(() => {
@@ -829,13 +845,23 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
         resetMenuRef={resetMenuRef}
       />
 
-      <div className="space-y-8">
+      <div className="space-y-5">
         <AnnouncementPreview
           config={config}
           previewBg={previewBg}
           visibleAnnouncements={visible}
           loopCopies={loopCopies}
           scrollContainerRef={scrollContainerRef}
+          loop={config.announcementBar.loop !== false}
+          speed={pxPerSec}
+          onLoopChange={(next) => {
+            setConfig({ ...config, announcementBar: { ...config.announcementBar, loop: next } });
+            markChanged();
+          }}
+          onSpeedChange={(next) => {
+            setConfig({ ...config, announcementBar: { ...config.announcementBar, speed: next } });
+            markChanged();
+          }}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
@@ -844,10 +870,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
 
           <AnnouncementListPanel
             config={config}
-            setConfig={setConfig}
-            markChanged={markChanged}
-            activeThemeId={activeThemeId}
-            applyAnnouncementTheme={applyAnnouncementTheme}
             selectedIndex={selectedIndex}
             clearSelection={clearSelection}
             loadAnnouncementIntoSelection={loadAnnouncementIntoSelection}
@@ -862,6 +884,11 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
             richEditorRef={richEditorRef}
           />
         </div>
+
+        <AnnouncementAppearance
+          activeThemeId={activeThemeId}
+          applyAnnouncementTheme={applyAnnouncementTheme}
+        />
       </div>
       {/* Emoji tip toast */}
       {showShortcutsTip && (

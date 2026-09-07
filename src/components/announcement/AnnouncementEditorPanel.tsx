@@ -62,7 +62,7 @@ export function AnnouncementEditorPanel() {
   } = useAnnouncementEditor();
 
   return (
-    <div className="space-y-5 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col h-[490px] transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
+    <div className="space-y-5 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
       <div className="border-b border-border pb-4">
         <h4 className="text-2xl font-semibold leading-8 text-on-surface">Announcement Content</h4>
         <p className="mt-2 text-sm text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>

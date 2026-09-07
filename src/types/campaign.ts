@@ -78,6 +78,8 @@ export interface CampaignConfig {
   announcementBar: {
     active: boolean;
     loop?: boolean;
+    /** Marquee speed in pixels per second (0 = paused). Absent means the default pace. */
+    speed?: number;
     announcements: Announcement[];
     startDate: string;
     endDate: string;
@@ -96,6 +98,7 @@ export const defaultConfig: CampaignConfig = {
   announcementBar: {
     active: false,
     loop: true,
+    speed: 60,
     announcements: [
       { text: '🎉 Winter Sale is fully live! Keep shopping.' },
       { text: 'Get 5% off on orders above ₹999 and 10% off on orders above ₹1999' },

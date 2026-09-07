@@ -1,6 +1,6 @@
 import { getDb } from '@/lib/db/db';
 import { campaignConfig } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
 import { CampaignConfig, PromoCard } from '@/types/campaign';
 
 // One-line summary of a config for logs — key fields only, never the full blob.
@@ -20,6 +20,14 @@ const DEFAULT_ID = 'default';
 // keyed by account. Both live in the same table because the row shape is
 // identical and the id already distinguishes them.
 const draftId = (userId: string) => `draft:${userId}`;
+
+// A campaign waiting for its start date. Not the draft — that is the editing
+// copy and is cleared on publish, while this must survive one. Not the live
+// row either: anything in 'default' is on the website already.
+//
+// One per account, on purpose: the site shows one promo card, so a queue of
+// them would be a promise the site cannot keep.
+const scheduledId = (userId: string) => `scheduled:${userId}`;
 
 export const campaignRepository = {
   async getConfig(id: string = DEFAULT_ID): Promise<CampaignConfig | null> {
@@ -85,6 +93,44 @@ export const campaignRepository = {
 
   saveDraft(userId: string, config: CampaignConfig): Promise<boolean> {
     return this.saveConfig(config, draftId(userId));
+  },
+
+  /** Every campaign waiting for its start date, for the promoter to sweep. */
+  async listScheduled(): Promise<{ id: string; config: CampaignConfig }[]> {
+    const rows = await getDb()
+      .select()
+      .from(campaignConfig)
+      .where(like(campaignConfig.id, 'scheduled:%'));
+
+    return rows.map((row) => ({
+      id: row.id,
+      config: {
+        version: row.version,
+        lastUpdated: row.lastUpdated.toISOString(),
+        announcementBar: row.announcementBar,
+        promoCard: row.promoCard,
+      } as CampaignConfig,
+    }));
+  },
+
+  getScheduled(userId: string): Promise<CampaignConfig | null> {
+    return this.getConfig(scheduledId(userId));
+  },
+
+  saveScheduled(userId: string, config: CampaignConfig): Promise<boolean> {
+    return this.saveConfig(config, scheduledId(userId));
+  },
+
+  async deleteScheduled(userId: string): Promise<boolean> {
+    const start = Date.now();
+    try {
+      await getDb().delete(campaignConfig).where(eq(campaignConfig.id, scheduledId(userId)));
+      console.log(`[DB] deleteScheduled -> OK (${Date.now() - start}ms)`);
+      return true;
+    } catch (error) {
+      console.error(`[DB] deleteScheduled -> FAILED (${Date.now() - start}ms):`, error);
+      return false;
+    }
   },
 
   async deleteDraft(userId: string): Promise<boolean> {

@@ -140,18 +140,10 @@ export function getRequiredCardWidth(
   fields: { html: string; field: 'title' | 'subtitle' | 'description' }[],
   timerHtml = '',
 ): number {
-  // Width first, then wrapping — for every field, not just the title.
-  //
-  // The allowance here is 1, not the field's own. Measured against the field's
-  // allowance, the subtitle filled both its lines at 400 and only then widened
-  // the card, and the description filled all three. The title looked like the
-  // odd one out purely because its allowance is already 1.
-  //
-  // Reading a wrapped line at 400 when 440 was available is the wrong trade:
-  // the card has the room, so the words should use it before taking another
-  // line. This does mean most cards carrying a description sit at 440, since a
-  // description over about fifty characters wraps at 400 — the wide card is
-  // now the normal one and 400 is for genuinely short copy.
+  // Allowance of 1, not the field's own: the words use the full width before
+  // taking another line. Against the field's allowance the subtitle filled
+  // both its lines at 400 before widening, and the description all three.
+  // Most cards with a description now sit at 440, which is intended.
   for (const { html, field } of fields) {
     if (!html) continue;
     if (measureOverflowAtWidth(html, field, MIRROR_MIN_WIDTH, 1)) {

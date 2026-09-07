@@ -175,6 +175,7 @@ export function PromoEditorPanel() {
         <h4 className="text-2xl font-semibold leading-8 text-on-surface">
           Campaign Schedule
         </h4>
+        
         {openEndedSchedule && (
           <p className="mt-1 text-sm text-on-surface-variant">
             Set when the card goes live below.

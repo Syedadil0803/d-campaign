@@ -3,7 +3,6 @@
 import { createPortal } from 'react-dom';
 import { AnnouncementLinkPopup } from '@/components/announcement/AnnouncementLinkPopup';
 import { AnnouncementSchedulePopup } from '@/components/announcement/AnnouncementSchedulePopup';
-import { AnnouncementStylePanel } from '@/components/announcement/AnnouncementStylePanel';
 import { useAnnouncementEditor } from '@/components/announcement/AnnouncementEditorContext';
 
 /**
@@ -23,23 +22,15 @@ export function AnnouncementEditorPopups() {
     annCountryMenuRef,
     annCountryPos,
     applyLinkSnapshot,
-    backgroundTypeBtnRef,
-    backgroundTypeMenuRef,
-    backgroundTypePos,
     cancelCloseActionMenu,
-    directionBtnRef,
-    directionMenuRef,
-    directionPos,
     endDateCalendarRef,
     endDateView,
-    getEditorSnapshot,
     getLinkSnapshot,
     handleMenuAddLink,
     handleMenuDelete,
     handleMenuSchedule,
     linkPopupRef,
     linkPos,
-    pushImmediateState,
     pushLinkState,
     redoLink,
     scheduleCloseActionMenu,
@@ -62,14 +53,10 @@ export function AnnouncementEditorPopups() {
     setSelectedUrl,
     setSelectedWhatsappNumber,
     setShowAnnCountryDropdown,
-    setShowBackgroundTypeDropdown,
-    setShowDirectionDropdown,
     setShowEndDateCalendar,
     setShowStartDateCalendar,
     setStartDateView,
     showAnnCountryDropdown,
-    showBackgroundTypeDropdown,
-    showDirectionDropdown,
     showEndDateCalendar,
     showLinkPopup,
     showSchedulePopup,
@@ -77,13 +64,9 @@ export function AnnouncementEditorPopups() {
     startDateCalendarRef,
     startDateView,
     undoLink,
-    bg,
     closePopupAndFocusEditor,
     linkDeletingRef,
     scheduleRangeInvalid,
-    setPreviewDirection,
-    updateBg,
-    updateBgWithHistory,
   } = useAnnouncementEditor();
 
   return (
@@ -173,24 +156,6 @@ export function AnnouncementEditorPopups() {
       </div>,
       document.body
     )}
-
-    <AnnouncementStylePanel
-      bg={bg}
-      updateBg={updateBg}
-      updateBgWithHistory={updateBgWithHistory}
-      pushImmediateState={pushImmediateState}
-      getEditorSnapshot={getEditorSnapshot}
-      showBackgroundTypeDropdown={showBackgroundTypeDropdown}
-      setShowBackgroundTypeDropdown={setShowBackgroundTypeDropdown}
-      backgroundTypeBtnRef={backgroundTypeBtnRef}
-      backgroundTypeMenuRef={backgroundTypeMenuRef}
-      backgroundTypePos={backgroundTypePos}
-      showDirectionDropdown={showDirectionDropdown}
-      setShowDirectionDropdown={setShowDirectionDropdown}
-      directionBtnRef={directionBtnRef}
-      directionMenuRef={directionMenuRef}
-      directionPos={directionPos}
-      setPreviewDirection={setPreviewDirection}
-    />    </>
+    </>
   );
 }

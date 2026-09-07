@@ -106,7 +106,10 @@ export function AnnouncementStylePanel({
 
   return (
     <div>
-      <label className="block text-xl font-semibold leading-7 text-on-surface mb-4">Style Customization</label>
+      <label className="mb-1 block text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">
+        Custom bar styling
+      </label>
+      <p className="mb-3 text-sm text-on-surface-variant">Set the exact colours and gradient.</p>
 
       {/* Type + inline control */}
       <div className="grid grid-cols-3 gap-4">

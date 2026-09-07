@@ -125,6 +125,30 @@
   animation-play-state: paused;
 }
 
+/* Paused: stop the motion, drop back to a single copy, and let it sit centered
+   with equal space either side when it fits — otherwise it stays at the left as
+   it scrolls, exactly as before. The .paused-fits class is set by measurement. */
+.announcement-paused .animate-scroll-left {
+  animation: none;
+  transform: none;
+}
+.announcement-paused .animate-scroll-left > span:not(:first-child) {
+  display: none;
+}
+.announcement-paused .animate-scroll-left > span {
+  min-width: 0 !important;
+}
+.announcement-paused.paused-fits {
+  justify-content: center;
+}
+
+/* No auto-scroll for users who ask the OS for reduced motion (WCAG). */
+@media (prefers-reduced-motion: reduce) {
+  .animate-scroll-left {
+    animation: none;
+  }
+}
+
 @keyframes scrollLeft {
   0% {
     transform: translateX(0);

@@ -50,3 +50,68 @@ export function isAnnouncementInWindow(startDate?: string, endDate?: string): bo
 export function visibleAnnouncements(announcements: Announcement[]): Announcement[] {
   return announcements.filter((a) => isAnnouncementInWindow(a.startDate, a.endDate));
 }
+
+/**
+ * How a message's schedule reads in the list, so the editor can badge it.
+ *
+ * Two independent facts decide the badge — when it runs, and whether it ends —
+ * so the five states are every combination worth marking:
+ *
+ *   none              — no dates, or a bounded run already past
+ *   current           — live now, set to end (a bounded run)
+ *   future            — starts on a later day, set to end
+ *   openEndedCurrent  — live now, a start but no end, so it runs until stopped
+ *   openEndedFuture   — starts on a later day, then runs until stopped
+ *
+ * ── Badge standard (the reason behind each mark, not just the mark) ──
+ *
+ * One glyph per row, read as COLOUR + SHAPE. It is a traffic light for the two
+ * questions a user asks of the list: is this on air, and does it ever stop?
+ *
+ *   COLOUR answers "is it on air right now?" — the traffic-light half:
+ *     emerald (green) = LIVE NOW, showing on the site.  Green = go / on.
+ *     amber           = QUEUED, starts on a later day.   Amber = wait, not yet.
+ *   A live row also carries an emerald ring on the whole pill, so the list can
+ *   be scanned for what is on air without reading a single icon.
+ *
+ *   SHAPE answers "does it ever end?":
+ *     ∞  infinity     = never ends, runs until switched off.
+ *     ▤  calendar/clock = it has a bound — a clock while it waits to start,
+ *                         a calendar-check once it is live and ending on a date.
+ *
+ * The two compose, so no row ever needs two icons:
+ *   current           emerald calendar-check + ring
+ *   future            amber clock
+ *   openEndedCurrent  emerald infinity + ring
+ *   openEndedFuture   amber infinity          ← colour carries "starts later",
+ *                                               so it stays one glyph, not clock+∞
+ *   none              (no glyph, no ring)
+ *
+ * Derived from the same window rule above, so the badge and what actually shows
+ * on the site can never disagree.
+ */
+export type AnnouncementScheduleState =
+  | 'none'
+  | 'current'
+  | 'future'
+  | 'openEndedCurrent'
+  | 'openEndedFuture';
+
+export function announcementScheduleState(
+  startDate?: string,
+  endDate?: string,
+): AnnouncementScheduleState {
+  if (!startDate && !endDate) return 'none'; // nothing to mark
+
+  if (startDate) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    // Not showing yet — split by whether it will ever end.
+    if (today < start) return endDate ? 'future' : 'openEndedFuture';
+  }
+  if (!isAnnouncementInWindow(startDate, endDate)) return 'none'; // a bounded run already past
+  if (endDate) return 'current'; // live now, ends on its date
+  return 'openEndedCurrent'; // a start that has arrived, no end → runs on
+}

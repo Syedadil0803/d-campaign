@@ -208,15 +208,10 @@ export function useRichTextEditor(
       italic = document.queryCommandState('italic');
     }
 
-    // Size and color describe the WHOLE selection, the same way bold and
-    // italic already do above.
-    //
-    // Both used to walk up from the anchor node alone, which reports the
-    // FIRST character's value. Select red text and blue text together and the
-    // swatch showed red, as though red applied throughout — then picking a
-    // size re-applied that red to the lot. Every text node in the range has
-    // to agree; when they disagree the control shows nothing ('') rather than
-    // one arbitrary member of the set.
+    // Size and color describe the WHOLE selection, as bold and italic do
+    // above. Walking up from the anchor alone reported the first character's
+    // value, so a red-and-blue selection showed red. Every text node has to
+    // agree; when they disagree the control shows nothing ('').
     const nearest = (from: Node, read: (el: HTMLElement) => string): string => {
       let node: Node | null = from;
       while (node && node !== document.body) {

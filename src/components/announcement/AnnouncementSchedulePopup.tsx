@@ -1,7 +1,8 @@
 'use client';
 
-import type { Dispatch, RefObject, SetStateAction } from 'react';
+import { useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import { createPortal } from 'react-dom';
+import { Infinity as InfinityIcon } from 'lucide-react';
 import { formatDateLabel } from '@/lib/calendarDates';
 import { InlineCalendar } from '@/components/announcement/InlineCalendar';
 
@@ -65,6 +66,31 @@ export function AnnouncementSchedulePopup({
   startDateCalendarRef,
   endDateCalendarRef,
 }: AnnouncementSchedulePopupProps) {
+  // Two ways to run it, same choice as the promo card: 'custom' has a start and
+  // an end, 'openEnded' has a start and runs until switched off. A start with no
+  // end is not a half-finished schedule — it is the open-ended choice, made here.
+  const [mode, setMode] = useState<'custom' | 'openEnded'>('custom');
+  const wasOpenRef = useRef(false);
+
+  // The popup is one instance reused for every row, so adopt the mode implied by
+  // the saved dates each time it opens rather than keeping the last row's mode.
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      setMode(selectedEndDate ? 'custom' : selectedStartDate ? 'openEnded' : 'custom');
+    }
+    wasOpenRef.current = open;
+  }, [open, selectedStartDate, selectedEndDate]);
+
+  // Switching to open-ended drops any end date; switching back just reveals the
+  // end picker again, leaving the start untouched either way.
+  const chooseMode = (next: 'custom' | 'openEnded') => {
+    setMode(next);
+    if (next === 'openEnded') {
+      setSelectedEndDate('');
+      setShowEndDateCalendar(false);
+    }
+  };
+
   if (!open || !position || typeof document === 'undefined') return null;
 
   return createPortal(
@@ -83,6 +109,45 @@ export function AnnouncementSchedulePopup({
         ×
       </button>
       <p className="text-xs font-medium text-on-surface mb-2">Schedule (optional)</p>
+      {/* Same segmented choice as the promo card, so the two features read alike.
+          Full-width — the two options self-label. */}
+      <div className="mb-2 flex rounded-lg border border-white/10 bg-black/10 p-0.5">
+        {[
+          { value: 'custom' as const, label: 'Custom dates' },
+          { value: 'openEnded' as const, label: 'Open-ended' },
+        ].map((opt) => {
+          const active = mode === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); chooseMode(opt.value); }}
+              aria-pressed={active}
+              className={`flex-1 rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors ${
+                active ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+      {/* One line under the toggle saying what the chosen mode does, so the
+          choice is explained where it is made. To add an end date the user flips
+          to Custom dates — the toggle is the one, visible way to switch. */}
+      {mode === 'openEnded' ? (
+        <p className="mb-2 flex items-center gap-1.5 text-[10px] text-on-surface-variant">
+          <InfinityIcon
+            className="h-3 w-3 flex-shrink-0 text-emerald-600 dark:text-emerald-400"
+            aria-hidden="true"
+          />
+          <span>Runs while the campaign is live.</span>
+        </p>
+      ) : (
+        <p className="mb-2 text-[10px] text-on-surface-variant">
+          Shows between your start and end dates.
+        </p>
+      )}
       <div className="space-y-2">
         <div>
           <label className="block text-[11px] text-on-surface-variant mb-0.5">Start Date</label>
@@ -134,6 +199,7 @@ export function AnnouncementSchedulePopup({
             )}
           </div>
         </div>
+        {mode === 'custom' && (
         <div>
           <label className="block text-[11px] text-on-surface-variant mb-0.5">End Date</label>
           <div ref={endDateCalendarRef} className="relative">
@@ -181,12 +247,12 @@ export function AnnouncementSchedulePopup({
             )}
           </div>
         </div>
+        )}
         {scheduleRangeInvalid && (
           <p className="text-[11px] font-medium text-red-600 dark:text-red-400">
             End date must be on or after the start date.
           </p>
         )}
-        <p className="text-[10px] text-on-surface-variant">Leave empty to always show when bar is active.</p>
       </div>
       <div className="flex justify-between items-center mt-2">
         {(selectedStartDate || selectedEndDate) && (
