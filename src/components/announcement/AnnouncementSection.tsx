@@ -845,7 +845,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
         resetMenuRef={resetMenuRef}
       />
 
-      <div className="space-y-5">
+      <div className="space-y-6">
         <AnnouncementPreview
           config={config}
           previewBg={previewBg}
@@ -864,7 +864,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
           }}
         />
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
           {/* Left: Input + Chips + Link */}
           <AnnouncementEditorPanel />
 

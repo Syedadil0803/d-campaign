@@ -116,9 +116,6 @@ export default function RichTextToolbar({
           )}
         </div>
 
-        {/* Divider */}
-        <div className="border-l border-gray-300 h-4 mx-0.5" />
-
         {/* Bold Button */}
         <button
           onMouseDown={(e) => {
@@ -147,8 +144,8 @@ export default function RichTextToolbar({
           I
         </button>
 
-        {/* Divider */}
-        <div className="border-l border-gray-300 h-4 mx-1" />
+        {/* Divider — between A/B/I group and size group */}
+        <div className="border-l border-gray-300 h-4 mx-2" />
 
         {/* Size — one control showing the current size, the rest a click away.
             Six buttons side by side made the toolbar read as a row of shouty

@@ -64,13 +64,13 @@ function ColorField({
 }) {
   return (
     <div>
-      <label className="block text-sm font-semibold text-on-surface mb-2">{label}</label>
+      <label className="block text-xs font-medium text-on-surface-variant mb-1.5">{label}</label>
       <input
         type="color"
         value={value}
         onFocus={onFocus}
         onChange={(e) => onChange(e.target.value)}
-        className="bg-color-picker h-11 w-full rounded cursor-pointer"
+        className="bg-color-picker h-10 w-full rounded cursor-pointer"
       />
     </div>
   );
@@ -109,7 +109,7 @@ export function AnnouncementStylePanel({
       <label className="mb-1 block text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">
         Custom bar styling
       </label>
-      <p className="mb-3 text-sm text-on-surface-variant">Set the exact colours and gradient.</p>
+      <p className="mb-3 text-xs text-on-surface-variant">Set the exact colours and gradient.</p>
 
       {/* Type + inline control */}
       <div className="grid grid-cols-3 gap-4">
@@ -146,14 +146,14 @@ export function AnnouncementStylePanel({
               <input type="range" min="0" max="100" value={bg.midpoint ?? 50}
                 onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
                 onMouseDown={snapshot}
-                className="balance-slider mt-3" />
+                className="balance-slider mt-2" />
             </div>
           )}
         </div>
       </div>
 
       {/* Colors + Direction (second line) */}
-      <div className="mt-4 min-h-[96px]">
+      <div className="mt-3 min-h-0">
         {type === 'solid' && (
           <div className="grid grid-cols-3 gap-4">
             <ColorField
@@ -184,8 +184,8 @@ export function AnnouncementStylePanel({
             <div>
               <PopupDropdown
                 label="Direction"
-                labelClassName="block text-sm font-semibold text-on-surface mb-2"
-                buttonExtraClassName="h-11"
+                labelClassName="block text-xs font-medium text-on-surface-variant mb-1.5"
+                buttonExtraClassName="h-10"
                 value={bg.direction || 'to right'}
                 options={DIRECTIONS}
                 open={showDirectionDropdown}

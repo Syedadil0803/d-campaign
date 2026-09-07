@@ -62,20 +62,33 @@ export function AnnouncementEditorPanel() {
   } = useAnnouncementEditor();
 
   return (
-    <div className="space-y-5 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm flex flex-col transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
-      <div className="border-b border-border pb-4">
-        <h4 className="text-2xl font-semibold leading-8 text-on-surface">Announcement Content</h4>
-        <p className="mt-2 text-sm text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
+    <div className="min-h-[289px] rounded-2xl border border-border campaign-card-surface p-6 shadow-sm flex flex-col transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
+      <div className="border-b border-border pb-4 mb-4">
+        <h4 className="text-xl font-semibold leading-7 text-on-surface">Announcement Content</h4>
+        <p className="mt-1 text-sm text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
       </div>
 
       {/* Announcement Input */}
-      <div className="flex-1 flex flex-col justify-between">
-        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] mb-4">Message</label>
+      <div className="flex-1 flex flex-col">
+   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] mb-2">
+  Message
+</label>
 
-        {/* Rich Text Toolbar + Link/Schedule buttons — same row, show/hide with focus */}
-        <div className="mb-4">
-          <div className="flex items-center gap-1">
-            <div className="flex-1 min-w-0">
+{/* Toolbar group labels */}
+<div className="flex items-center justify-between mb-3 px-0.5">
+  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant/60">
+    TEXT FORMATTING
+  </span>
+
+  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant/60">
+   AI ASSIST
+  </span>
+</div>
+
+{/* Rich Text Toolbar + Link/Schedule buttons */}
+<div className="mb-5">
+  <div className="flex items-center gap-1">
+    <div className="flex-1 min-w-0">
               <RichTextToolbar
                 activeFormats={activeFormats}
                 onFormat={(format) => {
@@ -141,8 +154,10 @@ export function AnnouncementEditorPanel() {
                 }}
                 extraActions={
                   <>
-                    <div className="border-l border-border h-4 mx-0.5 shrink-0" />
+                    {/* Divider before Link / Schedule group */}
+                    <div className="border-l border-border h-4 mx-2 shrink-0" />
 
+                    {/* 🔗 Link — labeled, icon + text */}
                     <button
                       ref={linkBtnRef}
                       onMouseDown={(e) => {
@@ -152,14 +167,16 @@ export function AnnouncementEditorPanel() {
                         setShowSchedulePopup(false);
                       }}
                       disabled={!newAnnouncementText.trim()}
-                      className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${selectedUrl ? 'border-primary/80 bg-primary/10 text-primary' : 'border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
+                      className={`cursor-pointer flex items-center gap-1 px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed text-xs ${selectedUrl ? 'border-primary/80 bg-primary/10 text-primary' : 'border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
                       title={newAnnouncementText.trim() ? 'Add link' : 'Enter text first'}
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                       </svg>
+                      <span className="leading-none">Link</span>
                     </button>
 
+                    {/* 📅 Schedule — labeled, icon + text */}
                     <button
                       ref={scheduleBtnRef}
                       onMouseDown={(e) => {
@@ -172,26 +189,29 @@ export function AnnouncementEditorPanel() {
                         setShowLinkPopup(false);
                       }}
                       disabled={!newAnnouncementText.trim()}
-                      className={`cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${(selectedStartDate || selectedEndDate) ? 'border-primary/80 bg-primary/10 text-primary' : 'border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
-                      title={newAnnouncementText.trim() ? 'Schedule' : 'Enter text first'}
+                      className={`cursor-pointer flex items-center gap-1 px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed text-xs ${(selectedStartDate || selectedEndDate) ? 'border-primary/80 bg-primary/10 text-primary' : 'border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
+                      title={newAnnouncementText.trim() ? 'Schedule this message' : 'Enter text first'}
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
+                      <span className="leading-none">Schedule</span>
                     </button>
                   </>
                 }
                 rightActions={
+                  /* ✨ AI — labeled, isolated far-right */
                   <button
                     type="button"
                     onMouseDown={(e) => {
                       e.preventDefault();
                       openChatGptWithPrompt();
                     }}
-                    className="cursor-pointer flex items-center px-1.5 py-1 border rounded transition-colors shrink-0 border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant ml-1"
+                    className="cursor-pointer flex items-center gap-1 px-1.5 py-1 border rounded transition-colors shrink-0 border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant text-xs"
                     title="Open ChatGPT with a prompt"
                   >
-                    <Sparkles className="w-3.5 h-3.5" />
+                    <Sparkles className="w-3 h-3" />
+                    <span className="leading-none">AI</span>
                   </button>
                 }
               />
@@ -201,7 +221,6 @@ export function AnnouncementEditorPanel() {
 
         <div className="flex gap-2 items-end">
           <div className="flex-1 min-w-0">
-            <p className="text-sm text-on-surface-variant mb-2">Enter text below</p>
             <div ref={richEditorRef} contentEditable suppressContentEditableWarning
               spellCheck={true}
               onInput={onRichTextInput}
@@ -412,7 +431,7 @@ export function AnnouncementEditorPanel() {
                   if (richEditorRef.current) richEditorRef.current.innerHTML = '';
                 }
               }}
-              className={`rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[360px] resize-y break-words transition-colors focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 border-border`}
+              className={`rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[120px] resize-y break-words transition-colors focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 border-border`}
               style={{ background: getBackgroundStyle(previewBg), wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%', caretColor: 'auto' }} />
           </div>
           <button onMouseDown={(e) => {
@@ -420,7 +439,7 @@ export function AnnouncementEditorPanel() {
             addAnnouncement();
           }}
             disabled={!newAnnouncementText.trim()}
-            className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-on-primary bg-primary hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed self-end">
+            className="h-10 px-4 border border-transparent text-sm font-medium rounded-md shadow-sm text-on-primary bg-primary hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed self-end whitespace-nowrap shrink-0">
             {selectedIndex !== null ? 'Update' : 'Add'}
           </button>
         </div>
