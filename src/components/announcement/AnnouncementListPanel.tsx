@@ -7,6 +7,7 @@ import type { CampaignConfig } from '@/types/campaign';
 import { stripHtml } from '@/lib/utils';
 import { isInvalidRange } from '@/lib/dateRange';
 import { announcementScheduleState } from '@/lib/announcement/announcementWindow';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 
 interface AnnouncementListPanelProps {
   config: CampaignConfig;
@@ -45,6 +46,7 @@ export function AnnouncementListPanel({
 }: AnnouncementListPanelProps) {
   const announcements = config.announcementBar.announcements;
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const prevLengthRef = useRef(announcements.length);
 
@@ -64,11 +66,28 @@ export function AnnouncementListPanel({
   const hasStartsLater = announcements.some((a) => ['future', 'openEndedFuture'].includes(announcementScheduleState(a.startDate, a.endDate)));
   const hasActiveNow = announcements.some((a) => ['current', 'openEndedCurrent'].includes(announcementScheduleState(a.startDate, a.endDate)));
 
+  // Handle inline "Yes" click - shows the popup confirmation
+  const handleInlineYes = () => {
+    setConfirmingClear(false);
+    setShowClearConfirm(true);
+  };
+
+  // Handle popup confirm (Yes, clear all button)
+  const handlePopupConfirm = () => {
+    clearAnnouncements();
+    setShowClearConfirm(false);
+  };
+
+  // Handle popup cancel
+  const handlePopupCancel = () => {
+    setShowClearConfirm(false);
+  };
+
   return (
     <div className="relative h-[320px] w-full">
       {/* Outer Container: Fixed 320px with py-[30px] Padding */}
       <div className="absolute inset-0 box-border rounded-2xl border border-border campaign-card-surface px-6 py-[30px] shadow-sm flex flex-col transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
-        
+
         {/* Zone 1: Header Block (52px) */}
         <div className="shrink-0 flex flex-col gap-1">
           <h4 className="text-xl font-bold leading-[28px] text-on-surface">
@@ -79,7 +98,7 @@ export function AnnouncementListPanel({
           </p>
         </div>
 
-        {/* Divider Line & Margins (41px Total) */}
+        {/* Divider Line & Margins (41px Total - Divider sits exactly at 102px Y-offset) */}
         <div className="my-5 h-[1px] w-full bg-border" />
 
         {/* Zone 2: Toolbar Row (20px) */}
@@ -91,12 +110,13 @@ export function AnnouncementListPanel({
 
             {announcements.length > 0 && (
               confirmingClear ? (
+                // ── INLINE CONFIRMATION ──
                 <span className="flex items-center gap-1.5 text-[11px] leading-none">
                   <span className="text-on-surface-variant/70">Clear all?</span>
                   <button
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => { clearAnnouncements(); setConfirmingClear(false); }}
+                    onClick={handleInlineYes}
                     className="font-medium text-rose-500 hover:text-rose-600 transition-colors"
                   >
                     Yes
@@ -116,9 +136,10 @@ export function AnnouncementListPanel({
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => setConfirmingClear(true)}
-                  className="text-[11px] font-medium text-slate-400 hover:text-rose-500 transition-colors focus:outline-none"
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
                   title="Remove all messages"
                 >
+                  <Trash2 className="w-3 h-3" />
                   Clear All
                 </button>
               )
@@ -152,13 +173,13 @@ export function AnnouncementListPanel({
 
         {/* Zone 3: Canvas Viewport (Hard Cap: 120px Height Lock = 3 Rows Max) */}
         {announcements.length === 0 ? (
-          <div className="mt-[25px] flex h-[120px] max-h-[120px] w-full items-center justify-center text-center text-sm text-on-surface-variant">
+          <div className="mt-4 flex h-[120px] max-h-[120px] w-full items-center justify-center text-center text-sm text-on-surface-variant">
             Added text from the left input box will be displayed here
           </div>
         ) : (
-          <div 
+          <div
             ref={scrollContainerRef}
-            className="mt-[25px] flex h-[120px] max-h-[120px] w-full flex-wrap items-center content-start gap-x-[6px] gap-y-3 overflow-y-auto pr-1.5 campaign-custom-scrollbar"
+            className="mt-4 flex h-[120px] max-h-[120px] w-full flex-wrap items-center content-start gap-x-[6px] gap-y-3 overflow-y-auto pr-1.5 campaign-custom-scrollbar"
             style={{ scrollbarGutter: 'stable' }}
           >
             {announcements.map((ann, index) => {
@@ -193,15 +214,14 @@ export function AnnouncementListPanel({
                     detectFormatsForSelectMode(normalizedText);
                   }}
                   title={rowRangeInvalid ? 'This message ends before it starts — open it and fix or clear the schedule.' : undefined}
-                  className={`inline-flex h-8 max-w-[212px] min-w-[60.77px] shrink-0 items-center rounded-full pl-[10px] pr-[6px] text-xs font-medium text-[#5a4138] dark:text-[#dbc1b3] bg-primary/20 group relative cursor-pointer transition-all ${
-                    rowRangeInvalid
+                  className={`inline-flex h-8 max-w-[212px] min-w-[60.77px] shrink-0 items-center rounded-full pl-[10px] pr-[6px] text-xs font-medium text-[#5a4138] dark:text-[#dbc1b3] bg-primary/20 group relative cursor-pointer transition-all ${rowRangeInvalid
                       ? 'border border-red-500 dark:border-red-400'
                       : selectedIndex === index
                         ? 'border border-primary/80 bg-primary/30'
                         : isActiveNow
                           ? 'border border-emerald-500/50 hover:border-emerald-500/80'
                           : 'border border-transparent hover:border-primary/70 hover:bg-primary/25'
-                  } ${draggedIndex === index ? 'opacity-60' : ''}`}
+                    } ${draggedIndex === index ? 'opacity-60' : ''}`}
                 >
                   {rowRangeInvalid ? (
                     <TriangleAlert className="h-[12px] w-[12px] text-red-600 dark:text-red-400 shrink-0" aria-label="Invalid schedule" />
@@ -232,6 +252,23 @@ export function AnnouncementListPanel({
           </div>
         )}
       </div>
+
+      {/* ── POPUP CONFIRMATION DIALOG ── */}
+      <ConfirmDialog
+        open={showClearConfirm}
+        title="Clear all announcements?"
+        confirmLabel="Yes, clear all"
+        cancelLabel="Cancel"
+        tone="danger"
+        onConfirm={handlePopupConfirm}
+        onCancel={handlePopupCancel}
+      >
+        <div className="mt-2 space-y-1">
+          <p className="text-sm text-on-surface-variant">
+            This will permanently remove all messages from the list. You can undo this action from the toast notification that appears after clearing.
+          </p>
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }
