@@ -612,7 +612,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   }
 
   const bg = config.announcementBar.style.background;
-  const activeThemeId = config.announcementBar.activeThemeId || matchAnnouncementTheme(bg, config.announcementBar.style.textColor);
+  /** Explicitly selected theme only — no color-match fallback. */
+  const activeThemeId = config.announcementBar.activeThemeId ?? null;
   const [previewDirection, setPreviewDirection] = useState<string | null>(null);
   const previewBg = previewDirection ? { ...bg, direction: previewDirection } : bg;
   const scheduleRangeInvalid = isInvalidRange(selectedStartDate, selectedEndDate);

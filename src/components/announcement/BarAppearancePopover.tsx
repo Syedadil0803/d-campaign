@@ -29,6 +29,7 @@ export function BarAppearancePopover({
 }: BarAppearancePopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
   const themesContainerRef = useRef<HTMLDivElement>(null);
+  const wasOpenRef = useRef(false);
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("presets");
 
@@ -49,11 +50,13 @@ export function BarAppearancePopover({
     isThemeMode,
   } = useAnnouncementEditor();
 
-  // Initialize tab when popover opens
+  // Initialize tab ONLY when popover opens (closed → open transition)
+  // Not on every isThemeMode change while already open
   useEffect(() => {
-    if (open) {
+    if (open && !wasOpenRef.current) {
       setActiveTab(isThemeMode ? "presets" : "custom");
     }
+    wasOpenRef.current = open;
   }, [open, isThemeMode]);
 
   // Calculate popover position
@@ -83,7 +86,7 @@ export function BarAppearancePopover({
     }
   }, [open, calculatePosition]);
 
-  // Auto-scroll to active theme
+  // Auto-scroll to active theme - runs when popover is actually rendered
   useEffect(() => {
     if (!open || activeTab !== "presets" || !position) return;
     if (!themesContainerRef.current) return;
@@ -116,12 +119,11 @@ export function BarAppearancePopover({
     });
   }, [open, activeTab, activeThemeId, position]);
 
-  // Reposition on scroll/resize - IGNORE scrolls from inside popover
+  // Reposition on scroll/resize - ignore scrolls from inside popover
   useEffect(() => {
     if (!open) return;
 
     const handleReposition = (event: Event) => {
-      // Ignore scroll events that originate from inside the popover
       if (popoverRef.current?.contains(event.target as Node)) {
         return;
       }
