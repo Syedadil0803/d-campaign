@@ -70,17 +70,23 @@ export function AnnouncementEditorPanel() {
   const isOverLimit = getPlainTextLength(newAnnouncementText) > 120;
 
   return (
-    <div className="min-h-[320px] rounded-2xl border border-border campaign-card-surface px-6 pt-6 pb-6 shadow-sm flex flex-col transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
+    <div className="box-border h-[320px] rounded-2xl border border-border campaign-card-surface px-6 py-[30px] shadow-sm flex flex-col transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
 
-      {/* ── Header ── */}
-      <div className="shrink-0">
-        <h4 className="text-xl font-semibold leading-6 text-on-surface">Announcement Content</h4>
-        <p className="mt-1 text-sm leading-4 text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
-        <div className="mt-4 border-b border-border" />
+      {/* Zone 1: Header Block (52px) */}
+      <div className="shrink-0 flex flex-col gap-1">
+        <h4 className="text-xl font-bold leading-[28px] text-on-surface">
+          Announcement Content
+        </h4>
+        <p className="text-sm leading-[20px] text-on-surface-variant">
+          Create your message, optionally attach a link, and add timing only if needed.
+        </p>
       </div>
 
+      {/* Divider Line & Margins (41px Total - Divider sits exactly at 102px Y-offset) */}
+      <div className="my-5 h-[1px] w-full bg-border" />
+
       {/* ── Body ── */}
-      <div className="mt-4 flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-h-0">
 
         {/* Toolbar sub-card */}
         <div className="shrink-0 rounded-lg border border-border bg-surface-subtle px-3 pt-3 pb-3">
@@ -213,7 +219,7 @@ export function AnnouncementEditorPanel() {
         </div>
 
         {/* ── Message input section ── */}
-        <div className="mt-5 flex-1 flex flex-col min-h-0">
+        <div className="mt-4 flex-1 flex flex-col min-h-0">
           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] leading-none">
             Message
           </label>
