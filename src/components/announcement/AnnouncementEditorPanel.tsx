@@ -61,34 +61,39 @@ export function AnnouncementEditorPanel() {
     scheduleRangeInvalid,
   } = useAnnouncementEditor();
 
+  // Get plain text length
+  const getPlainTextLength = (html: string) => {
+    return html.replace(/<[^>]*>/g, '').replace(/\u200B/g, '').length;
+  };
+
+  // Check if text exceeds limit
+  const isOverLimit = getPlainTextLength(newAnnouncementText) > 120;
+
   return (
-    <div className="min-h-[289px] rounded-2xl border border-border campaign-card-surface p-6 shadow-sm flex flex-col transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
-      <div className="border-b border-border pb-4 mb-4">
-        <h4 className="text-xl font-semibold leading-7 text-on-surface">Announcement Content</h4>
-        <p className="mt-1 text-sm text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
+    <div className="min-h-[320px] rounded-2xl border border-border campaign-card-surface px-6 pt-6 pb-6 shadow-sm flex flex-col transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
+
+      {/* ── Header ── */}
+      <div className="shrink-0">
+        <h4 className="text-xl font-semibold leading-6 text-on-surface">Announcement Content</h4>
+        <p className="mt-1 text-sm leading-4 text-on-surface-variant">Create your message, optionally attach a link, and add timing only if needed.</p>
+        <div className="mt-4 border-b border-border" />
       </div>
 
-      {/* Announcement Input */}
-      <div className="flex-1 flex flex-col">
-   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] mb-2">
-  Message
-</label>
+      {/* ── Body ── */}
+      <div className="mt-4 flex flex-col flex-1">
 
-{/* Toolbar group labels */}
-<div className="flex items-center justify-between mb-3 px-0.5">
-  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant/60">
-    TEXT FORMATTING
-  </span>
-
-  <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant/60">
-   AI ASSIST
-  </span>
-</div>
-
-{/* Rich Text Toolbar + Link/Schedule buttons */}
-<div className="mb-5">
-  <div className="flex items-center gap-1">
-    <div className="flex-1 min-w-0">
+        {/* Toolbar sub-card */}
+        <div className="shrink-0 rounded-lg border border-border bg-surface-subtle px-3 pt-3 pb-3">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant/60 leading-none">
+              Formatting &amp; Options
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant/60 leading-none">
+              AI Assistant
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="flex-1 min-w-0">
               <RichTextToolbar
                 activeFormats={activeFormats}
                 onFormat={(format) => {
@@ -117,13 +122,11 @@ export function AnnouncementEditorPanel() {
                       }
                     }, 0);
                   } else {
-                    // No selection in editor: apply to all text or track for future
                     const hasContent = richEditorRef.current?.textContent?.replace(/\u200B/g, '').trim();
                     if (hasContent) {
                       pushImmediateState(getEditorSnapshot());
                       applyFormatToAll(() => formatText(format));
                     } else {
-                      // Empty editor: just track the format for future typing
                       if (format.startsWith('size-')) {
                         setActiveFormats(prev => ({ ...prev, size: format.replace('size-', '') }));
                       } else if (format === 'bold') {
@@ -143,7 +146,6 @@ export function AnnouncementEditorPanel() {
                     applyColor(color);
                     onRichTextInput();
                   } else {
-                    // No selection in editor: apply to all text or track for future
                     const hasContent = richEditorRef.current?.textContent?.replace(/\u200B/g, '').trim();
                     if (hasContent) {
                       pushImmediateState(getEditorSnapshot());
@@ -154,43 +156,36 @@ export function AnnouncementEditorPanel() {
                 }}
                 extraActions={
                   <>
-                    {/* Divider before Link / Schedule group */}
                     <div className="border-l border-border h-4 mx-2 shrink-0" />
-
-                    {/* 🔗 Link — labeled, icon + text */}
                     <button
                       ref={linkBtnRef}
                       onMouseDown={(e) => {
                         e.preventDefault();
-                        if (!newAnnouncementText.trim()) return;
+                        if (!newAnnouncementText.trim() || isOverLimit) return;
                         setShowLinkPopup(!showLinkPopup);
                         setShowSchedulePopup(false);
                       }}
-                      disabled={!newAnnouncementText.trim()}
+                      disabled={!newAnnouncementText.trim() || isOverLimit}
                       className={`cursor-pointer flex items-center gap-1 px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed text-xs ${selectedUrl ? 'border-primary/80 bg-primary/10 text-primary' : 'border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
-                      title={newAnnouncementText.trim() ? 'Add link' : 'Enter text first'}
+                      title={newAnnouncementText.trim() ? (isOverLimit ? 'Character limit exceeded' : 'Add link') : 'Enter text first'}
                     >
                       <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                       </svg>
                       <span className="leading-none">Link</span>
                     </button>
-
-                    {/* 📅 Schedule — labeled, icon + text */}
                     <button
                       ref={scheduleBtnRef}
                       onMouseDown={(e) => {
                         e.preventDefault();
-                        if (!newAnnouncementText.trim()) return;
-                        // Don't let the toggle close the popup while its
-                        // date range is invalid — fix it or press Clear.
+                        if (!newAnnouncementText.trim() || isOverLimit) return;
                         if (showSchedulePopup && scheduleRangeInvalid) return;
                         setShowSchedulePopup(!showSchedulePopup);
                         setShowLinkPopup(false);
                       }}
-                      disabled={!newAnnouncementText.trim()}
+                      disabled={!newAnnouncementText.trim() || isOverLimit}
                       className={`cursor-pointer flex items-center gap-1 px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed text-xs ${(selectedStartDate || selectedEndDate) ? 'border-primary/80 bg-primary/10 text-primary' : 'border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
-                      title={newAnnouncementText.trim() ? 'Schedule this message' : 'Enter text first'}
+                      title={newAnnouncementText.trim() ? (isOverLimit ? 'Character limit exceeded' : 'Schedule this message') : 'Enter text first'}
                     >
                       <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -200,7 +195,6 @@ export function AnnouncementEditorPanel() {
                   </>
                 }
                 rightActions={
-                  /* ✨ AI — labeled, isolated far-right */
                   <button
                     type="button"
                     onMouseDown={(e) => {
@@ -211,7 +205,6 @@ export function AnnouncementEditorPanel() {
                     title="Open ChatGPT with a prompt"
                   >
                     <Sparkles className="w-3 h-3" />
-                    <span className="leading-none">AI</span>
                   </button>
                 }
               />
@@ -219,230 +212,227 @@ export function AnnouncementEditorPanel() {
           </div>
         </div>
 
-        <div className="flex gap-2 items-end">
-          <div className="flex-1 min-w-0">
-            <div ref={richEditorRef} contentEditable suppressContentEditableWarning
-              spellCheck={true}
-              onInput={onRichTextInput}
-              onPaste={(e) => {
-                e.preventDefault();
-                const text = e.clipboardData.getData('text/plain');
-                document.execCommand('insertText', false, text);
-              }}
-              onMouseDown={() => {
-                // Click in editor resets styling session
-              }}
-              onMouseUp={() => {
-                if (!richEditorRef.current) return;
-                const hasContent = richEditorRef.current.textContent?.replace(/\u200B/g, '').trim();
-                if (!hasContent) return;
-                const sel = window.getSelection();
-                if (sel && sel.rangeCount > 0 && richEditorRef.current.contains(sel.anchorNode)) {
-                  detectFormats();
-                }
-              }}
-              onKeyUp={(e) => {
-                if (!richEditorRef.current) return;
+        {/* ── Message input section ── */}
+        <div className="mt-5 flex-1 flex flex-col min-h-0">
+          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] leading-none">
+            Message
+          </label>
 
-                // After delete, clean up empty styled nodes
-                if (e.key === 'Backspace' || e.key === 'Delete') {
-                  const editor = richEditorRef.current;
-                  // Remove empty styled spans and wrappers
-                  editor.querySelectorAll('span[style], b, strong, i, em').forEach((el) => {
-                    if (!el.textContent?.replace(/\u200B/g, '').trim()) {
-                      el.remove();
+          <div className="flex gap-2 mt-2 flex-1">
+            <div className="flex-1 min-w-0 flex flex-col">
+              <div
+                ref={richEditorRef}
+                contentEditable
+                suppressContentEditableWarning
+                spellCheck={true}
+                data-placeholder="Enter announcement text…"
+                onInput={onRichTextInput}
+                onPaste={(e) => {
+                  e.preventDefault();
+                  const text = e.clipboardData.getData('text/plain');
+                  const currentText = richEditorRef.current?.textContent?.replace(/\u200B/g, '') || '';
+                  const remaining = 120 - currentText.length;
+                  
+                  if (remaining <= 0) return;
+                  // Truncate pasted text to fit remaining characters
+                  const pasteText = text.slice(0, remaining);
+                  document.execCommand('insertText', false, pasteText);
+                }}
+                onMouseDown={() => {}}
+                onMouseUp={() => {
+                  if (!richEditorRef.current) return;
+                  const hasContent = richEditorRef.current.textContent?.replace(/\u200B/g, '').trim();
+                  if (!hasContent) return;
+                  const sel = window.getSelection();
+                  if (sel && sel.rangeCount > 0 && richEditorRef.current.contains(sel.anchorNode)) {
+                    detectFormats();
+                  }
+                }}
+                onKeyUp={(e) => {
+                  if (!richEditorRef.current) return;
+                  if (e.key === 'Backspace' || e.key === 'Delete') {
+                    const editor = richEditorRef.current;
+                    editor.querySelectorAll('span[style], b, strong, i, em').forEach((el) => {
+                      if (!el.textContent?.replace(/\u200B/g, '').trim()) el.remove();
+                    });
+                    const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
+                    if (!hasContent) {
+                      setActiveFormats({ bold: false, italic: false, size: 'md', color: editorDefaultColor });
+                      editor.innerHTML = '';
+                      justDeletedStyledRef.current = false;
+                      return;
                     }
-                  });
-
-                  const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
-                  if (!hasContent) {
-                    setActiveFormats({ bold: false, italic: false, size: 'md', color: editorDefaultColor });
-                    editor.innerHTML = '';
-                    justDeletedStyledRef.current = false;
+                    justDeletedStyledRef.current = true;
+                    detectFormatsForSelectMode(editor.innerHTML);
                     return;
                   }
-                  // Mark that we just deleted — next typed char should use detected formats
-                  justDeletedStyledRef.current = true;
-                  // Use DOM-walking detection (not queryCommandState which reads stale context)
-                  detectFormatsForSelectMode(editor.innerHTML);
-                  return;
-                }
-
-                const hasContent = richEditorRef.current.textContent?.replace(/\u200B/g, '').trim();
-                if (!hasContent) return;
-                const sel = window.getSelection();
-                if (sel && sel.rangeCount > 0 && richEditorRef.current.contains(sel.anchorNode)) {
-                  detectFormats();
-                }
-              }}
-              onKeyDown={(e) => {
-                // Any keystroke ends the styling session
-
-                // ── 1. Selection overwrite — snapshot before replacing selected text ──
-                // A deliberate selection+overwrite always starts a NEW session
-                if (!e.metaKey && !e.ctrlKey) {
+                  const hasContent = richEditorRef.current.textContent?.replace(/\u200B/g, '').trim();
+                  if (!hasContent) return;
                   const sel = window.getSelection();
-                  if (
-                    sel &&
-                    !sel.isCollapsed &&
-                    richEditorRef.current?.contains(sel.anchorNode) &&
-                    (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete')
-                  ) {
-                    pushImmediateState(getEditorSnapshot());
-                    // Typing over a selection is a typing run, not a delete
-                    // run — leave the lock off so the rest of the word
-                    // collapses into this one step.
-                    isDeletingRef.current =
-                      e.key === 'Backspace' || e.key === 'Delete';
+                  if (sel && sel.rangeCount > 0 && richEditorRef.current.contains(sel.anchorNode)) {
+                    detectFormats();
                   }
-                }
-
-                // ── 2. First Backspace/Delete — snapshot before destruction begins ──
-                if ((e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.ctrlKey) {
-                  const sel = window.getSelection();
-                  if (sel?.isCollapsed && !isDeletingRef.current) {
-                    isDeletingRef.current = true;
-                    pushImmediateState(getEditorSnapshot());
-                  }
-                } else if (
-                  (e.key.length === 1 || e.key === 'Enter') &&
-                  !e.metaKey &&
-                  !e.ctrlKey
-                ) {
-                  // Ordinary typing. Snapshot BEFORE the character lands,
-                  // so undo restores the text as it was; the stack's
-                  // coalescing window folds the rest of the burst in.
-                  if (isDeletingRef.current) {
-                    // Typing after a delete run ends that run and opens its
-                    // own step, so the words survive one Ctrl+Z instead of
-                    // being swallowed together with the deletion.
-                    isDeletingRef.current = false;
-                    pushImmediateState(getEditorSnapshot());
-                  } else {
-                    pushTypingState(getEditorSnapshot());
-                  }
-                }
-
-                // ── 3. Suppress native undo/redo ──
-                const mod = e.metaKey || e.ctrlKey;
-                if (mod && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
-                  e.preventDefault();
-                  const isUndo = e.key.toLowerCase() === 'z' && !e.shiftKey;
-                  const isRedo = (e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y';
-                  if (isUndo) {
-                    const snapshot = undoEditor(getEditorSnapshot());
-                    if (snapshot) applyEditorSnapshot(snapshot);
-                  } else if (isRedo) {
-                    const snapshot = redoEditor(getEditorSnapshot());
-                    if (snapshot) applyEditorSnapshot(snapshot);
-                  }
-                  // After undo/redo, reset delete mode
-                  isDeletingRef.current = false;
-                  return;
-                }
-
-                // ── 4. Enter to submit ──
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  addAnnouncement();
-                  return;
-                }
-
-                // ── 5. Seed empty editor ──
-                if (!e.metaKey && !e.ctrlKey && e.key.length === 1 && richEditorRef.current) {
-                  const editor = richEditorRef.current;
-                  const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
-                  if (!hasContent) {
-                    e.preventDefault();
-                    const { size, color, bold, italic } = activeFormatsRef.current;
-                    const fontSize = size ? ({ xs: '0.75rem', sm: '0.875rem', md: '1rem', lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem' }[size] || '1rem') : '1rem';
-                    const resolvedColor = color || editorDefaultColor;
-                    let html = `<span style="font-size: ${fontSize}; color: ${resolvedColor}">${e.key}</span>`;
-                    if (bold) html = `<b>${html}</b>`;
-                    if (italic) html = `<i>${html}</i>`;
-                    editor.innerHTML = html;
-                    const sel = window.getSelection();
-                    if (sel) {
-                      sel.removeAllRanges();
-                      const range = document.createRange();
-                      let lastNode: Node = editor;
-                      while (lastNode.lastChild) lastNode = lastNode.lastChild;
-                      if (lastNode.nodeType === Node.TEXT_NODE) {
-                        range.setStart(lastNode, lastNode.textContent?.length || 0);
-                        range.collapse(true);
-                      } else {
-                        range.selectNodeContents(editor);
-                        range.collapse(false);
-                      }
-                      sel.addRange(range);
+                }}
+                onKeyDown={(e) => {
+                  // Prevent typing if at limit
+                  if (!e.metaKey && !e.ctrlKey && e.key.length === 1) {
+                    const currentText = richEditorRef.current?.textContent?.replace(/\u200B/g, '') || '';
+                    if (currentText.length >= 120) {
+                      e.preventDefault();
+                      return;
                     }
-                    onRichTextInput();
-                    justDeletedStyledRef.current = false;
-                  } else if (justDeletedStyledRef.current) {
-                    // After deleting styled text, force-insert with surrounding style
+                  }
+
+                  if (!e.metaKey && !e.ctrlKey) {
+                    const sel = window.getSelection();
+                    if (
+                      sel && !sel.isCollapsed &&
+                      richEditorRef.current?.contains(sel.anchorNode) &&
+                      (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete')
+                    ) {
+                      pushImmediateState(getEditorSnapshot());
+                      isDeletingRef.current = e.key === 'Backspace' || e.key === 'Delete';
+                    }
+                  }
+                  if ((e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.ctrlKey) {
+                    const sel = window.getSelection();
+                    if (sel?.isCollapsed && !isDeletingRef.current) {
+                      isDeletingRef.current = true;
+                      pushImmediateState(getEditorSnapshot());
+                    }
+                  } else if ((e.key.length === 1 || e.key === 'Enter') && !e.metaKey && !e.ctrlKey) {
+                    if (isDeletingRef.current) {
+                      isDeletingRef.current = false;
+                      pushImmediateState(getEditorSnapshot());
+                    } else {
+                      pushTypingState(getEditorSnapshot());
+                    }
+                  }
+                  const mod = e.metaKey || e.ctrlKey;
+                  if (mod && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) {
                     e.preventDefault();
-                    justDeletedStyledRef.current = false;
-                    const { size, color, bold, italic } = activeFormatsRef.current;
-                    const fontSize = size ? ({ xs: '0.75rem', sm: '0.875rem', md: '1rem', lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem' }[size] || '1rem') : '1rem';
-                    const resolvedColor = color || editorDefaultColor;
-                    let charHtml = `<span style="font-size: ${fontSize}; color: ${resolvedColor}">${e.key}</span>`;
-                    if (bold) charHtml = `<b>${charHtml}</b>`;
-                    if (italic) charHtml = `<i>${charHtml}</i>`;
-                    document.execCommand('insertHTML', false, charHtml);
-                    onRichTextInput();
-                  } else {
-                    ensureDefaultFontSize();
+                    const isUndo = e.key.toLowerCase() === 'z' && !e.shiftKey;
+                    const isRedo = (e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y';
+                    if (isUndo) {
+                      const snapshot = undoEditor(getEditorSnapshot());
+                      if (snapshot) applyEditorSnapshot(snapshot);
+                    } else if (isRedo) {
+                      const snapshot = redoEditor(getEditorSnapshot());
+                      if (snapshot) applyEditorSnapshot(snapshot);
+                    }
+                    isDeletingRef.current = false;
+                    return;
                   }
-                }
-              }}
-              onFocus={() => {
-                if (applyingFormatRef.current) return;
-                if (restoringSnapshotRef.current) return;
-                setShowRichToolbar(true);
-                if (!shortcutsTipShown.current && localStorage.getItem('ann_shortcuts_seen') !== 'never') {
-                  shortcutsTipShown.current = true;
-                  setShowShortcutsTip(true);
-                }
-                if (richEditorRef.current) {
-                  const editor = richEditorRef.current;
-                  const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
-                  if (hasContent) {
-                    detectFormatsForSelectMode(editor.innerHTML);
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!isOverLimit && newAnnouncementText.trim()) {
+                      addAnnouncement();
+                    }
+                    return;
                   }
-                }
-              }}
-              onBlur={(e) => {
-                if (applyingFormatRef.current) return;
-                if (restoringSnapshotRef.current) return;
-
-                // Skip if focus moved to toolbar or editor UI (not a true blur)
-                const relatedTarget = e.relatedTarget as HTMLElement | null;
-                const editorContainer = e.currentTarget.closest('.space-y-4');
-                if (relatedTarget && editorContainer?.contains(relatedTarget)) {
-                  // Focus stayed inside editor UI — skip snapshot
-                } else {
-                  // True blur — capture final state
-                  pushImmediateState(getEditorSnapshot());
-                }
-
-                const text = richEditorRef.current?.textContent?.replace(/\u200B/g, '').trim();
-                if (!text && selectedIndex === null) {
+                  if (!e.metaKey && !e.ctrlKey && e.key.length === 1 && richEditorRef.current) {
+                    const editor = richEditorRef.current;
+                    const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
+                    if (!hasContent) {
+                      e.preventDefault();
+                      const { size, color, bold, italic } = activeFormatsRef.current;
+                      const fontSize = size ? ({ xs: '0.75rem', sm: '0.875rem', md: '1rem', lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem' }[size] || '1rem') : '1rem';
+                      const resolvedColor = color || editorDefaultColor;
+                      let html = `<span style="font-size: ${fontSize}; color: ${resolvedColor}">${e.key}</span>`;
+                      if (bold) html = `<b>${html}</b>`;
+                      if (italic) html = `<i>${html}</i>`;
+                      editor.innerHTML = html;
+                      const sel = window.getSelection();
+                      if (sel) {
+                        sel.removeAllRanges();
+                        const range = document.createRange();
+                        let lastNode: Node = editor;
+                        while (lastNode.lastChild) lastNode = lastNode.lastChild;
+                        if (lastNode.nodeType === Node.TEXT_NODE) {
+                          range.setStart(lastNode, lastNode.textContent?.length || 0);
+                          range.collapse(true);
+                        } else {
+                          range.selectNodeContents(editor);
+                          range.collapse(false);
+                        }
+                        sel.addRange(range);
+                      }
+                      onRichTextInput();
+                      justDeletedStyledRef.current = false;
+                    } else if (justDeletedStyledRef.current) {
+                      e.preventDefault();
+                      justDeletedStyledRef.current = false;
+                      const { size, color, bold, italic } = activeFormatsRef.current;
+                      const fontSize = size ? ({ xs: '0.75rem', sm: '0.875rem', md: '1rem', lg: '1.125rem', xl: '1.25rem', xxl: '1.5rem' }[size] || '1rem') : '1rem';
+                      const resolvedColor = color || editorDefaultColor;
+                      let charHtml = `<span style="font-size: ${fontSize}; color: ${resolvedColor}">${e.key}</span>`;
+                      if (bold) charHtml = `<b>${charHtml}</b>`;
+                      if (italic) charHtml = `<i>${charHtml}</i>`;
+                      document.execCommand('insertHTML', false, charHtml);
+                      onRichTextInput();
+                    } else {
+                      ensureDefaultFontSize();
+                    }
+                  }
+                }}
+                onFocus={() => {
+                  if (applyingFormatRef.current) return;
+                  if (restoringSnapshotRef.current) return;
                   setShowRichToolbar(true);
-                  if (richEditorRef.current) richEditorRef.current.innerHTML = '';
+                  if (!shortcutsTipShown.current && localStorage.getItem('ann_shortcuts_seen') !== 'never') {
+                    shortcutsTipShown.current = true;
+                    setShowShortcutsTip(true);
+                  }
+                  if (richEditorRef.current) {
+                    const editor = richEditorRef.current;
+                    const hasContent = editor.textContent?.replace(/\u200B/g, '').trim();
+                    if (hasContent) detectFormatsForSelectMode(editor.innerHTML);
+                  }
+                }}
+                onBlur={(e) => {
+                  if (applyingFormatRef.current) return;
+                  if (restoringSnapshotRef.current) return;
+                  const relatedTarget = e.relatedTarget as HTMLElement | null;
+                  const editorContainer = e.currentTarget.closest('.space-y-4');
+                  if (!(relatedTarget && editorContainer?.contains(relatedTarget))) {
+                    pushImmediateState(getEditorSnapshot());
+                  }
+                  const text = richEditorRef.current?.textContent?.replace(/\u200B/g, '').trim();
+                  if (!text && selectedIndex === null) {
+                    setShowRichToolbar(true);
+                    if (richEditorRef.current) richEditorRef.current.innerHTML = '';
+                  }
+                }}
+                className="rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden break-words transition-colors focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 border-border resize-y min-h-[44px] max-h-[120px]"
+                style={{ background: getBackgroundStyle(previewBg), wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%', caretColor: 'auto' }}
+              />
+            </div>
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault();
+                if (!isOverLimit && newAnnouncementText.trim()) {
+                  addAnnouncement();
                 }
               }}
-              className={`rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden h-[44px] min-h-[44px] max-h-[120px] resize-y break-words transition-colors focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 border-border`}
-              style={{ background: getBackgroundStyle(previewBg), wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%', caretColor: 'auto' }} />
+              disabled={!newAnnouncementText.trim() || isOverLimit}
+              className="h-11 px-4 border border-transparent text-sm font-medium rounded-md shadow-sm text-on-primary bg-primary hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap shrink-0 self-start"
+            >
+              {selectedIndex !== null ? 'Update' : 'Add'}
+            </button>
           </div>
-          <button onMouseDown={(e) => {
-            e.preventDefault();
-            addAnnouncement();
-          }}
-            disabled={!newAnnouncementText.trim()}
-            className="h-10 px-4 border border-transparent text-sm font-medium rounded-md shadow-sm text-on-primary bg-primary hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed self-end whitespace-nowrap shrink-0">
-            {selectedIndex !== null ? 'Update' : 'Add'}
-          </button>
+
+          {/* Footer hint with character count and limit warning */}
+          <div className="mt-2 flex items-center justify-between shrink-0">
+            <span className={`text-[11px] leading-none ${isOverLimit ? 'text-red-500 font-medium' : 'text-on-surface-variant/50'}`}>
+              {(newAnnouncementText.replace(/<[^>]*>/g, '').replace(/\u200B/g, '').length)}&nbsp;/&nbsp;120 chars
+              {isOverLimit && ' ⚠️ Limit exceeded'}
+            </span>
+            <span className="text-[11px] text-on-surface-variant/50 leading-none">
+              Press ↵ Enter to add
+            </span>
+          </div>
         </div>
+
       </div>
 
       <AnnouncementEditorPopups />

@@ -14,12 +14,6 @@ interface AnnouncementStylePanelProps {
   pushImmediateState: (snapshot: EditorSnapshot) => void;
   getEditorSnapshot: () => EditorSnapshot;
 
-  showBackgroundTypeDropdown: boolean;
-  setShowBackgroundTypeDropdown: (open: boolean | ((prev: boolean) => boolean)) => void;
-  backgroundTypeBtnRef: RefObject<HTMLButtonElement | null>;
-  backgroundTypeMenuRef: RefObject<HTMLDivElement | null>;
-  backgroundTypePos: MenuPosition;
-
   showDirectionDropdown: boolean;
   setShowDirectionDropdown: (open: boolean | ((prev: boolean) => boolean)) => void;
   directionBtnRef: RefObject<HTMLButtonElement | null>;
@@ -39,17 +33,15 @@ const DIRECTIONS = [
   { value: 'to top left', label: 'To Top Left ↖' },
 ];
 
-/** Empty grid cell, so the colour fields keep their columns across types. */
-function Spacer() {
-  return <div aria-hidden="true" />;
-}
+/** The three background modes — same values `bg.type` already takes. */
+const BACKGROUND_TYPES: { value: NonNullable<GradientStyle['type']>; label: string }[] = [
+  { value: 'solid', label: 'Solid' },
+  { value: 'linear', label: 'Linear' },
+  { value: 'radial', label: 'Gradient' },
+];
 
 /**
  * One labelled colour well.
- *
- * Written out five times before this — solid's Background Color, linear's
- * Start and End, radial's Center and Outer — identical but for the label and
- * which end of the gradient it wrote to.
  */
 function ColorField({
   label,
@@ -77,20 +69,41 @@ function ColorField({
 }
 
 /**
- * How the announcement bar is painted: solid, linear or radial, and the
- * colours each of those needs.
+ * Balance slider with percentage display - vertically centered
  */
+function BalanceControl({
+  value,
+  onChange,
+  onMouseDown,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  onMouseDown: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 h-10">
+      <input
+        type="range"
+        min="0"
+        max="100"
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        onMouseDown={onMouseDown}
+        className="balance-slider flex-1"
+      />
+      <span className="text-xs font-medium text-on-surface-variant min-w-[40px] text-right">
+        {value}%
+      </span>
+    </div>
+  );
+}
+
 export function AnnouncementStylePanel({
   bg,
   updateBg,
   updateBgWithHistory,
   pushImmediateState,
   getEditorSnapshot,
-  showBackgroundTypeDropdown,
-  setShowBackgroundTypeDropdown,
-  backgroundTypeBtnRef,
-  backgroundTypeMenuRef,
-  backgroundTypePos,
   showDirectionDropdown,
   setShowDirectionDropdown,
   directionBtnRef,
@@ -100,99 +113,67 @@ export function AnnouncementStylePanel({
 }: AnnouncementStylePanelProps) {
   const snapshot = () => pushImmediateState(getEditorSnapshot());
   const type = bg.type || 'solid';
-  // Both gradients take a balance; solid has nothing to balance. The two
-  // branches were written out separately and were identical.
-  const hasBalance = type === 'linear' || type === 'radial';
 
   return (
-    <div>
-      <label className="mb-1 block text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">
-        Custom bar styling
-      </label>
-      <p className="mb-3 text-xs text-on-surface-variant">Set the exact colours and gradient.</p>
-
-      {/* Type + inline control */}
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <PopupDropdown
-            label="Background Type"
-            value={type}
-            options={[
-              { value: 'solid', label: 'Solid' },
-              { value: 'linear', label: 'Linear' },
-              { value: 'radial', label: 'Gradient' },
-            ]}
-            open={showBackgroundTypeDropdown}
-            onOpen={() => {
-              setShowBackgroundTypeDropdown((current) => !current);
-              setShowDirectionDropdown(false);
-            }}
-            onSelect={(nextType) => {
-              // The dropdown is typed to plain strings; its options are
-              // exactly the three background types, so this narrows to what
-              // the list can actually produce.
-              updateBgWithHistory({ type: nextType as GradientStyle['type'] });
-              setShowBackgroundTypeDropdown(false);
-            }}
-            buttonRef={backgroundTypeBtnRef}
-            menuRef={backgroundTypeMenuRef}
-            menuPosition={backgroundTypePos}
-          />
-        </div>
-        <div className="col-span-2">
-          {hasBalance && (
-            <div>
-              <label className="block text-xs text-on-surface-variant mb-1">Balance: {bg.midpoint ?? 50}%</label>
-              <input type="range" min="0" max="100" value={bg.midpoint ?? 50}
-                onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
-                onMouseDown={snapshot}
-                className="balance-slider mt-2" />
-            </div>
-          )}
-        </div>
+    <div className="space-y-4">
+      {/* Inset segmented control - full width */}
+      <div role="group" aria-label="Background type" className="flex rounded-lg border border-border bg-surface-subtle p-0.5">
+        {BACKGROUND_TYPES.map((opt) => {
+          const active = opt.value === type;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => updateBgWithHistory({ type: opt.value })}
+              className={`flex-1 rounded-md px-4 py-1.5 text-xs font-semibold transition-colors ${active ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Colors + Direction (second line) */}
-      <div className="mt-3 min-h-0">
-        {type === 'solid' && (
-          <div className="grid grid-cols-3 gap-4">
-            <ColorField
-              label="Background Color"
-              value={bg.startColor}
-              onFocus={snapshot}
-              onChange={(startColor) => updateBg({ startColor })}
-            />
-            <Spacer />
-            <Spacer />
-          </div>
-        )}
+      {/* Color fields - 2 columns with proper labels */}
+      {type === 'solid' && (
+        <div className="grid grid-cols-2 gap-4">
+          <ColorField
+            label="Background Color"
+            value={bg.startColor}
+            onFocus={snapshot}
+            onChange={(startColor) => updateBg({ startColor })}
+          />
+        </div>
+      )}
 
-        {type === 'linear' && (
-          <div className="grid grid-cols-3 gap-4">
+      {type === 'linear' && (
+        <>
+          <div className="grid grid-cols-2 gap-4">
             <ColorField
-              label="Start Color"
+              label="START COLOR"
               value={bg.startColor}
               onFocus={snapshot}
               onChange={(startColor) => updateBg({ startColor })}
             />
             <ColorField
-              label="End Color"
+              label="END COLOR"
               value={bg.endColor}
               onFocus={snapshot}
               onChange={(endColor) => updateBg({ endColor })}
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div>
+              <label className="block text-xs font-medium text-on-surface-variant mb-1.5">DIRECTION</label>
               <PopupDropdown
-                label="Direction"
-                labelClassName="block text-xs font-medium text-on-surface-variant mb-1.5"
-                buttonExtraClassName="h-10"
+                label=""
+                buttonExtraClassName="h-10 w-full justify-between text-left"
                 value={bg.direction || 'to right'}
                 options={DIRECTIONS}
                 open={showDirectionDropdown}
-                onOpen={() => {
-                  setShowDirectionDropdown((current) => !current);
-                  setShowBackgroundTypeDropdown(false);
-                }}
+                onOpen={() => setShowDirectionDropdown((current) => !current)}
                 onSelect={(nextDirection) => {
                   snapshot();
                   updateBg({ direction: nextDirection });
@@ -206,27 +187,54 @@ export function AnnouncementStylePanel({
                 arrowDirection="right"
               />
             </div>
+            <div>
+              <label className="block text-xs font-medium text-on-surface-variant mb-1.5">BALANCE</label>
+              <BalanceControl
+                value={bg.midpoint ?? 50}
+                onChange={(val) => updateBg({ midpoint: val })}
+                onMouseDown={snapshot}
+              />
+            </div>
           </div>
-        )}
+        </>
+      )}
 
-        {type === 'radial' && (
-          <div className="grid grid-cols-3 gap-4">
+      {type === 'radial' && (
+        <>
+          <div className="grid grid-cols-2 gap-4">
             <ColorField
-              label="Center Color"
+              label="CENTER COLOR"
               value={bg.startColor}
               onFocus={snapshot}
               onChange={(startColor) => updateBg({ startColor })}
             />
             <ColorField
-              label="Outer Color"
+              label="OUTER COLOR"
               value={bg.endColor}
               onFocus={snapshot}
               onChange={(endColor) => updateBg({ endColor })}
             />
-            <Spacer />
           </div>
-        )}
-      </div>
+
+          <div>
+            <label className="block text-xs font-medium text-on-surface-variant mb-1.5">BALANCE</label>
+            <div className="flex items-center gap-3 h-10">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={bg.midpoint ?? 50}
+                onChange={(e) => updateBg({ midpoint: Number(e.target.value) })}
+                onMouseDown={snapshot}
+                className="balance-slider flex-1"
+              />
+              <span className="text-xs font-medium text-on-surface-variant min-w-[40px] text-right">
+                {bg.midpoint ?? 50}%
+              </span>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

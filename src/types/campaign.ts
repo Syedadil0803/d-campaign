@@ -87,6 +87,7 @@ export interface CampaignConfig {
       background: GradientStyle;
       textColor: string;
     };
+    activeThemeId?: string | null;
   };
   promoCard: PromoCard;
 }
