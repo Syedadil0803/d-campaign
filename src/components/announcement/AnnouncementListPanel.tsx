@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { Clock, Infinity as InfinityIcon, MoreVertical, Trash2, TriangleAlert } from 'lucide-react';
 import type { CampaignConfig } from '@/types/campaign';
@@ -46,6 +46,19 @@ export function AnnouncementListPanel({
 }: AnnouncementListPanelProps) {
   const announcements = config.announcementBar.announcements;
   const [confirmingClear, setConfirmingClear] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const prevLengthRef = useRef(announcements.length);
+
+  useEffect(() => {
+    const prevLength = prevLengthRef.current;
+    if (announcements.length > prevLength && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+    prevLengthRef.current = announcements.length;
+  }, [announcements.length]);
 
   const hasInvalid = announcements.some((a) => isInvalidRange(a.startDate, a.endDate));
   const hasNoEnd = announcements.some((a) => ['openEndedCurrent', 'openEndedFuture'].includes(announcementScheduleState(a.startDate, a.endDate)));
@@ -53,12 +66,15 @@ export function AnnouncementListPanel({
   const hasActiveNow = announcements.some((a) => ['current', 'openEndedCurrent'].includes(announcementScheduleState(a.startDate, a.endDate)));
 
   return (
-    <div className="relative min-h-0">
+
+    <div className="relative h-[320px] w-full">
       <div className="absolute inset-0 rounded-2xl border border-border campaign-card-surface p-6 shadow-sm flex flex-col overflow-hidden transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
 
-        <div className="border-b border-border pb-4 mb-4 shrink-0">
-          <h4 className="text-xl font-semibold leading-7 text-on-surface">Manage Announcements</h4>
-          <p className="mt-0.5 text-sm text-on-surface-variant">View, reorder, and manage your messages.</p>
+        <div className="shrink-0">
+          <h4 className="text-xl font-bold leading-7 text-on-surface">Manage Announcements</h4>
+          <p className="mt-1 text-sm text-on-surface-variant">View, reorder, and manage your messages.</p>
+          <div className="mt-3 border-b border-border" />
+          <div className="mb-4" />
         </div>
 
         <div className="min-h-0 flex flex-col">
@@ -105,7 +121,7 @@ export function AnnouncementListPanel({
               )}
             </div>
 
-            <div className="flex items-center gap-2.5 text-[10px] text-on-surface-variant/65 leading-none">
+            <div className="flex items-center gap-3 text-[10px] text-on-surface-variant/65 leading-none">
               {hasInvalid && (
                 <span className="flex items-center gap-0.5" title="Ends before it starts — fix or clear the schedule.">
                   <TriangleAlert className="w-2.5 h-2.5 text-red-500 shrink-0" /> Invalid
@@ -130,12 +146,15 @@ export function AnnouncementListPanel({
           </div>
 
           {announcements.length === 0 ? (
-            <div className="flex items-center justify-center text-center text-sm text-on-surface-variant min-h-[116px]">
+            <div className="flex items-center justify-center text-center text-sm text-on-surface-variant h-[159px]">
               Added text from the left input box will be displayed here
             </div>
           ) : (
-            <div className="campaign-custom-scrollbar overflow-y-auto overflow-x-hidden min-h-[116px] max-h-[116px]">
-              <div className="flex flex-wrap gap-2 p-0.5 content-start">
+            <div
+              ref={scrollContainerRef}
+              className="campaign-custom-scrollbar overflow-y-auto overflow-x-hidden h-[159px]"
+            >
+              <div className="flex flex-wrap gap-1.5 p-0.5 content-start">
                 {announcements.map((ann, index) => {
                   const rowRangeInvalid = isInvalidRange(ann.startDate, ann.endDate);
                   const schedState = announcementScheduleState(ann.startDate, ann.endDate);
@@ -168,15 +187,14 @@ export function AnnouncementListPanel({
                         detectFormatsForSelectMode(normalizedText);
                       }}
                       title={rowRangeInvalid ? 'This message ends before it starts — open it and fix or clear the schedule.' : undefined}
-                      className={`inline-flex items-center gap-1.5 px-3 py-[6px] rounded-full text-sm text-[#5a4138] dark:text-[#dbc1b3] bg-primary/20 group relative cursor-pointer transition-all ${
-                        rowRangeInvalid
-                          ? 'ring-[1.5px] ring-red-500 dark:ring-red-400'
-                          : selectedIndex === index
+                      className={`inline-flex items-center gap-1.5 h-8 pl-3 pr-2.5 rounded-full text-xs font-medium text-[#5a4138] dark:text-[#dbc1b3] bg-primary/20 group relative cursor-pointer transition-all ${rowRangeInvalid
+                        ? 'ring-[1.5px] ring-red-500 dark:ring-red-400'
+                        : selectedIndex === index
                           ? 'ring-[1.5px] ring-primary/80 bg-primary/30'
                           : isActiveNow
-                          ? 'ring-1 ring-emerald-500/50 hover:ring-emerald-500/80'
-                          : 'hover:bg-primary/25 hover:ring-1 hover:ring-primary/70'
-                      } ${draggedIndex === index ? 'opacity-60' : ''}`}
+                            ? 'ring-1 ring-emerald-500/50 hover:ring-emerald-500/80'
+                            : 'hover:bg-primary/25 hover:ring-1 hover:ring-primary/70'
+                        } ${draggedIndex === index ? 'opacity-60' : ''}`}
                     >
                       {rowRangeInvalid ? (
                         <TriangleAlert className="w-3 h-3 text-red-600 dark:text-red-400 shrink-0" aria-label="Invalid schedule" />
@@ -188,7 +206,7 @@ export function AnnouncementListPanel({
                         </span>
                       )}
 
-                      <span className="flex-1 truncate max-w-[180px]" title={stripHtml(ann.text)}>
+                      <span className="flex-1 truncate max-w-[130px]" title={stripHtml(ann.text)}>
                         {stripHtml(ann.text)}
                       </span>
 
@@ -196,7 +214,7 @@ export function AnnouncementListPanel({
                         type="button"
                         data-action-btn
                         onClick={(e) => { e.stopPropagation(); openActionMenu(index, e.currentTarget); }}
-                        className="w-4 flex items-center justify-center shrink-0 text-[#5a4138]/30 dark:text-[#dbc1b3]/30 group-hover:text-[#5a4138]/80 dark:group-hover:text-[#dbc1b3]/80 transition-colors"
+                        className="flex h-5 w-5 items-center justify-center shrink-0 text-[#5a4138]/30 dark:text-[#dbc1b3]/30 group-hover:text-[#5a4138]/80 dark:group-hover:text-[#dbc1b3]/80 transition-colors rounded hover:bg-slate-100 dark:hover:bg-slate-700"
                         title="More options"
                       >
                         <MoreVertical className="w-3 h-3" />
