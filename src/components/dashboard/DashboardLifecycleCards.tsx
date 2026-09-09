@@ -81,7 +81,7 @@ export function DashboardLifecycleCards({
   return (
     <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
   <div ref={promoCardRef} className="flex h-full flex-col rounded-2xl border border-border campaign-card-surface p-4 shadow-sm">
-    <div className="mb-4 flex items-center justify-between">
+    <div className="mb-3 flex items-center justify-between">
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center rounded-xl border border-border bg-background p-2.5">
           <Gift className="h-5 w-5 text-primary" />
@@ -168,7 +168,7 @@ export function DashboardLifecycleCards({
 
     {/* schedule — dd-mon-yyyy window + progress bar (no percentage; time-left is the hero above) */}
     {endMs ? (
-      <div className="mt-4 space-y-2">
+      <div className="mt-3 space-y-2">
         <div className="h-2 w-full overflow-hidden rounded-full bg-surface-subtle">
           <div
             className="h-full rounded-full bg-primary transition-all"
@@ -183,11 +183,11 @@ export function DashboardLifecycleCards({
     ) : promoUncreated ? (
       // Nothing to schedule yet — telling them to set dates for a card
       // that doesn't exist is an instruction they can't act on here.
-      <p className="mt-4 text-sm text-on-surface-variant">
+      <p className="mt-3 text-sm text-on-surface-variant">
         No promo card yet — create one to show it on your site.
       </p>
     ) : (
-      <p className="mt-4 text-sm text-on-surface-variant">Not scheduled yet — set a start and end date.</p>
+      <p className="mt-3 text-sm text-on-surface-variant">Not scheduled yet — set a start and end date.</p>
     )}
 
     {/* actions — two ways in, then lifecycle.
@@ -239,7 +239,7 @@ export function DashboardLifecycleCards({
 
   {/* Announcement */}
   <div className="flex h-full flex-col rounded-2xl border border-border campaign-card-surface p-4 shadow-sm">
-    <div className="mb-4 flex items-center justify-between">
+    <div className="mb-3 flex items-center justify-between">
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center rounded-xl border border-border bg-background p-2.5">
           <Megaphone className="h-5 w-5 text-primary" />
@@ -304,7 +304,7 @@ export function DashboardLifecycleCards({
 
     {/* details below the box — read-only scheduled / unscheduled summary */}
     {annCount > 0 && (
-      <div className="mt-4 space-y-2.5">
+      <div className="mt-3 space-y-2.5">
         <div className="flex items-center gap-2 text-sm text-on-surface-variant">
           <Calendar className="h-4 w-4 shrink-0" />
           <span>

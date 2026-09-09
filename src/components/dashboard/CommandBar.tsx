@@ -135,7 +135,7 @@ function OverflowBadge({
       className="flex shrink-0 items-center rounded-lg border border-border bg-surface-elevated font-semibold text-on-surface-variant transition-colors hover:border-primary/50 hover:text-primary dark:border-border dark:bg-surface-elevated dark:text-on-surface-variant"
       style={{ height: 34, padding: '6px 12px', fontSize: 12, gap: 6 }}
     >
-      <span>+{count} More ▾</span>
+      <span>+{count} More</span>
       <ChevronDown
         className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
         style={{ width: 12, height: 12 }}

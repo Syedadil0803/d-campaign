@@ -1139,6 +1139,10 @@ export default function Home() {
                 promoUnpublished={hasPromoChanges}
                 announcementUnpublished={hasAnnouncementChanges || readyToPublishAnnouncement}
                 promoDraftExists={draftPromoCard !== null}
+                onOpenDraft={() => {
+                  setPendingPromoPopup('draft');
+                  setActiveTab('promo');
+                }}
               />
             )}
 
