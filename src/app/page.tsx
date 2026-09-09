@@ -399,7 +399,7 @@ export default function Home() {
     markPromoChanged,
     loadConfig,
     persistConfig,
-    } = campaign;
+  } = campaign;
 
   // Announcement still stages via Save → Publish (promo saves straight to a
   // draft from the tab strip instead, so it has no staged/"ready" state).
@@ -843,25 +843,25 @@ export default function Home() {
       ...prev,
       promoCard: startingFresh
         ? {
-            ...blankPromoCard(),
-            // On-air state belongs to the website, not the card being drafted;
-            // creating a new one must never take the live campaign down.
-            active: prev.promoCard.active,
-            stoppedByUser: prev.promoCard.stoppedByUser,
-            startDate: start,
-            endDate: end,
-            scheduleMode: mode,
-            // An open-ended campaign has no end to count towards, so a
-            // countdown left on from a previous answer would render nothing.
-            ...(mode === 'openEnded' ? { showTimer: false } : {}),
-          }
+          ...blankPromoCard(),
+          // On-air state belongs to the website, not the card being drafted;
+          // creating a new one must never take the live campaign down.
+          active: prev.promoCard.active,
+          stoppedByUser: prev.promoCard.stoppedByUser,
+          startDate: start,
+          endDate: end,
+          scheduleMode: mode,
+          // An open-ended campaign has no end to count towards, so a
+          // countdown left on from a previous answer would render nothing.
+          ...(mode === 'openEnded' ? { showTimer: false } : {}),
+        }
         : {
-            ...prev.promoCard,
-            startDate: start,
-            endDate: end,
-            scheduleMode: mode,
-            ...(mode === 'openEnded' ? { showTimer: false, timerText: '' } : {}),
-          },
+          ...prev.promoCard,
+          startDate: start,
+          endDate: end,
+          scheduleMode: mode,
+          ...(mode === 'openEnded' ? { showTimer: false, timerText: '' } : {}),
+        },
     }));
     markPromoChanged();
     if (startingFresh) {
@@ -969,7 +969,7 @@ export default function Home() {
     // either way: a failed request must not strand someone on a page they have
     // asked to leave, and the cookie expires on its own.
     fetch('/api/auth/logout', { method: 'POST', keepalive: true })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => {
         window.location.href = '/login';
       });
@@ -1121,13 +1121,13 @@ export default function Home() {
 
         <main
           ref={mainScrollRef}
-          className={`flex-1 overflow-y-auto bg-transparent px-6 pt-8 pb-6 ${
-            activeTab === 'promo' || activeTab === 'announcement' ? 'campaign-custom-scrollbar' : ''
-          }`}
+          className={`flex-1 overflow-y-auto bg-transparent px-6 pt-8 pb-6 ${activeTab === 'promo' || activeTab === 'announcement' ? 'campaign-custom-scrollbar' : ''
+            }`}
         >
           <div className={`max-w-[1840px] mx-auto ${activeTab === 'promo' || activeTab === 'dashboard' ? '' : 'space-y-8 pb-12'}`}>
             {activeTab === 'dashboard' && (
               <Dashboard
+                key={`dashboard-${publishedConfig.announcementBar.active}-${publishedConfig.promoCard.active}`}
                 config={publishedConfig}
                 setActiveTab={handleDashboardTabSwitch}
                 onCreatePromo={handleCreatePromo}
@@ -1138,6 +1138,7 @@ export default function Home() {
                 onGoOnAirAnnouncement={goOnAirAnnouncementNow}
                 promoUnpublished={hasPromoChanges}
                 announcementUnpublished={hasAnnouncementChanges || readyToPublishAnnouncement}
+                promoDraftExists={draftPromoCard !== null}
               />
             )}
 
@@ -1155,41 +1156,41 @@ export default function Home() {
 
             {activeTab === 'promo' && (
               <PromoFlow
-                  key={`promo-${editorResetKey}`}
-                  onAiApplied={handleAiApplied}
-                  openBuildSignal={openBuildSignal}
-                  configLoadedSignal={configLoadedSignal}
-                  blankStart={promoBlankStart}
-                  onBlankStartChange={setPromoBlankStart}
-                  timerAutoArmed={promoTimerAutoArmed}
-                  onTimerAutoArmedChange={setPromoTimerAutoArmed}
-                  pendingPopup={pendingPromoPopup}
-                  onPendingPopupHandled={() => setPendingPromoPopup(null)}
-                  initialStep={promoEntryStep}
-                  config={config}
-                  setConfig={setConfig}
-                  markChanged={markPromoChanged}
-                  toast={toast}
-                  onSelectedVersionChange={setSelectedPromoVersionId}
-                  canReactivate={promoCanReactivate}
-                  livePromoCard={publishedConfig.promoCard}
-                  draftPromoCard={draftPromoCard}
-                  onStop={stopPromoNow}
-                  onGoOnAir={goOnAirPromoNow}
-                  dateErrorPing={promoDateErrorPing}
-                  hasUnsavedChanges={hasPromoChanges}
-                  onSaveDraft={handleSaveAsDraft}
-                  // Writes the draft with no replace-confirm of its own — the
-                  // template dialogs already asked, and asking twice for one
-                  // decision reads as a bug.
-                  onSaveDraftDirect={writeDraftNow}
-                  savingDraft={savingDraft}
-                  onDeleteDraft={handleDeleteDraft}
-                  draftUpToDate={
-                    savedDraftSignature !== null &&
-                    savedDraftSignature === getConfigSignature(config)
-                  }
-                  draftExists={savedDraftSignature !== null}
+                key={`promo-${editorResetKey}`}
+                onAiApplied={handleAiApplied}
+                openBuildSignal={openBuildSignal}
+                configLoadedSignal={configLoadedSignal}
+                blankStart={promoBlankStart}
+                onBlankStartChange={setPromoBlankStart}
+                timerAutoArmed={promoTimerAutoArmed}
+                onTimerAutoArmedChange={setPromoTimerAutoArmed}
+                pendingPopup={pendingPromoPopup}
+                onPendingPopupHandled={() => setPendingPromoPopup(null)}
+                initialStep={promoEntryStep}
+                config={config}
+                setConfig={setConfig}
+                markChanged={markPromoChanged}
+                toast={toast}
+                onSelectedVersionChange={setSelectedPromoVersionId}
+                canReactivate={promoCanReactivate}
+                livePromoCard={publishedConfig.promoCard}
+                draftPromoCard={draftPromoCard}
+                onStop={stopPromoNow}
+                onGoOnAir={goOnAirPromoNow}
+                dateErrorPing={promoDateErrorPing}
+                hasUnsavedChanges={hasPromoChanges}
+                onSaveDraft={handleSaveAsDraft}
+                // Writes the draft with no replace-confirm of its own — the
+                // template dialogs already asked, and asking twice for one
+                // decision reads as a bug.
+                onSaveDraftDirect={writeDraftNow}
+                savingDraft={savingDraft}
+                onDeleteDraft={handleDeleteDraft}
+                draftUpToDate={
+                  savedDraftSignature !== null &&
+                  savedDraftSignature === getConfigSignature(config)
+                }
+                draftExists={savedDraftSignature !== null}
                 onRemoveLive={removeLivePromo}
               />
             )}

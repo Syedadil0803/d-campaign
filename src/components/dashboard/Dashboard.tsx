@@ -3,8 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Pencil,
-  Check,
-  AlertTriangle,
   Eye,
 } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
@@ -16,11 +14,9 @@ import {
   fmtRemaining,
   timeAgo,
 } from '@/components/dashboard/dashboardFormat';
-import {
-  MICRO,
-} from '@/components/dashboard/dashboardStyles';
 import { DashboardLifecycleCards } from '@/components/dashboard/DashboardLifecycleCards';
 import { DashboardPopups } from '@/components/dashboard/DashboardPopups';
+import { CommandBar } from '@/components/dashboard/CommandBar'; // <-- ADD THIS IMPORT
 
 interface DashboardProps {
   config: CampaignConfig;
@@ -35,20 +31,14 @@ interface DashboardProps {
   onEditLivePromo?: () => void;
   promoUnpublished?: boolean;
   announcementUnpublished?: boolean;
+  promoDraftExists?: boolean;
+  onOpenDraft?: () => void;
 }
 
 /** No copy anywhere on the card — the operator hasn't created one yet. */
 function isPromoUncreated(promo: CampaignConfig['promoCard']): boolean {
   return !stripHtml(promo.title) && !stripHtml(promo.subtitle) && !stripHtml(promo.description);
 }
-
-
-
-
-
-
-
-// Match the tool's micro-label convention: sans (Geist) bold uppercase — NOT mono.
 
 export function Dashboard({
   config,
@@ -59,6 +49,10 @@ export function Dashboard({
   onGoOnAirAnnouncement,
   onCreatePromo,
   onEditLivePromo,
+  promoUnpublished,
+  announcementUnpublished,
+  promoDraftExists,
+  onOpenDraft,
 }: DashboardProps) {
   const promoUncreated = isPromoUncreated(config.promoCard);
   // Stop / go-on-air both change the live website, so confirm first.
@@ -121,21 +115,90 @@ export function Dashboard({
   // mirrors what's live on the website only. Editor state is the editor's
   // business — the way back into unfinished work is My Draft below, which is
   // always available rather than appearing as an alert.
-  const checks: { ok: boolean; text: string; action?: { label: string; onClick: () => void } }[] = [];
+  // Actionable readiness checks — what actually needs the operator's attention.
+  // Actionable readiness checks — what actually needs the operator's attention.
+  const checks: { ok: boolean; text: string; severity?: 'high' | 'medium' | 'low'; action?: { label: string; onClick: () => void } }[] = [];
+
+  // P0 (Critical) - Live Promo missing CTA link
   if (promo.active && !hasCta) {
     checks.push({
       ok: false,
-      text: 'Promo has no call-to-action',
-      action: { label: 'Add one', onClick: () => setActiveTab('promo') },
+      text: 'Promo Card has no call-to-action',
+      severity: 'high',
+      action: { label: 'Fix', onClick: () => setActiveTab('promo') },
     });
   }
+
+  // P0 (Critical) - Unsaved edits in browser memory (Promo)
+  if (promoUnpublished) {
+    checks.push({
+      ok: false,
+      text: 'Unsaved local edits (Promo)',
+      severity: 'high',
+      action: { label: 'Resume', onClick: () => setActiveTab('promo') },
+    });
+  }
+
+  // P0 (Critical) - Unsaved edits in browser memory (Announcement)
+  if (announcementUnpublished) {
+    checks.push({
+      ok: false,
+      text: 'Unsaved local edits (Bar)',
+      severity: 'high',
+      action: { label: 'Resume', onClick: () => setActiveTab('announcement') },
+    });
+  }
+
+  // P1 (Warning) - Promo Card toggled OFF
+  if (!promo.active) {
+    checks.push({
+      ok: false,
+      text: 'Promo Card is turned OFF',
+      severity: 'medium',
+      action: { label: 'Turn On', onClick: () => setPending({ kind: 'goOnAir', target: 'promo' }) },
+    });
+  }
+
+  // P1 (Warning) - Announcement Bar toggled OFF
   if (!ann.active) {
     checks.push({
       ok: false,
-      text: 'Announcement bar is off',
-      action: { label: 'Turn on', onClick: () => setPending({ kind: 'goOnAir', target: 'announcement' }) },
+      text: 'Announcement Bar is turned OFF',
+      severity: 'medium',
+      action: { label: 'Turn On', onClick: () => setPending({ kind: 'goOnAir', target: 'announcement' }) },
     });
   }
+
+  // P2 (Schedule) - Scheduled message window expired (Promo)
+  if (promo.active && promo.scheduleMode !== 'openEnded' && endMs && now && now.getTime() > endMs) {
+    checks.push({
+      ok: false,
+      text: 'Schedule ended for announcement',
+      severity: 'medium',
+      action: { label: 'Extend', onClick: () => setActiveTab('promo') },
+    });
+  }
+
+  // P3 (Info) - Persisted database draft ready (Promo)
+  if (promoDraftExists) {
+    checks.push({
+      ok: false,
+      text: 'Saved draft ready (Promo)',
+      severity: 'low',
+      action: {
+        label: 'Review',
+        onClick: () => {
+          if (onOpenDraft) {
+            onOpenDraft();
+          } else {
+            setActiveTab('promo');
+          }
+        },
+      },
+    });
+  }
+
+  // If everything is healthy
   if (checks.every((c) => c.ok)) {
     checks.push({ ok: true, text: 'Promo and announcement look good' });
   }
@@ -143,8 +206,22 @@ export function Dashboard({
   const scheduledMsgs = ann.announcements.filter((a) => a.startDate || a.endDate).length;
 
   const liveCount = (promo.active ? 1 : 0) + (ann.active ? 1 : 0);
-  const liveLabel =
-    liveCount === 0 ? 'Nothing on air right now' : liveCount === 2 ? 'Both channels on air' : '1 of 2 channels on air';
+  const liveLabel = (() => {
+    const promoActive = promo.active;
+    const annActive = ann.active;
+
+    if (promoActive && annActive) {
+      return 'Promo Card & Announcement Bar are both Live';
+    }
+    if (promoActive && !annActive) {
+      return 'Promo Card is Live  •  Announcement Bar is Off';
+    }
+    if (!promoActive && annActive) {
+      return 'Announcement Bar is Live  •  Promo Card is Off';
+    }
+    // Both Off
+    return 'All site campaigns are currently Paused';
+  })();
   const issues = checks.filter((c) => !c.ok);
 
   const PENDING_COPY = {
@@ -224,66 +301,28 @@ export function Dashboard({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Command bar — one-line site status + the publish action */}
-      <section className="flex flex-col gap-3 rounded-2xl border border-border campaign-card-surface p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <span className="relative flex h-2.5 w-2.5">
-            {liveCount > 0 && (
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-            )}
-            <span
-              className={`relative inline-flex h-2.5 w-2.5 rounded-full ${
-                liveCount > 0 ? 'bg-emerald-500' : 'bg-on-surface-variant'
-              }`}
-            />
-          </span>
-          <div>
-            <p className={`${MICRO} text-on-surface-variant`}>Your site</p>
-            <p className="text-sm font-semibold text-on-surface">{liveLabel}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-xs text-on-surface-variant">
-            Last published {now ? timeAgo(config.lastUpdated, now) : '—'}
-          </span>
-          {/* No "Publish changes" here — publishing belongs to the editor,
-              where you can see what you'd be publishing. Surfacing it on the
-              dashboard also meant leaking editor state into a view that only
-              reports what's live. */}
-        </div>
-      </section>
-
-      {/* Attention strip — loud only when something actually needs fixing */}
-      {issues.length > 0 ? (
-        <section className="rounded-2xl border border-amber-300/60 bg-amber-50/70 p-3 dark:border-amber-500/25 dark:bg-amber-500/[0.07]">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <span className={`inline-flex items-center gap-1.5 ${MICRO} text-amber-700 dark:text-amber-400`}>
-              <AlertTriangle className="h-3.5 w-3.5" />
-              Needs attention
-            </span>
-            {issues.map((c, i) => (
-              <span key={i} className="inline-flex items-center gap-2 text-sm text-on-surface">
-                <span aria-hidden className="inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500/80 dark:bg-amber-400/80" />
-                {c.text}
-                {c.action && (
-                  <button
-                    type="button"
-                    onClick={c.action.onClick}
-                    className="font-semibold text-primary transition-opacity hover:opacity-80"
-                  >
-                    {c.action.label}
-                  </button>
-                )}
-              </span>
-            ))}
-          </div>
-        </section>
-      ) : (
-        <section className="flex items-center gap-2 rounded-2xl border border-emerald-300/50 bg-emerald-50/60 px-4 py-2.5 text-sm text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/[0.07] dark:text-emerald-300">
-          <Check className="h-4 w-4 shrink-0" />
-          Everything&apos;s live and healthy — nothing needs your attention.
-        </section>
-      )}
+      {/* NEW COMMAND BAR - Replaces the old command bar and attention strip */}
+      <CommandBar
+        lastPublished={now ? `Last published ${timeAgo(config.lastUpdated, now)}` : 'Not yet published'}
+        isLive={liveCount > 0}
+        liveStatusText={liveLabel}
+        initialIssues={issues.map((issue, index) => ({
+          id: `issue-${index}`,
+          message: issue.text,
+          severity: issue.severity ?? 'medium',
+          action: issue.action ? {
+            label: issue.action.label,
+            onClick: issue.action.onClick,
+          } : undefined,
+        }))}
+        onIssueAction={(issueId) => {
+          const index = parseInt(issueId.split('-')[1]);
+          const issue = issues[index];
+          if (issue?.action) {
+            issue.action.onClick();
+          }
+        }}
+      />
 
       {/* Lifecycle cards — Studio layout: recessed preview stage + schedule/meta + actions */}
       <DashboardLifecycleCards
