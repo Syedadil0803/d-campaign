@@ -155,23 +155,22 @@ function FlyoutDrawer({
 }) {
   return (
     <div
-      className="absolute right-0 z-50 rounded-xl border border-border bg-surface-elevated shadow-lg dark:border-border dark:bg-surface-elevated"
+      className="absolute right-0 z-50 rounded-xl border border-white/10 bg-black/10 p-4 text-on-surface shadow-2xl backdrop-blur-md"
       style={{
         top: 'calc(100% + 6px)',
         width: 440,
-        padding: 16,
         animation: 'fadeSlideDown 150ms ease-out both',
       }}
     >
       {/* Header */}
-      <div className="mb-3 flex items-center justify-between border-b border-border pb-3 dark:border-border">
-        <span className="font-bold uppercase tracking-[0.08em] text-on-surface-variant text-[11px] dark:text-on-surface-variant">
+      <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-3">
+        <span className="font-bold uppercase tracking-[0.08em] text-on-surface-variant text-[11px]">
           All Pending Issues ({issues.length})
         </span>
         <button
           type="button"
           onClick={onClose}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-surface-subtle hover:text-on-surface dark:text-on-surface-variant dark:hover:bg-surface-subtle dark:hover:text-on-surface"
+          className="flex h-6 w-6 items-center justify-center rounded-md text-on-surface-variant transition-colors hover:bg-white/10 hover:text-on-surface"
           aria-label="Close issues drawer"
         >
           <X style={{ width: 14, height: 14 }} />
@@ -185,12 +184,12 @@ function FlyoutDrawer({
           return (
             <div
               key={issue.id}
-              className="flex items-center justify-between rounded-lg bg-surface-subtle transition-colors hover:bg-surface-hover dark:bg-surface-subtle dark:hover:bg-surface-hover"
+              className="flex items-center justify-between rounded-lg bg-white/5 transition-colors hover:bg-white/10"
               style={{ height: 40, padding: '8px 12px', gap: 12 }}
             >
               <div className="flex min-w-0 flex-1 items-center" style={{ gap: 10 }}>
                 <span className="shrink-0 text-[13px] leading-none">{PRIORITY_CONFIG[issue.severity].icon}</span>
-                <span className="truncate text-on-surface text-[13px] font-medium leading-[18px] dark:text-on-surface">
+                <span className="truncate text-on-surface text-[13px] font-medium leading-[18px]">
                   {issue.message}
                 </span>
               </div>
@@ -323,13 +322,13 @@ export function CommandBar({
           >
             {siteName}
           </span>
-          <span className="text-on-surface-variant/40 dark:text-on-surface-variant/40" style={{ fontSize: 11 }}>•</span>
-          <span
+          {/* <span className="text-on-surface-variant/40 dark:text-on-surface-variant/40" style={{ fontSize: 11 }}>•</span> */}
+          {/* <span
             className="font-medium text-on-surface-variant/60 dark:text-on-surface-variant/60"
             style={{ fontSize: 11, lineHeight: '14px' }}
           >
             {lastPublished}
-          </span>
+          </span> */}
         </div>
         <div className="flex items-center" style={{ gap: 8 }}>
           <LiveDot isLive={isLive} />
