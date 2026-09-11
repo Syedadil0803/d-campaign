@@ -1421,7 +1421,6 @@ export default function Home() {
       {/* First-run campaign setup, opened from the dashboard's "Create promo
           card". Same dialog the guided flow uses, so the questions asked are
           identical wherever a campaign starts. */}
-      {/* "Set up your campaign" - DISABLED
       {setup.visible && (
         <PromoSetupDialog
           sourceLabel="a blank card"
@@ -1437,7 +1436,6 @@ export default function Home() {
           onClose={() => setup.setVisible(false)}
         />
       )}
-      */}
 
       {/* Unsaved promo work, caught at the dashboard before an action that
           would replace the canvas. Saving is offered, never required — the

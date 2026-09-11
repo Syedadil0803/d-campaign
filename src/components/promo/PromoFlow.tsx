@@ -52,11 +52,9 @@ export function PromoFlow({
   const { config, setConfig, markChanged, toast } = editorProps;
 
   /** Which stage the panel opens at, or null when it's closed. */
-  // DISABLED: Build flow dialogs ("How do you want to build it?", "Pick a starting design", "What should AI create?")
-  const [panelStage, setPanelStage] = useState<BuildStage | null>(null);
-  // const [panelStage, setPanelStage] = useState<BuildStage | null>(
-  //   initialStep === 'ai' ? 'ai' : initialStep === 'build' ? 'mode' : null,
-  // );
+  const [panelStage, setPanelStage] = useState<BuildStage | null>(
+    initialStep === 'ai' ? 'ai' : initialStep === 'build' ? 'mode' : null,
+  );
   const [showTour, setShowTour] = useState(false);
   /**
    * The countdown hint. Unlike the first-run tour this recurs: it fires each
