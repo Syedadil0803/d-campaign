@@ -177,7 +177,13 @@ export function useCampaignPublishing({
     // you click Publish"). Off is reached via the Stop chip, not by publishing.
     const cfgToSave = {
       ...config,
-      promoCard: { ...config.promoCard, active: true, stoppedByUser: false },
+      promoCard: { 
+        ...config.promoCard, 
+        active: true, 
+        stoppedByUser: false,
+        // For open-ended campaigns, don't send an endDate
+        ...(config.promoCard.scheduleMode === 'openEnded' && { endDate: null })
+      },
     };
     const successMsg = 'Campaign is live on your website';
 

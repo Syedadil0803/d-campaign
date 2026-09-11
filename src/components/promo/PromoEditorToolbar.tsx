@@ -2,11 +2,9 @@
 
 import {
   FileClock,
-  FilePlus2,
   History,
   LayoutTemplate,
-  Loader2,
-  Save,
+  Palette,
   Sparkles,
 } from 'lucide-react';
 
@@ -16,13 +14,15 @@ interface PromoEditorToolbarProps {
   setTemplatesFromBuild: (fromBuild: boolean) => void;
   setShowTemplatesPopup: (open: boolean) => void;
   setShowVersionsPopup: (open: boolean) => void;
-  confirmClearCanvas: () => void;
-  canvasIsEmpty: boolean;
   openDraftPopup: () => void;
-  draftExists: boolean;
-  onSaveDraft: () => void;
-  savingDraft: boolean;
-  draftUpToDate: boolean;
+  /** Card position controls */
+  cardPositionPos: string | null;
+  setCardPositionPos: (pos: string) => void;
+  /** Styling popover trigger */
+  customizeButtonRef: React.RefObject<HTMLButtonElement | null>;
+  onShowStylingPopover?: () => void;
+  stylingTriggerLabel?: string;
+  showStylingPopover?: boolean;
 }
 
 /**
@@ -49,6 +49,13 @@ export function PromoEditorToolbar({
   onSaveDraft,
   savingDraft,
   draftUpToDate,
+  onDeleteDraft,
+  cardPositionPos,
+  setCardPositionPos,
+  customizeButtonRef,
+  onShowStylingPopover,
+  stylingTriggerLabel = 'Customize',
+  showStylingPopover = false,
 }: PromoEditorToolbarProps) {
   return (
     <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
@@ -112,20 +119,51 @@ export function PromoEditorToolbar({
             reading as unrelated to anything and sitting directly above the
             primary save button. */}
         <span className="h-6 w-px shrink-0 bg-border" aria-hidden="true" />
-        <button
-          type="button"
-          onClick={confirmClearCanvas}
-          disabled={canvasIsEmpty}
-          className="tool-chip relative inline-flex h-8 shrink-0 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-lg border border-on-surface-variant/25 px-2.5 text-xs font-medium text-on-surface-variant/80 transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
-          title={
-            canvasIsEmpty
-              ? 'Nothing to clear — the canvas is already blank.'
-              : 'Start from a blank promo card'
-          }
-        >
-          <span aria-hidden="true" className="ai-sheen pointer-events-none absolute inset-0" />
-          <FilePlus2 className="h-3.5 w-3.5" /> Clear
-        </button>
+        {/* Clear button moved to left panel next to "Content" heading */}
+      </div>
+
+      {/* Styling Studio Row — Styling controls on left, Card position on right */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">Styling Studio:</span>
+          <button
+            ref={customizeButtonRef}
+            type="button"
+            onClick={() => onShowStylingPopover?.()}
+            aria-pressed={showStylingPopover}
+            title="Edit card colors and themes"
+            className={`flex h-7 items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-medium transition-colors ${
+              showStylingPopover
+                ? 'border-primary/80 bg-primary/10 text-primary'
+                : 'border-border bg-surface-subtle text-on-surface-variant hover:border-primary/60 hover:text-on-surface'
+            }`}
+          >
+            <Palette className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="max-w-[120px] truncate">{stylingTriggerLabel}</span>
+            <svg
+              className={`h-3.5 w-3.5 shrink-0 transition-transform ${showStylingPopover ? 'rotate-180' : ''}`}
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">Position:</span>
+          <select
+            value={cardPositionPos || 'bottom-right'}
+            onChange={(e) => setCardPositionPos(e.target.value)}
+            className="rounded-lg border border-border bg-surface-subtle px-2.5 py-1.5 text-xs font-medium text-on-surface transition-colors hover:border-primary/60"
+            title="Where the card sits on your website"
+          >
+            <option value="bottom-left">Bottom Left</option>
+            <option value="bottom-right">Bottom Right</option>
+          </select>
+        </div>
       </div>
 
       {/* Position and card colour moved down to sit with Current in the Themes
@@ -133,45 +171,7 @@ export function PromoEditorToolbar({
           group there instead of living apart from the Current swatch they act
           on. Only the primary action stays up here, pushed right. */}
       <div className="flex items-center justify-end gap-2">
-        {/* Icon-only: it sits directly beside "Save draft", which already names
-            the subject, so repeating "My Draft" in full spent a button's worth
-            of width saying the same word twice. The dot still marks that a
-            draft exists. */}
-        <button
-          type="button"
-          data-tour="promo-my-draft"
-          onClick={openDraftPopup}
-          aria-label={draftExists ? 'View your saved draft' : 'No saved draft yet'}
-          className="relative grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-on-surface-variant/40 text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
-          title={draftExists ? 'View your saved draft' : 'No saved draft yet'}
-        >
-          <FileClock className="h-4 w-4" />
-          {draftExists && (
-            <span
-              aria-hidden="true"
-              className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-surface bg-primary"
-            />
-          )}
-        </button>
-        <button
-          type="button"
-          data-tour="promo-save-draft"
-          onClick={onSaveDraft}
-          disabled={savingDraft || canvasIsEmpty || draftUpToDate}
-          className="inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
-          title={
-            canvasIsEmpty
-              ? 'Nothing to save yet - add some content first.'
-              : draftUpToDate
-                ? 'Your saved draft already matches this - make a change to save again.'
-                : draftExists
-                  ? 'Replace your saved draft with what you are editing now'
-                  : 'Store these edits as your saved draft'
-          }
-        >
-          {savingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {draftExists ? 'Update draft' : 'Save draft'}
-        </button>
+        {/* Save draft functionality removed */}
       </div>
     </div>
   );

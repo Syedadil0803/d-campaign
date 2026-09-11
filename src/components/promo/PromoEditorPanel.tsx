@@ -1,6 +1,6 @@
 'use client';
 
-import { Gift } from 'lucide-react';
+import { Gift, RotateCcw } from 'lucide-react';
 import { getBackgroundStyle } from '@/lib/utils';
 import { usePromoEditor } from '@/components/promo/PromoEditorContext';
 import { PromoCardActionDialog } from '@/components/promo/PromoCardActionDialog';
@@ -56,6 +56,8 @@ export function PromoEditorPanel() {
     countryCodeMenuRef,
     closeAllPromoDropdowns,
     getDropdownPosition,
+    canvasIsEmpty,
+    confirmClearCanvas,
   } = usePromoEditor();
 
   const openEndedSchedule = isOpenEnded(config.promoCard);
@@ -116,13 +118,31 @@ export function PromoEditorPanel() {
           28px and "Content" at 24px are close enough in size to compete,
           and the standard gap left them reading as two titles stacked
           rather than a section beneath a page. */}
-      <div className="!mt-12">
-        <h4 className="text-2xl font-semibold leading-8 text-on-surface">
-          Content
-        </h4>
-        <p className="mt-2 text-sm text-on-surface-variant">
-          Main promo copy shown in the card.
-        </p>
+      <div className="!mt-12 flex items-center justify-between gap-3">
+        <div>
+          <h4 className="text-2xl font-semibold leading-8 text-on-surface">
+            Content
+          </h4>
+          <p className="mt-2 text-sm text-on-surface-variant">
+            Main promo copy shown in the card.
+          </p>
+        </div>
+        {/* Clear button moved from toolbar */}
+        <button
+          type="button"
+          onClick={confirmClearCanvas}
+          disabled={canvasIsEmpty}
+          className="tool-chip relative inline-flex h-8 shrink-0 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-lg border border-on-surface-variant/25 px-2.5 text-xs font-medium text-on-surface-variant/80 transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+          title={
+            canvasIsEmpty
+              ? 'Nothing to refresh — the canvas is already blank.'
+              : 'Start from a blank promo card'
+          }
+        >
+          <span aria-hidden="true" className="ai-sheen pointer-events-none absolute inset-0" />
+          <RotateCcw className="h-3.5 w-3.5" />
+          Start Fresh
+        </button>
       </div>
 
       {/* Three fields, one component.

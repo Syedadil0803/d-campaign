@@ -212,6 +212,8 @@ export function draftHasRestorableWork(
   published: CampaignConfig | null,
 ): boolean {
   if (promoHasVisibleContent(draft.promoCard)) return true;
+  // Dates are work — even a blank card with a schedule is restorable
+  if (draft.promoCard.startDate || draft.promoCard.endDate) return true;
   if (!published) return false;
   return announcementSignature(draft) !== announcementSignature(published);
 }

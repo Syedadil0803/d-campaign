@@ -20,6 +20,17 @@ import type { CampaignConfig } from '@/types/campaign';
 const RECOVERY_KEY = 'campaign-admin:recovery';
 
 /**
+ * Why the rescue copy was written.
+ *
+ * The offer shown on the next login depends on it: an idle sign-out is not
+ * an accident — the tool knew it was ending the session, and the copy was
+ * taken deliberately on the way out — while a crash is exactly the case the
+ * warning "session ended before you could save" is for. Saying the wrong one
+ * makes the tool look like it lost track of what happened.
+ */
+export type RecoveryReason = 'idle' | 'crash';
+
+/**
  * Stored with the moment it was taken, not just the config.
  *
  * The config's own `lastUpdated` is when it was last published, which says
@@ -29,12 +40,17 @@ const RECOVERY_KEY = 'campaign-admin:recovery';
  */
 export interface RecoveryEnvelope {
   savedAt: string;
+  reason: RecoveryReason;
   config: CampaignConfig;
 }
 
-export function writeRecovery(cfg: CampaignConfig) {
+export function writeRecovery(cfg: CampaignConfig, reason: RecoveryReason = 'crash') {
   try {
-    const envelope: RecoveryEnvelope = { savedAt: new Date().toISOString(), config: cfg };
+    const envelope: RecoveryEnvelope = {
+      savedAt: new Date().toISOString(),
+      reason,
+      config: cfg,
+    };
     localStorage.setItem(RECOVERY_KEY, JSON.stringify(envelope));
   } catch {
     // Private mode or quota — nothing to fall back to, and the close must
@@ -45,9 +61,11 @@ export function writeRecovery(cfg: CampaignConfig) {
 /**
  * Reads either shape.
  *
- * Copies written before this carried the bare config. They belong to someone
- * who is mid-edit right now, so the change must not throw their work away —
- * it reads as a recovery with an unknown time, which is exactly what it is.
+ * Copies written before this carried the bare config, and copies written
+ * before `reason` existed carry no reason. They belong to someone who is
+ * mid-edit right now, so the change must not throw their work away — they
+ * read as a crash with an unknown time, which is the safest default: the
+ * offer says the work was rescued, and the user can still accept it.
  */
 export function readRecoveryEnvelope(): RecoveryEnvelope | null {
   try {
@@ -55,14 +73,17 @@ export function readRecoveryEnvelope(): RecoveryEnvelope | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed.savedAt === 'string' && parsed.config) {
-      return parsed as RecoveryEnvelope;
+      return {
+        savedAt: parsed.savedAt,
+        reason: parsed.reason === 'idle' ? 'idle' : 'crash',
+        config: parsed.config as CampaignConfig,
+      };
     }
-    return { savedAt: '', config: parsed as CampaignConfig };
+    return { savedAt: '', reason: 'crash', config: parsed as CampaignConfig };
   } catch {
     return null;
   }
 }
-
 
 export function clearRecovery() {
   try {

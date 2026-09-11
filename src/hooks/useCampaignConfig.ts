@@ -20,8 +20,6 @@ import { isFirstLoadOfVisit } from '@/lib/visit';
 import { cardIsNotUserWork } from '@/lib/promo/promoAuthorship';
 import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
 import { readRecoveryEnvelope, clearRecovery } from '@/lib/recovery';
-import type { RestoreNotice } from '@/types/campaignShell';
-
 
 interface CampaignDraftPort {
   clearDraft: () => void;
@@ -33,16 +31,16 @@ interface CampaignDraftPort {
   setPostPublishDraft: (value: boolean) => void;
 }
 
-
-
 interface UseCampaignConfigArgs {
   toast: (message: string, isError?: boolean) => void;
   promoBlankStart: boolean;
   setPromoEntryStep: (step: 'build' | 'editor') => void;
-  /** Shape declared here so the page and this agree on one definition. */
-  setRestoreNotice: (notice: RestoreNotice | null) => void;
   ensureLivePromoVariant: (cfg: CampaignConfig) => Promise<CampaignConfig>;
   draftPort: CampaignDraftPort;
+  setHasRecoveredWork: (value: boolean) => void;
+  setRecoveryReason: (reason: 'idle' | 'crash' | null) => void;
+  setBlankStart?: (value: boolean) => void;
+  setRecoveredConfig?: (config: CampaignConfig | null) => void;
 }
 
 /**
@@ -56,9 +54,12 @@ interface UseCampaignConfigArgs {
 export function useCampaignConfig({
   toast,
   setPromoEntryStep,
-  setRestoreNotice,
   ensureLivePromoVariant,
   draftPort,
+  setHasRecoveredWork,
+  setRecoveryReason,
+  setBlankStart,
+  setRecoveredConfig,
 }: UseCampaignConfigArgs) {
   const [config, setConfig] = useState<CampaignConfig>(defaultConfig);
   const [publishedConfig, setPublishedConfig] = useState<CampaignConfig>(defaultConfig);
@@ -74,6 +75,8 @@ export function useCampaignConfig({
   configRef.current = config;
   const hasAnnouncementChangesRef = useRef(hasAnnouncementChanges);
   hasAnnouncementChangesRef.current = hasAnnouncementChanges;
+  const hasPromoChangesRef = useRef(hasPromoChanges);
+  hasPromoChangesRef.current = hasPromoChanges;
   const publishedConfigRef = useRef<string | null>(null);
   const publishedConfigObjRef = useRef<CampaignConfig | null>(null);
   const savedPromoSignatureRef = useRef<string | null>(null);
@@ -101,45 +104,11 @@ export function useCampaignConfig({
     savedPromoSignatureRef.current = getPromoSignature(next);
     draftPort.draftSignatureRef.current = getConfigSignature(next);
     setHasPromoChanges(false);
-    setPromoEntryStep('build');
+   setPromoEntryStep('editor');
     // Makes the editors re-read from config — without it the contentEditable
     // fields keep showing the card that was just cleared.
     setConfigLoadedSignal((n) => n + 1);
   }
-
-  /**
-   * Drafting is manual — except when the work is about to be lost.
-   *
-   * On tab close or refresh, take one rescue copy and warn with the native
-   * prompt. The test is whether anything would actually be LOST, which is
-   * narrower than "has anything changed": a card can sit in My Published, and a
-   * blank canvas or untouched template is nobody's work. The promo half reuses
-   * the dashboard's check, which weighs all three places a card is recoverable
-   * from.
-   *
-   * A prompt that fires when there is nothing to lose is one people learn to
-   * click through, which costs more than it saves.
-   *
-   * Nothing is written on the way out. If the user is warned and leaves anyway,
-   * quietly keeping the work would make the warning a lie.
-   */
-  /**
-   * Keep a local copy of work in progress, continuously.
-   *
-   * The unload handler below covers a deliberate close, but it is not a
-   * guarantee: a crash, a killed tab, a battery running out or a phone
-   * switching apps never fire it. Writing as the user works means the copy is
-   * already there whatever happens next.
-   *
-   * Debounced because this runs on every keystroke's worth of state, and
-   * localStorage writes are synchronous — doing it eagerly would stutter the
-   * editor it is meant to protect.
-   *
-   * Only real work is kept: the same at-risk test the close prompt uses, so a
-   * blank canvas, a stock template or the published card unedited never
-   * displaces something worth recovering.
-   */
-  /** True once a card has been loaded — see the recovery effect below. */
 
   /**
    * A blank promo card wearing this visit's palette.
@@ -162,15 +131,6 @@ export function useCampaignConfig({
     // card whose Start Date read "Select" — see withDefaultStartDate.
     return withDefaultStartDate(card);
   }
-
-  /**
-   * May the countdown switch itself on once both dates exist?
-   *
-   * Only after Clear, where the end date is genuinely missing and supplying it
-   * is the user finishing the schedule. Create new collects both dates before
-   * the card has been seen, so the same behaviour there is the app deciding
-   * for them — which is why this is a separate flag and not `promoBlankStart`.
-   */
 
   async function persistConfig(
     cfg: CampaignConfig,
@@ -219,39 +179,18 @@ export function useCampaignConfig({
           if (scope === 'announcement') setHasAnnouncementChanges(false);
           else if (scope === 'promo') setHasPromoChanges(false);
           else { setHasAnnouncementChanges(false); setHasPromoChanges(false); }
-          /**
-           * What happens to the saved draft is the user's call, not ours.
-           *
-           * Publishing used to delete it outright, on the reasoning that going
-           * live supersedes the parked copy. Sometimes true — but a draft is
-           * whatever the user put aside, often work on a different card, and
-           * publishing says nothing about wanting that gone.
-           *
-           * So: if the draft is what was just published, it is redundant and
-           * goes quietly — nothing can be lost, the content is live. If it
-           * differs, it is asked about rather than assumed.
-           */
           // Live now, so anything the recovery slot was holding is moot.
           clearRecovery();
           /**
            * Only when the promo was published. My Draft holds a promo card, so
-           * publishing the announcement bar says nothing about it — yet this
-           * ran for every scope and asked "we kept your draft" after an
-           * announcement publish, about a card the user had not touched.
-           *
-           * The same rule is applied two lines below, to the editor reset: an
-           * undefined scope saves both and counts as a promo publish, an
-           * explicit 'announcement' does not.
+           * publishing the announcement bar says nothing about it.
            */
           if (scope !== 'announcement' && draftPort.savedDraftSignatureRef.current !== null) {
-            if (draftPort.savedDraftSignatureRef.current === getConfigSignature(guaranteed)) {
-              draftPort.clearDraft();
-            } else {
-              draftPort.setPostPublishDraft(true);
-            }
+            // After publishing, the draft should now match the published version
+            // Auto-clear it since there's nothing new to save
+            draftPort.clearDraft();
           }
           // The card is live now, so the editor starts fresh for the next one.
-          // Undefined scope saves both, so it counts as a promo publish too.
           if (scope !== 'announcement') resetPromoEditorToDefault();
         }
         toast(successMessage);
@@ -292,6 +231,9 @@ export function useCampaignConfig({
         setPublishedConfig(publishedCfg);
       }
 
+      /**
+       * Check saved draft from cloud first to have it available for recovery comparison.
+       */
       let draft: CampaignConfig | null = null;
       if (draftResponse.ok) {
         const draftData = await draftResponse.json();
@@ -299,156 +241,104 @@ export function useCampaignConfig({
       }
 
       /**
-       * Work that was in progress when the page went away comes back first,
-       * and without being asked about.
+       * Disaster management: handle recovery FIRST, before auto-loading draft.
+       * This way conflict detection (Case 2) can compare recovery vs draft.
        *
-       * The user did not choose to stop, so finding anything other than where
-       * they left off reads as data loss. It is cleared as it is taken up —
-       * one accident, one restore — and a draft parked in My Draft is left
-       * exactly where it is, still on its chip.
+       * Case 1: No cloud draft + recovery exists
+       *   → Push recovery to cloud, auto-load it (silent save)
+       *
+       * Case 2: Cloud draft exists + recovery exists + they DIFFER
+       *   → Show recovery banner (user chooses which one — conflict resolution)
+       *
+       * Case 3: Cloud draft exists + recovery exists + they're IDENTICAL
+       *   → Recovery is old/stale, discard it
        */
       const recoveredEnvelope = readRecoveryEnvelope();
       const recovered = recoveredEnvelope?.config ?? null;
       if (recovered && publishedCfg) {
         const restored = migrateConfig(recovered, recovered.version);
         if (getConfigSignature(restored) !== getConfigSignature(publishedCfg)) {
-          clearRecovery();
-          setConfig(restored);
-          draftPort.draftSignatureRef.current = getConfigSignature(publishedCfg);
-          savedPromoSignatureRef.current = getPromoSignature(publishedCfg);
-          /**
-           * Flag only what is genuinely the user's, rather than marking
-           * everything changed on the way in.
-           *
-           * A recovery copy is the whole config, so it carries the promo card
-           * even when the announcements were the part at risk. Marking the
-           * promo changed regardless would report unpublished work for a card
-           * that is a stock template, or the published one unedited — and
-           * every guard downstream reads those flags.
-           */
-          const promoIsOwnWork = !cardIsNotUserWork(
-            restored.promoCard,
-            sampleTemplates.map((t) => t.promoCard as CampaignConfig['promoCard']),
-          );
-          setHasAnnouncementChanges(
-            announcementSignature(restored) !== announcementSignature(publishedCfg),
-          );
-          setHasPromoChanges(
-            promoIsOwnWork &&
-              getPromoSignature(restored) !== getPromoSignature(publishedCfg),
-          );
-          setPromoEntryStep('editor');
-          setConfigLoadedSignal((n) => n + 1);
+          if (!draft) {
+            // Case 1: No cloud draft, recovery exists → push recovery to cloud, auto-load
+            fetch('/api/draft', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(restored),
+              keepalive: true,
+            }).catch(() => {});
 
-          /**
-           * A parked draft is left exactly where it is.
-           *
-           * The restored work goes on the canvas and the draft stays on its
-           * chip, because they are two different things: one is where the user
-           * was, the other is what they last decided to keep. Overwriting the
-           * draft with the rescue would spend a deliberate save on an accident.
-           * The notice then has to name both, or the user is looking at a
-           * canvas and a draft chip that disagree with no explanation.
-           */
-          let draftSavedAt: string | null = null;
-          let draftIsNewer = false;
-          if (draft) {
-            const migratedDraft = migrateConfig(draft, draft.version);
-            draftPort.setSavedDraftSignature(getConfigSignature(migratedDraft));
-            draftPort.setDraftPromoCard(JSON.parse(JSON.stringify(migratedDraft.promoCard)));
-            draftSavedAt = migratedDraft.lastUpdated ?? null;
+            // Auto-load recovery as the new draft
+            setConfig(restored);
+            configRef.current = restored;
+            draftPort.draftSignatureRef.current = getConfigSignature(restored);
+            draftPort.setSavedDraftSignature(getConfigSignature(restored));
+            draftPort.setDraftPromoCard(JSON.parse(JSON.stringify(restored.promoCard)));
+            savedPromoSignatureRef.current = getPromoSignature(restored);
+            setPromoEntryStep('editor');
+            setBlankStart?.(true);
+            clearRecovery();
+            setConfigLoadedSignal((n) => n + 1);
+            return;
+          } else {
+            // Cloud draft exists — check if recovery differs from it
+            const migrated = migrateConfig(draft, draft.version);
+            if (getConfigSignature(restored) !== getConfigSignature(migrated)) {
+              // Case 2: Both exist AND differ
+              // Load CLOUD draft into editor (what user sees)
+              // Store recovery for dashboard alert (user can restore it from there)
+              setConfig(migrated);
+              configRef.current = migrated;
+              draftPort.draftSignatureRef.current = getConfigSignature(migrated);
+              draftPort.setSavedDraftSignature(getConfigSignature(migrated));
+              draftPort.setDraftPromoCard(JSON.parse(JSON.stringify(migrated.promoCard)));
+              savedPromoSignatureRef.current = getPromoSignature(migrated);
 
-            // Only claimable when both times are known: a recovery written
-            // before copies carried a timestamp has nothing to compare, and
-            // guessing would put a warning in front of the wrong person.
-            const takenAt = recoveredEnvelope?.savedAt;
-            if (takenAt && draftSavedAt) {
-              draftIsNewer = new Date(draftSavedAt).getTime() > new Date(takenAt).getTime();
+              // Mark recovery so dashboard can show alert
+              setHasRecoveredWork(true);
+              setRecoveryReason(recoveredEnvelope?.reason ?? 'crash');
+              setRecoveredConfig?.(restored);
+              // Don't clear recovery — user may restore it from dashboard
+
+              setPromoEntryStep('editor');
+              setBlankStart?.(true);
+              setConfigLoadedSignal((n) => n + 1);
+              return;
+            } else {
+              // Case 3: Both exist but identical — recovery is stale, discard it
+              clearRecovery();
             }
           }
-          /**
-           * Announced only when the work was genuinely away.
-           *
-           * A refresh restores through this same path, so every reload was
-           * telling the user their work had been rescued — from a page they
-           * had just reloaded themselves, with the card already in front of
-           * them. Nothing was at stake and nothing needed saying.
-           *
-           * The browser distinguishes the two: a reload reports 'reload',
-           * while reopening the tool is a 'navigate'. Restoring still happens
-           * either way — only the announcement is held back.
-           */
-          if (isFirstLoadOfVisit()) {
-            setRestoreNotice({
-              localSavedAt: recoveredEnvelope?.savedAt || null,
-              draftSavedAt,
-              draftIsNewer,
-            });
-          }
-          return;
         }
         // Identical to what is live — nothing was lost, so drop it quietly.
         clearRecovery();
       }
 
+      /**
+       * Now check draft (only if no recovery conflict was found above).
+       * If draft exists and is restorable, auto-load it directly.
+       */
       if (draft) {
         const migrated = migrateConfig(draft, draft.version);
-        /**
-         * Nothing worth restoring in it — so do not offer it. It is left on
-         * disk rather than deleted: this runs on every load, with no user
-         * action behind it, and the test is a heuristic. Getting it wrong
-         * should cost a missing prompt, not the user's saved work.
-         */
-        if (!draftHasRestorableWork(migrated, publishedCfg)) {
-          // deliberately nothing
-        } else if (publishedCfg && getConfigSignature(migrated) !== getConfigSignature(publishedCfg)) {
-          /**
-           * A draft exists and differs from what's live. It used to be poured
-           * straight into the editor, which meant landing on half-finished work
-           * with no way to tell it apart from the published card.
-           *
-           * Now the canvas starts clear and the draft is offered: the toast
-           * says it's there, and taking it is a decision rather than a
-           * surprise. Declining leaves it saved — the My Draft dot still shows.
-           */
-          /**
-           * The canvas starts on the default card, not the published one.
-           *
-           * Loading the live card here made "Start something new" a lie — the
-           * user declined the draft and was left holding a copy of what is
-           * already out there, which then reads as work in progress and
-           * diverges from the live card the moment it is touched. The
-           * published card stays one click away under My Published.
-           *
-           * Only the promo card is reset; the announcement bar keeps its
-           * published content.
-           */
-          const forEditor: CampaignConfig = {
-            ...publishedCfg,
-            promoCard: blankPromoCard(),
-          };
-          setConfig(forEditor);
-          draftPort.draftSignatureRef.current = getConfigSignature(forEditor);
-          savedPromoSignatureRef.current = getPromoSignature(forEditor);
-          draftPort.setSavedDraftSignature(getConfigSignature(migrated));
-          setPromoEntryStep('build');
-          setConfigLoadedSignal((n) => n + 1);
-          // Held, not announced: the draft is about the promo editor, so the
-          // offer waits until that is the screen being looked at. Raised on
-          // the dashboard it interrupts a page the draft has nothing to do
-          // with, and expires before the user reaches the editor.
-          draftPort.offeredDraftRef.current = migrated;
-          return;
-        } else {
-          /**
-           * The draft is identical to what is live, so there is nothing to
-           * offer — but it is not deleted either.
-           *
-           * Nothing here is a user action, and the app should not be removing
-           * saved things on its own. Keeping it costs a dot on the My Draft
-           * chip; deleting it costs the user something they chose to save,
-           * every time this heuristic is wrong.
-           */
+        if (draftHasRestorableWork(migrated, publishedCfg)) {
+          if (publishedCfg && getConfigSignature(migrated) !== getConfigSignature(publishedCfg)) {
+            /**
+             * A draft exists and differs from what's live. Auto-load it directly
+             * into the editor so the user sees their work immediately.
+             */
+            setConfig(migrated);
+            configRef.current = migrated;
+            draftPort.draftSignatureRef.current = getConfigSignature(migrated);
+            draftPort.setSavedDraftSignature(getConfigSignature(migrated));
+            draftPort.setDraftPromoCard(JSON.parse(JSON.stringify(migrated.promoCard)));
+            savedPromoSignatureRef.current = getPromoSignature(migrated);
+            // Mark that the promo card has unpublished changes
+            setHasPromoChanges(true);
+            setPromoEntryStep('editor');
+            // Keep scaffolds (timer & CTA button outlines) visible
+            setBlankStart?.(true);
+            setConfigLoadedSignal((n) => n + 1);
+            return;
+          }
         }
       }
 
@@ -459,12 +349,7 @@ export function useCampaignConfig({
          *
          * Only the promo card is reset — the announcement bar keeps its
          * published content, and the dashboard reads publishedConfig, so what
-         * is live is unaffected either way. The published card stays one click
-         * away under My Published.
-         *
-         * Loading the live card here was what made a cleared canvas come back
-         * as the published design after a refresh: the entry step opened the
-         * picker, but the card underneath was still the live one.
+         * is live is unaffected either way.
          */
         const forEditor: CampaignConfig = {
           ...publishedCfg,
@@ -485,11 +370,6 @@ export function useCampaignConfig({
     }
   }
 
-  // Stage the announcement for publish. No automatic draft write here —
-  // drafting is explicit-only ("Save as draft" in the Promo tab strip, which
-  // covers the full config including the announcement) — this just flips the
-  // header to "ready to Publish" and asks whether to publish now.
-
   /**
    * The promo card's content, with the markup noise removed.
    *
@@ -504,15 +384,6 @@ export function useCampaignConfig({
       ),
     );
   }
-
-  // Both of these ask "does MY half still match what is published?".
-  //
-  // They used to compare the whole config signature, which answered a
-  // different question: it went true whenever EITHER half differed. So an
-  // unpublished promo card kept the announcement tab reading "unsaved
-  // changes" with nothing in the announcement bar touched, and neither flag
-  // could clear until both halves matched. Comparing each half against its own
-  // published counterpart is what the flags are named for.
 
   function markAnnouncementChanged() {
     setTimeout(() => {
@@ -558,6 +429,7 @@ export function useCampaignConfig({
     hasAnnouncementChangesRef,
     hasPromoChanges,
     setHasPromoChanges,
+    hasPromoChangesRef,
     readyToPublishAnnouncement,
     setReadyToPublishAnnouncement,
     configLoadedSignal,

@@ -10,7 +10,6 @@ interface UsePromoThemeBaselineArgs {
   canvasIsEmpty: boolean;
   /** Every look the app hands out — templates, the default, the blank palettes. */
   ourLooks: string[];
-  toast: (message: string, isError?: boolean, action?: { label: string; onClick: () => void }, durationMs?: number) => void;
 }
 
 /**
@@ -28,7 +27,6 @@ export function usePromoThemeBaseline({
   style,
   canvasIsEmpty,
   ourLooks,
-  toast,
 }: UsePromoThemeBaselineArgs) {
   const [themeBaseline, setThemeBaseline] = useState<PromoCard['style']>(() => style);
 
@@ -70,19 +68,8 @@ export function usePromoThemeBaseline({
     ownSwatchWasVisibleRef.current = hasCurrentDesign;
     // First render only records the state; it has not appeared, it just is.
     if (wasVisible === null) return;
-    if (!wasVisible && hasCurrentDesign) {
-      toast(
-        'Your design is saved as the first swatch — tap it to come back',
-        false,
-        undefined,
-        // Longer than the default: this asks the user to go and find
-        // something, and three seconds is gone before the eye has left the
-        // toast to look for it.
-        8000,
-      );
-    }
      
-  }, [hasCurrentDesign, toast]);
+  }, [hasCurrentDesign]);
 
   return {
     themeBaseline,

@@ -456,12 +456,7 @@ export function PromoBuildPanel({
                       the top: the panel is taller than the card, and pinning it
                       up top left the whole gap stacked underneath. */}
                   <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-xl border border-border bg-surface-subtle p-3">
-                    <div className="w-full shrink-0" style={{ maxWidth: `${pc.cardWidth || 400}px` }}>
-                      {/* Scaffold on a blank card, so a new campaign previews
-                          as the shape AI is about to fill rather than an
-                          empty box — same as the editor's own canvas. */}
-                      <PromoMiniPreview promoCard={pc} faithful scaffold={!cardHasCopy} />
-                    </div>
+                    {/* Preview removed to avoid user confusion between editor and preview states */}
                   </div>
                 </div>
               </div>

@@ -20,6 +20,7 @@ import { CommandBar } from '@/components/dashboard/CommandBar'; // <-- ADD THIS 
 
 interface DashboardProps {
   config: CampaignConfig;
+  draftConfig?: CampaignConfig;
   setActiveTab: (tab: 'dashboard' | 'announcement' | 'promo') => void;
   onStopPromo?: () => void;
   onGoOnAirPromo?: () => void;
@@ -33,6 +34,11 @@ interface DashboardProps {
   announcementUnpublished?: boolean;
   promoDraftExists?: boolean;
   onOpenDraft?: () => void;
+  onStartNewWithDraft?: () => void;
+  hasRecoveredWork?: boolean;
+  recoveryReason?: 'idle' | 'crash' | null;
+  onRestoreRecovery?: () => void;
+  onDismissRecovery?: () => void;
 }
 
 /** No copy anywhere on the card — the operator hasn't created one yet. */
@@ -42,6 +48,7 @@ function isPromoUncreated(promo: CampaignConfig['promoCard']): boolean {
 
 export function Dashboard({
   config,
+  draftConfig,
   setActiveTab,
   onStopPromo,
   onGoOnAirPromo,
@@ -53,6 +60,11 @@ export function Dashboard({
   announcementUnpublished,
   promoDraftExists,
   onOpenDraft,
+  onStartNewWithDraft,
+  hasRecoveredWork,
+  recoveryReason,
+  onRestoreRecovery,
+  onDismissRecovery,
 }: DashboardProps) {
   const promoUncreated = isPromoUncreated(config.promoCard);
   // Stop / go-on-air both change the live website, so confirm first.
@@ -91,13 +103,19 @@ export function Dashboard({
   const ann = config.announcementBar;
 
   const startMs = parseDate(promo.startDate)?.getTime() ?? null;
-  const endD = parseDate(promo.endDate);
+  const endD = promo.endDate ? parseDate(promo.endDate) : null;
   const endMs = endD ? endD.getTime() + DAY - 1 : null;
 
   let remainingLabel = '—';
   let progressPct = 0;
   const ended = !!(now && endMs && now.getTime() > endMs);
-  if (now && endMs) {
+  
+  // Check if this is an open-ended campaign (no endDate)
+  const isOpenEnded = !promo.endDate;
+  
+  if (isOpenEnded) {
+    remainingLabel = 'Open ended • Till you stop it';
+  } else if (now && endMs) {
     const rem = endMs - now.getTime();
     remainingLabel = fmtRemaining(rem);
     if (startMs) progressPct = Math.round(clamp(((now.getTime() - startMs) / (endMs - startMs)) * 100, 0, 100));
@@ -300,7 +318,7 @@ export function Dashboard({
   );
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mx-auto max-w-[1200px] flex flex-col gap-4 px-8 py-8">
       {/* NEW COMMAND BAR - Replaces the old command bar and attention strip */}
       <CommandBar
         lastPublished={now ? `Last published ${timeAgo(config.lastUpdated, now)}` : 'Not yet published'}
@@ -343,6 +361,13 @@ export function Dashboard({
         onCreatePromo={onCreatePromo}
         remainingLabel={remainingLabel}
         progressPct={progressPct}
+        hasRecoveredWork={hasRecoveredWork}
+        onRestoreRecovery={onRestoreRecovery}
+        onDismissRecovery={onDismissRecovery}
+        promoUnpublished={promoUnpublished}
+        onOpenDraft={onOpenDraft}
+        onStartNewWithDraft={onStartNewWithDraft}
+        draftSavedAt={draftConfig?.lastUpdated || undefined}
       />
 
       <DashboardPopups

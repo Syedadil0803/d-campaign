@@ -3,7 +3,7 @@
 import { useEffect, type RefObject, type Dispatch, type SetStateAction } from 'react';
 import type { CampaignConfig } from '@/types/campaign';
 import { getConfigSignature } from '@/lib/configSignature';
-import { writeRecovery } from '@/lib/recovery';
+import { writeRecovery, clearRecovery } from '@/lib/recovery';
 import { reportUnsaved } from '@/lib/auth/presenceClient';
 import {
   describeDuration,
@@ -15,25 +15,7 @@ import {
   setAppBadge,
 } from '@/lib/auth/sessionWarning';
 
-/**
- * Is this the first load of this visit?
- *
- * The arrival messages — work restored, work waiting on another device — are
- * about coming back to the tool, so they should be said once and not again on
- * every refresh.
- *
- * Asking the browser whether the load was a "reload" was the first attempt and
- * was too blunt: plenty of people return to work by refreshing a tab they left
- * open, and those people would never have been told about the other device at
- * all. sessionStorage draws the line where it belongs — it survives refreshes
- * within a tab and is empty again when the tool is opened afresh.
- *
- * Memoised because both messages ask, and the first ask is what marks the
- * visit as seen.
- */
-
-
-export const IDLE_LIMIT_MS = 300_000; // 5 minutes of inactivity
+export const IDLE_LIMIT_MS = 20_000; // 20 seconds of inactivity before the countdown starts
 
 /**
  * How much of that is spent counting down in front of the user.
@@ -41,14 +23,14 @@ export const IDLE_LIMIT_MS = 300_000; // 5 minutes of inactivity
  * A lead time rather than a second absolute figure, so raising the limit can
  * never leave the warning firing after the sign-out it is warning about.
  */
-export const IDLE_WARNING_LEAD_MS = 30_000;
-
+export const IDLE_WARNING_LEAD_MS = 10_000; // 10 seconds of countdown
 
 interface UseIdleSignOutArgs {
   configRef: RefObject<CampaignConfig>;
   /** Whether work would be lost — the two editors answer separately. */
   promoWorkNotInDraftRef: RefObject<boolean>;
   hasAnnouncementChangesRef: RefObject<boolean>;
+  hasPromoChangesRef: RefObject<boolean>;
   draftSignatureRef: RefObject<string | null>;
   /** Why the session ended, read by the sign-in screen on the way back. */
   exitReasonRef: RefObject<'logout' | 'timeout' | null>;
@@ -57,6 +39,16 @@ interface UseIdleSignOutArgs {
   setIdleSecondsLeft: Dispatch<SetStateAction<number | null>>;
   /** Filled in here so the rest of the page can restart the clock. */
   idleRestartRef: RefObject<(() => void) | null>;
+  /**
+   * The guarded draft save, read at call time.
+   *
+   * Passed as a ref rather than the function itself: `useCampaignDraft` is
+   * built before `useIdleSignOut` in the page, and the function's identity
+   * changes on every render. A ref keeps this effect's dependency list empty
+   * while still reaching the latest closure.
+   */
+  saveDraftRef: RefObject<(cfg: CampaignConfig) => boolean>;
+  toast: (message: string, isError?: boolean) => void;
 }
 
 /**
@@ -71,25 +63,36 @@ export function useIdleSignOut({
   configRef,
   promoWorkNotInDraftRef,
   hasAnnouncementChangesRef,
+  hasPromoChangesRef,
   draftSignatureRef,
   exitReasonRef,
   idleSecondsLeftRef,
   setIdleSecondsLeft,
   idleRestartRef,
+  saveDraftRef,
+  toast,
 }: UseIdleSignOutArgs) {
   /**
    * Sign out after a spell of inactivity — and treat it as an accident, not a
    * decision.
    *
-   * Someone who walks away has not chosen to stop working, so the order
-   * matters: the local copy is written first, while the page is still ours,
-   * and only then is anything attempted that can fail. If the logout request
-   * never lands, the work is still on disk and the next visit restores it.
+   * The order matters: the work is put somewhere it can be found again while
+   * the page is still ours, and only then is anything attempted that can
+   * fail. What "somewhere" means depends on whether a saved work already
+   * exists:
    *
-   * A short time before that (IDLE_WARNING_LEAD_MS), the countdown appears. It is a dialog in the page,
-   * which everyone gets, plus a desktop notification for anyone who granted
-   * permission and has switched to another window — the case where the dialog
-   * alone would be invisible and the sign-out would arrive unexplained.
+   *   - No saved work yet. The current editor IS the work, so it becomes the
+   *     first save — written straight to the cloud draft. The local rescue
+   *     copy is cleared at the same time: the work is now saved properly, and
+   *     a rescue offer on the next login would be redundant.
+   *
+   *   - Saved work already exists. The cloud draft is left alone; the current
+   *     editor goes to the local rescue slot instead, and the next login
+   *     offers to save it. Silently overwriting the user's saved work with
+   *     whatever the editor happened to hold would destroy a save they made
+   *     on purpose.
+   *
+   * A short time before that (IDLE_WARNING_LEAD_MS), the countdown appears.
    */
   useEffect(() => {
     let idleTimer: number | undefined;
@@ -99,41 +102,41 @@ export function useIdleSignOut({
     const signOutIdle = () => {
       const atRisk =
         promoWorkNotInDraftRef.current ||
+        hasPromoChangesRef.current ||
         (hasAnnouncementChangesRef.current &&
           draftSignatureRef.current !== getConfigSignature(configRef.current));
 
       if (atRisk) {
-        writeRecovery(configRef.current);
-        // Raised now rather than left to the debounced reporter, which will not
-        // get another turn before this page is gone.
+        const hasCloudDraft = draftSignatureRef.current !== null;
+        if (hasCloudDraft) {
+          // Saved work already exists — write to recovery only, and mark it
+          // as an idle rescue so the next login says so.
+          writeRecovery(configRef.current, 'idle');
+        } else {
+          // No saved work yet — this is the first save
+          // Save to cloud draft, but DON'T clear recovery yet
+          // Let loadConfig clear it when it detects it's stale
+          const written = saveDraftRef.current(configRef.current);
+          if (written) {
+            // Write recovery with 'idle' reason so next login knows it's from auto-logout
+            writeRecovery(configRef.current, 'idle');
+            toast('Saved your work');
+          }
+        }
         reportUnsaved(true);
       }
 
       standDown();
       exitReasonRef.current = 'timeout';
       fetch('/api/auth/logout', { method: 'POST', keepalive: true })
-        .catch(() => {})
+        .catch(() => { })
         .finally(() => {
           window.location.href = '/login?reason=timeout';
         });
     };
 
     /**
-     * Put the warning wherever the user actually is.
-     *
-     * The dialog is always rendered — it costs nothing in a tab nobody is
-     * looking at, and it means someone coming back mid-countdown finds the
-     * warning already there instead of being signed out mid-glance. The
-     * desktop notification is what reaches them when they are elsewhere, and
-     * is suppressed while the tab is visible because the dialog has it covered.
-     */
-    /**
      * Take every alarm back down.
-     *
-     * Gathered into one call because there are now four of them — dialog,
-     * notification, tab title, icon, dock badge — and each exit from the
-     * countdown used to remember them individually. Forgetting one leaves a
-     * tab wearing a red dot over a session that is perfectly fine.
      */
     const standDown = () => {
       closeIdleNotification();
@@ -143,10 +146,6 @@ export function useIdleSignOut({
     };
 
     const reachUser = () => {
-      // Only while a countdown is actually running. Without this, a listener
-      // outliving its warning — clicking the notification restarts the timer,
-      // and the next tab switch arrives before the teardown has settled —
-      // posts a notification for a warning that is already over.
       if (idleSecondsLeftRef.current === null) {
         standDown();
         return;
@@ -159,26 +158,16 @@ export function useIdleSignOut({
           restart(),
         );
       } else {
-        // Back on the page, where the dialog speaks for itself. Leaving the
-        // notification or the title alarm up would have them dismissing the
-        // same warning twice.
         standDown();
       }
     };
 
     const beginWarning = () => {
       const seconds = Math.round(IDLE_WARNING_LEAD_MS / 1000);
-      // The ref is written here as well as during render, because what reads
-      // it is an event handler that can fire before React has re-rendered —
-      // clicking the notification and switching tabs in the same breath.
       idleSecondsLeftRef.current = seconds;
       setIdleSecondsLeft(seconds);
       reachUser();
 
-      // Watched for the whole countdown, not just its first moment. Switching
-      // away after the dialog appeared used to mean no notification at all —
-      // the warning sat in a tab the user could not see, and the sign-out
-      // arrived unannounced.
       document.addEventListener('visibilitychange', reachUser);
 
       tick = window.setInterval(() => {
@@ -186,9 +175,6 @@ export function useIdleSignOut({
           if (left === null) return null;
           const next = Math.max(0, left - 1);
           idleSecondsLeftRef.current = next;
-          // Only while they are elsewhere. Rewriting the title of a tab
-          // somebody is looking at changes nothing they can see and leaves the
-          // window chrome flickering behind the dialog.
           if (document.visibilityState === 'hidden') {
             setTitleCountdown(next);
             setAppBadge(next);
@@ -210,23 +196,11 @@ export function useIdleSignOut({
       idleSecondsLeftRef.current = null;
       setIdleSecondsLeft(null);
       standDown();
-      /**
-       * No clock at all while the tab is on screen.
-       *
-       * The guard lives here rather than at each caller because there are
-       * three — the visibility change, any real input, and the "I'm still
-       * here" button — and two of them fire while the page is visible. Without
-       * it, typing would start a countdown that then interrupted the person
-       * typing.
-       */
       if (document.visibilityState === 'visible') return;
       warnTimer = window.setTimeout(beginWarning, IDLE_LIMIT_MS - IDLE_WARNING_LEAD_MS);
       idleTimer = window.setTimeout(signOutIdle, IDLE_LIMIT_MS);
     }
 
-    // Real input only, and only while nothing is being asked. A mousemove
-    // listener would keep the session alive under a sleeping cursor, and once
-    // the countdown is up it wants an answer rather than a twitch.
     const onActivity = () => {
       if (idleSecondsLeftRef.current !== null) return;
       restart();
@@ -235,18 +209,6 @@ export function useIdleSignOut({
     const events: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
     events.forEach((event) => window.addEventListener(event, onActivity, { passive: true }));
 
-    /**
-     * The clock only runs while the user is somewhere else.
-     *
-     * Sitting on the tool reading your own card was enough to be counted idle,
-     * because idleness was measured by input alone — so a modal countdown
-     * interrupted someone who was plainly present and looking straight at it.
-     * Being on the page IS the activity.
-     *
-     * So the timer starts when the tab is hidden and stops when it comes back,
-     * which also means the warning can only ever reach someone who has left —
-     * exactly who it is for.
-     */
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
         restart();

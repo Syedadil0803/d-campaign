@@ -6,7 +6,6 @@ import type { useCampaignConfig } from '@/hooks/useCampaignConfig';
 import type {
   ElsewhereNotice,
   PendingDraftAction,
-  RestoreNotice,
 } from '@/types/campaignShell';
 import {
   getConfigSignature,
@@ -19,7 +18,6 @@ import { markElsewhereSeen } from '@/lib/auth/presenceClient';
 import { migrateConfig } from '@/lib/configMigration';
 
 type Campaign = ReturnType<typeof useCampaignConfig>;
-
 
 interface UseCampaignDraftArgs {
   /**
@@ -40,10 +38,13 @@ interface UseCampaignDraftArgs {
   performLogout: () => void;
   setActiveTab: (tab: 'dashboard' | 'announcement' | 'promo') => void;
   setPromoEntryStep: (step: 'ai' | 'build' | 'editor') => void;
-  setRestoreNotice: (notice: RestoreNotice | null) => void;
   /** Another device is editing — shape mirrors the page's own state. */
   elsewhereNotice: ElsewhereNotice | null;
   setElsewhereNotice: (notice: ElsewhereNotice | null) => void;
+  /** Suppress auto-opening build flow on side effects like delete. */
+  setSuppressBuildFlow?: (suppress: boolean) => void;
+  /** Show scaffolds (timer & CTA outlines) on blank canvas. */
+  setBlankStart?: (value: boolean) => void;
 }
 
 /**
@@ -59,9 +60,10 @@ export function useCampaignDraft({
   performLogout,
   setActiveTab,
   setPromoEntryStep,
-  setRestoreNotice,
   elsewhereNotice,
   setElsewhereNotice,
+  setSuppressBuildFlow,
+  setBlankStart,
 }: UseCampaignDraftArgs) {
   const [savedDraftSignature, setSavedDraftSignature] = useState<string | null>(null);
   const savedDraftSignatureRef = useRef<string | null>(null);
@@ -96,8 +98,6 @@ export function useCampaignDraft({
     toast('Picked up where you left off');
   }
 
-  // Consent before discarding a draft (destructive).
-
   function dismissWelcomeBack() {
     /**
      * Closing it counts as having read it.
@@ -108,22 +108,21 @@ export function useCampaignDraft({
      * every visit, which it did, with nothing the user could do about it.
      */
     if (elsewhereNotice) markElsewhereSeen(elsewhereNotice.deviceId, elsewhereNotice.at);
-    setRestoreNotice(null);
     setDraftOffer(null);
     setElsewhereNotice(null);
   }
 
-  // A picker the editor should open as soon as it mounts, set by the
-  // dashboard's "Edit published". Cleared by the editor once acted on.
-
-  // Persist the draft only if it carries restorable work — real promo text or a
-  // changed announcement. A fresh/blank promo (even one that replaced a full
-  // published card) is trivially recreatable, so it's not worth a draft.
-  // Returns whether a draft was actually written.
-  // The draft lives in the DB via /api/draft. The DB write is fired without
-  // awaiting (with keepalive so it survives page unload); the decision — save
-  // vs skip, and the returned boolean the callers use for the toast — stays
-  // synchronous so call sites don't change.
+  /**
+   * Persist the draft only if it carries restorable work — real promo text or a
+   * changed announcement. A fresh/blank promo (even one that replaced a full
+   * published card) is trivially recreatable, so it's not worth a draft.
+   * Returns whether a draft was actually written.
+   *
+   * The draft lives in the DB via /api/draft. The DB write is fired without
+   * awaiting (with keepalive so it survives page unload); the decision — save
+   * vs skip, and the returned boolean the callers use for the toast — stays
+   * synchronous so call sites don't change.
+   */
   function saveDraft(
     cfg: CampaignConfig,
     options: { markHandled?: boolean } = {},
@@ -136,9 +135,7 @@ export function useCampaignDraft({
      * This used to delete the draft, on the reasoning that a blank card should
      * not leave a stale one behind. But the two are unrelated: the draft is
      * whatever was parked there earlier, and an empty canvas says nothing
-     * about it. The unload rescue runs this on every close, so closing the tab
-     * with a cleared canvas silently destroyed a draft the user had saved
-     * days before and never touched in that session.
+     * about it.
      *
      * Deleting a draft stays where the user can see it: the My Draft popup,
      * and publishing, which supersedes it.
@@ -179,20 +176,58 @@ export function useCampaignDraft({
    * Edits made since the draft was saved are left alone: those are the user's
    * current work, not the thing they just deleted.
    */
-
   function handleDeleteDraft() {
     const campaign = campaignRef.current!;
     const deleted = draftPromoCard;
     const live = campaign.publishedConfigObjRef.current;
+    const savedDraft = deleted ? JSON.parse(JSON.stringify(deleted)) : null;
+    const savedDraftSig = savedDraft ? getConfigSignature({ ...campaign.configRef.current, promoCard: savedDraft }) : null;
+    
     clearDraft();
-    if (!deleted || !live) return;
-    // Normalised for the same reason as everywhere else — otherwise the app's
-    // own HTML rewrites make the canvas look "edited since saving" and the
-    // deleted draft is left sitting on it.
-    const sig = (card: CampaignConfig['promoCard']) =>
-      JSON.stringify(normalizePromoForCompare(card as unknown as Record<string, unknown>));
-    if (sig(campaign.configRef.current.promoCard) !== sig(deleted)) return;
+    
+    // Suppress build flow since this is a side effect, not a user-initiated action
+    setSuppressBuildFlow?.(true);
+    
+    const undoTimeoutRef: { current: NodeJS.Timeout | undefined } = { current: undefined };
+    
+    toast('Saved draft deleted', false, {
+      label: 'Undo',
+      onClick: () => {
+        if (undoTimeoutRef.current) {
+          clearTimeout(undoTimeoutRef.current);
+        }
+        if (savedDraft && savedDraftSig) {
+          setSavedDraftSignature(savedDraftSig);
+          setDraftPromoCard(savedDraft);
+          
+          // Also load it back into editor canvas
+          const restored = { ...campaign.configRef.current, promoCard: savedDraft };
+          campaign.setConfig(restored);
+          campaign.configRef.current = restored;
+          draftSignatureRef.current = getConfigSignature(restored);
+          campaign.savedPromoSignatureRef.current = getPromoSignature(restored);
+          
+          // Suppress build dialog since this is a restoration, not a new action
+          setSuppressBuildFlow?.(true);
+          
+          fetch('/api/draft', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(restored),
+            keepalive: true,
+          }).catch(() => {});
+          toast('Saved draft restored');
+        }
+      }
+    }, 10000);
+    
+    // After 10s, if undo wasn't clicked, it's actually deleted
+    undoTimeoutRef.current = setTimeout(() => {
+      // Do nothing — already deleted from DB
+    }, 10000);
 
+    if (!live) return;
+    // Reset canvas to published/live state
     const next: CampaignConfig = {
       ...campaign.configRef.current,
       promoCard: JSON.parse(JSON.stringify(live.promoCard)),
@@ -203,25 +238,24 @@ export function useCampaignDraft({
     campaign.savedPromoSignatureRef.current = getPromoSignature(next);
     campaign.setHasPromoChanges(getConfigSignature(next) !== campaign.publishedConfigRef.current);
     campaign.setEditorResetKey((k) => k + 1);
+    // Show scaffolds (timer & CTA outlines) on blank canvas
+    setBlankStart?.(true);
   }
 
-  // Explicit "Save as draft" — the ONLY way a draft is ever written now.
-  // Unlike the automatic saveDraft() above, this always writes what's in the
-  // editor: an explicit click means the user wants it saved, blank or not.
   /**
+   * Explicit "Save as draft" — the ONLY way a draft is ever written now.
+   * Unlike the automatic saveDraft() above, this always writes what's in the
+   * editor: an explicit click means the user wants it saved, blank or not.
+   *
    * @param options.keepEditor
    *   Leave the editor alone after the write. Set by the card-replace consent,
-   *   which saves the outgoing card and then applies the incoming one: the
-   *   reset below lands after the fetch resolves, so it blanked the card that
-   *   had just replaced it and the user was left looking at the skeleton,
-   *   with the draft saved and the template apparently ignored.
+   *   which saves the outgoing card and then applies the incoming one.
    */
-
-  function writeDraftNow(options: { keepEditor?: boolean } = {}) {
+  function writeDraftNow(options: { keepEditor?: boolean; configOverride?: CampaignConfig } = {}): Promise<void> {
     const campaign = campaignRef.current!;
-    const cfg = campaign.configRef.current;
+    const cfg = options.configOverride || campaign.configRef.current;
     setSavingDraft(true);
-    fetch('/api/draft', {
+    return fetch('/api/draft', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(cfg),
@@ -234,9 +268,6 @@ export function useCampaignDraft({
           // Safe in the draft now, so the recovery copy has nothing to rescue.
           clearRecovery();
           toast('Saved draft updated');
-          // Parked in My Draft — the editor is free for the next card, unless
-          // something has already been put in it.
-          if (!options.keepEditor) campaign.resetPromoEditorToDefault();
         } else {
           toast('Couldn’t save your draft', true);
         }
@@ -245,9 +276,10 @@ export function useCampaignDraft({
       .finally(() => setSavingDraft(false));
   }
 
-  // There's only one draft slot — if it's already occupied, confirm before
-  // overwriting it.
-
+  /**
+   * There's only one draft slot — if it's already occupied, confirm before
+   * overwriting it.
+   */
   async function handleSaveAsDraft() {
     setSavingDraft(true);
     let exists = false;
@@ -260,10 +292,6 @@ export function useCampaignDraft({
       // unconfirmed overwrite, better than silently failing to save.
     }
     setSavingDraft(false);
-    if (exists) {
-      setConfirmReplaceDraft(true);
-      return;
-    }
     writeDraftNow();
   }
 

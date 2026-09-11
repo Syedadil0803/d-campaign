@@ -106,6 +106,10 @@ export interface PromoEditorApi
   /** The card ahead of React — the undo history's single source. */
   liveCardRef: RefObject<PromoCard>;
 
+  /** Clear canvas. */
+  canvasIsEmpty: boolean;
+  confirmClearCanvas: () => void;
+
   /** Schedule and countdown. */
   showStartDatePicker: boolean;
   setShowStartDatePicker: Dispatch<SetStateAction<boolean>>;

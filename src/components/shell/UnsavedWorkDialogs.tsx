@@ -70,27 +70,13 @@ export function UnsavedWorkDialog({
                       work, and the user is left deciding what "different"
                       was supposed to mean. */}
                   <p className="mt-1 text-sm text-on-surface-variant">
-                    One card is already saved in{' '}
-                    <span className="font-semibold text-on-surface">My Draft</span>{' '}
-                    and there is only one slot, so saving these edits
-                    permanently replaces it.
-                  </p>
-                  <p className="mt-3 text-xs text-on-surface-variant/80">
-                    Edits you don&apos;t save stay on this browser only.
+                    Save your changes before signing out, or they&apos;ll be lost.
                   </p>
                 </>
               ) : (
                 <>
                   <p className="mt-1 text-sm text-on-surface-variant">
-                    These edits aren&apos;t in{' '}
-                    <span className="font-semibold text-on-surface">My Draft</span>{' '}
-                    yet. Saving keeps them with your account, so they are
-                    waiting wherever you sign in next.
-                  </p>
-                  <p className="mt-3 text-xs text-on-surface-variant/80">
-                    Until then they stay on this browser — sign in from
-                    another browser or another device and they won&apos;t be
-                    there.
+                    You have unsaved changes. Save them to keep your work across all your devices.
                   </p>
                 </>
               )}
@@ -121,7 +107,7 @@ export function UnsavedWorkDialog({
               onClick={saveDraftAndContinue}
               className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
             >
-              {savedDraftSignature !== null ? 'Replace draft & sign out' : 'Save & sign out'}
+              {savedDraftSignature !== null ? 'Save & sign out' : 'Save & sign out'}
             </button>
           </div>
         </div>
@@ -356,11 +342,11 @@ export function DashboardUnsavedDialog({
                   setPendingDashboardAction(null);
                   writeDraftNow();
                   if (action === 'create') startCreatePromo();
-                  else openPublishedPicker();
+                  else if (action === 'published') openPublishedPicker();
                 }}
                 className="whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
               >
-                {savedDraftSignature !== null ? 'Replace draft & continue' : 'Save & continue'}
+                {savedDraftSignature !== null ? 'Save & continue' : 'Save & continue'}
               </button>
             </div>
           </div>

@@ -292,7 +292,7 @@ export function CommandBar({
       ref={containerRef}
       className={`relative ${className}`}
       style={{
-        width: 1392,
+        width: '100%',
         height: 68,
         padding: '12px 24px',
         borderRadius: 12,

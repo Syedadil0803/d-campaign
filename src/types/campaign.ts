@@ -48,7 +48,7 @@ export interface PromoCard {
   whatsappCountryCode?: string;
   cardWidth?: number;
   startDate: string;
-  endDate: string;
+  endDate: string | null;
   /**
    * How the campaign is scheduled.
    *

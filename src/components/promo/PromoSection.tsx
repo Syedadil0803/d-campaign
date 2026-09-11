@@ -29,7 +29,7 @@ import {
 } from "@/lib/promo/promoAuthorship";
 import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
 
-import { isBlankLook } from '@/lib/promo/lookSignature';
+import { isBlankLook, lookSignature } from '@/lib/promo/lookSignature';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { useSignalEffect } from '@/hooks/useSignalEffect';
 
@@ -49,6 +49,7 @@ import { PromoSectionDialogs } from '@/components/promo/PromoSectionDialogs';
 import { usePromoCardLifecycle } from '@/components/promo/usePromoCardLifecycle';
 import { usePromoPreviewFit } from '@/components/promo/usePromoPreviewFit';
 import { usePromoEditorSync } from '@/components/promo/usePromoEditorSync';
+import { PromoStylingPopover } from '@/components/promo/PromoStylingPopover';
 import { usePromoThemeBaseline } from '@/components/promo/usePromoThemeBaseline';
 import { usePromoScheduleUi } from '@/components/promo/usePromoScheduleUi';
 import { useFieldInfoNotes } from '@/components/promo/useFieldInfoNotes';
@@ -90,6 +91,27 @@ import {
 const TEMPLATE_CARDS = sampleTemplates.map((t) => t.promoCard as PromoCard);
 const OUR_LOOKS = ourLooks(TEMPLATE_CARDS);
 
+/**
+ * Generate a label for the styling button showing the current background type or theme.
+ * Shows theme name only if NOT in custom mode and we have an active theme ID.
+ */
+function promoStylingTriggerLabel(
+  style: PromoCard['style'],
+  isInCustomMode: boolean,
+  activeThemeId: string | null,
+): string {
+  // If we have an active theme and not in custom mode, show theme name
+  if (!isInCustomMode && activeThemeId) {
+    const matchingTemplate = sampleTemplates.find((t) => t.id === activeThemeId);
+    if (matchingTemplate) return `Theme: ${matchingTemplate.name}`;
+  }
+  
+  // Show the background type
+  const type = style.background.type || 'solid';
+  const typeLabel = type === 'radial' ? 'Gradient' : type.charAt(0).toUpperCase() + type.slice(1);
+  return typeLabel;
+}
+
 export function PromoSection(props: PromoSectionProps) {
   // Named rather than destructured in the signature: the card-lifecycle
   // hook takes the whole object, which is one argument instead of eleven.
@@ -122,6 +144,11 @@ export function PromoSection(props: PromoSectionProps) {
   draftUpToDate,
   draftExists,
   onUseAi,
+  hasRecoveredWork,
+  recoveryReason,
+  onDismissRecovery,
+  onRestoreRecovery,
+  onDeleteDraft,
 } = props;
 
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -266,6 +293,12 @@ export function PromoSection(props: PromoSectionProps) {
 
   const { promoCardRef, cardWidth, setCardWidth, previewZoom } =
     usePromoPreviewFit({ config, setConfig });
+
+  // Styling popover state and trigger ref
+  const customizeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [showStylingPopover, setShowStylingPopover] = useState(false);
+  const [isInCustomMode, setIsInCustomMode] = useState(false);
+  const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
 
   // End Date field wrapper — the fallback guard scrolls here and flashes its
   // inline error if the user tries to save with an invalid range.
@@ -900,8 +933,14 @@ export function PromoSection(props: PromoSectionProps) {
     style: config.promoCard.style,
     canvasIsEmpty,
     ourLooks: OUR_LOOKS,
-    toast,
   });
+
+  // Styling trigger label - computed after usePromoThemeBaseline
+  const stylingTriggerLabel = promoStylingTriggerLabel(
+    config.promoCard.style,
+    isInCustomMode,
+    activeThemeId,
+  );
 
   /**
    * The editor mounts on defaultConfig and the real card arrives a moment
@@ -1075,11 +1114,37 @@ export function PromoSection(props: PromoSectionProps) {
     pushPromoStateFromConfig,
     liveCardRef,
     timerLimitReached,
+    canvasIsEmpty,
+    confirmClearCanvas,
   };
 
   return (
     <PromoEditorProvider value={editorApi}>
       <>
+      {hasRecoveredWork && (
+        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-1.5 flex items-center justify-between gap-2">
+          <p className="text-xs text-amber-700 dark:text-amber-400">
+            Unsaved changes recovered. {recoveryReason === 'idle' ? '(Auto-logout)' : '(Session ended)'}
+          </p>
+          <div className="flex gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={onRestoreRecovery}
+              className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline"
+            >
+              Restore
+            </button>
+            <span className="text-amber-500/40">·</span>
+            <button
+              type="button"
+              onClick={onDismissRecovery}
+              className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
       <div
         className="sticky top-0 flex gap-4 overflow-hidden"
         style={{ height: "calc(100dvh - 120px)", maxHeight: "calc(100dvh - 120px)" }}
@@ -1102,17 +1167,30 @@ export function PromoSection(props: PromoSectionProps) {
             setTemplatesFromBuild={setTemplatesFromBuild}
             setShowTemplatesPopup={setShowTemplatesPopup}
             setShowVersionsPopup={setShowVersionsPopup}
-            confirmClearCanvas={confirmClearCanvas}
-            canvasIsEmpty={canvasIsEmpty}
             openDraftPopup={openDraftPopup}
-            draftExists={draftExists}
-            onSaveDraft={onSaveDraft}
-            savingDraft={savingDraft}
-            draftUpToDate={draftUpToDate}
+            cardPositionPos={config.promoCard.style.position}
+            setCardPositionPos={(pos) => {
+              pushPromoState();
+              setConfig({
+                ...config,
+                promoCard: {
+                  ...config.promoCard,
+                  style: {
+                    ...config.promoCard.style,
+                    position: pos as PromoCard['style']['position'],
+                  },
+                },
+              });
+              markChanged();
+            }}
+            customizeButtonRef={customizeButtonRef}
+            onShowStylingPopover={() => setShowStylingPopover(!showStylingPopover)}
+            stylingTriggerLabel={stylingTriggerLabel}
+            showStylingPopover={showStylingPopover}
           />
           <PromoCanvas />
 
-          <PromoThemeRow
+          {/* <PromoThemeRow
             config={config}
             configRef={configRef}
             setConfig={setConfig}
@@ -1137,7 +1215,7 @@ export function PromoSection(props: PromoSectionProps) {
             baselineIsATheme={baselineIsATheme}
             themeBaseline={themeBaseline}
             samplingThemeRef={samplingThemeRef}
-          />
+          /> */}
         </div>
       </div>
 
@@ -1178,6 +1256,30 @@ export function PromoSection(props: PromoSectionProps) {
         confirmCardReplace={confirmCardReplace}
       />
       <PromoEditorStyles />
+      <PromoStylingPopover
+        triggerRef={customizeButtonRef}
+        open={showStylingPopover}
+        onClose={() => setShowStylingPopover(false)}
+        config={config}
+        configRef={configRef}
+        setConfig={setConfig}
+        markChanged={markChanged}
+        pushPromoState={pushPromoState}
+        toast={toast}
+        themeBaseline={themeBaseline}
+        onOwnDesign={onOwnDesign}
+        baselineIsATheme={baselineIsATheme}
+        hasCurrentDesign={hasCurrentDesign}
+        samplingThemeRef={samplingThemeRef}
+        onEnterCustomMode={() => {
+          setIsInCustomMode(true);
+          setActiveThemeId(null);
+        }}
+        onApplyTheme={(themeId) => {
+          setIsInCustomMode(false);
+          setActiveThemeId(themeId);
+        }}
+      />
       </>
     </PromoEditorProvider>
   );

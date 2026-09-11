@@ -187,7 +187,7 @@ export function BarAppearancePopover({
   return createPortal(
     <div
       ref={popoverRef}
-      className="rounded-2xl border border-border bg-surface-elevated shadow-2xl overflow-hidden"
+      className="rounded-2xl border border-white/10 bg-black/10 backdrop-blur-md shadow-2xl overflow-hidden"
       style={{
         position: "fixed",
         top: position.top,

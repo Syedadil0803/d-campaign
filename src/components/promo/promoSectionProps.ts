@@ -128,4 +128,8 @@ export interface PromoSectionProps {
   /** Reopens the setup dialog from the editor, to change the schedule. */
   /** Opens the AI step for the card being edited. Omitted = chip not shown. */
   onUseAi?: () => void;
+  hasRecoveredWork: boolean;
+  recoveryReason: 'idle' | 'crash' | null;
+  onDismissRecovery: () => void;
+  onRestoreRecovery: () => void;
 }

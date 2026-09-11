@@ -8,8 +8,10 @@ import {
 import {
   writeRecovery,
   clearRecovery,
+  readRecoveryEnvelope,
 } from '@/lib/recovery';
 import { isInvalidRange, anyInvalidRange } from '@/lib/dateRange';
+import { migrateConfig } from '@/lib/configMigration';
 import { CampaignConfig } from '@/types/campaign';
 import { cardIsNotUserWork } from '@/lib/promo/promoAuthorship';
 import { forgetVisit } from '@/lib/promo/blankLooks';
@@ -92,6 +94,8 @@ const TEMPLATE_CARDS = sampleTemplates.map(
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'announcement' | 'promo'>('dashboard');
+  const [hasRecoveredWork, setHasRecoveredWork] = useState(false);
+  const [recoveryReason, setRecoveryReason] = useState<'idle' | 'crash' | null>(null);
   // `config` is the editing/draft state (what the editors show). `publishedConfig`
   // is what's actually LIVE on the website — the Dashboard renders this so it
   // never shows unpublished draft content as if it were live.
@@ -331,7 +335,6 @@ export default function Home() {
     performLogout,
     setActiveTab,
     setPromoEntryStep,
-    setRestoreNotice,
     elsewhereNotice,
     setElsewhereNotice,
   });
@@ -339,6 +342,7 @@ export default function Home() {
     savedDraftSignature,
     draftSignatureRef,
     draftPromoCard,
+    setDraftPromoCard,
     savingDraft,
     confirmReplaceDraft,
     setConfirmReplaceDraft,
@@ -361,16 +365,18 @@ export default function Home() {
     saveDraftAndContinue,
     continueWithoutDraft,
     dismissWelcomeBack,
+    saveDraft,
   } = draft;
 
   const campaign = useCampaignConfig({
     toast,
     promoBlankStart,
     setPromoEntryStep,
-    setRestoreNotice,
     ensureLivePromoVariant: (cfg: CampaignConfig) =>
       ensureLiveVariantRef.current(cfg),
     draftPort: draft,
+    setHasRecoveredWork,
+    setRecoveryReason,
   });
   campaignRef.current = campaign;
 
@@ -389,6 +395,7 @@ export default function Home() {
     hasAnnouncementChangesRef,
     hasPromoChanges,
     setHasPromoChanges,
+    hasPromoChangesRef,
     readyToPublishAnnouncement,
     setReadyToPublishAnnouncement,
     configLoadedSignal,
@@ -400,6 +407,7 @@ export default function Home() {
     loadConfig,
     persistConfig,
   } = campaign;
+
 
   // Announcement still stages via Save → Publish (promo saves straight to a
   // draft from the tab strip instead, so it has no staged/"ready" state).
@@ -461,9 +469,16 @@ export default function Home() {
       return;
     }
 
-    const id = window.setTimeout(() => writeRecovery(config), 800);
-    return () => window.clearTimeout(id);
+    // DON'T write recovery here - it overwrites existing recovery!
+    // Recovery is ONLY written on beforeunload/pagehide to capture absolute latest
   }, [config, hasAnnouncementChanges]);
+
+  /**
+   * Sync promoWorkNotInDraftRef with hasPromoChanges so unsaved work detection works.
+   */
+  useEffect(() => {
+    promoWorkNotInDraftRef.current = hasPromoChanges;
+  }, [hasPromoChanges]);
 
   /**
    * Tells the server one bit: is work sitting unsaved somewhere.
@@ -493,15 +508,20 @@ export default function Home() {
   const idleRestartRef = useRef<(() => void) | null>(null);
   const exitReasonRef = useRef<'logout' | 'timeout' | null>(null);
   const idleSecondsLeftRef = useRef<number | null>(null);
+  const saveDraftRef = useRef(saveDraft);
+  saveDraftRef.current = saveDraft;
   useIdleSignOut({
     configRef,
     promoWorkNotInDraftRef,
     hasAnnouncementChangesRef,
+    hasPromoChangesRef,
     draftSignatureRef,
     exitReasonRef,
     idleSecondsLeftRef,
     setIdleSecondsLeft,
     idleRestartRef,
+    saveDraftRef,
+    toast,
   });
 
   /**
@@ -514,14 +534,28 @@ export default function Home() {
    */
   useEffect(() => {
     const preserveWork = () => {
-      if (!editorWorkAtRisk()) return;
-
-      // Synchronous, so it completes while the page still exists — the
-      // debounced autosave may have up to 800ms of edits still pending.
+      // Always write recovery to capture the latest state on abrupt close,
+      // regardless of whether it's "at risk" or already in draft
       writeRecovery(configRef.current);
       // Raised now rather than left to the debounced reporter, which will not
       // get another turn. keepalive carries it past the page's death.
       if (!reportedUnsavedRef.current) reportUnsaved(true);
+    };
+
+    /**
+     * Browser close: show warning prompt if there's unsaved work.
+     * Modern browsers restrict the message, so it's just generic text.
+     * User can still close if they confirm.
+     * 
+     * BUT: Skip the warning if we're already signing out (manual logout or timeout).
+     */
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Don't warn if logout or timeout is happening
+      if (exitReasonRef.current === 'logout' || exitReasonRef.current === 'timeout') return;
+      
+      if (!editorWorkAtRisk()) return;
+      e.preventDefault();
+      e.returnValue = '';
     };
 
     /**
@@ -550,9 +584,11 @@ export default function Home() {
       if (document.visibilityState === 'hidden' && !exitReasonRef.current) preserveWork();
     };
 
+    window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('pagehide', handlePageHide);
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('pagehide', handlePageHide);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
@@ -663,10 +699,21 @@ export default function Home() {
   })();
 
   const [pendingPromoPopup, setPendingPromoPopup] = useState<'published' | 'draft' | null>(null);
+  // Track if we're discarding to start new (vs just discarding)
+  const [discardIntentIsStartNew, setDiscardIntentIsStartNew] = useState(false);
+  const [bypassUnsavedCheckRef] = useState({ current: false });
   // The schedule dialog serves two intents, and they end differently:
   //   'new'      → starting a campaign, so it continues to the build panel
   //   'schedule' → an existing card just missing dates, so it returns to work
   const setup = usePromoSetupDialog(() => configRef.current.promoCard);
+  
+  // Close setup dialog when switching away from promo tab
+  useEffect(() => {
+    if (activeTab !== 'promo') {
+      setup.setVisible(false);
+    }
+  }, [activeTab]);
+
   /** Bumped to remount the editors so they re-read a reverted config. */
 
   // Invalid promo schedule = both dates set and start is after end. Blocks
@@ -764,6 +811,16 @@ export default function Home() {
    * picker first — there's nothing to pick from on a first run.
    */
   const handleCreatePromo = useCallback(() => {
+    if (bypassUnsavedCheckRef.current) {
+      startCreatePromo();
+      return;
+    }
+    // If there's no draft in cloud, just start new (nothing to protect)
+    if (draftPromoCard === null) {
+      startCreatePromo();
+      return;
+    }
+    // Only show unsaved check if there's a draft in cloud to protect
     if (promoWorkNotInDraftRef.current) {
       setPendingDashboardAction('create');
       return;
@@ -774,6 +831,31 @@ export default function Home() {
 
   /** The actual create flow, once nothing is at risk. */
   const startCreatePromo = setup.openForNewCard;
+
+  /**
+   * When "Start New" is clicked while a draft exists, show confirmation.
+   * After discard, the DiscardDraftDialog will handle the flow via this callback.
+   */
+  const handleStartNewWithDraft = useCallback(() => {
+    setDiscardIntentIsStartNew(true);
+    setConfirmDiscardDraft(true);
+  }, [setConfirmDiscardDraft]);
+
+  /**
+   * Wrapper around discardDraft to also start new if that was the intent.
+   */
+  const discardDraftAndHandleNext = useCallback(() => {
+    discardDraft();
+    if (discardIntentIsStartNew) {
+      setDiscardIntentIsStartNew(false);
+      bypassUnsavedCheckRef.current = true;
+      // Small delay to ensure draft is cleared before starting new
+      setTimeout(() => {
+        startCreatePromo();
+        bypassUnsavedCheckRef.current = false;
+      }, 0);
+    }
+  }, [discardDraft, discardIntentIsStartNew, startCreatePromo]);
 
   /**
    * Dashboard → the editor with a picker already open.
@@ -912,6 +994,58 @@ export default function Home() {
 
 
 
+
+  async function handleRestoreRecovery() {
+    // Load the recovered config from localStorage
+    const recoveryEnvelope = readRecoveryEnvelope();
+    if (recoveryEnvelope?.config) {
+      const recovered = migrateConfig(recoveryEnvelope.config, recoveryEnvelope.config.version);
+      
+      // Update the campaign hook's configRef so PromoSection sees it immediately
+      if (campaignRef.current) {
+        campaignRef.current.configRef.current = recovered;
+      }
+      
+      // Save recovery to cloud draft using the recovered config directly
+      await writeDraftNow({ configOverride: recovered });
+      
+      // Update draft state so dashboard knows about it
+      setDraftPromoCard(JSON.parse(JSON.stringify(recovered.promoCard)));
+      
+      // Clear local recovery after saving
+      clearRecovery();
+      
+      // Update state for editor re-render
+      setConfig(recovered);
+      
+      // Bump signal so PromoSection re-reads the recovered config
+      if (campaignRef.current) {
+        campaignRef.current.setConfigLoadedSignal((n) => n + 1);
+      }
+      
+      setPromoEntryStep('editor');
+      
+      // Switch to promo tab AFTER React processes the state update
+      setTimeout(() => {
+        setActiveTab('promo');
+      }, 0);
+      
+      toast('Recovery saved to draft');
+    }
+    
+    // Close the recovery alert
+    setHasRecoveredWork(false);
+    setRecoveryReason(null);
+  }
+
+  // Remove the useEffect that was trying to handle the tab switch
+
+  function handleDismissRecovery() {
+    // User chose to discard recovery, just close the alert
+    setHasRecoveredWork(false);
+    setRecoveryReason(null);
+    clearRecovery(); // Clear the local recovery
+  }
 
   function handleSaveAnnouncement() {
     setHasAnnouncementChanges(false);
@@ -1129,6 +1263,7 @@ export default function Home() {
               <Dashboard
                 key={`dashboard-${publishedConfig.announcementBar.active}-${publishedConfig.promoCard.active}`}
                 config={publishedConfig}
+                draftConfig={config}
                 setActiveTab={handleDashboardTabSwitch}
                 onCreatePromo={handleCreatePromo}
                 onEditLivePromo={handleOpenPublishedPromo}
@@ -1136,13 +1271,18 @@ export default function Home() {
                 onGoOnAirPromo={goOnAirPromoNow}
                 onStopAnnouncement={stopAnnouncementNow}
                 onGoOnAirAnnouncement={goOnAirAnnouncementNow}
-                promoUnpublished={hasPromoChanges}
+                promoUnpublished={draftPromoCard !== null}
                 announcementUnpublished={hasAnnouncementChanges || readyToPublishAnnouncement}
                 promoDraftExists={draftPromoCard !== null}
                 onOpenDraft={() => {
-                  setPendingPromoPopup('draft');
+                  setPromoEntryStep('editor');
                   setActiveTab('promo');
                 }}
+                onStartNewWithDraft={handleStartNewWithDraft}
+                hasRecoveredWork={hasRecoveredWork}
+                recoveryReason={recoveryReason}
+                onRestoreRecovery={handleRestoreRecovery}
+                onDismissRecovery={handleDismissRecovery}
               />
             )}
 
@@ -1196,6 +1336,10 @@ export default function Home() {
                 }
                 draftExists={savedDraftSignature !== null}
                 onRemoveLive={removeLivePromo}
+                hasRecoveredWork={hasRecoveredWork}
+                recoveryReason={recoveryReason}
+                onRestoreRecovery={handleRestoreRecovery}
+                onDismissRecovery={handleDismissRecovery}
               />
             )}
           </div>
@@ -1320,7 +1464,8 @@ export default function Home() {
       <DiscardDraftDialog
         confirmDiscardDraft={confirmDiscardDraft}
         setConfirmDiscardDraft={setConfirmDiscardDraft}
-        discardDraft={discardDraft}
+        discardIntentIsStartNew={discardIntentIsStartNew}
+        discardDraft={discardDraftAndHandleNext}
       />
 
       {/* Replace-draft consent — there's only one draft slot, so saving again

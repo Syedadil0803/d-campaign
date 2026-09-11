@@ -212,19 +212,6 @@ export function usePromoCardLifecycle({
                         <>
                           This removes all content and styling from the card you are editing. Your live
                           campaign remains unchanged.
-                          {draftUpToDate ? (
-                            <>
-                              {' '}
-                              This card is already saved in{' '}
-                              <span className="font-semibold text-on-surface">My Draft</span>.
-                            </>
-                          ) : draftExists ? (
-                            <>
-                              {' '}
-                              Keeping a copy will replace the card currently in{' '}
-                              <span className="font-semibold text-on-surface">My Draft</span>.
-                            </>
-                          ) : null}
                         </>
                       ),
                       reassuranceBody:
@@ -234,17 +221,6 @@ export function usePromoCardLifecycle({
                       // "anyway" only means something next to a save button; alone
                       // it implies a choice that isn't being offered.
                       confirmLabel: canvasIsEmpty || draftUpToDate ? 'Clear canvas' : 'Clear anyway',
-                      // Offered only when there is something to save that isn't
-                      // already saved — otherwise it's a button that does nothing.
-                      ...(canvasIsEmpty || draftUpToDate
-                        ? {}
-                        : {
-                            secondaryLabel: draftExists ? 'Replace draft & clear' : 'Save & clear',
-                            onSecondary: () => {
-                              saveOutgoingCardToDraft();
-                              startFreshPromoCard();
-                            },
-                          }),
                     });
   }
 
