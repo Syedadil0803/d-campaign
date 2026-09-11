@@ -211,7 +211,7 @@ export function PromoCanvas() {
                 showTimerInPreview={showTimerInPreview}
                 showButtonInPreview={showButtonInPreview}
                 textColor={config.promoCard.style.textColor}
-                endDate={config.promoCard.endDate}
+                endDate={config.promoCard.endDate || ''}
                 openEnded={isOpenEnded(config.promoCard)}
               />
 

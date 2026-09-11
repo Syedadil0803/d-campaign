@@ -17,51 +17,13 @@ import { describeWhen } from '@/lib/auth/presenceClient';
 export function DiscardDraftDialog({
   confirmDiscardDraft,
   setConfirmDiscardDraft,
-  discardIntentIsStartNew,
   discardDraft,
 }: {
   confirmDiscardDraft: boolean;
   setConfirmDiscardDraft: (v: boolean) => void;
-  discardIntentIsStartNew?: boolean;
   discardDraft: () => void;
 }) {
   if (!confirmDiscardDraft) return null;
-
-  // Discard when starting new: use card colors
-  if (discardIntentIsStartNew) {
-    return (
-      <div data-modal className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="absolute inset-0" onClick={() => setConfirmDiscardDraft(false)} />
-        <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-black/10 p-6 text-on-surface shadow-2xl backdrop-blur-md">
-          <h2 className="text-base font-semibold">Discard existing draft?</h2>
-          <p className="mt-3 text-sm text-on-surface-variant">
-            You have a saved draft. Starting a new campaign will permanently overwrite and delete this draft.
-            <br /><br />
-            This action cannot be undone.
-          </p>
-          <div className="mt-6 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setConfirmDiscardDraft(false)}
-              className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
-            >
-              Keep saved draft
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setConfirmDiscardDraft(false);
-                discardDraft();
-              }}
-              className="rounded-md bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors"
-            >
-              Discard & start fresh
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // Delete from My Draft: use card colors
   return (

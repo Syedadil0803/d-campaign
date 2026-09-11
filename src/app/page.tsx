@@ -699,8 +699,6 @@ export default function Home() {
   })();
 
   const [pendingPromoPopup, setPendingPromoPopup] = useState<'published' | 'draft' | null>(null);
-  // Track if we're discarding to start new (vs just discarding)
-  const [discardIntentIsStartNew, setDiscardIntentIsStartNew] = useState(false);
   const [bypassUnsavedCheckRef] = useState({ current: false });
   // The schedule dialog serves two intents, and they end differently:
   //   'new'      → starting a campaign, so it continues to the build panel
@@ -837,25 +835,16 @@ export default function Home() {
    * After discard, the DiscardDraftDialog will handle the flow via this callback.
    */
   const handleStartNewWithDraft = useCallback(() => {
-    setDiscardIntentIsStartNew(true);
-    setConfirmDiscardDraft(true);
-  }, [setConfirmDiscardDraft]);
-
-  /**
-   * Wrapper around discardDraft to also start new if that was the intent.
-   */
-  const discardDraftAndHandleNext = useCallback(() => {
+    // Skip dialog - directly discard draft and start new in editor
     discardDraft();
-    if (discardIntentIsStartNew) {
-      setDiscardIntentIsStartNew(false);
-      bypassUnsavedCheckRef.current = true;
-      // Small delay to ensure draft is cleared before starting new
-      setTimeout(() => {
-        startCreatePromo();
-        bypassUnsavedCheckRef.current = false;
-      }, 0);
-    }
-  }, [discardDraft, discardIntentIsStartNew, startCreatePromo]);
+    bypassUnsavedCheckRef.current = true;
+    setTimeout(() => {
+      startCreatePromo();
+      bypassUnsavedCheckRef.current = false;
+    }, 0);
+    toast('Draft discarded');
+  }, [discardDraft, startCreatePromo, toast]);
+
 
   /**
    * Dashboard → the editor with a picker already open.
@@ -1464,8 +1453,7 @@ export default function Home() {
       <DiscardDraftDialog
         confirmDiscardDraft={confirmDiscardDraft}
         setConfirmDiscardDraft={setConfirmDiscardDraft}
-        discardIntentIsStartNew={discardIntentIsStartNew}
-        discardDraft={discardDraftAndHandleNext}
+        discardDraft={discardDraft}
       />
 
       {/* Replace-draft consent — there's only one draft slot, so saving again
