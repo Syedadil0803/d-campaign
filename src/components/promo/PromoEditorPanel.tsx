@@ -97,7 +97,7 @@ export function PromoEditorPanel() {
             <h3 className="text-[1.75rem] leading-9 font-bold text-on-surface">
                 Promo Card
             </h3>
-            <p className="mt-2 max-w-2xl text-sm text-on-surface-variant">
+            <p className="max-w-2xl text-sm text-on-surface-variant">
               Floating widget for special offers.
             </p>
           </div>

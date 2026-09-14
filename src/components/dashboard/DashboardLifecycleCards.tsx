@@ -53,12 +53,20 @@ interface DashboardLifecycleCardsProps {
   remainingLabel: string;
   /** How far through its run the promo is, 0-100. */
   progressPct: number;
-  hasRecoveredWork?: boolean;
+  /** Recovered-but-unsaved content that belongs to the promo card specifically. */
+  promoRecovered?: boolean;
+  /** Recovered-but-unsaved content that belongs to the announcement card specifically. */
+  announcementRecovered?: boolean;
   onRestoreRecovery?: () => void;
   onDismissRecovery?: () => void;
   promoUnpublished?: boolean;
+  announcementUnpublished?: boolean;
   onOpenDraft?: () => void;
   draftSavedAt?: string | null;
+  /** When the promo side of the draft was last actually saved — independent of announcementSavedAt. */
+  promoSavedAt?: string | null;
+  /** When the announcement side of the draft was last actually saved — independent of promoSavedAt. */
+  announcementSavedAt?: string | null;
   onStartNewWithDraft?: () => void;
 }
 
@@ -88,12 +96,16 @@ export function DashboardLifecycleCards({
   onCreatePromo,
   remainingLabel,
   progressPct,
-  hasRecoveredWork = false,
+  promoRecovered = false,
+  announcementRecovered = false,
   onRestoreRecovery = () => { },
   onDismissRecovery = () => { },
   promoUnpublished = false,
+  announcementUnpublished = false,
   onOpenDraft = () => { },
   draftSavedAt = null,
+  promoSavedAt = null,
+  announcementSavedAt = null,
   onStartNewWithDraft = () => { },
 }: DashboardLifecycleCardsProps) {
   return (
@@ -235,7 +247,7 @@ export function DashboardLifecycleCards({
 
         {/* [HELPER ZONE] 40px */}
         <div className="flex h-10 shrink-0 items-center">
-          {hasRecoveredWork ? (
+          {promoRecovered ? (
             <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 dark:border-amber-800 dark:bg-amber-950">
               <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
               <span className="text-[13px] font-medium text-amber-900 dark:text-amber-100">
@@ -246,7 +258,7 @@ export function DashboardLifecycleCards({
             <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 dark:border-blue-800 dark:bg-blue-950">
               <InfoIcon className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
               <span className="text-[13px] font-medium text-blue-800 dark:text-blue-100">
-                Saved to cloud {draftSavedAt ? describeWhen(draftSavedAt) : ''} • Draft pending
+                Saved to cloud {promoSavedAt ? describeWhen(promoSavedAt) : ''} • Draft pending
               </span>
             </div>
           ) : promo.active ? (
@@ -264,7 +276,7 @@ export function DashboardLifecycleCards({
         </div>
 
         {/* [ACTION ZONE] 42px */}
-        {hasRecoveredWork ? (
+        {promoRecovered ? (
           <div className="flex h-[42px] gap-2.5">
             <button
               type="button"
@@ -421,7 +433,22 @@ export function DashboardLifecycleCards({
 
         {/* Helper/Alert Zone */}
         <div className="flex h-10 shrink-0 items-center">
-          {annCount > 0 ? (
+          {announcementRecovered ? (
+            <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 dark:border-amber-800 dark:bg-amber-950">
+              <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span className="text-[13px] font-medium text-amber-900 dark:text-amber-100">
+                Unsaved session recovered from browser cache
+              </span>
+            </div>
+          ) : /* Draft status - show only when announcement has unpublished changes and draft exists */
+          announcementUnpublished && announcementSavedAt ? (
+            <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 dark:border-blue-800 dark:bg-blue-950">
+              <InfoIcon className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+              <span className="text-[13px] font-medium text-blue-800 dark:text-blue-100">
+                Saved to cloud {describeWhen(announcementSavedAt)} • Draft pending
+              </span>
+            </div>
+          ) : annCount > 0 ? (
             <div className="flex w-full gap-4 text-[13px] text-on-surface-variant">
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4 shrink-0" />
@@ -446,32 +473,70 @@ export function DashboardLifecycleCards({
         </div>
 
         {/* Action Zone */}
-        <div className="flex h-[42px] gap-2.5">
-          <button
-            className={`${GHOST_BTN} flex-1`}
-            onClick={() => setActiveTab('announcement')}
-          >
-            <Pencil className="h-4 w-4" />
-            Edit
-          </button>
-          {ann.active ? (
+        {announcementRecovered ? (
+          <div className="flex h-[42px] gap-2.5">
             <button
-              className={`${STOP_BTN} flex-1`}
-              onClick={() => setPending({ kind: 'stop', target: 'announcement' })}
-            >
-              <CircleStop className="h-4 w-4" />
-              Stop
-            </button>
-          ) : (
-            <button
+              type="button"
+              onClick={onRestoreRecovery}
               className={`${PRIMARY_BTN} flex-1`}
-              onClick={() => setPending({ kind: 'goOnAir', target: 'announcement' })}
             >
-              <Radio className="h-4 w-4" />
-              Go on air
+              Save & Continue
             </button>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={onDismissRecovery}
+              className={`${GHOST_BTN} flex-1`}
+            >
+              Discard & Start New
+            </button>
+          </div>
+        ) : announcementUnpublished && announcementSavedAt ? (
+          <div className="flex h-[42px] gap-2.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab('announcement')}
+              className={`${PRIMARY_BTN} flex-1`}
+            >
+              <FolderOpen className="h-4 w-4" />
+              Resume Draft
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('announcement')}
+              className={`${GHOST_BTN} flex-1`}
+            >
+              <Plus className="h-4 w-4" />
+              Add New
+            </button>
+          </div>
+        ) : (
+          <div className="flex h-[42px] gap-2.5">
+            <button
+              className={`${GHOST_BTN} flex-1`}
+              onClick={() => setActiveTab('announcement')}
+            >
+              <Pencil className="h-4 w-4" />
+              Edit
+            </button>
+            {ann.active ? (
+              <button
+                className={`${STOP_BTN} flex-1`}
+                onClick={() => setPending({ kind: 'stop', target: 'announcement' })}
+              >
+                <CircleStop className="h-4 w-4" />
+                Stop
+              </button>
+            ) : (
+              <button
+                className={`${PRIMARY_BTN} flex-1`}
+                onClick={() => setPending({ kind: 'goOnAir', target: 'announcement' })}
+              >
+                <Radio className="h-4 w-4" />
+                Go on air
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );

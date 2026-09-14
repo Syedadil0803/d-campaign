@@ -78,7 +78,7 @@ export function AnnouncementHeader({
             </>
           )}
         </button>
-        <div ref={resetMenuRef} className="relative">
+        {/* <div ref={resetMenuRef} className="relative">
           <button
             type="button"
             onClick={() => setShowResetMenu((v) => !v)}
@@ -106,7 +106,7 @@ export function AnnouncementHeader({
               </button>
             </div>
           )}
-        </div>
+        </div> */}
       </div>
     </div>
   );

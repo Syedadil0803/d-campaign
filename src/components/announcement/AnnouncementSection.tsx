@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type RefObject } from 'react';
 import { isInvalidRange } from '@/lib/dateRange';
 import { visibleAnnouncements } from '@/lib/announcement/announcementWindow';
 import { marqueeDurationSeconds, DEFAULT_PX_PER_SEC } from '@/lib/announcement/scrollSpeed';
@@ -40,6 +40,14 @@ interface AnnouncementSectionProps {
   canReactivate: boolean;
   onStop: () => void;
   onGoOnAir: () => void;
+  /**
+   * Holds whatever's mid-typed in the compose box across a tab switch. This
+   * component unmounts every time the tab changes (it's only rendered while
+   * activeTab === 'announcement'), which used to throw away newAnnouncementText
+   * along with it. Owned by the parent so it survives the unmount; this
+   * component just reads it back on mount and keeps it updated as you type.
+   */
+  pendingComposeTextRef?: RefObject<string>;
 }
 
 function getThemeOnSurfaceHex(): string {
@@ -51,9 +59,30 @@ function getThemeOnSurfaceHex(): string {
   return rgbToHex(`rgb(${r}, ${g}, ${b})`);
 }
 
-export function AnnouncementSection({ config, setConfig, markChanged, canReactivate, onStop, onGoOnAir }: AnnouncementSectionProps) {
+export function AnnouncementSection({ config, setConfig, markChanged, canReactivate, onStop, onGoOnAir, pendingComposeTextRef }: AnnouncementSectionProps) {
   const [newAnnouncementText, setNewAnnouncementText] = useState('');
   const richEditorRef = useRef<HTMLDivElement>(null);
+
+  // Restore whatever was mid-typed before a tab switch unmounted this
+  // component. Runs once, on mount only — selectedIndex always starts null,
+  // so this can never clobber an "edit existing announcement" load, which
+  // sets the text itself afterward.
+  useEffect(() => {
+    const pending = pendingComposeTextRef?.current;
+    if (pending) {
+      setNewAnnouncementText(pending);
+      if (richEditorRef.current) {
+        richEditorRef.current.innerHTML = pending;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the parent-owned copy in sync as the user types, so it's there to
+  // restore if they switch tabs before clicking Add.
+  useEffect(() => {
+    if (pendingComposeTextRef) pendingComposeTextRef.current = newAnnouncementText;
+  }, [newAnnouncementText, pendingComposeTextRef]);
 
   const [showShortcutsTip, setShowShortcutsTip] = useState(false);
   const shortcutsTipShown = useRef(false);

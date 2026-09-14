@@ -19,7 +19,6 @@ interface UseCampaignPublishingArgs {
   setPublishedConfig: (cfg: CampaignConfig) => void;
   persistConfig: (cfg: CampaignConfig, successMessage?: string, scope?: 'announcement' | 'promo', options?: { preserveDraft?: boolean }) => Promise<void>;
   pendingDraftRef: RefObject<boolean>;
-  setReadyToPublishAnnouncement: (ready: boolean) => void;
   setPromoDateErrorPing: Dispatch<SetStateAction<number>>;
   setPublishConfirm: (
     confirm: { warnings: string[]; onConfirm: () => Promise<void> | void } | null,
@@ -56,7 +55,6 @@ export function useCampaignPublishing({
   setPublishedConfig,
   persistConfig,
   pendingDraftRef,
-  setReadyToPublishAnnouncement,
   setPromoDateErrorPing,
   setPublishConfirm,
   refreshPromoVariants,
@@ -91,7 +89,6 @@ export function useCampaignPublishing({
     // when the "Publishing…" loader completes, not at the start.
     await persistConfig(next, 'Campaign is live on your website', 'announcement');
     setConfig(next);
-    setReadyToPublishAnnouncement(false);
   }
 
   // Immediate live on/off from the status chip / Dashboard — no Save → Publish.

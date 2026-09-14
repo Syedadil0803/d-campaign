@@ -8,16 +8,23 @@ import { CampaignConfig } from '@/types/campaign';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// GET → the single saved draft, or null when there is none.
+// GET → the single saved draft, or null when there is none. Also carries the
+// two independent per-card save timestamps (promoCard and announcementBar
+// share this one row, but are saved separately — see savePromoDraft /
+// saveAnnouncementDraft — so each needs its own "last saved" time).
 export async function GET() {
   const start = Date.now();
   try {
     const userId = await getSessionUserId();
     if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
 
-    const draft = await campaignService.getDraft(userId);
-    console.log(`[DRAFT] GET -> ${draft ? 'OK' : 'EMPTY'} (${Date.now() - start}ms)`);
-    return NextResponse.json({ draft });
+    const result = await campaignService.getDraftWithTimestamps(userId);
+    console.log(`[DRAFT] GET -> ${result ? 'OK' : 'EMPTY'} (${Date.now() - start}ms)`);
+    return NextResponse.json({
+      draft: result?.config ?? null,
+      promoLastUpdated: result?.promoLastUpdated ?? null,
+      announcementLastUpdated: result?.announcementLastUpdated ?? null,
+    });
   } catch (error) {
     console.error(`[DRAFT] GET -> FAILED (${Date.now() - start}ms):`, error);
     return NextResponse.json({ error: 'Failed to load draft' }, { status: 500 });

@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  FileClock,
   History,
   LayoutTemplate,
   Palette,
@@ -42,14 +41,6 @@ export function PromoEditorToolbar({
   setTemplatesFromBuild,
   setShowTemplatesPopup,
   setShowVersionsPopup,
-  confirmClearCanvas,
-  canvasIsEmpty,
-  openDraftPopup,
-  draftExists,
-  onSaveDraft,
-  savingDraft,
-  draftUpToDate,
-  onDeleteDraft,
   cardPositionPos,
   setCardPositionPos,
   customizeButtonRef,

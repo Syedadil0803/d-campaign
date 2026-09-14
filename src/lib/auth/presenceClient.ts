@@ -104,7 +104,7 @@ export function describeWhen(iso: string | null | undefined): string {
   const when = new Date(iso);
   if (Number.isNaN(when.getTime())) return 'recently';
 
-  const time = when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const time = when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second : '2-digit' });
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const startOfYesterday = new Date(startOfToday);

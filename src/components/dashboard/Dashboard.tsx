@@ -21,6 +21,9 @@ import { CommandBar } from '@/components/dashboard/CommandBar'; // <-- ADD THIS 
 interface DashboardProps {
   config: CampaignConfig;
   draftConfig?: CampaignConfig;
+  draftSavedAt?: Date | null;
+  promoSavedAt?: Date | null;
+  announcementSavedAt?: Date | null;
   setActiveTab: (tab: 'dashboard' | 'announcement' | 'promo') => void;
   onStopPromo?: () => void;
   onGoOnAirPromo?: () => void;
@@ -36,6 +39,9 @@ interface DashboardProps {
   onOpenDraft?: () => void;
   onStartNewWithDraft?: () => void;
   hasRecoveredWork?: boolean;
+  /** Whether the recovered-but-unsaved content actually touches promo/announcement. */
+  recoveredAffectsPromo?: boolean;
+  recoveredAffectsAnnouncement?: boolean;
   recoveryReason?: 'idle' | 'crash' | null;
   onRestoreRecovery?: () => void;
   onDismissRecovery?: () => void;
@@ -49,6 +55,9 @@ function isPromoUncreated(promo: CampaignConfig['promoCard']): boolean {
 export function Dashboard({
   config,
   draftConfig,
+  draftSavedAt,
+  promoSavedAt,
+  announcementSavedAt,
   setActiveTab,
   onStopPromo,
   onGoOnAirPromo,
@@ -62,6 +71,8 @@ export function Dashboard({
   onOpenDraft,
   onStartNewWithDraft,
   hasRecoveredWork,
+  recoveredAffectsPromo,
+  recoveredAffectsAnnouncement,
   recoveryReason,
   onRestoreRecovery,
   onDismissRecovery,
@@ -361,13 +372,17 @@ export function Dashboard({
         onCreatePromo={onCreatePromo}
         remainingLabel={remainingLabel}
         progressPct={progressPct}
-        hasRecoveredWork={hasRecoveredWork}
+        promoRecovered={Boolean(hasRecoveredWork && recoveredAffectsPromo)}
+        announcementRecovered={Boolean(hasRecoveredWork && recoveredAffectsAnnouncement)}
         onRestoreRecovery={onRestoreRecovery}
         onDismissRecovery={onDismissRecovery}
         promoUnpublished={promoUnpublished}
+        announcementUnpublished={announcementUnpublished}
         onOpenDraft={onOpenDraft}
         onStartNewWithDraft={onStartNewWithDraft}
-        draftSavedAt={draftConfig?.lastUpdated || undefined}
+        draftSavedAt={draftSavedAt ? draftSavedAt.toISOString() : undefined}
+        promoSavedAt={promoSavedAt ? promoSavedAt.toISOString() : undefined}
+        announcementSavedAt={announcementSavedAt ? announcementSavedAt.toISOString() : undefined}
       />
 
       <DashboardPopups

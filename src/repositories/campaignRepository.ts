@@ -1,7 +1,7 @@
 import { getDb } from '@/lib/db/db';
 import { campaignConfig } from '@/lib/db/schema';
 import { eq, like } from 'drizzle-orm';
-import { CampaignConfig, PromoCard } from '@/types/campaign';
+import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
 
 // One-line summary of a config for logs — key fields only, never the full blob.
 function summarize(config: CampaignConfig): string {
@@ -93,6 +93,151 @@ export const campaignRepository = {
 
   saveDraft(userId: string, config: CampaignConfig): Promise<boolean> {
     return this.saveConfig(config, draftId(userId));
+  },
+
+  /**
+   * The draft plus its two independent save timestamps. Split out from
+   * getDraft() (which still returns a plain CampaignConfig for the general
+   * "load whatever's saved" path) because most callers just want the
+   * content; only the dashboard's per-card badges need to know which side
+   * was saved when.
+   */
+  async getDraftWithTimestamps(userId: string): Promise<{
+    config: CampaignConfig;
+    promoLastUpdated: string | null;
+    announcementLastUpdated: string | null;
+  } | null> {
+    const start = Date.now();
+    try {
+      const result = await getDb()
+        .select()
+        .from(campaignConfig)
+        .where(eq(campaignConfig.id, draftId(userId)))
+        .limit(1);
+      if (result.length === 0) {
+        console.log(`[DB] getDraftWithTimestamps -> NO ROW (${Date.now() - start}ms)`);
+        return null;
+      }
+      const row = result[0];
+      console.log(`[DB] getDraftWithTimestamps -> OK (${Date.now() - start}ms)`);
+      return {
+        config: {
+          version: row.version,
+          announcementBar: row.announcementBar as CampaignConfig['announcementBar'],
+          promoCard: row.promoCard as CampaignConfig['promoCard'],
+          lastUpdated: row.lastUpdated.toISOString(),
+        },
+        promoLastUpdated: row.promoLastUpdated ? row.promoLastUpdated.toISOString() : null,
+        announcementLastUpdated: row.announcementLastUpdated
+          ? row.announcementLastUpdated.toISOString()
+          : null,
+      };
+    } catch (error) {
+      console.error(`[DB] getDraftWithTimestamps -> FAILED (${Date.now() - start}ms):`, error);
+      return null;
+    }
+  },
+
+  /**
+   * Writes ONLY the promoCard column (+ its own timestamp) on the draft row.
+   * Never touches announcementBar — the whole point of splitting these is
+   * that saving one side can no longer read or write the other's content.
+   * Creates the row with a blank announcementBar if it doesn't exist yet.
+   */
+  async savePromoDraft(userId: string, promoCard: PromoCard): Promise<boolean> {
+    const start = Date.now();
+    const id = draftId(userId);
+    const now = new Date();
+    try {
+      await getDb()
+        .insert(campaignConfig)
+        .values({
+          id,
+          version: '1.1',
+          promoCard,
+          announcementBar: defaultConfig.announcementBar,
+          lastUpdated: now,
+          promoLastUpdated: now,
+        })
+        .onConflictDoUpdate({
+          target: campaignConfig.id,
+          set: { promoCard, lastUpdated: now, promoLastUpdated: now },
+        });
+      console.log(`[DB] savePromoDraft -> OK (${Date.now() - start}ms)`);
+      return true;
+    } catch (error) {
+      console.error(`[DB] savePromoDraft -> FAILED (${Date.now() - start}ms):`, error);
+      return false;
+    }
+  },
+
+  /** Mirror of savePromoDraft — writes only announcementBar (+ its timestamp). */
+  async saveAnnouncementDraft(
+    userId: string,
+    announcementBar: CampaignConfig['announcementBar'],
+  ): Promise<boolean> {
+    const start = Date.now();
+    const id = draftId(userId);
+    const now = new Date();
+    try {
+      await getDb()
+        .insert(campaignConfig)
+        .values({
+          id,
+          version: '1.1',
+          announcementBar,
+          promoCard: defaultConfig.promoCard,
+          lastUpdated: now,
+          announcementLastUpdated: now,
+        })
+        .onConflictDoUpdate({
+          target: campaignConfig.id,
+          set: { announcementBar, lastUpdated: now, announcementLastUpdated: now },
+        });
+      console.log(`[DB] saveAnnouncementDraft -> OK (${Date.now() - start}ms)`);
+      return true;
+    } catch (error) {
+      console.error(`[DB] saveAnnouncementDraft -> FAILED (${Date.now() - start}ms):`, error);
+      return false;
+    }
+  },
+
+  /**
+   * Resets just the promo side to blank and clears its timestamp — the
+   * announcement column is never read or written. Leaves the row in place
+   * even if that makes it "all blank": a fully-blank draft is inert (no
+   * badge, nothing to resume) and not worth a second query to decide
+   * whether to delete the row outright.
+   */
+  async clearPromoDraft(userId: string): Promise<boolean> {
+    const start = Date.now();
+    try {
+      await getDb()
+        .update(campaignConfig)
+        .set({ promoCard: defaultConfig.promoCard, promoLastUpdated: null })
+        .where(eq(campaignConfig.id, draftId(userId)));
+      console.log(`[DB] clearPromoDraft -> OK (${Date.now() - start}ms)`);
+      return true;
+    } catch (error) {
+      console.error(`[DB] clearPromoDraft -> FAILED (${Date.now() - start}ms):`, error);
+      return false;
+    }
+  },
+
+  /** Mirror of clearPromoDraft — resets only announcementBar. */
+  async clearAnnouncementDraft(userId: string): Promise<boolean> {
+    const start = Date.now();
+    try {
+      await getDb()
+        .update(campaignConfig)
+        .set({ announcementBar: defaultConfig.announcementBar, announcementLastUpdated: null })
+        .where(eq(campaignConfig.id, draftId(userId)));
+      console.log(`[DB] clearAnnouncementDraft -> OK (${Date.now() - start}ms)`);
+      return true;
+    } catch (error) {
+      console.error(`[DB] clearAnnouncementDraft -> FAILED (${Date.now() - start}ms):`, error);
+      return false;
+    }
   },
 
   /** Every campaign waiting for its start date, for the promoter to sweep. */

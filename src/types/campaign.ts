@@ -23,6 +23,21 @@ interface Announcement {
 }
 
 /**
+ * A message with text styling.
+ */
+export interface Message {
+  id: string;
+  content: string;
+  styles: {
+    bold?: boolean;
+    italic?: boolean;
+    color?: string;
+    size?: 'sm' | 'md' | 'lg';
+  };
+  createdAt: string;
+}
+
+/**
  * The promo card's five styleable text fields.
  *
  * Shared rather than private to the editor: the panel, the preview and the
@@ -90,6 +105,7 @@ export interface CampaignConfig {
     activeThemeId?: string | null;
   };
   promoCard: PromoCard;
+  messages?: Message[];
 }
 
 export const defaultConfig: CampaignConfig = {
@@ -164,4 +180,5 @@ export const defaultConfig: CampaignConfig = {
      */
     style: JSON.parse(JSON.stringify(FIRST_BLANK_LOOK)) as PromoCard['style'],
   },
+  messages: [],
 };

@@ -15,6 +15,17 @@ export const campaignConfig = campaignSchema.table('campaign_config', {
   // Up to MAX_VERSIONS saved promo-card variants ("My Saved"), as a JSON array.
   variants: jsonb('variants').$type<PromoCard[]>(),
   lastUpdated: timestamp('last_updated').notNull().defaultNow(),
+  /**
+   * Per-card save timestamps on the draft row. promoCard and announcementBar
+   * are independent pieces of work sharing one row (one draft per account) —
+   * without these, every write to either column bumped the same lastUpdated,
+   * so the two cards could never tell which of them was actually last saved.
+   * Null until that side has ever been saved as a draft. Unused on the
+   * 'default' (published) and 'scheduled:*' rows — only draft rows populate
+   * them, via savePromoDraft/saveAnnouncementDraft below.
+   */
+  promoLastUpdated: timestamp('promo_last_updated'),
+  announcementLastUpdated: timestamp('announcement_last_updated'),
 });
 
 /**

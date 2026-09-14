@@ -29,6 +29,9 @@ interface CampaignDraftPort {
   setSavedDraftSignature: (signature: string | null) => void;
   setDraftPromoCard: (card: PromoCard | null) => void;
   setPostPublishDraft: (value: boolean) => void;
+  setDraftSavedAt: (value: Date | null) => void;
+  setPromoSavedAt: (value: Date | null) => void;
+  setAnnouncementSavedAt: (value: Date | null) => void;
 }
 
 interface UseCampaignConfigArgs {
@@ -41,6 +44,14 @@ interface UseCampaignConfigArgs {
   setRecoveryReason: (reason: 'idle' | 'crash' | null) => void;
   setBlankStart?: (value: boolean) => void;
   setRecoveredConfig?: (config: CampaignConfig | null) => void;
+  /**
+   * Which card the recovered-but-not-yet-saved content actually belongs to.
+   * hasRecoveredWork alone doesn't say — a recovery pulled in purely from an
+   * announcement edit would otherwise show its "recovered" banner on both
+   * cards, or on the wrong one, since both cards share the one flag.
+   */
+  setRecoveredAffectsPromo?: (value: boolean) => void;
+  setRecoveredAffectsAnnouncement?: (value: boolean) => void;
 }
 
 /**
@@ -60,6 +71,8 @@ export function useCampaignConfig({
   setRecoveryReason,
   setBlankStart,
   setRecoveredConfig,
+  setRecoveredAffectsPromo,
+  setRecoveredAffectsAnnouncement,
 }: UseCampaignConfigArgs) {
   const [config, setConfig] = useState<CampaignConfig>(defaultConfig);
   const [publishedConfig, setPublishedConfig] = useState<CampaignConfig>(defaultConfig);
@@ -139,9 +152,26 @@ export function useCampaignConfig({
     options: { preserveDraft?: boolean } = {},
   ) {
     try {
+      /**
+       * `cfg` is built from the shared editor config, which holds BOTH
+       * cards' current state at once — so publishing one scope with the
+       * config as-is silently republished whatever happened to be sitting
+       * in the OTHER tab's editor too (half-typed promo text going live
+       * off an announcement publish, and vice versa). A scoped publish must
+       * only ever touch the side it names; the other side is pinned to
+       * what's already live, completely untouched by editor state.
+       */
+      const live = publishedConfigObjRef.current;
+      const scopedCfg: CampaignConfig =
+        scope === 'announcement' && live
+          ? { ...cfg, promoCard: live.promoCard }
+          : scope === 'promo' && live
+            ? { ...cfg, announcementBar: live.announcementBar }
+            : cfg;
+
       // Anything going live gets a saved variant first, so the write below can
       // never publish a card that My Published doesn't know about.
-      const guaranteed = await ensureLivePromoVariant(cfg);
+      const guaranteed = await ensureLivePromoVariant(scopedCfg);
       // Build the button destination from the CTA type
       const cfgToSend = { ...guaranteed };
       const pc = cfgToSend.promoCard;
@@ -182,12 +212,23 @@ export function useCampaignConfig({
           // Live now, so anything the recovery slot was holding is moot.
           clearRecovery();
           /**
-           * Only when the promo was published. My Draft holds a promo card, so
-           * publishing the announcement bar says nothing about it.
+           * There's one draft row for both cards, but promoCard and
+           * announcementBar are separate columns (/api/draft/promo,
+           * /api/draft/announcement) — so a publish only ever needs to
+           * clear its own column. This used to mean fetching the whole
+           * draft, rewriting it with the published side reset, and
+           * preserving the other side by hand; none of that is needed
+           * anymore, since the other column was never touched by this
+           * write to begin with.
            */
-          if (scope !== 'announcement' && draftPort.savedDraftSignatureRef.current !== null) {
-            // After publishing, the draft should now match the published version
-            // Auto-clear it since there's nothing new to save
+          if (scope === 'announcement') {
+            fetch('/api/draft/announcement', { method: 'DELETE', keepalive: true }).catch(() => {});
+            draftPort.setAnnouncementSavedAt(null);
+          } else if (scope === 'promo') {
+            fetch('/api/draft/promo', { method: 'DELETE', keepalive: true }).catch(() => {});
+            draftPort.setPromoSavedAt(null);
+            draftPort.setDraftPromoCard(null);
+          } else if (draftPort.savedDraftSignatureRef.current !== null) {
             draftPort.clearDraft();
           }
           // The card is live now, so the editor starts fresh for the next one.
@@ -238,6 +279,26 @@ export function useCampaignConfig({
       if (draftResponse.ok) {
         const draftData = await draftResponse.json();
         draft = (draftData?.draft as CampaignConfig | null) ?? null;
+        /**
+         * promoCard and announcementBar are separate columns on the draft
+         * row (/api/draft/promo, /api/draft/announcement each write only
+         * their own), so the API hands back each column's own timestamp
+         * directly — no client-side inference needed. This used to be
+         * reconstructed by comparing content signatures against a
+         * remembered baseline, which broke every time the baseline and the
+         * live comparison were computed from slightly different
+         * representations (raw vs migrated, one day's date-default vs the
+         * next's). The server now IS the source of truth for each.
+         */
+        if (draftData?.promoLastUpdated) {
+          draftPort.setPromoSavedAt(new Date(draftData.promoLastUpdated));
+        }
+        if (draftData?.announcementLastUpdated) {
+          draftPort.setAnnouncementSavedAt(new Date(draftData.announcementLastUpdated));
+        }
+        if (draft?.lastUpdated) {
+          draftPort.setDraftSavedAt(new Date(draft.lastUpdated));
+        }
       }
 
       /**
@@ -274,6 +335,14 @@ export function useCampaignConfig({
             draftPort.setSavedDraftSignature(getConfigSignature(restored));
             draftPort.setDraftPromoCard(JSON.parse(JSON.stringify(restored.promoCard)));
             savedPromoSignatureRef.current = getPromoSignature(restored);
+            // Flag only the side that actually differs from live — see the
+            // matching comment further down for why this can't be blanket-true.
+            if (promoContentSignature(restored) !== promoContentSignature(publishedCfg)) {
+              setHasPromoChanges(true);
+            }
+            if (announcementSignature(restored) !== announcementSignature(publishedCfg)) {
+              setHasAnnouncementChanges(true);
+            }
             setPromoEntryStep('editor');
             setBlankStart?.(true);
             clearRecovery();
@@ -292,11 +361,26 @@ export function useCampaignConfig({
               draftPort.setSavedDraftSignature(getConfigSignature(migrated));
               draftPort.setDraftPromoCard(JSON.parse(JSON.stringify(migrated.promoCard)));
               savedPromoSignatureRef.current = getPromoSignature(migrated);
+              if (promoContentSignature(migrated) !== promoContentSignature(publishedCfg)) {
+                setHasPromoChanges(true);
+              }
+              if (announcementSignature(migrated) !== announcementSignature(publishedCfg)) {
+                setHasAnnouncementChanges(true);
+              }
 
-              // Mark recovery so dashboard can show alert
+              // Mark recovery so dashboard can show alert — scoped to
+              // whichever card's content the recovered copy actually adds on
+              // top of the cloud draft, so an announcement-only recovery
+              // doesn't light up the promo card's banner.
               setHasRecoveredWork(true);
               setRecoveryReason(recoveredEnvelope?.reason ?? 'crash');
               setRecoveredConfig?.(restored);
+              setRecoveredAffectsPromo?.(
+                promoContentSignature(restored) !== promoContentSignature(migrated),
+              );
+              setRecoveredAffectsAnnouncement?.(
+                announcementSignature(restored) !== announcementSignature(migrated),
+              );
               // Don't clear recovery — user may restore it from dashboard
 
               setPromoEntryStep('editor');
@@ -331,8 +415,22 @@ export function useCampaignConfig({
             draftPort.setSavedDraftSignature(getConfigSignature(migrated));
             draftPort.setDraftPromoCard(JSON.parse(JSON.stringify(migrated.promoCard)));
             savedPromoSignatureRef.current = getPromoSignature(migrated);
-            // Mark that the promo card has unpublished changes
-            setHasPromoChanges(true);
+            /**
+             * A draft always carries both promoCard and announcementBar (the
+             * type requires both fields), even when only one was actually
+             * edited — so flag only the side whose content genuinely differs
+             * from what's live. Blindly marking both dirty made the
+             * Announcement card silently never light up: a draft saved from
+             * the announcement tab alone used to set only hasPromoChanges,
+             * leaving hasAnnouncementChanges — and therefore the dashboard's
+             * "Saved to cloud" badge — permanently false after a fresh login.
+             */
+            if (promoContentSignature(migrated) !== promoContentSignature(publishedCfg)) {
+              setHasPromoChanges(true);
+            }
+            if (announcementSignature(migrated) !== announcementSignature(publishedCfg)) {
+              setHasAnnouncementChanges(true);
+            }
             setPromoEntryStep('editor');
             // Keep scaffolds (timer & CTA button outlines) visible
             setBlankStart?.(true);

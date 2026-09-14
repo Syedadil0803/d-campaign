@@ -10,8 +10,10 @@ import type {
 import {
   getConfigSignature,
   getPromoSignature,
-  normalizePromoForCompare,
-  draftHasRestorableWork,
+  getMessagesSignature,
+  messagesHasRestorableWork,
+  announcementSignature,
+  promoHasVisibleContent,
 } from '@/lib/configSignature';
 import { clearRecovery } from '@/lib/recovery';
 import { markElsewhereSeen } from '@/lib/auth/presenceClient';
@@ -74,6 +76,24 @@ export function useCampaignDraft({
   const [savingDraft, setSavingDraft] = useState(false);
   const [confirmReplaceDraft, setConfirmReplaceDraft] = useState(false);
   const [confirmDiscardDraft, setConfirmDiscardDraft] = useState(false);
+  // Messages draft state
+  const [savedMessagesSignature, setSavedMessagesSignature] = useState<string | null>(null);
+  // Track when draft was last saved to cloud, for dashboard display
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
+  /**
+   * Per-card save timestamps. promoCard and announcementBar now write to
+   * separate columns on the draft row via /api/draft/promo and
+   * /api/draft/announcement — see startScopedDraftPuts below — so these
+   * simply get set to the write's own timestamp whenever that side's
+   * request actually goes out. No more inferring "did this side really
+   * change" from a signature comparison against the last save: the scoped
+   * endpoint IS the guarantee that only the requested side was touched.
+   */
+  const [promoSavedAt, setPromoSavedAt] = useState<Date | null>(null);
+  const [announcementSavedAt, setAnnouncementSavedAt] = useState<Date | null>(null);
+  const savedMessagesSignatureRef = useRef<string | null>(null);
+  savedMessagesSignatureRef.current = savedMessagesSignature;
+  const messagesSignatureRef = useRef<string | null>(null);
   /** What was offered back on load, so accepting it does not re-read the disk. */
   const offeredDraftRef = useRef<CampaignConfig | null>(null);
   const [draftOffer, setDraftOffer] = useState<CampaignConfig | null>(null);
@@ -113,49 +133,137 @@ export function useCampaignDraft({
   }
 
   /**
-   * Persist the draft only if it carries restorable work — real promo text or a
-   * changed announcement. A fresh/blank promo (even one that replaced a full
-   * published card) is trivially recreatable, so it's not worth a draft.
-   * Returns whether a draft was actually written.
-   *
-   * The draft lives in the DB via /api/draft. The DB write is fired without
-   * awaiting (with keepalive so it survives page unload); the decision — save
-   * vs skip, and the returned boolean the callers use for the toast — stays
-   * synchronous so call sites don't change.
+   * promoCard and announcementBar now write to separate columns on the
+   * draft row (/api/draft/promo, /api/draft/announcement) — see the
+   * migration in campaignRepository.ts. A whole-config PUT used to be the
+   * only option, which meant every save touched both columns whether or
+   * not both sides had anything worth saving, and was the root cause of
+   * nearly every cross-card bug this draft system had (shared timestamps,
+   * "Start New" on one card wiping the other's draft, publish
+   * republishing whatever was in the other editor). These decide per side
+   * whether there's anything worth writing at all.
+   */
+  function promoWorthSaving(cfg: CampaignConfig): boolean {
+    // NOT startDate — blankPromoCard()/migrateConfig() both run every blank
+    // card through withDefaultStartDate(), which stamps today's date onto
+    // ANY card missing one. So startDate is non-empty on every promo card
+    // in the editor, touched or not, and checking it here meant a save
+    // scoped to announcement always looked like it should write promo too.
+    // endDate is never auto-defaulted, so it's a reliable signal that a
+    // schedule was actually, deliberately set.
+    return promoHasVisibleContent(cfg.promoCard) || Boolean(cfg.promoCard.endDate);
+  }
+
+  function announcementWorthSaving(cfg: CampaignConfig, published: CampaignConfig | null): boolean {
+    if (!published) return false;
+    return announcementSignature(cfg) !== announcementSignature(published);
+  }
+
+  /**
+   * Starts up to two independent PUTs — one per side, only for whichever
+   * side actually has something worth saving. Separate columns on the same
+   * row, so these can never step on each other: saving only the
+   * announcement fires only the announcement request, and vice versa.
+   */
+  function startScopedDraftPuts(cfg: CampaignConfig) {
+    const campaign = campaignRef.current!;
+    const published = campaign.publishedConfigObjRef.current;
+    const now = new Date();
+    const requests: { side: 'promo' | 'announcement'; request: Promise<Response> }[] = [];
+
+    if (promoWorthSaving(cfg)) {
+      requests.push({
+        side: 'promo',
+        request: fetch('/api/draft/promo', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ promoCard: cfg.promoCard }),
+          keepalive: true,
+        }),
+      });
+    }
+    if (announcementWorthSaving(cfg, published)) {
+      requests.push({
+        side: 'announcement',
+        request: fetch('/api/draft/announcement', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ announcementBar: cfg.announcementBar }),
+          keepalive: true,
+        }),
+      });
+    }
+    return { requests, now };
+  }
+
+  function applyScopedDraftSaveState(
+    cfg: CampaignConfig,
+    now: Date,
+    sides: ('promo' | 'announcement')[],
+    options: { markHandled?: boolean } = {},
+  ) {
+    // Whole-config bookkeeping other draft features (offer/accept, "draft
+    // exists" for the promo flow) still rely on — unaffected by the split.
+    setSavedDraftSignature(getConfigSignature(cfg));
+    setSavedMessagesSignature(getMessagesSignature(cfg));
+    if (sides.includes('promo')) {
+      setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
+      setPromoSavedAt(now);
+    }
+    if (sides.includes('announcement')) {
+      setAnnouncementSavedAt(now);
+    }
+    if (sides.length > 0) setDraftSavedAt(now);
+    if (options.markHandled !== false) {
+      draftSignatureRef.current = getConfigSignature(cfg);
+      messagesSignatureRef.current = getMessagesSignature(cfg);
+    }
+  }
+
+  /**
+   * Fire-and-forget (with keepalive so it survives page unload) — save vs
+   * skip, and the returned boolean the callers use for the toast, stay
+   * synchronous so call sites don't change. Used by the idle-timeout
+   * auto-save, which also writes a local recovery copy as a safety net —
+   * so a lost race here isn't a lost save.
    */
   function saveDraft(
     cfg: CampaignConfig,
     options: { markHandled?: boolean } = {},
   ): boolean {
-    const campaign = campaignRef.current!;
-    /**
-     * Nothing worth keeping in the editor — so write nothing. It must NOT
-     * clear the slot.
-     *
-     * This used to delete the draft, on the reasoning that a blank card should
-     * not leave a stale one behind. But the two are unrelated: the draft is
-     * whatever was parked there earlier, and an empty canvas says nothing
-     * about it.
-     *
-     * Deleting a draft stays where the user can see it: the My Draft popup,
-     * and publishing, which supersedes it.
-     */
-    if (!draftHasRestorableWork(cfg, campaign.publishedConfigObjRef.current)) {
-      return false;
-    }
-
-    fetch('/api/draft', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cfg),
-      keepalive: true,
-    }).catch(() => {});
-    setSavedDraftSignature(getConfigSignature(cfg));
-    setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
-    if (options.markHandled !== false) {
-      draftSignatureRef.current = getConfigSignature(cfg);
-    }
+    const { requests, now } = startScopedDraftPuts(cfg);
+    if (requests.length === 0) return false;
+    requests.forEach(({ request }) => request.catch(() => {}));
+    applyScopedDraftSaveState(
+      cfg,
+      now,
+      requests.map((r) => r.side),
+      options,
+    );
     return true;
+  }
+
+  /**
+   * Same save, but actually waits for the server to confirm both requests
+   * before resolving. Logging out right after a fire-and-forget save raced
+   * the logout request against the draft PUT — if the session got
+   * invalidated first, the PUT came back 401 and the draft was silently
+   * never written, even though the toast had already said "Saved".
+   * Anything that logs the user out right after saving must go through
+   * this, not saveDraft().
+   */
+  async function saveDraftAndWaitForCloud(
+    cfg: CampaignConfig,
+  ): Promise<'skipped' | 'saved' | 'failed'> {
+    const { requests, now } = startScopedDraftPuts(cfg);
+    if (requests.length === 0) return 'skipped';
+    applyScopedDraftSaveState(cfg, now, requests.map((r) => r.side));
+    try {
+      const results = await Promise.all(requests.map((r) => r.request));
+      return results.every((res) => res.ok) ? 'saved' : 'failed';
+    } catch {
+      return 'failed';
+    }
   }
 
   function clearDraft() {
@@ -182,14 +290,18 @@ export function useCampaignDraft({
     const live = campaign.publishedConfigObjRef.current;
     const savedDraft = deleted ? JSON.parse(JSON.stringify(deleted)) : null;
     const savedDraftSig = savedDraft ? getConfigSignature({ ...campaign.configRef.current, promoCard: savedDraft }) : null;
-    
-    clearDraft();
-    
+
+    // "My Draft" is the promo card's own slot — only /api/draft/promo, so
+    // whatever the announcement side has saved is never touched by this.
+    fetch('/api/draft/promo', { method: 'DELETE', keepalive: true }).catch(() => {});
+    setDraftPromoCard(null);
+    setPromoSavedAt(null);
+
     // Suppress build flow since this is a side effect, not a user-initiated action
     setSuppressBuildFlow?.(true);
-    
+
     const undoTimeoutRef: { current: NodeJS.Timeout | undefined } = { current: undefined };
-    
+
     toast('Saved draft deleted', false, {
       label: 'Undo',
       onClick: () => {
@@ -199,28 +311,29 @@ export function useCampaignDraft({
         if (savedDraft && savedDraftSig) {
           setSavedDraftSignature(savedDraftSig);
           setDraftPromoCard(savedDraft);
-          
+          setPromoSavedAt(new Date());
+
           // Also load it back into editor canvas
           const restored = { ...campaign.configRef.current, promoCard: savedDraft };
           campaign.setConfig(restored);
           campaign.configRef.current = restored;
           draftSignatureRef.current = getConfigSignature(restored);
           campaign.savedPromoSignatureRef.current = getPromoSignature(restored);
-          
+
           // Suppress build dialog since this is a restoration, not a new action
           setSuppressBuildFlow?.(true);
-          
-          fetch('/api/draft', {
+
+          fetch('/api/draft/promo', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(restored),
+            body: JSON.stringify({ promoCard: savedDraft }),
             keepalive: true,
           }).catch(() => {});
           toast('Saved draft restored');
         }
       }
     }, 10000);
-    
+
     // After 10s, if undo wasn't clicked, it's actually deleted
     undoTimeoutRef.current = setTimeout(() => {
       // Do nothing — already deleted from DB
@@ -243,56 +356,117 @@ export function useCampaignDraft({
   }
 
   /**
-   * Explicit "Save as draft" — the ONLY way a draft is ever written now.
-   * Unlike the automatic saveDraft() above, this always writes what's in the
-   * editor: an explicit click means the user wants it saved, blank or not.
+   * Explicit "Save as draft" for the PROMO card — reached from the promo
+   * editor's own Save button and the card-replace consent flow (which saves
+   * the outgoing card before applying the incoming one). Always writes the
+   * promo card, blank or not: an explicit click means the user wants it
+   * saved. Scoped to /api/draft/promo, so the announcement side — whatever
+   * it currently holds, saved or not — is never read or touched by this.
    *
    * @param options.keepEditor
-   *   Leave the editor alone after the write. Set by the card-replace consent,
-   *   which saves the outgoing card and then applies the incoming one.
+   *   Leave the editor alone after the write. (Kept for call-site parity;
+   *   the write itself never touched the editor either way.)
    */
   function writeDraftNow(options: { keepEditor?: boolean; configOverride?: CampaignConfig } = {}): Promise<void> {
     const campaign = campaignRef.current!;
     const cfg = options.configOverride || campaign.configRef.current;
     setSavingDraft(true);
-    return fetch('/api/draft', {
+    return fetch('/api/draft/promo', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cfg),
+      body: JSON.stringify({ promoCard: cfg.promoCard }),
     })
       .then((res) => {
         if (res.ok) {
+          const now = new Date();
           draftSignatureRef.current = getConfigSignature(cfg);
           setSavedDraftSignature(getConfigSignature(cfg));
           setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
-          // Safe in the draft now, so the recovery copy has nothing to rescue.
-          clearRecovery();
-          toast('Saved draft updated');
+          setDraftSavedAt(now);
+          setPromoSavedAt(now);
+          toast("Saved draft updated");
         } else {
-          toast('Couldn’t save your draft', true);
+          toast("Couldn’t save your draft", true);
         }
       })
       .catch(() => toast('Couldn’t save your draft', true))
       .finally(() => setSavingDraft(false));
   }
 
-  /**
-   * There's only one draft slot — if it's already occupied, confirm before
-   * overwriting it.
-   */
-  async function handleSaveAsDraft() {
-    setSavingDraft(true);
-    let exists = false;
-    try {
-      const res = await fetch('/api/draft');
-      const data = res.ok ? await res.json() : null;
-      exists = Boolean(data?.draft);
-    } catch {
-      // Can't tell — fall through and just write; worst case is an
-      // unconfirmed overwrite, better than silently failing to save.
-    }
-    setSavingDraft(false);
+  function handleSaveAsDraft() {
     writeDraftNow();
+  }
+
+  /**
+   * Writes a recovered snapshot to the draft row — both sides, since a
+   * crash/idle recovery may hold unsaved work on either or both cards.
+   * Used only by the recovery-restore flow (handleRestoreRecovery in
+   * page.tsx); every other save path is scoped to one card via
+   * writeDraftNow / saveMessagesDraft / saveDraft above.
+   */
+  async function writeRecoveredDraft(cfg: CampaignConfig): Promise<void> {
+    setSavingDraft(true);
+    try {
+      const [promoRes, annRes] = await Promise.all([
+        fetch('/api/draft/promo', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ promoCard: cfg.promoCard }),
+        }),
+        fetch('/api/draft/announcement', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ announcementBar: cfg.announcementBar }),
+        }),
+      ]);
+      const now = new Date();
+      draftSignatureRef.current = getConfigSignature(cfg);
+      setSavedDraftSignature(getConfigSignature(cfg));
+      if (promoRes.ok) {
+        setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
+        setPromoSavedAt(now);
+      }
+      if (annRes.ok) setAnnouncementSavedAt(now);
+      if (promoRes.ok || annRes.ok) setDraftSavedAt(now);
+    } catch (e) {
+      console.error('Failed to write recovered draft:', e);
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
+  /**
+   * Save only the messages draft (text + styles, NOT bar background).
+   */
+  async function saveMessagesDraft() {
+    const campaign = campaignRef.current!;
+    const cfg = campaign.configRef.current;
+
+    if (!messagesHasRestorableWork(cfg, campaign.publishedConfigObjRef.current)) {
+      toast('No message changes to save', false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/draft/announcement', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ announcementBar: cfg.announcementBar }),
+      });
+
+      if (res.ok) {
+        const now = new Date();
+        setSavedMessagesSignature(getMessagesSignature(cfg));
+        messagesSignatureRef.current = getMessagesSignature(cfg);
+        setDraftSavedAt(now);
+        setAnnouncementSavedAt(now);
+        toast('Messages saved');
+      } else {
+        toast('Failed to save messages', true);
+      }
+    } catch {
+      toast('Failed to save messages', true);
+    }
   }
 
   function completePendingDraftAction(action = pendingDraftAction) {
@@ -306,9 +480,20 @@ export function useCampaignDraft({
     performLogout();
   }
 
-  function saveDraftAndContinue() {
+  async function saveDraftAndContinue() {
     const campaign = campaignRef.current!;
-    if (saveDraft(campaign.configRef.current)) toast('Saved draft updated');
+    // Awaited, not fire-and-forget: this runs right before a logout, which
+    // clears the session. A fire-and-forget PUT here raced the logout
+    // request — if the session was invalidated first, the draft write came
+    // back 401 and was silently dropped, even though the toast already said
+    // "Saved". Must confirm the write landed before letting the caller
+    // proceed to logout.
+    const result = await saveDraftAndWaitForCloud(campaign.configRef.current);
+    if (result === 'failed') {
+      toast('Could not save to cloud — check your connection and try again', true);
+      return;
+    }
+    if (result === 'saved') toast('Saved draft updated');
     completePendingDraftAction();
   }
 
@@ -342,6 +527,53 @@ export function useCampaignDraft({
     toast('Saved draft deleted');
   }
 
+  /**
+   * "Start New" from the promo card specifically — discards only the promo
+   * side. There's one draft row for both cards, so calling the full
+   * discardDraft() here (a DELETE on that row) was also wiping out whatever
+   * the announcement side had saved, even though the user only asked to
+   * start a new promo. If the announcement still has work worth keeping, the
+   * row is rewritten with promo blanked out rather than deleted outright.
+   */
+  /**
+   * "Start New" from the promo card — resets the promo editor to blank and
+   * clears only the promo column of the draft row. Used to require fetching
+   * the current draft, checking whether announcement still had work, and
+   * rewriting the row to preserve it (see git history if curious just how
+   * much). None of that is needed now: /api/draft/promo only ever touches
+   * its own column, so announcement's draft — saved or not — simply can't
+   * be affected by this, by construction.
+   */
+  async function discardPromoDraft() {
+    const campaign = campaignRef.current!;
+
+    try {
+      const response = await fetch('/api/campaign.config');
+      if (response.ok) {
+        const data = await response.json();
+        const migrated = migrateConfig(data, data.version);
+        const nextConfig: CampaignConfig = {
+          ...migrated,
+          promoCard: campaign.blankPromoCard(),
+          // The announcement editor is untouched by a promo discard.
+          announcementBar: campaign.configRef.current.announcementBar,
+        };
+        campaign.setConfig(nextConfig);
+        draftSignatureRef.current = getConfigSignature(nextConfig);
+        campaign.savedPromoSignatureRef.current = getPromoSignature(nextConfig);
+        campaign.publishedConfigRef.current = getConfigSignature(migrated);
+        campaign.publishedConfigObjRef.current = migrated;
+      }
+    } catch (e) {
+      console.error('Failed to reload config:', e);
+    }
+
+    fetch('/api/draft/promo', { method: 'DELETE', keepalive: true }).catch(() => {});
+    setDraftPromoCard(null);
+    campaign.setHasPromoChanges(false);
+    setPromoSavedAt(null);
+  }
+
   return {
     savedDraftSignature,
     setSavedDraftSignature,
@@ -364,8 +596,10 @@ export function useCampaignDraft({
     setPendingDraftAction,
     promoWorkNotInDraftRef,
     writeDraftNow,
+    writeRecoveredDraft,
     saveDraft,
     discardDraft,
+    discardPromoDraft,
     handleDeleteDraft,
     handleSaveAsDraft,
     acceptOfferedDraft,
@@ -374,5 +608,21 @@ export function useCampaignDraft({
     continueWithoutDraft,
     completePendingDraftAction,
     dismissWelcomeBack,
+    // Messages draft
+    savedMessagesSignature,
+    setSavedMessagesSignature,
+    savedMessagesSignatureRef,
+    messagesSignatureRef,
+    saveMessagesDraft,
+    // Track when draft was last saved
+    draftSavedAt,
+    setDraftSavedAt,
+    // Per-card save timestamps — independent of each other, sourced from
+    // the draft row's own promo_last_updated / announcement_last_updated
+    // columns (see useCampaignConfig.ts's load, and each scoped save above).
+    promoSavedAt,
+    setPromoSavedAt,
+    announcementSavedAt,
+    setAnnouncementSavedAt,
   };
 }

@@ -15,7 +15,7 @@ import {
   setAppBadge,
 } from '@/lib/auth/sessionWarning';
 
-export const IDLE_LIMIT_MS = 20_000; // 20 seconds of inactivity before the countdown starts
+export const IDLE_LIMIT_MS = 20_000; // 5 minutes of inactivity before the countdown starts
 
 /**
  * How much of that is spent counting down in front of the user.
@@ -48,6 +48,8 @@ interface UseIdleSignOutArgs {
    * while still reaching the latest closure.
    */
   saveDraftRef: RefObject<(cfg: CampaignConfig) => boolean>;
+  /** Save messages draft on logout (auto-call, no await). */
+  saveMessagesRef?: RefObject<(() => void) | null>;
   toast: (message: string, isError?: boolean) => void;
 }
 
@@ -70,6 +72,7 @@ export function useIdleSignOut({
   setIdleSecondsLeft,
   idleRestartRef,
   saveDraftRef,
+  saveMessagesRef,
   toast,
 }: UseIdleSignOutArgs) {
   /**
@@ -123,6 +126,8 @@ export function useIdleSignOut({
             toast('Saved your work');
           }
         }
+        // Also save messages draft if present
+        saveMessagesRef?.current?.();
         reportUnsaved(true);
       }
 

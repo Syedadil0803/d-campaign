@@ -238,13 +238,13 @@ export function AnnouncementEditorPanel() {
                   const text = e.clipboardData.getData('text/plain');
                   const currentText = richEditorRef.current?.textContent?.replace(/\u200B/g, '') || '';
                   const remaining = 120 - currentText.length;
-                  
+
                   if (remaining <= 0) return;
                   // Truncate pasted text to fit remaining characters
                   const pasteText = text.slice(0, remaining);
                   document.execCommand('insertText', false, pasteText);
                 }}
-                onMouseDown={() => {}}
+                onMouseDown={() => { }}
                 onMouseUp={() => {
                   if (!richEditorRef.current) return;
                   const hasContent = richEditorRef.current.textContent?.replace(/\u200B/g, '').trim();
@@ -410,7 +410,8 @@ export function AnnouncementEditorPanel() {
                   }
                 }}
                 className="rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden break-words transition-colors focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 border-border resize-y min-h-[44px] max-h-[120px]"
-                style={{ background: getBackgroundStyle(previewBg), wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%', caretColor: 'auto' }}
+                //add here in styles background: getBackgroundStyle(previewBg) for the preview background color
+                style={{ wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%', caretColor: 'auto' }}
               />
             </div>
             <button

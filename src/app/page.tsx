@@ -96,6 +96,11 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'announcement' | 'promo'>('dashboard');
   const [hasRecoveredWork, setHasRecoveredWork] = useState(false);
   const [recoveryReason, setRecoveryReason] = useState<'idle' | 'crash' | null>(null);
+  // Which card the recovered-but-unsaved content actually belongs to —
+  // hasRecoveredWork alone doesn't say, and both cards used to show the
+  // banner off the same flag regardless of which one the recovery affected.
+  const [recoveredAffectsPromo, setRecoveredAffectsPromo] = useState(false);
+  const [recoveredAffectsAnnouncement, setRecoveredAffectsAnnouncement] = useState(false);
   // `config` is the editing/draft state (what the editors show). `publishedConfig`
   // is what's actually LIVE on the website — the Dashboard renders this so it
   // never shows unpublished draft content as if it were live.
@@ -139,6 +144,10 @@ export default function Home() {
   // already up. There is no separate start screen any more.
   const [promoEntryStep, setPromoEntryStep] = useState<'ai' | 'build' | 'editor'>('editor');
   const mainScrollRef = useRef<HTMLElement>(null);
+  // Survives AnnouncementSection unmounting on a tab switch — see the prop's
+  // doc comment on AnnouncementSectionProps for why this can't just live
+  // inside that component.
+  const announcementComposeTextRef = useRef('');
 
 
   const [isConfirming, setIsConfirming] = useState(false);
@@ -357,7 +366,9 @@ export default function Home() {
     setPendingDraftAction,
     promoWorkNotInDraftRef,
     writeDraftNow,
+    writeRecoveredDraft,
     discardDraft,
+    discardPromoDraft,
     handleDeleteDraft,
     handleSaveAsDraft,
     acceptOfferedDraft,
@@ -366,6 +377,10 @@ export default function Home() {
     continueWithoutDraft,
     dismissWelcomeBack,
     saveDraft,
+    saveMessagesDraft,
+    draftSavedAt,
+    promoSavedAt,
+    announcementSavedAt,
   } = draft;
 
   const campaign = useCampaignConfig({
@@ -377,6 +392,8 @@ export default function Home() {
     draftPort: draft,
     setHasRecoveredWork,
     setRecoveryReason,
+    setRecoveredAffectsPromo,
+    setRecoveredAffectsAnnouncement,
   });
   campaignRef.current = campaign;
 
@@ -396,8 +413,6 @@ export default function Home() {
     hasPromoChanges,
     setHasPromoChanges,
     hasPromoChangesRef,
-    readyToPublishAnnouncement,
-    setReadyToPublishAnnouncement,
     configLoadedSignal,
     editorResetKey,
     setEditorResetKey,
@@ -409,16 +424,27 @@ export default function Home() {
   } = campaign;
 
 
-  // Announcement still stages via Save → Publish (promo saves straight to a
-  // draft from the tab strip instead, so it has no staged/"ready" state).
+  // Both announcement and promo save straight to draft from the tab strip.
   const hasChanges = hasAnnouncementChanges || hasPromoChanges;
-  // Any pending draft work (unsaved edits OR a staged-but-unpublished
-  // announcement) — a live on-air toggle must preserve this, not discard it.
-  const pendingDraft = hasChanges || readyToPublishAnnouncement;
+  // Any pending draft work (unsaved edits) — a live on-air toggle must preserve this, not discard it.
+  const pendingDraft = hasChanges;
   const pendingDraftRef = useRef(pendingDraft);
   pendingDraftRef.current = pendingDraft;
   const hasChangesRef = useRef(hasChanges);
   hasChangesRef.current = hasChanges;
+
+  /**
+   * `draftPromoCard !== null` only means "a draft row exists" — the draft
+   * always carries a promoCard (the type requires it) even when what was
+   * actually saved is announcement-only work. Saving messages must never
+   * light up the promo card, so the promo alert requires the draft's promo
+   * content to genuinely differ from what is live, not just that a draft
+   * exists.
+   */
+  const promoDraftDiffersFromLive = draftPromoCard
+    ? JSON.stringify(normalizePromoForCompare(draftPromoCard as unknown as Record<string, unknown>)) !==
+      JSON.stringify(normalizePromoForCompare(publishedConfig.promoCard as unknown as Record<string, unknown>))
+    : false;
 
   const {
     pendingVariantSave,
@@ -510,6 +536,8 @@ export default function Home() {
   const idleSecondsLeftRef = useRef<number | null>(null);
   const saveDraftRef = useRef(saveDraft);
   saveDraftRef.current = saveDraft;
+  const saveMessagesRef = useRef(saveMessagesDraft);
+  saveMessagesRef.current = saveMessagesDraft;
   useIdleSignOut({
     configRef,
     promoWorkNotInDraftRef,
@@ -521,6 +549,7 @@ export default function Home() {
     setIdleSecondsLeft,
     idleRestartRef,
     saveDraftRef,
+    saveMessagesRef,
     toast,
   });
 
@@ -552,7 +581,7 @@ export default function Home() {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       // Don't warn if logout or timeout is happening
       if (exitReasonRef.current === 'logout' || exitReasonRef.current === 'timeout') return;
-      
+
       if (!editorWorkAtRisk()) return;
       e.preventDefault();
       e.returnValue = '';
@@ -704,7 +733,7 @@ export default function Home() {
   //   'new'      → starting a campaign, so it continues to the build panel
   //   'schedule' → an existing card just missing dates, so it returns to work
   const setup = usePromoSetupDialog(() => configRef.current.promoCard);
-  
+
   // Close setup dialog when switching away from promo tab
   useEffect(() => {
     if (activeTab !== 'promo') {
@@ -748,7 +777,6 @@ export default function Home() {
     setPublishedConfig,
     persistConfig,
     pendingDraftRef,
-    setReadyToPublishAnnouncement,
     setPromoDateErrorPing,
     setPublishConfirm,
     refreshPromoVariants,
@@ -828,22 +856,27 @@ export default function Home() {
   }, []);
 
   /** The actual create flow, once nothing is at risk. */
-  const startCreatePromo = setup.openForNewCard;
+  // Instead of opening the setup dialog (which we hid), directly go to promo editor
+  const startCreatePromo = () => {
+    handleDashboardTabSwitch('promo');
+  };
 
   /**
    * When "Start New" is clicked while a draft exists, show confirmation.
    * After discard, the DiscardDraftDialog will handle the flow via this callback.
    */
-  const handleStartNewWithDraft = useCallback(() => {
-    // Skip dialog - directly discard draft and start new in editor
-    discardDraft();
+  const handleStartNewWithDraft = useCallback(async () => {
+    // Clear only the promo side of the draft — this is "Start New" from the
+    // promo card specifically, so the announcement's saved work (if any)
+    // must survive it.
+    await discardPromoDraft();
     bypassUnsavedCheckRef.current = true;
-    setTimeout(() => {
-      startCreatePromo();
-      bypassUnsavedCheckRef.current = false;
-    }, 0);
-    toast('Draft discarded');
-  }, [discardDraft, startCreatePromo, toast]);
+    // THEN go to editor (now it's clean)
+    startCreatePromo();
+    bypassUnsavedCheckRef.current = false;
+    toast('Promo draft discarded');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [discardPromoDraft, startCreatePromo, toast]);
 
 
   /**
@@ -989,39 +1022,49 @@ export default function Home() {
     const recoveryEnvelope = readRecoveryEnvelope();
     if (recoveryEnvelope?.config) {
       const recovered = migrateConfig(recoveryEnvelope.config, recoveryEnvelope.config.version);
-      
+
       // Update the campaign hook's configRef so PromoSection sees it immediately
       if (campaignRef.current) {
         campaignRef.current.configRef.current = recovered;
       }
-      
-      // Save recovery to cloud draft using the recovered config directly
-      await writeDraftNow({ configOverride: recovered });
-      
+
+      // Save recovery to cloud draft using the recovered config directly —
+      // writeDraftNow is promo-scoped now, but a recovered snapshot can hold
+      // unsaved work on either or both cards, so this needs the two-sided
+      // write.
+      await writeRecoveredDraft(recovered);
+
       // Update draft state so dashboard knows about it
       setDraftPromoCard(JSON.parse(JSON.stringify(recovered.promoCard)));
-      
+
       // Clear local recovery after saving
       clearRecovery();
-      
+
       // Update state for editor re-render
       setConfig(recovered);
-      
+
       // Bump signal so PromoSection re-reads the recovered config
       if (campaignRef.current) {
         campaignRef.current.setConfigLoadedSignal((n) => n + 1);
       }
-      
-      setPromoEntryStep('editor');
-      
-      // Switch to promo tab AFTER React processes the state update
+
+      // Go wherever the recovered work actually is — this used to always
+      // jump to promo, so clicking "Save & Continue" on an announcement-only
+      // recovery (shown from the Announcement card) still landed you on the
+      // promo tab. Promo wins when both are affected, matching prior behavior.
+      const recoveryTargetTab: 'promo' | 'announcement' = recoveredAffectsPromo
+        ? 'promo'
+        : 'announcement';
+      if (recoveryTargetTab === 'promo') setPromoEntryStep('editor');
+
+      // Switch tabs AFTER React processes the state update
       setTimeout(() => {
-        setActiveTab('promo');
+        setActiveTab(recoveryTargetTab);
       }, 0);
-      
+
       toast('Recovery saved to draft');
     }
-    
+
     // Close the recovery alert
     setHasRecoveredWork(false);
     setRecoveryReason(null);
@@ -1036,19 +1079,6 @@ export default function Home() {
     clearRecovery(); // Clear the local recovery
   }
 
-  function handleSaveAnnouncement() {
-    setHasAnnouncementChanges(false);
-    setReadyToPublishAnnouncement(true);
-    toast('Changes saved — please publish to go live');
-    setPublishConfirm({
-      warnings: [],
-      onConfirm: handlePublishAnnouncement,
-      title: 'Changes saved',
-      message: 'Ready to publish, or you can review and publish later.',
-      confirmLabel: 'Publish now',
-      cancelLabel: 'Publish later',
-    });
-  }
 
 
 
@@ -1230,13 +1260,11 @@ export default function Home() {
           setActiveTab={handleTabSwitch}
           hasAnnouncementChanges={hasAnnouncementChanges}
           hasPromoChanges={promoWorthPublishing}
-          readyToPublishAnnouncement={readyToPublishAnnouncement}
           promoDateInvalid={promoDateRangeInvalid}
           announcementDateInvalid={announcementDateRangeInvalid}
           isPublishing={isPublishing}
           isDarkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode}
-          handleSaveAnnouncement={handleSaveAnnouncement}
           handlePublishAnnouncement={handlePublishAnnouncementWithValidation}
           handlePublishPromo={handlePublishPromoWithValidation}
           handleLogout={handleLogout}
@@ -1253,6 +1281,9 @@ export default function Home() {
                 key={`dashboard-${publishedConfig.announcementBar.active}-${publishedConfig.promoCard.active}`}
                 config={publishedConfig}
                 draftConfig={config}
+                draftSavedAt={draftSavedAt}
+                promoSavedAt={promoSavedAt}
+                announcementSavedAt={announcementSavedAt}
                 setActiveTab={handleDashboardTabSwitch}
                 onCreatePromo={handleCreatePromo}
                 onEditLivePromo={handleOpenPublishedPromo}
@@ -1260,8 +1291,8 @@ export default function Home() {
                 onGoOnAirPromo={goOnAirPromoNow}
                 onStopAnnouncement={stopAnnouncementNow}
                 onGoOnAirAnnouncement={goOnAirAnnouncementNow}
-                promoUnpublished={draftPromoCard !== null}
-                announcementUnpublished={hasAnnouncementChanges || readyToPublishAnnouncement}
+                promoUnpublished={promoDraftDiffersFromLive}
+                announcementUnpublished={hasAnnouncementChanges}
                 promoDraftExists={draftPromoCard !== null}
                 onOpenDraft={() => {
                   setPromoEntryStep('editor');
@@ -1269,6 +1300,8 @@ export default function Home() {
                 }}
                 onStartNewWithDraft={handleStartNewWithDraft}
                 hasRecoveredWork={hasRecoveredWork}
+                recoveredAffectsPromo={recoveredAffectsPromo}
+                recoveredAffectsAnnouncement={recoveredAffectsAnnouncement}
                 recoveryReason={recoveryReason}
                 onRestoreRecovery={handleRestoreRecovery}
                 onDismissRecovery={handleDismissRecovery}
@@ -1284,6 +1317,7 @@ export default function Home() {
                 canReactivate={announcementCanReactivate}
                 onStop={stopAnnouncementNow}
                 onGoOnAir={goOnAirAnnouncementNow}
+                pendingComposeTextRef={announcementComposeTextRef}
               />
             )}
 
@@ -1421,6 +1455,7 @@ export default function Home() {
       {/* First-run campaign setup, opened from the dashboard's "Create promo
           card". Same dialog the guided flow uses, so the questions asked are
           identical wherever a campaign starts. */}
+      {/* HIDDEN: Set up your campaign
       {setup.visible && (
         <PromoSetupDialog
           sourceLabel="a blank card"
@@ -1436,6 +1471,7 @@ export default function Home() {
           onClose={() => setup.setVisible(false)}
         />
       )}
+      */}
 
       {/* Unsaved promo work, caught at the dashboard before an action that
           would replace the canvas. Saving is offered, never required — the

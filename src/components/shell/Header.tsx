@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { LayoutDashboard, Megaphone, Gift, LayoutGrid, Save, Upload, Sun, Moon, LogOut, Loader2, Check, MonitorDown } from 'lucide-react';
+import { LayoutDashboard, Upload, Sun, Moon, LogOut, Loader2, Check, MonitorDown } from 'lucide-react';
 import { useInstallPrompt } from '@/hooks/useInstallPrompt';
 
 interface HeaderProps {
@@ -7,19 +6,14 @@ interface HeaderProps {
   setActiveTab: (tab: 'dashboard' | 'announcement' | 'promo') => void;
   hasAnnouncementChanges: boolean;
   hasPromoChanges: boolean;
-  // Announcement still stages via Save → Publish (no dedicated "Save as
-  // draft" entry point of its own yet). Promo skipped this step: it saves
-  // straight to a draft via the tab strip, so its top button is Publish-only.
-  readyToPublishAnnouncement: boolean;
   promoDateInvalid: boolean;
   /** Any announcement scheduled back to front. */
   announcementDateInvalid: boolean;
-  /** Hides the status badge and Save/Publish — used outside the promo editor. */
+  /** Hides the status badge and Publish — used outside the promo editor. */
   hideActions?: boolean;
   isPublishing: boolean;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
-  handleSaveAnnouncement: () => void;
   handlePublishAnnouncement: () => Promise<void> | void;
   handlePublishPromo: () => Promise<void> | void;
   handleLogout: () => void;
@@ -30,31 +24,27 @@ export function Header({
   setActiveTab,
   hasAnnouncementChanges,
   hasPromoChanges,
-  readyToPublishAnnouncement,
   promoDateInvalid,
   announcementDateInvalid,
   hideActions,
   isPublishing,
   isDarkMode,
   toggleDarkMode,
-  handleSaveAnnouncement,
   handlePublishAnnouncement,
   handlePublishPromo,
   handleLogout,
 }: HeaderProps) {
-  const [saving, setSaving] = useState(false);
 
   // Only ever true on a browser that can actually install, and only until it
   // has been installed — so this adds a control to the header rarely and
   // temporarily, rather than parking a permanent one there.
   const { canInstall, install } = useInstallPrompt();
 
-  // Announcement: three states (unsaved → Save; ready → Publish; published).
-  // Promo: two states only — editing goes straight to "ready to Publish",
-  // since drafting lives in the tab strip instead of this button.
+  // Both announcement and promo: two states only — unsaved (with drafting in the
+  // tab strip) or published. Removed Save step from announcement.
   const state: 'published' | 'unsaved' | 'ready' =
     activeTab === 'announcement'
-      ? (readyToPublishAnnouncement ? 'ready' : hasAnnouncementChanges ? 'unsaved' : 'published')
+      ? (hasAnnouncementChanges ? 'unsaved' : 'published')
       : (hasPromoChanges ? 'ready' : 'published');
 
   // Block the action while the tab's schedule is back to front (start > end).
@@ -64,24 +54,15 @@ export function Header({
   const blockForDateRange =
     (activeTab === 'promo' && promoDateInvalid) ||
     (activeTab === 'announcement' && announcementDateInvalid);
-  // Name the blocked action — announcement stages through Save first, so
-  // always saying "publish" was wrong on the Save button — and, for
-  // announcements, say where to look. One bad message out of several locks
-  // this button, and the button itself cannot show which one; the offending
+  // Both tabs go straight to Publish now — no separate Save step on either
+  // side — so the blocked action is always "publish". For announcements,
+  // also say where to look: one bad message out of several locks this
+  // button, and the button itself cannot show which one; the offending
   // message is ringed red in the list.
-  const blockedAction = state === 'unsaved' ? 'save' : 'publish';
   const dateRangeTooltip =
     activeTab === 'announcement'
-      ? `A message ends before it starts — it is outlined in red in the list. Fix or clear its schedule to ${blockedAction}.`
-      : `Fix invalid date range to ${blockedAction}.`;
-
-  async function onSave() {
-    setSaving(true);
-    // Brief acknowledgment only — the actual save is instant.
-    await new Promise(r => setTimeout(r, 500));
-    handleSaveAnnouncement();
-    setSaving(false);
-  }
+      ? `A message ends before it starts — it is outlined in red in the list. Fix or clear its schedule to publish.`
+      : `Fix invalid date range to publish.`;
 
   async function onPublish() {
     if (activeTab === 'announcement') await handlePublishAnnouncement();
@@ -173,18 +154,7 @@ export function Header({
               )}
 
               {/* Action button - consistent h-9 px-4 text-xs */}
-              {state === 'unsaved' && (
-                <button
-                  onClick={onSave}
-                  disabled={saving || blockForDateRange}
-                  title={blockForDateRange ? dateRangeTooltip : undefined}
-                  className="inline-flex items-center h-9 px-4 rounded-md text-xs font-semibold border border-primary/40 bg-primary text-on-primary shadow-sm transition-all hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {saving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
-                  <span>{saving ? 'Saving...' : 'Save'}</span>
-                </button>
-              )}
-              {state === 'ready' && (
+              {(state === 'unsaved' || state === 'ready') && (
                 <button
                   data-tour="header-publish"
                   onClick={onPublish}

@@ -113,6 +113,22 @@ export function normalizePromoForCompare(card: Record<string, unknown>) {
     .replace(/\s+/g, ' ')
     .trim();
   clone.timerStateJson = normalizeTimerStateForCompare(clone.timerStateJson);
+  // migrateConfig() stamps today's date onto any promo card missing a
+  // startDate, every single time it runs (withDefaultStartDate). For a card
+  // nobody has ever actually scheduled, that means two snapshots migrated on
+  // different days — e.g. a browser-cache recovery from yesterday compared
+  // against a freshly re-migrated cloud draft today — disagree on startDate
+  // even though nobody touched it. Only a card with real content or an
+  // explicit endDate has a startDate worth comparing; on a blank card it's
+  // pure app-generated noise, exactly like cardWidth above.
+  const hasVisibleContent =
+    htmlHasVisibleText(clone.title as string | undefined) ||
+    htmlHasVisibleText(clone.subtitle as string | undefined) ||
+    htmlHasVisibleText(clone.description as string | undefined) ||
+    htmlHasVisibleText(clone.buttonText as string | undefined);
+  if (!hasVisibleContent && !clone.endDate) {
+    delete clone.startDate;
+  }
   return clone;
 }
 
@@ -212,8 +228,28 @@ export function draftHasRestorableWork(
   published: CampaignConfig | null,
 ): boolean {
   if (promoHasVisibleContent(draft.promoCard)) return true;
-  // Dates are work — even a blank card with a schedule is restorable
-  if (draft.promoCard.startDate || draft.promoCard.endDate) return true;
+  // endDate is work — even a blank card with a schedule is restorable.
+  // NOT startDate: withDefaultStartDate() stamps today's date onto any
+  // blank promo card during migration, so startDate is non-empty on every
+  // card whether or not it was ever actually scheduled — checking it here
+  // made a totally untouched promo card register as "restorable work".
+  if (draft.promoCard.endDate) return true;
   if (!published) return false;
   return announcementSignature(draft) !== announcementSignature(published);
+}
+
+// Messages signature (only text + styles, NOT bar background)
+export function getMessagesSignature(cfg: CampaignConfig | null): string {
+  if (!cfg?.messages || cfg.messages.length === 0) return '';
+  return JSON.stringify(cfg.messages);
+}
+
+// Check if messages have changed from published
+export function messagesHasRestorableWork(
+  current: CampaignConfig,
+  published: CampaignConfig | null,
+): boolean {
+  const currentSig = getMessagesSignature(current);
+  const publishedSig = getMessagesSignature(published);
+  return currentSig !== publishedSig && currentSig !== '';
 }
