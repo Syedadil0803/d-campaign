@@ -272,8 +272,10 @@ export function useCampaignDraft({
     if (sides.includes('promo')) {
       setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
       setPromoSavedAt(now);
-      // Reset flag after successful save
+      // Update saved signature after successful promo save
       const campaign = campaignRef.current!;
+      campaign.savedPromoSignatureRef.current = getPromoSignature(cfg);
+      // Reset flag after successful save
       campaign.setHasPromoChanges(false);
     }
     if (sides.includes('announcement')) {
@@ -326,10 +328,14 @@ export function useCampaignDraft({
   ): Promise<'skipped' | 'saved' | 'failed'> {
     const { requests, now } = startScopedDraftPuts(cfg);
     if (requests.length === 0) return 'skipped';
-    applyScopedDraftSaveState(cfg, now, requests.map((r) => r.side));
     try {
       const results = await Promise.all(requests.map((r) => r.request));
-      return results.every((res) => res.ok) ? 'saved' : 'failed';
+      // ONLY update saved signatures after API confirms success
+      if (results.every((res) => res.ok)) {
+        applyScopedDraftSaveState(cfg, now, requests.map((r) => r.side));
+        return 'saved';
+      }
+      return 'failed';
     } catch {
       return 'failed';
     }

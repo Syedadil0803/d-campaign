@@ -193,7 +193,11 @@ export function announcementSignature(cfg: CampaignConfig): string {
 }
 
 export function getPromoSignature(cfg: CampaignConfig) {
-  return JSON.stringify(cfg.promoCard);
+  return JSON.stringify(
+    normalizePromoForCompare(
+      cfg.promoCard as unknown as Record<string, unknown>,
+    ),
+  );
 }
 
 // A draft is only worth persisting/restoring when it carries real content —

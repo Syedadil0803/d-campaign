@@ -61,7 +61,7 @@ export function usePromoVariantSaves({
   const refreshPromoVariants = useCallback(() => {
     listVersions()
       .then(setPromoVariants)
-      .catch(() => {});
+      .catch((e) => console.warn('[variants] Failed to load:', e));
   }, []);
 
   function getAutoVariantLabel() {

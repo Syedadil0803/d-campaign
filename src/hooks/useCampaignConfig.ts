@@ -352,7 +352,7 @@ export function useCampaignConfig({
                 body: JSON.stringify({ announcementBar: restored.announcementBar }),
                 keepalive: true,
               }),
-            ]).catch(() => {});
+            ]).then(() => clearRecovery()).catch(() => {});
 
             // Auto-load recovery as the new draft
             setConfig(restored);
@@ -361,8 +361,6 @@ export function useCampaignConfig({
             draftPort.setSavedDraftSignature(getConfigSignature(restored));
             draftPort.setDraftPromoCard(JSON.parse(JSON.stringify(restored.promoCard)));
             savedPromoSignatureRef.current = getPromoSignature(restored);
-            // Flag only the side that actually differs from live — see the
-            // matching comment further down for why this can't be blanket-true.
             if (promoContentSignature(restored) !== promoContentSignature(publishedCfg)) {
               setHasPromoChanges(true);
             }
@@ -371,7 +369,6 @@ export function useCampaignConfig({
             }
             setPromoEntryStep('editor');
             setBlankStart?.(true);
-            clearRecovery();
             setConfigLoadedSignal((n) => n + 1);
             return;
           } else {

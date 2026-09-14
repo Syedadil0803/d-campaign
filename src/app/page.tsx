@@ -564,81 +564,31 @@ export default function Home() {
    * wrong throws the work away.
    */
   useEffect(() => {
-    const preserveWork = async () => {
-      if (!editorWorkAtRisk()) return;
+    const preserveWork = () => {
+      // Always write local recovery first — synchronous, survives page death.
+      writeRecovery(configRef.current);
 
-      const hasPromoChanges = promoWorkNotInDraftRef.current || hasPromoChangesRef.current;
-      const hasAnnChanges = hasAnnouncementChangesRef.current && 
-        draftSignatureRef.current !== getConfigSignature(configRef.current);
-
-      // ALWAYS write recovery as a safety net (capture latest state)
-      if (hasPromoChanges || hasAnnChanges) {
-        writeRecovery(configRef.current);
+      // Also push to cloud for whichever side is dirty. Uses the same dirty
+      // flags the rest of the app uses (hasPromoChangesRef,
+      // hasAnnouncementChangesRef) instead of a separate signature comparison
+      // that could disagree. keepalive ensures the request outlives the page.
+      if (hasPromoChangesRef.current) {
+        fetch('/api/draft/promo', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ promoCard: configRef.current.promoCard }),
+          keepalive: true,
+        }).catch(() => {});
+      }
+      if (hasAnnouncementChangesRef.current) {
+        fetch('/api/draft/announcement', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ announcementBar: configRef.current.announcementBar }),
+          keepalive: true,
+        }).catch(() => {});
       }
 
-      // ALSO try to save to cloud draft (primary save)
-      // Debug: Log to sessionStorage (persists across page reload)
-      const debugLog: any = {
-        source: 'preserveWork',
-        timestamp: new Date().toISOString(),
-      };
-      let savedCount = 0;
-
-      // Only save promo if it actually differs from the saved draft
-      const promoHasRealChanges = savedPromoSignatureRef.current && 
-        getPromoSignature(configRef.current) !== savedPromoSignatureRef.current;
-      debugLog.promoHasRealChanges = promoHasRealChanges;
-      if (promoHasRealChanges) {
-        try {
-          await fetch('/api/draft/promo', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(configRef.current.promoCard),
-            keepalive: true,
-          });
-          // Update signature after successful save
-          savedPromoSignatureRef.current = getPromoSignature(configRef.current);
-          savedCount++;
-        } catch {
-          // Cloud save failed, but recovery is already written
-        }
-      }
-
-      // Save announcement only if it actually differs from the saved draft
-      const annHasRealChanges = draftSignatureRef.current && 
-        getConfigSignature(configRef.current) !== draftSignatureRef.current;
-      debugLog.annHasRealChanges = annHasRealChanges;
-      if (annHasRealChanges) {
-        try {
-          await fetch('/api/draft/announcement', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(configRef.current.announcementBar),
-            keepalive: true,
-          });
-          // Update signature after successful save
-          draftSignatureRef.current = getConfigSignature(configRef.current);
-          savedCount++;
-        } catch {
-          // Cloud save failed, but recovery is already written
-        }
-      }
-      
-      debugLog.savedCount = savedCount;
-      try {
-        const existing = sessionStorage.getItem('__debug_logs') || '[]';
-        const logs = JSON.parse(existing);
-        logs.push(debugLog);
-        // Keep last 10 logs
-        const recent = logs.slice(-10);
-        sessionStorage.setItem('__debug_logs', JSON.stringify(recent));
-        sessionStorage.setItem('__last_preserve_work', JSON.stringify(debugLog));
-      } catch (e) {
-        // Ignore
-      }
-
-      // Raised now rather than left to the debounced reporter, which will not
-      // get another turn. keepalive carries it past the page's death.
       if (!reportedUnsavedRef.current) reportUnsaved(true);
     };
 
