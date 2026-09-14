@@ -15,7 +15,7 @@ import {
   setAppBadge,
 } from '@/lib/auth/sessionWarning';
 
-export const IDLE_LIMIT_MS = 20_000; // 5 minutes of inactivity before the countdown starts
+export const IDLE_LIMIT_MS = 5 * 60 * 1000; // 5 minutes of inactivity before the countdown starts
 
 /**
  * How much of that is spent counting down in front of the user.
