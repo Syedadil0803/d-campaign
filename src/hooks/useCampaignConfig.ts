@@ -6,8 +6,8 @@ import {
   getConfigSignature,
   getPromoSignature,
   normalizePromoForCompare,
-  draftHasRestorableWork,
   announcementSignature,
+  htmlHasVisibleText,
 } from '@/lib/configSignature';
 import {
   blankLookForVisit,
@@ -222,12 +222,34 @@ export function useCampaignConfig({
            * write to begin with.
            */
           if (scope === 'announcement') {
-            fetch('/api/draft/announcement', { method: 'DELETE', keepalive: true }).catch(() => {});
-            draftPort.setAnnouncementSavedAt(null);
+            // Awaited, not fire-and-forget: a "Draft pending" badge that
+            // clears on screen but silently failed to clear server-side
+            // came back the moment the page reloaded — the row was still
+            // there the whole time, the client just never found out the
+            // DELETE had failed. Only drop the local flag once the server
+            // confirms the row is actually gone.
+            try {
+              const res = await fetch('/api/draft/announcement', { method: 'DELETE' });
+              if (res.ok) {
+                draftPort.setAnnouncementSavedAt(null);
+              } else {
+                console.error('[persistConfig] Failed to clear announcement draft after publish');
+              }
+            } catch (e) {
+              console.error('[persistConfig] Failed to clear announcement draft after publish:', e);
+            }
           } else if (scope === 'promo') {
-            fetch('/api/draft/promo', { method: 'DELETE', keepalive: true }).catch(() => {});
-            draftPort.setPromoSavedAt(null);
-            draftPort.setDraftPromoCard(null);
+            try {
+              const res = await fetch('/api/draft/promo', { method: 'DELETE' });
+              if (res.ok) {
+                draftPort.setPromoSavedAt(null);
+                draftPort.setDraftPromoCard(null);
+              } else {
+                console.error('[persistConfig] Failed to clear promo draft after publish');
+              }
+            } catch (e) {
+              console.error('[persistConfig] Failed to clear promo draft after publish:', e);
+            }
           } else if (draftPort.savedDraftSignatureRef.current !== null) {
             draftPort.clearDraft();
           }
@@ -276,25 +298,18 @@ export function useCampaignConfig({
        * Check saved draft from cloud first to have it available for recovery comparison.
        */
       let draft: CampaignConfig | null = null;
+      let promoHasTimestamp = false;
+      let announcementHasTimestamp = false;
       if (draftResponse.ok) {
         const draftData = await draftResponse.json();
         draft = (draftData?.draft as CampaignConfig | null) ?? null;
-        /**
-         * promoCard and announcementBar are separate columns on the draft
-         * row (/api/draft/promo, /api/draft/announcement each write only
-         * their own), so the API hands back each column's own timestamp
-         * directly — no client-side inference needed. This used to be
-         * reconstructed by comparing content signatures against a
-         * remembered baseline, which broke every time the baseline and the
-         * live comparison were computed from slightly different
-         * representations (raw vs migrated, one day's date-default vs the
-         * next's). The server now IS the source of truth for each.
-         */
         if (draftData?.promoLastUpdated) {
           draftPort.setPromoSavedAt(new Date(draftData.promoLastUpdated));
+          promoHasTimestamp = true;
         }
         if (draftData?.announcementLastUpdated) {
           draftPort.setAnnouncementSavedAt(new Date(draftData.announcementLastUpdated));
+          announcementHasTimestamp = true;
         }
         if (draft?.lastUpdated) {
           draftPort.setDraftSavedAt(new Date(draft.lastUpdated));
@@ -321,12 +336,23 @@ export function useCampaignConfig({
         if (getConfigSignature(restored) !== getConfigSignature(publishedCfg)) {
           if (!draft) {
             // Case 1: No cloud draft, recovery exists → push recovery to cloud, auto-load
-            fetch('/api/draft', {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(restored),
-              keepalive: true,
-            }).catch(() => {});
+            // Scoped endpoints so each side gets its own timestamp — the full
+            // /api/draft PUT doesn't set per-card timestamps, so the next login
+            // would not recognise the draft.
+            Promise.all([
+              fetch('/api/draft/promo', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ promoCard: restored.promoCard }),
+                keepalive: true,
+              }),
+              fetch('/api/draft/announcement', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ announcementBar: restored.announcementBar }),
+                keepalive: true,
+              }),
+            ]).catch(() => {});
 
             // Auto-load recovery as the new draft
             setConfig(restored);
@@ -351,20 +377,29 @@ export function useCampaignConfig({
           } else {
             // Cloud draft exists — check if recovery differs from it
             const migrated = migrateConfig(draft, draft.version);
-            if (getConfigSignature(restored) !== getConfigSignature(migrated)) {
+            // Only use cloud draft sides that have a per-card timestamp —
+            // the other side is upsert padding, not saved user work.
+            const cloudForEditor: CampaignConfig = {
+              ...migrated,
+              promoCard: promoHasTimestamp ? migrated.promoCard : publishedCfg.promoCard,
+              announcementBar: announcementHasTimestamp ? migrated.announcementBar : publishedCfg.announcementBar,
+            };
+            if (getConfigSignature(restored) !== getConfigSignature(cloudForEditor)) {
               // Case 2: Both exist AND differ
               // Load CLOUD draft into editor (what user sees)
               // Store recovery for dashboard alert (user can restore it from there)
-              setConfig(migrated);
-              configRef.current = migrated;
-              draftPort.draftSignatureRef.current = getConfigSignature(migrated);
-              draftPort.setSavedDraftSignature(getConfigSignature(migrated));
-              draftPort.setDraftPromoCard(JSON.parse(JSON.stringify(migrated.promoCard)));
-              savedPromoSignatureRef.current = getPromoSignature(migrated);
-              if (promoContentSignature(migrated) !== promoContentSignature(publishedCfg)) {
+              setConfig(cloudForEditor);
+              configRef.current = cloudForEditor;
+              draftPort.draftSignatureRef.current = getConfigSignature(cloudForEditor);
+              draftPort.setSavedDraftSignature(getConfigSignature(cloudForEditor));
+              savedPromoSignatureRef.current = getPromoSignature(cloudForEditor);
+              if (promoHasTimestamp) {
+                draftPort.setDraftPromoCard(JSON.parse(JSON.stringify(cloudForEditor.promoCard)));
+              }
+              if (promoHasTimestamp && promoContentSignature(cloudForEditor) !== promoContentSignature(publishedCfg)) {
                 setHasPromoChanges(true);
               }
-              if (announcementSignature(migrated) !== announcementSignature(publishedCfg)) {
+              if (announcementHasTimestamp && announcementSignature(cloudForEditor) !== announcementSignature(publishedCfg)) {
                 setHasAnnouncementChanges(true);
               }
 
@@ -375,11 +410,15 @@ export function useCampaignConfig({
               setHasRecoveredWork(true);
               setRecoveryReason(recoveredEnvelope?.reason ?? 'crash');
               setRecoveredConfig?.(restored);
+              // Only flag recovery as affecting a card if it differs from current AND has visible content
+              // This prevents flagging empty/default blanks as "meaningful recovery"
               setRecoveredAffectsPromo?.(
-                promoContentSignature(restored) !== promoContentSignature(migrated),
+                promoContentSignature(restored) !== promoContentSignature(cloudForEditor) &&
+                hasPromoVisibleContent(restored.promoCard),
               );
               setRecoveredAffectsAnnouncement?.(
-                announcementSignature(restored) !== announcementSignature(migrated),
+                announcementSignature(restored) !== announcementSignature(cloudForEditor) &&
+                hasAnnouncementVisibleContent(restored.announcementBar),
               );
               // Don't clear recovery — user may restore it from dashboard
 
@@ -399,44 +438,43 @@ export function useCampaignConfig({
 
       /**
        * Now check draft (only if no recovery conflict was found above).
-       * If draft exists and is restorable, auto-load it directly.
+       *
+       * The per-card timestamps are the gatekeeper: only load and flag a
+       * side from the draft row if the server says that side was explicitly
+       * saved. The draft row always carries BOTH columns (the type requires
+       * it), but saving one side fills the other with a default — that
+       * default differs from published after migration/normalization, which
+       * was the root cause of "saving announcement lights up promo" and
+       * every variant of that cross-contamination bug.
        */
-      if (draft) {
+      if (draft && publishedCfg && (promoHasTimestamp || announcementHasTimestamp)) {
         const migrated = migrateConfig(draft, draft.version);
-        if (draftHasRestorableWork(migrated, publishedCfg)) {
-          if (publishedCfg && getConfigSignature(migrated) !== getConfigSignature(publishedCfg)) {
-            /**
-             * A draft exists and differs from what's live. Auto-load it directly
-             * into the editor so the user sees their work immediately.
-             */
-            setConfig(migrated);
-            configRef.current = migrated;
-            draftPort.draftSignatureRef.current = getConfigSignature(migrated);
-            draftPort.setSavedDraftSignature(getConfigSignature(migrated));
-            draftPort.setDraftPromoCard(JSON.parse(JSON.stringify(migrated.promoCard)));
-            savedPromoSignatureRef.current = getPromoSignature(migrated);
-            /**
-             * A draft always carries both promoCard and announcementBar (the
-             * type requires both fields), even when only one was actually
-             * edited — so flag only the side whose content genuinely differs
-             * from what's live. Blindly marking both dirty made the
-             * Announcement card silently never light up: a draft saved from
-             * the announcement tab alone used to set only hasPromoChanges,
-             * leaving hasAnnouncementChanges — and therefore the dashboard's
-             * "Saved to cloud" badge — permanently false after a fresh login.
-             */
-            if (promoContentSignature(migrated) !== promoContentSignature(publishedCfg)) {
+        const forEditor: CampaignConfig = {
+          ...migrated,
+          promoCard: promoHasTimestamp ? migrated.promoCard : publishedCfg.promoCard,
+          announcementBar: announcementHasTimestamp ? migrated.announcementBar : publishedCfg.announcementBar,
+        };
+
+        if (getConfigSignature(forEditor) !== getConfigSignature(publishedCfg)) {
+          setConfig(forEditor);
+          configRef.current = forEditor;
+          draftPort.draftSignatureRef.current = getConfigSignature(forEditor);
+          draftPort.setSavedDraftSignature(getConfigSignature(forEditor));
+          savedPromoSignatureRef.current = getPromoSignature(forEditor);
+
+          if (promoHasTimestamp) {
+            draftPort.setDraftPromoCard(JSON.parse(JSON.stringify(forEditor.promoCard)));
+            if (promoContentSignature(forEditor) !== promoContentSignature(publishedCfg)) {
               setHasPromoChanges(true);
             }
-            if (announcementSignature(migrated) !== announcementSignature(publishedCfg)) {
-              setHasAnnouncementChanges(true);
-            }
-            setPromoEntryStep('editor');
-            // Keep scaffolds (timer & CTA button outlines) visible
-            setBlankStart?.(true);
-            setConfigLoadedSignal((n) => n + 1);
-            return;
           }
+          if (announcementHasTimestamp && announcementSignature(forEditor) !== announcementSignature(publishedCfg)) {
+            setHasAnnouncementChanges(true);
+          }
+          setPromoEntryStep(promoHasTimestamp ? 'editor' : 'build');
+          setBlankStart?.(true);
+          setConfigLoadedSignal((n) => n + 1);
+          return;
         }
       }
 
@@ -469,6 +507,28 @@ export function useCampaignConfig({
   }
 
   /**
+   * Check if a promo card has any visible user-created content.
+   */
+  function hasPromoVisibleContent(card: PromoCard): boolean {
+    if (!card) return false;
+    const { title, subtitle, description, buttonText } = card;
+    return (
+      htmlHasVisibleText(title) ||
+      htmlHasVisibleText(subtitle) ||
+      htmlHasVisibleText(description) ||
+      htmlHasVisibleText(buttonText)
+    );
+  }
+
+  /**
+   * Check if an announcement bar has any visible user-created content.
+   */
+  function hasAnnouncementVisibleContent(bar: CampaignConfig['announcementBar']): boolean {
+    if (!bar || !bar.announcements) return false;
+    return bar.announcements.some((ann) => htmlHasVisibleText(ann.text));
+  }
+
+  /**
    * The promo card's content, with the markup noise removed.
    *
    * getPromoSignature stringifies the card raw, so it counts the editors'
@@ -493,8 +553,11 @@ export function useCampaignConfig({
         setHasAnnouncementChanges(false);
         return;
       }
-      setHasAnnouncementChanges(true);
-      setReadyToPublishAnnouncement(false);
+      // Only flag as changed if published config exists AND differs
+      if (published && announcementSignature(published) !== announcementSignature(configRef.current)) {
+        setHasAnnouncementChanges(true);
+        setReadyToPublishAnnouncement(false);
+      }
     }, 0);
   }
 
@@ -508,7 +571,10 @@ export function useCampaignConfig({
         setHasPromoChanges(false);
         return;
       }
-      setHasPromoChanges(true);
+      // Only flag as changed if published config exists AND differs
+      if (published && promoContentSignature(published) !== promoContentSignature(configRef.current)) {
+        setHasPromoChanges(true);
+      }
     }, 0);
   }
 

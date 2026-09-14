@@ -1121,30 +1121,6 @@ export function PromoSection(props: PromoSectionProps) {
   return (
     <PromoEditorProvider value={editorApi}>
       <>
-      {hasRecoveredWork && (
-        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-1.5 flex items-center justify-between gap-2">
-          <p className="text-xs text-amber-700 dark:text-amber-400">
-            Unsaved changes recovered. {recoveryReason === 'idle' ? '(Auto-logout)' : '(Session ended)'}
-          </p>
-          <div className="flex gap-1 shrink-0">
-            <button
-              type="button"
-              onClick={onRestoreRecovery}
-              className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline"
-            >
-              Restore
-            </button>
-            <span className="text-amber-500/40">·</span>
-            <button
-              type="button"
-              onClick={onDismissRecovery}
-              className="text-xs font-medium text-amber-700 dark:text-amber-400 hover:underline"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
       <div
         className="sticky top-0 flex gap-4 overflow-hidden"
         style={{ height: "calc(100dvh - 120px)", maxHeight: "calc(100dvh - 120px)" }}

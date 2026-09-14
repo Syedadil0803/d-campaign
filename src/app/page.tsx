@@ -52,6 +52,7 @@ import {
   normalizePromoForCompare,
   getPromoSignature,
   promoHasVisibleContent,
+  announcementSignature,
 } from '@/lib/configSignature';
 import {
   fetchUnsavedElsewhere,
@@ -377,6 +378,7 @@ export default function Home() {
     continueWithoutDraft,
     dismissWelcomeBack,
     saveDraft,
+    saveDraftAndWaitForCloud,
     saveMessagesDraft,
     draftSavedAt,
     promoSavedAt,
@@ -534,8 +536,8 @@ export default function Home() {
   const idleRestartRef = useRef<(() => void) | null>(null);
   const exitReasonRef = useRef<'logout' | 'timeout' | null>(null);
   const idleSecondsLeftRef = useRef<number | null>(null);
-  const saveDraftRef = useRef(saveDraft);
-  saveDraftRef.current = saveDraft;
+  const saveDraftRef = useRef(saveDraftAndWaitForCloud);
+  saveDraftRef.current = saveDraftAndWaitForCloud;
   const saveMessagesRef = useRef(saveMessagesDraft);
   saveMessagesRef.current = saveMessagesDraft;
   useIdleSignOut({
@@ -562,10 +564,59 @@ export default function Home() {
    * wrong throws the work away.
    */
   useEffect(() => {
-    const preserveWork = () => {
-      // Always write recovery to capture the latest state on abrupt close,
-      // regardless of whether it's "at risk" or already in draft
-      writeRecovery(configRef.current);
+    const preserveWork = async () => {
+      if (!editorWorkAtRisk()) return;
+
+      const hasPromoChanges = promoWorkNotInDraftRef.current || hasPromoChangesRef.current;
+      const hasAnnChanges = hasAnnouncementChangesRef.current && 
+        draftSignatureRef.current !== getConfigSignature(configRef.current);
+
+      // ALWAYS write recovery as a safety net (capture latest state)
+      if (hasPromoChanges || hasAnnChanges) {
+        writeRecovery(configRef.current);
+      }
+
+      // ALSO try to save to cloud draft (primary save)
+      let savedCount = 0;
+
+      // Only save promo if it actually differs from the saved draft
+      const promoHasRealChanges = savedPromoSignatureRef.current && 
+        getPromoSignature(configRef.current) !== savedPromoSignatureRef.current;
+      if (promoHasRealChanges) {
+        try {
+          await fetch('/api/draft/promo', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(configRef.current.promoCard),
+            keepalive: true,
+          });
+          // Update signature after successful save
+          savedPromoSignatureRef.current = getPromoSignature(configRef.current);
+          savedCount++;
+        } catch {
+          // Cloud save failed, but recovery is already written
+        }
+      }
+
+      // Save announcement only if it actually differs from the saved draft
+      const annHasRealChanges = draftSignatureRef.current && 
+        getConfigSignature(configRef.current) !== draftSignatureRef.current;
+      if (annHasRealChanges) {
+        try {
+          await fetch('/api/draft/announcement', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(configRef.current.announcementBar),
+            keepalive: true,
+          });
+          // Update signature after successful save
+          draftSignatureRef.current = getConfigSignature(configRef.current);
+          savedCount++;
+        } catch {
+          // Cloud save failed, but recovery is already written
+        }
+      }
+
       // Raised now rather than left to the debounced reporter, which will not
       // get another turn. keepalive carries it past the page's death.
       if (!reportedUnsavedRef.current) reportUnsaved(true);
@@ -1164,7 +1215,7 @@ export default function Home() {
    * Requires content, so a blank canvas does not light Publish.
    */
   const promoWorthPublishing =
-    hasPromoChanges ||
+    (hasPromoChanges && promoHasVisibleContent(config.promoCard)) ||
     (!publishedConfig.promoCard.active &&
       promoHasVisibleContent(config.promoCard));
 

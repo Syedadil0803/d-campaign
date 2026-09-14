@@ -15,7 +15,7 @@ import {
   setAppBadge,
 } from '@/lib/auth/sessionWarning';
 
-export const IDLE_LIMIT_MS = 5 * 60 * 1000; // 5 minutes of inactivity before the countdown starts
+export const IDLE_LIMIT_MS = 20_000; // 5 minutes of inactivity before the countdown starts
 
 /**
  * How much of that is spent counting down in front of the user.
@@ -40,14 +40,16 @@ interface UseIdleSignOutArgs {
   /** Filled in here so the rest of the page can restart the clock. */
   idleRestartRef: RefObject<(() => void) | null>;
   /**
-   * The guarded draft save, read at call time.
+   * The guarded draft save, read at call time — the awaited version, so the
+   * countdown before this fires (there's always one) can be used to confirm
+   * the cloud write actually landed, same as the pre-logout save.
    *
    * Passed as a ref rather than the function itself: `useCampaignDraft` is
    * built before `useIdleSignOut` in the page, and the function's identity
    * changes on every render. A ref keeps this effect's dependency list empty
    * while still reaching the latest closure.
    */
-  saveDraftRef: RefObject<(cfg: CampaignConfig) => boolean>;
+  saveDraftRef: RefObject<(cfg: CampaignConfig) => Promise<'skipped' | 'saved' | 'failed'>>;
   /** Save messages draft on logout (auto-call, no await). */
   saveMessagesRef?: RefObject<(() => void) | null>;
   toast: (message: string, isError?: boolean) => void;
@@ -102,7 +104,7 @@ export function useIdleSignOut({
     let warnTimer: number | undefined;
     let tick: number | undefined;
 
-    const signOutIdle = () => {
+    const signOutIdle = async () => {
       const atRisk =
         promoWorkNotInDraftRef.current ||
         hasPromoChangesRef.current ||
@@ -110,21 +112,20 @@ export function useIdleSignOut({
           draftSignatureRef.current !== getConfigSignature(configRef.current));
 
       if (atRisk) {
-        const hasCloudDraft = draftSignatureRef.current !== null;
-        if (hasCloudDraft) {
-          // Saved work already exists — write to recovery only, and mark it
-          // as an idle rescue so the next login says so.
+        /**
+         * There's a warning countdown before this fires — unlike an abrupt
+         * close, there's time to push to the cloud properly, the same as
+         * any other save, rather than falling back to local-only recovery
+         * just because a draft already existed. Saves are scoped per card
+         * now (see useCampaignDraft.ts), so this can no longer silently
+         * overwrite a purposeful save on the OTHER card the way a
+         * whole-config write used to — it only ever touches whichever
+         * side is actually dirty. Local recovery stays as a fallback for
+         * when the network write itself fails.
+         */
+        const result = await saveDraftRef.current(configRef.current);
+        if (result !== 'saved') {
           writeRecovery(configRef.current, 'idle');
-        } else {
-          // No saved work yet — this is the first save
-          // Save to cloud draft, but DON'T clear recovery yet
-          // Let loadConfig clear it when it detects it's stale
-          const written = saveDraftRef.current(configRef.current);
-          if (written) {
-            // Write recovery with 'idle' reason so next login knows it's from auto-logout
-            writeRecovery(configRef.current, 'idle');
-            toast('Saved your work');
-          }
         }
         // Also save messages draft if present
         saveMessagesRef?.current?.();

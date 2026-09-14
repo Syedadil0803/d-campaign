@@ -201,7 +201,7 @@ export function getPromoSignature(cfg: CampaignConfig) {
 // (e.g. right after Start Fresh, which sets the dirty flag but has no text)
 // differs from published only by defaults (dates/style), which isn't work
 // worth a "You have an unpublished draft" banner.
-function htmlHasVisibleText(html: string | undefined): boolean {
+export function htmlHasVisibleText(html: string | undefined): boolean {
   if (!html) return false;
   return html
     .replace(/<[^>]*>/g, '')

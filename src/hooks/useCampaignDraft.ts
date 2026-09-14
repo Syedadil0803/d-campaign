@@ -13,9 +13,8 @@ import {
   getMessagesSignature,
   messagesHasRestorableWork,
   announcementSignature,
-  promoHasVisibleContent,
+  normalizePromoForCompare,
 } from '@/lib/configSignature';
-import { clearRecovery } from '@/lib/recovery';
 import { markElsewhereSeen } from '@/lib/auth/presenceClient';
 import { migrateConfig } from '@/lib/configMigration';
 
@@ -143,56 +142,75 @@ export function useCampaignDraft({
    * republishing whatever was in the other editor). These decide per side
    * whether there's anything worth writing at all.
    */
-  function promoWorthSaving(cfg: CampaignConfig): boolean {
-    // NOT startDate — blankPromoCard()/migrateConfig() both run every blank
-    // card through withDefaultStartDate(), which stamps today's date onto
-    // ANY card missing one. So startDate is non-empty on every promo card
-    // in the editor, touched or not, and checking it here meant a save
-    // scoped to announcement always looked like it should write promo too.
-    // endDate is never auto-defaulted, so it's a reliable signal that a
-    // schedule was actually, deliberately set.
-    return promoHasVisibleContent(cfg.promoCard) || Boolean(cfg.promoCard.endDate);
-  }
-
-  function announcementWorthSaving(cfg: CampaignConfig, published: CampaignConfig | null): boolean {
-    if (!published) return false;
-    return announcementSignature(cfg) !== announcementSignature(published);
-  }
-
   /**
    * Starts up to two independent PUTs — one per side, only for whichever
-   * side actually has something worth saving. Separate columns on the same
-   * row, so these can never step on each other: saving only the
-   * announcement fires only the announcement request, and vice versa.
+   * side is actually dirty right now. Separate columns on the same row, so
+   * these can never step on each other: saving only the announcement fires
+   * only the announcement request, and vice versa.
+   *
+   * Gated on hasPromoChangesRef / hasAnnouncementChangesRef — the same
+   * dirty flags the rest of the app already uses to decide "does this side
+   * have unpublished work". An earlier version gated on "does this side
+   * have any content at all", which meant an already-saved, untouched
+   * promo card got silently re-saved (and its timestamp re-stamped) on
+   * every single save, just because it existed — not because anything
+   * about it had changed.
    */
   function startScopedDraftPuts(cfg: CampaignConfig) {
     const campaign = campaignRef.current!;
-    const published = campaign.publishedConfigObjRef.current;
     const now = new Date();
     const requests: { side: 'promo' | 'announcement'; request: Promise<Response> }[] = [];
 
-    if (promoWorthSaving(cfg)) {
-      requests.push({
-        side: 'promo',
-        request: fetch('/api/draft/promo', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ promoCard: cfg.promoCard }),
-          keepalive: true,
-        }),
-      });
+    // Only save promo if it has REAL changes (flag true + content differs from live)
+    if (campaign.hasPromoChangesRef.current) {
+      // Use the SAME signature function as markPromoChanged() for consistency
+      const promoSig = JSON.stringify(
+        normalizePromoForCompare(
+          cfg.promoCard as unknown as Record<string, unknown>,
+        ),
+      );
+      const livePromoSig = campaign.publishedConfigObjRef.current 
+        ? JSON.stringify(
+            normalizePromoForCompare(
+              campaign.publishedConfigObjRef.current.promoCard as unknown as Record<string, unknown>,
+            ),
+          )
+        : campaign.savedPromoSignatureRef.current;
+      
+      if (promoSig !== livePromoSig) {
+        requests.push({
+          side: 'promo',
+          request: fetch('/api/draft/promo', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ promoCard: cfg.promoCard }),
+            keepalive: true,
+          }),
+        });
+      }
     }
-    if (announcementWorthSaving(cfg, published)) {
-      requests.push({
-        side: 'announcement',
-        request: fetch('/api/draft/announcement', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ announcementBar: cfg.announcementBar }),
-          keepalive: true,
-        }),
-      });
+
+    // Only save announcement if it has REAL changes (flag true + content differs from live)
+    if (campaign.hasAnnouncementChangesRef.current) {
+      const annSig = announcementSignature(cfg);
+      const liveAnnSig = campaign.publishedConfigObjRef.current 
+        ? announcementSignature(campaign.publishedConfigObjRef.current)
+        : null;
+      
+      // Only make API call if signatures actually differ (not just when flag is true)
+      if (annSig !== liveAnnSig) {
+        requests.push({
+          side: 'announcement',
+          request: fetch('/api/draft/announcement', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ announcementBar: cfg.announcementBar }),
+            keepalive: true,
+          }),
+        });
+      }
     }
+
     return { requests, now };
   }
 
@@ -209,9 +227,15 @@ export function useCampaignDraft({
     if (sides.includes('promo')) {
       setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
       setPromoSavedAt(now);
+      // Reset flag after successful save
+      const campaign = campaignRef.current!;
+      campaign.setHasPromoChanges(false);
     }
     if (sides.includes('announcement')) {
       setAnnouncementSavedAt(now);
+      // Reset flag after successful save
+      const campaign = campaignRef.current!;
+      campaign.setHasAnnouncementChanges(false);
     }
     if (sides.length > 0) setDraftSavedAt(now);
     if (options.markHandled !== false) {
@@ -293,7 +317,15 @@ export function useCampaignDraft({
 
     // "My Draft" is the promo card's own slot — only /api/draft/promo, so
     // whatever the announcement side has saved is never touched by this.
-    fetch('/api/draft/promo', { method: 'DELETE', keepalive: true }).catch(() => {});
+    // Optimistic (UI clears immediately, with Undo as the safety net below)
+    // rather than awaited — but a silently-failed DELETE here is exactly
+    // the "badge persists after discard" bug: at least log it so it's
+    // diagnosable instead of invisible.
+    fetch('/api/draft/promo', { method: 'DELETE', keepalive: true })
+      .then((res) => {
+        if (!res.ok) console.error('[handleDeleteDraft] Failed to clear promo draft');
+      })
+      .catch((e) => console.error('[handleDeleteDraft] Failed to clear promo draft:', e));
     setDraftPromoCard(null);
     setPromoSavedAt(null);
 
@@ -568,10 +600,23 @@ export function useCampaignDraft({
       console.error('Failed to reload config:', e);
     }
 
-    fetch('/api/draft/promo', { method: 'DELETE', keepalive: true }).catch(() => {});
-    setDraftPromoCard(null);
-    campaign.setHasPromoChanges(false);
-    setPromoSavedAt(null);
+    // Awaited: a fire-and-forget DELETE here meant "Draft pending" cleared
+    // on screen immediately but could silently fail to clear server-side —
+    // the badge then came right back the next time the draft was fetched,
+    // because the row had never actually been deleted. Only drop the local
+    // state once the server confirms the row is gone.
+    try {
+      const res = await fetch('/api/draft/promo', { method: 'DELETE' });
+      if (res.ok) {
+        setDraftPromoCard(null);
+        campaign.setHasPromoChanges(false);
+        setPromoSavedAt(null);
+      } else {
+        console.error('[discardPromoDraft] Failed to clear promo draft');
+      }
+    } catch (e) {
+      console.error('[discardPromoDraft] Failed to clear promo draft:', e);
+    }
   }
 
   return {
@@ -598,6 +643,7 @@ export function useCampaignDraft({
     writeDraftNow,
     writeRecoveredDraft,
     saveDraft,
+    saveDraftAndWaitForCloud,
     discardDraft,
     discardPromoDraft,
     handleDeleteDraft,

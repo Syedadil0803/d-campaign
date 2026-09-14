@@ -254,11 +254,11 @@ export function DashboardLifecycleCards({
                 Unsaved session recovered from browser cache
               </span>
             </div>
-          ) : promoUnpublished ? (
+          ) : promoUnpublished && promoSavedAt ? (
             <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 dark:border-blue-800 dark:bg-blue-950">
               <InfoIcon className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
               <span className="text-[13px] font-medium text-blue-800 dark:text-blue-100">
-                Saved to cloud {promoSavedAt ? describeWhen(promoSavedAt) : ''} • Draft pending
+                Saved to cloud {describeWhen(promoSavedAt)} • Draft pending
               </span>
             </div>
           ) : promo.active ? (
@@ -293,7 +293,7 @@ export function DashboardLifecycleCards({
               Discard & Start New
             </button>
           </div>
-        ) : promoUnpublished ? (
+        ) : promoUnpublished && promoSavedAt ? (
           <div className="flex h-[42px] gap-2.5">
             <button
               type="button"
