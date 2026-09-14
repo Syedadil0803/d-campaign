@@ -545,36 +545,18 @@ export function useCampaignConfig({
 
   function markAnnouncementChanged() {
     setTimeout(() => {
-      const published = publishedConfigObjRef.current;
-      if (
-        published &&
-        announcementSignature(published) === announcementSignature(configRef.current)
-      ) {
-        setHasAnnouncementChanges(false);
-        return;
-      }
-      // Only flag as changed if published config exists AND differs
-      if (published && announcementSignature(published) !== announcementSignature(configRef.current)) {
-        setHasAnnouncementChanges(true);
-        setReadyToPublishAnnouncement(false);
-      }
+      // Set flag to true if anything changed since we last loaded
+      // The real check (comparing against saved draft) happens in startScopedDraftPuts
+      setHasAnnouncementChanges(true);
+      setReadyToPublishAnnouncement(false);
     }, 0);
   }
 
   function markPromoChanged() {
     setTimeout(() => {
-      const published = publishedConfigObjRef.current;
-      if (
-        published &&
-        promoContentSignature(published) === promoContentSignature(configRef.current)
-      ) {
-        setHasPromoChanges(false);
-        return;
-      }
-      // Only flag as changed if published config exists AND differs
-      if (published && promoContentSignature(published) !== promoContentSignature(configRef.current)) {
-        setHasPromoChanges(true);
-      }
+      // Set flag to true if anything changed since we last loaded
+      // The real check (comparing against saved draft) happens in startScopedDraftPuts
+      setHasPromoChanges(true);
     }, 0);
   }
 

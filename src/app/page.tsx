@@ -577,11 +577,17 @@ export default function Home() {
       }
 
       // ALSO try to save to cloud draft (primary save)
+      // Debug: Log to sessionStorage (persists across page reload)
+      const debugLog: any = {
+        source: 'preserveWork',
+        timestamp: new Date().toISOString(),
+      };
       let savedCount = 0;
 
       // Only save promo if it actually differs from the saved draft
       const promoHasRealChanges = savedPromoSignatureRef.current && 
         getPromoSignature(configRef.current) !== savedPromoSignatureRef.current;
+      debugLog.promoHasRealChanges = promoHasRealChanges;
       if (promoHasRealChanges) {
         try {
           await fetch('/api/draft/promo', {
@@ -601,6 +607,7 @@ export default function Home() {
       // Save announcement only if it actually differs from the saved draft
       const annHasRealChanges = draftSignatureRef.current && 
         getConfigSignature(configRef.current) !== draftSignatureRef.current;
+      debugLog.annHasRealChanges = annHasRealChanges;
       if (annHasRealChanges) {
         try {
           await fetch('/api/draft/announcement', {
@@ -615,6 +622,19 @@ export default function Home() {
         } catch {
           // Cloud save failed, but recovery is already written
         }
+      }
+      
+      debugLog.savedCount = savedCount;
+      try {
+        const existing = sessionStorage.getItem('__debug_logs') || '[]';
+        const logs = JSON.parse(existing);
+        logs.push(debugLog);
+        // Keep last 10 logs
+        const recent = logs.slice(-10);
+        sessionStorage.setItem('__debug_logs', JSON.stringify(recent));
+        sessionStorage.setItem('__last_preserve_work', JSON.stringify(debugLog));
+      } catch (e) {
+        // Ignore
       }
 
       // Raised now rather than left to the debounced reporter, which will not

@@ -161,7 +161,14 @@ export function useCampaignDraft({
     const now = new Date();
     const requests: { side: 'promo' | 'announcement'; request: Promise<Response> }[] = [];
 
-    // Only save promo if it has REAL changes (flag true + content differs from live)
+    // DEBUG: Log to sessionStorage so we can see it after logout
+    const debugLog: any = {
+      timestamp: new Date().toISOString(),
+      hasPromoChangesRef: campaign.hasPromoChangesRef.current,
+      hasAnnouncementChangesRef: campaign.hasAnnouncementChangesRef.current,
+    };
+
+    // Only save promo if it has REAL changes (flag true + content differs from saved draft)
     if (campaign.hasPromoChangesRef.current) {
       // Use the SAME signature function as markPromoChanged() for consistency
       const promoSig = JSON.stringify(
@@ -169,15 +176,25 @@ export function useCampaignDraft({
           cfg.promoCard as unknown as Record<string, unknown>,
         ),
       );
-      const livePromoSig = campaign.publishedConfigObjRef.current 
-        ? JSON.stringify(
-            normalizePromoForCompare(
-              campaign.publishedConfigObjRef.current.promoCard as unknown as Record<string, unknown>,
-            ),
-          )
-        : campaign.savedPromoSignatureRef.current;
+      // savedPromoSignatureRef stores the RAW promo, so we need to normalize it for comparison
+      let savedPromoSig: string | undefined;
+      if (campaign.savedPromoSignatureRef.current) {
+        try {
+          const savedPromoObj = JSON.parse(campaign.savedPromoSignatureRef.current);
+          savedPromoSig = JSON.stringify(
+            normalizePromoForCompare(savedPromoObj),
+          );
+        } catch (e) {
+          // If parse fails, treat as no saved version
+          savedPromoSig = undefined;
+        }
+      }
       
-      if (promoSig !== livePromoSig) {
+      debugLog.promoSig_full = promoSig;
+      debugLog.savedPromoSig_full = savedPromoSig;
+      debugLog.promoMatches = promoSig === savedPromoSig;
+      
+      if (promoSig !== savedPromoSig) {
         requests.push({
           side: 'promo',
           request: fetch('/api/draft/promo', {
@@ -187,18 +204,31 @@ export function useCampaignDraft({
             keepalive: true,
           }),
         });
+        debugLog.promoApiCalled = true;
       }
     }
 
-    // Only save announcement if it has REAL changes (flag true + content differs from live)
+    // Only save announcement if it has REAL changes (flag true + content differs from saved draft)
     if (campaign.hasAnnouncementChangesRef.current) {
       const annSig = announcementSignature(cfg);
-      const liveAnnSig = campaign.publishedConfigObjRef.current 
-        ? announcementSignature(campaign.publishedConfigObjRef.current)
-        : null;
+      // Extract announcement signature from the saved full-config draft
+      let savedAnnSig: string | null = null;
+      if (savedDraftSignatureRef.current) {
+        try {
+          // savedDraftSignatureRef is a JSON string of the full config
+          const savedCfg = JSON.parse(savedDraftSignatureRef.current);
+          savedAnnSig = announcementSignature(savedCfg);
+        } catch (e) {
+          // If parse fails, just treat as null (nothing saved yet)
+        }
+      }
       
-      // Only make API call if signatures actually differ (not just when flag is true)
-      if (annSig !== liveAnnSig) {
+      debugLog.annSig_full = annSig;
+      debugLog.savedAnnSig_full = savedAnnSig;
+      debugLog.annMatches = annSig === savedAnnSig;
+      
+      // Only make API call if signatures actually differ from saved draft
+      if (annSig !== savedAnnSig) {
         requests.push({
           side: 'announcement',
           request: fetch('/api/draft/announcement', {
@@ -208,7 +238,22 @@ export function useCampaignDraft({
             keepalive: true,
           }),
         });
+        debugLog.annApiCalled = true;
       }
+    }
+
+    // Save debug log to sessionStorage
+    debugLog.totalRequests = requests.length;
+    try {
+      const existing = sessionStorage.getItem('__debug_logs') || '[]';
+      const logs = JSON.parse(existing);
+      logs.push(debugLog);
+      // Keep last 10 logs
+      const recent = logs.slice(-10);
+      sessionStorage.setItem('__debug_logs', JSON.stringify(recent));
+      sessionStorage.setItem('__last_draft_save', JSON.stringify(debugLog));
+    } catch (e) {
+      // Ignore
     }
 
     return { requests, now };
