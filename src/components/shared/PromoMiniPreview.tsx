@@ -124,7 +124,7 @@ export function PromoMiniPreview({ promoCard, faithful, scaffold }: PromoMiniPre
           dangerouslySetInnerHTML={{
             __html: getPreviewTimerHtml(
               promoCard.timerText,
-              promoCard.endDate,
+              promoCard.endDate || undefined,
               promoCard.timerStateJson,
             ),
           }}

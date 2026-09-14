@@ -195,10 +195,16 @@ export function PromoVersionsPopup({
                         </button>
                       </div>
                     </div>
-                    {formatScheduleRange(version.promoCard.startDate, version.promoCard.endDate) && (
+                    {formatScheduleRange(
+                      version.promoCard.startDate ?? undefined,
+                      version.promoCard.endDate ?? undefined,
+                    ) && (
                       <p className="mb-2 flex items-center gap-1 text-[11px] font-medium text-gray-500 dark:text-gray-400">
                         <CalendarDays className="h-3 w-3" />
-                        {formatScheduleRange(version.promoCard.startDate, version.promoCard.endDate)}
+                        {formatScheduleRange(
+                          version.promoCard.startDate ?? undefined,
+                          version.promoCard.endDate ?? undefined,
+                        )}
                       </p>
                     )}
                     <PromoMiniPreview promoCard={version.promoCard} faithful />
