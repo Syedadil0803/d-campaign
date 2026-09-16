@@ -185,31 +185,13 @@ export function WelcomeBackDialog({
     <div data-modal className="fixed inset-0 z-50 flex items-center justify-center bg-transparent p-4">
       <div className="absolute inset-0" />
       <div className="relative z-10 w-full max-w-lg rounded-xl border border-white/10 bg-black/10 p-6 text-on-surface shadow-2xl backdrop-blur-md">
-        {welcomeBack.mode === 'elsewhere' ? (
-          <>
-            <h2 className="text-base font-semibold">
-              Your unsaved changes are on another device
-            </h2>
-            <p className="mt-1.5 text-sm text-on-surface-variant">
-              You were editing on{' '}
-              <span className="font-medium text-on-surface">
-                {welcomeBack.elsewhere.deviceLabel}
-              </span>{' '}
-              {describeWhen(welcomeBack.elsewhere.at)}. Those changes never
-              made it to a draft, so they&apos;re on that browser only.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 className="text-base font-semibold">
-              Welcome back — your draft is waiting
-            </h2>
-            <p className="mt-1.5 text-sm text-on-surface-variant">
-              Your promo card from {describeWhen(welcomeBack.draftSavedAt)} is
-              still in My Draft, just as you left it.
-            </p>
-          </>
-        )}
+        <h2 className="text-base font-semibold">
+          Welcome back — your draft is waiting
+        </h2>
+        <p className="mt-1.5 text-sm text-on-surface-variant">
+          Your promo card from {describeWhen(welcomeBack.draftSavedAt)} is
+          still in My Draft, just as you left it.
+        </p>
 
         {welcomeBack.mode === 'draft' && welcomeBack.elsewhere && (
           <p className="mt-2.5 text-sm text-on-surface-variant">
@@ -221,50 +203,31 @@ export function WelcomeBackDialog({
           </p>
         )}
 
-        {welcomeBack.mode === 'elsewhere' && (
+        {editorWorkAtRisk ? (
+          <p className="mt-4 text-xs text-amber-600 dark:text-amber-500">
+            The editor has unsaved changes. Opening the draft replaces them.
+          </p>
+        ) : (
           <p className="mt-4 text-xs text-on-surface-variant/80">
-            Sign in there and save them to My Draft — then they&apos;ll open
-            anywhere.
+            Either way it stays saved — open it from My Draft whenever you like.
           </p>
         )}
-        {welcomeBack.mode === 'draft' &&
-          (editorWorkAtRisk ? (
-            <p className="mt-4 text-xs text-amber-600 dark:text-amber-500">
-              The editor has unsaved changes. Opening the draft replaces them.
-            </p>
-          ) : (
-            <p className="mt-4 text-xs text-on-surface-variant/80">
-              Either way it stays saved — open it from My Draft whenever you like.
-            </p>
-          ))}
 
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          {welcomeBack.mode === 'draft' ? (
-            <>
-              <button
-                type="button"
-                onClick={dismissWelcomeBack}
-                className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
-              >
-                {editorWorkAtRisk ? 'Keep my unsaved changes' : 'Start something new'}
-              </button>
-              <button
-                type="button"
-                onClick={() => draftOffer && acceptOfferedDraft(draftOffer)}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
-              >
-                Continue my draft
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={dismissWelcomeBack}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
-            >
-              Continue here
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={dismissWelcomeBack}
+            className="rounded-md border border-white/10 bg-transparent px-4 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+          >
+            {editorWorkAtRisk ? 'Keep my unsaved changes' : 'Start something new'}
+          </button>
+          <button
+            type="button"
+            onClick={() => draftOffer && acceptOfferedDraft(draftOffer)}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95"
+          >
+            Continue my draft
+          </button>
         </div>
       </div>
     </div>

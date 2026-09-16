@@ -6,6 +6,8 @@ export interface ElsewhereNotice {
   deviceId: string;
   deviceLabel: string;
   at: string | null;
+  hasUnsavedPromo: boolean;
+  hasUnsavedAnnouncement: boolean;
 }
 
 /**
@@ -79,6 +81,4 @@ export type WelcomeBackState =
   | ({ mode: 'restored'; elsewhere: ElsewhereNotice | null } & RestoreNotice)
   /** A parked draft is being offered back. */
   | { mode: 'draft'; draftSavedAt: string | null; elsewhere: ElsewhereNotice | null }
-  /** Only that work exists elsewhere — so the notice is never null here. */
-  | { mode: 'elsewhere'; elsewhere: ElsewhereNotice }
   | null;

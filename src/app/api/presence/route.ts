@@ -20,8 +20,12 @@ export async function GET(request: NextRequest) {
     const deviceId = request.nextUrl.searchParams.get('deviceId');
     if (!deviceId) return NextResponse.json({ error: 'Missing deviceId' }, { status: 400 });
 
+    const deviceLabel = request.nextUrl.searchParams.get('deviceLabel') || 'an unrecognized browser';
+    const home = await userRepository.ensureHomeDevice(userId, deviceId, deviceLabel);
+
     return NextResponse.json({
       elsewhere: await userRepository.findUnsavedElsewhere(userId, deviceId),
+      isCurrentDeviceHome: home.isHome,
     });
   } catch (error) {
     console.error('[PRESENCE] GET -> FAILED:', error);
@@ -46,6 +50,8 @@ export async function POST(request: NextRequest) {
       hasUnsaved?: boolean;
       deviceId?: string;
       deviceLabel?: string;
+      hasUnsavedPromo?: boolean;
+      hasUnsavedAnnouncement?: boolean;
     };
     if (typeof body.hasUnsaved !== 'boolean' || !body.deviceId) {
       return NextResponse.json({ error: 'Invalid presence update' }, { status: 400 });
@@ -55,6 +61,8 @@ export async function POST(request: NextRequest) {
       hasUnsaved: body.hasUnsaved,
       deviceId: body.deviceId,
       deviceLabel: body.deviceLabel || 'an unrecognized browser',
+      hasUnsavedPromo: body.hasUnsavedPromo,
+      hasUnsavedAnnouncement: body.hasUnsavedAnnouncement,
     });
     return NextResponse.json({ success: saved });
   } catch (error) {

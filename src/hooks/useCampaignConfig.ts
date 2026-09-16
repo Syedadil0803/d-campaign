@@ -19,7 +19,7 @@ import { withDefaultStartDate } from '@/lib/promo/promoCardIdentity';
 import { isFirstLoadOfVisit } from '@/lib/visit';
 import { cardIsNotUserWork } from '@/lib/promo/promoAuthorship';
 import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
-import { readRecoveryEnvelope, clearRecovery } from '@/lib/recovery';
+import { readRecoveryEnvelope, clearRecovery, addDebugLog } from '@/lib/recovery';
 
 interface CampaignDraftPort {
   clearDraft: () => void;
@@ -94,6 +94,7 @@ export function useCampaignConfig({
   const publishedConfigObjRef = useRef<CampaignConfig | null>(null);
   const savedPromoSignatureRef = useRef<string | null>(null);
   const hasLoadedOnceRef = useRef(false);
+  const recoveredComposeTextRef = useRef<string | null>(null);
 
   /**
    * Send the promo editor back to the default card.
@@ -331,46 +332,32 @@ export function useCampaignConfig({
        */
       const recoveredEnvelope = readRecoveryEnvelope();
       const recovered = recoveredEnvelope?.config ?? null;
+      let recoveryBannerShown = false;
       if (recovered && publishedCfg) {
         const restored = migrateConfig(recovered, recovered.version);
         if (getConfigSignature(restored) !== getConfigSignature(publishedCfg)) {
           if (!draft) {
-            // Case 1: No cloud draft, recovery exists → push recovery to cloud, auto-load
-            // Scoped endpoints so each side gets its own timestamp — the full
-            // /api/draft PUT doesn't set per-card timestamps, so the next login
-            // would not recognise the draft.
-            Promise.all([
-              fetch('/api/draft/promo', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ promoCard: restored.promoCard }),
-                keepalive: true,
-              }),
-              fetch('/api/draft/announcement', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ announcementBar: restored.announcementBar }),
-                keepalive: true,
-              }),
-            ]).then(() => clearRecovery()).catch(() => {});
-
-            // Auto-load recovery as the new draft
-            setConfig(restored);
-            configRef.current = restored;
-            draftPort.draftSignatureRef.current = getConfigSignature(restored);
-            draftPort.setSavedDraftSignature(getConfigSignature(restored));
-            draftPort.setDraftPromoCard(JSON.parse(JSON.stringify(restored.promoCard)));
-            savedPromoSignatureRef.current = getPromoSignature(restored);
-            if (promoContentSignature(restored) !== promoContentSignature(publishedCfg)) {
-              setHasPromoChanges(true);
+            // Case 1: No cloud draft, recovery exists — show the recovery
+            // banner so the user decides what to do with it. The editor loads
+            // what's published; clicking "Save & Continue" pushes recovery to
+            // the cloud draft. Silently auto-loading hid the crash from the
+            // user, which is the bug this fixes.
+            setHasRecoveredWork(true);
+            setRecoveryReason(recoveredEnvelope?.reason ?? 'crash');
+            setRecoveredConfig?.(restored);
+            setRecoveredAffectsPromo?.(
+              promoContentSignature(restored) !== promoContentSignature(publishedCfg) &&
+              hasPromoVisibleContent(restored.promoCard),
+            );
+            setRecoveredAffectsAnnouncement?.(
+              announcementSignature(restored) !== announcementSignature(publishedCfg) &&
+              hasAnnouncementVisibleContent(restored.announcementBar),
+            );
+            if (recoveredEnvelope?.announcementComposeText) {
+              recoveredComposeTextRef.current = recoveredEnvelope.announcementComposeText;
             }
-            if (announcementSignature(restored) !== announcementSignature(publishedCfg)) {
-              setHasAnnouncementChanges(true);
-            }
-            setPromoEntryStep('editor');
-            setBlankStart?.(true);
-            setConfigLoadedSignal((n) => n + 1);
-            return;
+            recoveryBannerShown = true;
+            // Fall through — load published config below (no draft to load)
           } else {
             // Cloud draft exists — check if recovery differs from it
             const migrated = migrateConfig(draft, draft.version);
@@ -430,7 +417,8 @@ export function useCampaignConfig({
           }
         }
         // Identical to what is live — nothing was lost, so drop it quietly.
-        clearRecovery();
+        // But don't clear if we just showed the recovery banner (Case 1).
+        if (!recoveryBannerShown) clearRecovery();
       }
 
       /**
@@ -580,6 +568,7 @@ export function useCampaignConfig({
     editorResetKey,
     setEditorResetKey,
     blankPromoCard,
+    recoveredComposeTextRef,
     markAnnouncementChanged,
     markPromoChanged,
     resetPromoEditorToDefault,

@@ -43,8 +43,13 @@ interface DashboardProps {
   recoveredAffectsPromo?: boolean;
   recoveredAffectsAnnouncement?: boolean;
   recoveryReason?: 'idle' | 'crash' | null;
-  onRestoreRecovery?: () => void;
-  onDismissRecovery?: () => void;
+  onRestoreRecovery?: (side: 'promo' | 'announcement') => void;
+  onDismissRecovery?: (side: 'promo' | 'announcement') => void;
+  /** Recovered announcement compose text that was being typed. */
+  announcementComposeTextRecovered?: boolean;
+  onDismissAnnouncementComposeRecovery?: () => void;
+  elsewhereNotice?: { deviceLabel: string; at: string | null; hasUnsavedPromo: boolean; hasUnsavedAnnouncement: boolean } | null;
+  onDismissElsewhere?: () => void;
 }
 
 /** No copy anywhere on the card — the operator hasn't created one yet. */
@@ -76,6 +81,10 @@ export function Dashboard({
   recoveryReason,
   onRestoreRecovery,
   onDismissRecovery,
+  announcementComposeTextRecovered,
+  onDismissAnnouncementComposeRecovery,
+  elsewhereNotice,
+  onDismissElsewhere,
 }: DashboardProps) {
   const promoUncreated = isPromoUncreated(config.promoCard);
   // Stop / go-on-air both change the live website, so confirm first.
@@ -373,9 +382,10 @@ export function Dashboard({
         remainingLabel={remainingLabel}
         progressPct={progressPct}
         promoRecovered={Boolean(hasRecoveredWork && recoveredAffectsPromo)}
-        announcementRecovered={Boolean(hasRecoveredWork && recoveredAffectsAnnouncement)}
+        announcementRecovered={Boolean(hasRecoveredWork && recoveredAffectsAnnouncement || announcementComposeTextRecovered)}
         onRestoreRecovery={onRestoreRecovery}
         onDismissRecovery={onDismissRecovery}
+        onDismissAnnouncementComposeRecovery={onDismissAnnouncementComposeRecovery}
         promoUnpublished={promoUnpublished}
         announcementUnpublished={announcementUnpublished}
         onOpenDraft={onOpenDraft}
@@ -383,6 +393,8 @@ export function Dashboard({
         draftSavedAt={draftSavedAt ? draftSavedAt.toISOString() : undefined}
         promoSavedAt={promoSavedAt ? promoSavedAt.toISOString() : undefined}
         announcementSavedAt={announcementSavedAt ? announcementSavedAt.toISOString() : undefined}
+        elsewhereNotice={elsewhereNotice}
+        onDismissElsewhere={onDismissElsewhere}
       />
 
       <DashboardPopups

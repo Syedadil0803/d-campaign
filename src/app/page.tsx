@@ -9,6 +9,8 @@ import {
   writeRecovery,
   clearRecovery,
   readRecoveryEnvelope,
+  addDebugLog,
+  getSelectedAnnouncementIndex,
 } from '@/lib/recovery';
 import { isInvalidRange, anyInvalidRange } from '@/lib/dateRange';
 import { migrateConfig } from '@/lib/configMigration';
@@ -53,9 +55,11 @@ import {
   getPromoSignature,
   promoHasVisibleContent,
   announcementSignature,
+  htmlHasVisibleText,
 } from '@/lib/configSignature';
 import {
   fetchUnsavedElsewhere,
+  markElsewhereSeen,
   reportUnsaved,
 } from '@/lib/auth/presenceClient';
 import {
@@ -150,6 +154,35 @@ export default function Home() {
   // inside that component.
   const announcementComposeTextRef = useRef('');
 
+  // Restore recovered compose text on first mount
+  const hasRestoredRecoveryRef = useRef(false);
+  const [announcementComposeTextRecovered, setAnnouncementComposeTextRecovered] = useState(false);
+  const [recoveredSelectedAnnouncementIndex, setRecoveredSelectedAnnouncementIndex] = useState<number | null>(null);
+  
+  useEffect(() => {
+    if (hasRestoredRecoveryRef.current) return;
+    hasRestoredRecoveryRef.current = true;
+
+    const recovery = readRecoveryEnvelope();
+    const savedSelectedIndex = getSelectedAnnouncementIndex();
+    
+    if (recovery?.announcementComposeText) {
+      const debugData = {
+        textLength: recovery.announcementComposeText.length,
+        textPreview: recovery.announcementComposeText.substring(0, 50),
+        selectedIndex: savedSelectedIndex,
+      };
+      console.log('[RECOVERY] Direct restore on mount:', debugData);
+      addDebugLog('page.tsx', 'Restoring compose text directly on mount', debugData);
+      announcementComposeTextRef.current = recovery.announcementComposeText;
+      setAnnouncementComposeTextRecovered(true);
+      if (savedSelectedIndex !== null) {
+        setRecoveredSelectedAnnouncementIndex(savedSelectedIndex);
+      }
+    } else {
+      addDebugLog('page.tsx', 'No compose text in recovery on mount', {});
+    }
+  }, []);
 
   const [isConfirming, setIsConfirming] = useState(false);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
@@ -263,6 +296,8 @@ export default function Home() {
         deviceId: elsewhere.deviceId,
         deviceLabel: elsewhere.deviceLabel,
         at: elsewhere.at,
+        hasUnsavedPromo: elsewhere.hasUnsavedPromo,
+        hasUnsavedAnnouncement: elsewhere.hasUnsavedAnnouncement,
       });
     });
     return () => {
@@ -330,7 +365,14 @@ export default function Home() {
     deviceId: string;
     deviceLabel: string;
     at: string | null;
+    hasUnsavedPromo: boolean;
+    hasUnsavedAnnouncement: boolean;
   } | null>(null);
+
+  const dismissElsewhere = () => {
+    if (elsewhereNotice) markElsewhereSeen(elsewhereNotice.deviceId, elsewhereNotice.at);
+    setElsewhereNotice(null);
+  };
 
   /**
    * The draft is built before the campaign because the campaign needs its
@@ -351,6 +393,7 @@ export default function Home() {
   const {
     savedDraftSignature,
     draftSignatureRef,
+    mergedSavedSignature,
     draftPromoCard,
     setDraftPromoCard,
     savingDraft,
@@ -419,6 +462,7 @@ export default function Home() {
     editorResetKey,
     setEditorResetKey,
     blankPromoCard,
+    recoveredComposeTextRef,
     markAnnouncementChanged,
     markPromoChanged,
     loadConfig,
@@ -492,14 +536,19 @@ export default function Home() {
        * Guarded on a load having happened, because on first mount the config
        * is the default and nothing is at risk yet — clearing here would delete
        * the very copy loadConfig is about to read.
+       *
+       * Also guarded on the recovery banner: while it is up, the editor holds
+       * the published card (nothing at risk) and the recovered copy is the
+       * thing the banner is offering. Clearing here would delete the offer out
+       * from under the user before they could accept it.
        */
-      if (hasLoadedOnceRef.current) clearRecovery();
+      if (hasLoadedOnceRef.current && !hasRecoveredWork) clearRecovery();
       return;
     }
 
     // DON'T write recovery here - it overwrites existing recovery!
     // Recovery is ONLY written on beforeunload/pagehide to capture absolute latest
-  }, [config, hasAnnouncementChanges]);
+  }, [config, hasAnnouncementChanges, hasRecoveredWork]);
 
   /**
    * Sync promoWorkNotInDraftRef with hasPromoChanges so unsaved work detection works.
@@ -519,17 +568,47 @@ export default function Home() {
    * the warning this exists to give.
    */
   useEffect(() => {
-    const atRisk =
-      promoWorkNotInDraftRef.current ||
-      (hasAnnouncementChanges && draftSignatureRef.current !== getConfigSignature(config));
-    if (reportedUnsavedRef.current === atRisk) return;
+    // Nothing is knowable until the first load has settled — reporting against
+    // the default config would lower a flag this device raised last session.
+    if (!configLoadedSignal) return;
+
+    const promoAtRisk = !!promoWorkNotInDraftRef.current;
+    /**
+     * Scoped to the announcement half, the same way editorWorkAtRisk is.
+     * Comparing the WHOLE config against the baseline meant a dirty promo
+     * made the announcement report as unsaved too — so the other device was
+     * told to look for announcement work that was never there.
+     */
+    const annAtRisk = (() => {
+      if (!hasAnnouncementChanges) return false;
+      let savedAnnSig: string | null = null;
+      if (draftSignatureRef.current) {
+        try {
+          savedAnnSig = announcementSignature(JSON.parse(draftSignatureRef.current));
+        } catch {
+          // No parseable baseline — treat as nothing saved yet.
+        }
+      }
+      return announcementSignature(config) !== savedAnnSig;
+    })();
+
+    const prev = reportedUnsavedRef.current;
+    // null means "we have not told the server anything this session", so the
+    // first report always goes out — that is what lowers a flag left standing
+    // by a crash, once this device comes back and the work is resolved.
+    if (prev && prev.promo === promoAtRisk && prev.announcement === annAtRisk) return;
 
     const id = window.setTimeout(() => {
-      reportedUnsavedRef.current = atRisk;
-      reportUnsaved(atRisk);
+      const flags = { promo: promoAtRisk, announcement: annAtRisk };
+      reportedUnsavedRef.current = flags;
+      if (!flags.promo && !flags.announcement) {
+        reportUnsaved(false);
+      } else {
+        reportUnsaved(flags);
+      }
     }, 1000);
     return () => window.clearTimeout(id);
-  }, [config, hasAnnouncementChanges]);
+  }, [config, hasAnnouncementChanges, configLoadedSignal]);
 
   // Declared here because useIdleSignOut takes them.
   const [idleSecondsLeft, setIdleSecondsLeft] = useState<number | null>(null);
@@ -546,6 +625,7 @@ export default function Home() {
     hasAnnouncementChangesRef,
     hasPromoChangesRef,
     draftSignatureRef,
+    announcementComposeTextRef,
     exitReasonRef,
     idleSecondsLeftRef,
     setIdleSecondsLeft,
@@ -565,31 +645,25 @@ export default function Home() {
    */
   useEffect(() => {
     const preserveWork = () => {
-      // Always write local recovery first — synchronous, survives page death.
-      writeRecovery(configRef.current);
+      // Synchronous localStorage write — the only thing guaranteed to survive
+      // an abrupt close. Cloud draft is NOT written here: the page is dying,
+      // keepalive fetches race the session cookie, and when they land the next
+      // login sees an identical draft + recovery (Case 3) and silently discards
+      // the recovery banner the user should have seen.
+      writeRecovery(
+        configRef.current,
+        'crash',
+        announcementComposeTextRef.current || undefined,
+      );
 
-      // Also push to cloud for whichever side is dirty. Uses the same dirty
-      // flags the rest of the app uses (hasPromoChangesRef,
-      // hasAnnouncementChangesRef) instead of a separate signature comparison
-      // that could disagree. keepalive ensures the request outlives the page.
-      if (hasPromoChangesRef.current) {
-        fetch('/api/draft/promo', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ promoCard: configRef.current.promoCard }),
-          keepalive: true,
-        }).catch(() => {});
+      // The debounce may not have fired yet (or may never have run) — raise the
+      // flag here so the crash is still visible from the user's other devices.
+      const rep = reportedUnsavedRef.current;
+      if (!rep?.promo && !rep?.announcement) {
+        const pDirty = !!promoWorkNotInDraftRef.current;
+        const aDirty = hasAnnouncementChangesRef.current;
+        if (pDirty || aDirty) reportUnsaved({ promo: pDirty, announcement: aDirty });
       }
-      if (hasAnnouncementChangesRef.current) {
-        fetch('/api/draft/announcement', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ announcementBar: configRef.current.announcementBar }),
-          keepalive: true,
-        }).catch(() => {});
-      }
-
-      if (!reportedUnsavedRef.current) reportUnsaved(true);
     };
 
     /**
@@ -679,6 +753,14 @@ export default function Home() {
     setPromoTimerAutoArmed(wearingBlank && !card.endDate);
   }, [configLoadedSignal]);
 
+  useEffect(() => {
+    if (!configLoadedSignal) return;
+    if (recoveredComposeTextRef.current) {
+      announcementComposeTextRef.current = recoveredComposeTextRef.current;
+      recoveredComposeTextRef.current = null;
+    }
+  }, [configLoadedSignal]);
+
   /**
    * Why the page is leaving, when the app is the one making it leave.
    *
@@ -691,7 +773,8 @@ export default function Home() {
    */
 
   /** What we last told the server, so a save clears only a flag we raised. */
-  const reportedUnsavedRef = useRef(false);
+  /** What this device last told the server. null until it has said anything. */
+  const reportedUnsavedRef = useRef<{ promo: boolean; announcement: boolean } | null>(null);
 
   /**
    * Seconds left before an idle sign-out, or null when nothing is pending.
@@ -744,7 +827,8 @@ export default function Home() {
     if (draftOffer) {
       return { mode: 'draft' as const, draftSavedAt: draftOffer.lastUpdated ?? null, elsewhere };
     }
-    if (elsewhere) return { mode: 'elsewhere' as const, elsewhere };
+    // Elsewhere-only no longer shows a popup — it appears in the dashboard
+    // alert zone on both cards instead.
     return null;
   })();
 
@@ -890,12 +974,25 @@ export default function Home() {
     // Clear only the promo side of the draft — this is "Start New" from the
     // promo card specifically, so the announcement's saved work (if any)
     // must survive it.
-    await discardPromoDraft();
+    /**
+     * Into the editor FIRST, then clear.
+     *
+     * The promo editor is unmounted while the dashboard is up, and its text
+     * fields are contentEditable nodes seeded by an effect — so blanking the
+     * config from here while it is unmounted changed the state and left the
+     * canvas painted with the draft. Clearing once it is mounted lets
+     * usePromoEditorSync see the change and repaint.
+     */
     bypassUnsavedCheckRef.current = true;
-    // THEN go to editor (now it's clean)
     startCreatePromo();
     bypassUnsavedCheckRef.current = false;
-    toast('Promo draft discarded');
+    const undo = await discardPromoDraft();
+    // Raised here rather than inside the discard so it lands with the cleared
+    // canvas, which is what the offer is about.
+    // An action toast already lives for TOAST_ACTION_MS (10s), long enough to
+    // be read and acted on.
+    if (undo) toast('Promo draft discarded', false, { label: 'Undo', onClick: undo });
+    else toast('Promo draft discarded');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [discardPromoDraft, startCreatePromo, toast]);
 
@@ -932,7 +1029,7 @@ export default function Home() {
       };
       setConfig(next);
       configRef.current = next;
-      draftSignatureRef.current = getConfigSignature(next);
+      draftSignatureRef.current = mergedSavedSignature(next, ['promo']);
       savedPromoSignatureRef.current = getPromoSignature(next);
       setHasPromoChanges(getConfigSignature(next) !== publishedConfigRef.current);
       setEditorResetKey((k) => k + 1);
@@ -1038,42 +1135,71 @@ export default function Home() {
 
 
 
-  async function handleRestoreRecovery() {
+  /**
+   * "Save & Continue" on a recovery banner.
+   *
+   * Scoped to the card whose banner was clicked. The banners are per-card, so
+   * restoring from the announcement's must not also push the snapshot's promo
+   * half into the draft — that overwrote a promo draft the user never touched
+   * during the crashed session.
+   */
+  async function handleRestoreRecovery(side?: 'promo' | 'announcement') {
     // Load the recovered config from localStorage
     const recoveryEnvelope = readRecoveryEnvelope();
     if (recoveryEnvelope?.config) {
       const recovered = migrateConfig(recoveryEnvelope.config, recoveryEnvelope.config.version);
 
+      const sides: ('promo' | 'announcement')[] = side
+        ? [side]
+        : ([
+            recoveredAffectsPromo ? 'promo' : null,
+            recoveredAffectsAnnouncement ? 'announcement' : null,
+          ].filter(Boolean) as ('promo' | 'announcement')[]);
+
+      // Take only the recovered half/halves being restored; the other card
+      // keeps whatever the editor is already holding.
+      const next: CampaignConfig = {
+        ...configRef.current,
+        ...(sides.includes('promo') ? { promoCard: recovered.promoCard } : {}),
+        ...(sides.includes('announcement')
+          ? { announcementBar: recovered.announcementBar }
+          : {}),
+      };
+
       // Update the campaign hook's configRef so PromoSection sees it immediately
       if (campaignRef.current) {
-        campaignRef.current.configRef.current = recovered;
+        campaignRef.current.configRef.current = next;
       }
 
-      // Save recovery to cloud draft using the recovered config directly —
-      // writeDraftNow is promo-scoped now, but a recovered snapshot can hold
-      // unsaved work on either or both cards, so this needs the two-sided
-      // write.
-      await writeRecoveredDraft(recovered);
+      await writeRecoveredDraft(next, sides);
 
       // Update draft state so dashboard knows about it
-      setDraftPromoCard(JSON.parse(JSON.stringify(recovered.promoCard)));
+      if (sides.includes('promo')) {
+        setDraftPromoCard(JSON.parse(JSON.stringify(next.promoCard)));
+      }
 
-      // Clear local recovery after saving
-      clearRecovery();
+      // Restore any in-flight announcement compose text
+      if (sides.includes('announcement') && recoveryEnvelope.announcementComposeText) {
+        announcementComposeTextRef.current = recoveryEnvelope.announcementComposeText;
+      }
 
       // Update state for editor re-render
-      setConfig(recovered);
+      setConfig(next);
 
       // Bump signal so PromoSection re-reads the recovered config
       if (campaignRef.current) {
         campaignRef.current.setConfigLoadedSignal((n) => n + 1);
       }
 
-      // Go wherever the recovered work actually is — this used to always
-      // jump to promo, so clicking "Save & Continue" on an announcement-only
-      // recovery (shown from the Announcement card) still landed you on the
-      // promo tab. Promo wins when both are affected, matching prior behavior.
-      const recoveryTargetTab: 'promo' | 'announcement' = recoveredAffectsPromo
+      // The other card may still be holding recovered work it hasn't been
+      // asked about yet — keep its banner, and the copy on disk behind it.
+      const promoLeft = recoveredAffectsPromo && !sides.includes('promo');
+      const annLeft = recoveredAffectsAnnouncement && !sides.includes('announcement');
+      setRecoveredAffectsPromo(promoLeft);
+      setRecoveredAffectsAnnouncement(annLeft);
+      if (!promoLeft && !annLeft) clearRecovery();
+
+      const recoveryTargetTab: 'promo' | 'announcement' = sides.includes('promo')
         ? 'promo'
         : 'announcement';
       if (recoveryTargetTab === 'promo') setPromoEntryStep('editor');
@@ -1084,6 +1210,8 @@ export default function Home() {
       }, 0);
 
       toast('Recovery saved to draft');
+
+      if (promoLeft || annLeft) return;
     }
 
     // Close the recovery alert
@@ -1093,8 +1221,18 @@ export default function Home() {
 
   // Remove the useEffect that was trying to handle the tab switch
 
-  function handleDismissRecovery() {
-    // User chose to discard recovery, just close the alert
+  /**
+   * "Start new" on a recovery banner — discards that card's recovered work.
+   *
+   * Scoped like the restore: dismissing the announcement's offer must leave
+   * the promo's banner (and the copy on disk behind it) standing.
+   */
+  function handleDismissRecovery(side?: 'promo' | 'announcement') {
+    const promoLeft = recoveredAffectsPromo && side === 'announcement';
+    const annLeft = recoveredAffectsAnnouncement && side === 'promo';
+    setRecoveredAffectsPromo(promoLeft);
+    setRecoveredAffectsAnnouncement(annLeft);
+    if (promoLeft || annLeft) return;
     setHasRecoveredWork(false);
     setRecoveryReason(null);
     clearRecovery(); // Clear the local recovery
@@ -1137,7 +1275,19 @@ export default function Home() {
     // Signing back in is a new visit, so the blank canvas should move on.
     forgetVisit();
     clearRecovery();
-    if (reportedUnsavedRef.current) reportUnsaved(false);
+    // Compose text isn't part of the cloud draft — re-write recovery just for
+    // it so the next login can restore it into the input box.
+    if (htmlHasVisibleText(announcementComposeTextRef.current)) {
+      writeRecovery(configRef.current, 'idle', announcementComposeTextRef.current);
+    }
+    /**
+     * Unconditional, unlike the editor path: signing out on purpose means the
+     * user was asked about anything at risk and answered. Presence rows are
+     * keyed per device, so this lowers only this browser's flag — and it has
+     * to run even when this session never raised one, to clear a flag left
+     * standing by an earlier crash on this same device.
+     */
+    reportUnsaved(false);
 
     // The session is a signed cookie, so only the server can end it. Navigate
     // either way: a failed request must not strand someone on a page they have
@@ -1267,10 +1417,29 @@ export default function Home() {
    * The promo half is the authorship test: a blank canvas, an untouched
    * template, or a card already in the draft are all nothing to lose.
    */
-  const editorWorkAtRisk = () =>
-    promoWorkNotInDraftRef.current ||
-    (hasAnnouncementChangesRef.current &&
-      draftSignatureRef.current !== getConfigSignature(configRef.current));
+  const editorWorkAtRisk = () => {
+    if (promoWorkNotInDraftRef.current) return true;
+
+    if (hasAnnouncementChangesRef.current) {
+      const currentAnnSig = announcementSignature(configRef.current);
+      let savedAnnSig: string | null = null;
+
+      if (draftSignatureRef.current) {
+        try {
+          const savedCfg = JSON.parse(draftSignatureRef.current);
+          savedAnnSig = announcementSignature(savedCfg);
+        } catch {
+          // If parse fails, treat as no saved version
+        }
+      }
+
+      if (currentAnnSig !== savedAnnSig) return true;
+    }
+
+    if (htmlHasVisibleText(announcementComposeTextRef.current)) return true;
+
+    return false;
+  };
 
 
   return (
@@ -1326,6 +1495,10 @@ export default function Home() {
                 recoveryReason={recoveryReason}
                 onRestoreRecovery={handleRestoreRecovery}
                 onDismissRecovery={handleDismissRecovery}
+                announcementComposeTextRecovered={announcementComposeTextRecovered}
+                onDismissAnnouncementComposeRecovery={() => setAnnouncementComposeTextRecovered(false)}
+                elsewhereNotice={elsewhereNotice}
+                onDismissElsewhere={dismissElsewhere}
               />
             )}
 
@@ -1339,6 +1512,8 @@ export default function Home() {
                 onStop={stopAnnouncementNow}
                 onGoOnAir={goOnAirAnnouncementNow}
                 pendingComposeTextRef={announcementComposeTextRef}
+                recoveredSelectedAnnouncementIndex={recoveredSelectedAnnouncementIndex}
+                onRestoreRecoveredSelection={() => setRecoveredSelectedAnnouncementIndex(null)}
               />
             )}
 
@@ -1382,8 +1557,8 @@ export default function Home() {
                 onRemoveLive={removeLivePromo}
                 hasRecoveredWork={hasRecoveredWork}
                 recoveryReason={recoveryReason}
-                onRestoreRecovery={handleRestoreRecovery}
-                onDismissRecovery={handleDismissRecovery}
+                onRestoreRecovery={() => handleRestoreRecovery('promo')}
+                onDismissRecovery={() => handleDismissRecovery('promo')}
               />
             )}
           </div>

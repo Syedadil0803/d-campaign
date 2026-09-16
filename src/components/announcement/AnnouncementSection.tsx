@@ -32,6 +32,7 @@ import {
   matchAnnouncementTheme,
   type AnnouncementTheme,
 } from '@/lib/announcement/announcementThemes';
+import { addDebugLog, saveSelectedAnnouncementIndex } from '@/lib/recovery';
 
 interface AnnouncementSectionProps {
   config: CampaignConfig;
@@ -48,6 +49,10 @@ interface AnnouncementSectionProps {
    * component just reads it back on mount and keeps it updated as you type.
    */
   pendingComposeTextRef?: RefObject<string>;
+  /** Index of announcement being recovered from browser cache (was being edited). */
+  recoveredSelectedAnnouncementIndex?: number | null;
+  /** Called after recovered selection is applied. */
+  onRestoreRecoveredSelection?: () => void;
 }
 
 function getThemeOnSurfaceHex(): string {
@@ -59,7 +64,7 @@ function getThemeOnSurfaceHex(): string {
   return rgbToHex(`rgb(${r}, ${g}, ${b})`);
 }
 
-export function AnnouncementSection({ config, setConfig, markChanged, canReactivate, onStop, onGoOnAir, pendingComposeTextRef }: AnnouncementSectionProps) {
+export function AnnouncementSection({ config, setConfig, markChanged, canReactivate, onStop, onGoOnAir, pendingComposeTextRef, recoveredSelectedAnnouncementIndex, onRestoreRecoveredSelection }: AnnouncementSectionProps) {
   const [newAnnouncementText, setNewAnnouncementText] = useState('');
   const richEditorRef = useRef<HTMLDivElement>(null);
 
@@ -69,11 +74,29 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   // sets the text itself afterward.
   useEffect(() => {
     const pending = pendingComposeTextRef?.current;
+    const restoreData = {
+      hasPending: !!pending,
+      textLength: pending?.length || 0,
+      textPreview: pending?.substring(0, 50) || '',
+    };
+    console.log('[ANNOUNCEMENT] Restoring from pendingComposeTextRef:', restoreData);
+    addDebugLog('AnnouncementSection', 'Restore effect: checking pendingComposeTextRef', restoreData);
+    
     if (pending) {
+      console.log('[ANNOUNCEMENT] Setting newAnnouncementText:', pending.substring(0, 50));
+      addDebugLog('AnnouncementSection', 'Restore effect: setting text', {
+        textLength: pending.length,
+        textPreview: pending.substring(0, 50),
+      });
       setNewAnnouncementText(pending);
       if (richEditorRef.current) {
         richEditorRef.current.innerHTML = pending;
+        addDebugLog('AnnouncementSection', 'Restore effect: updated richEditorRef.current.innerHTML', {
+          textLength: pending.length,
+        });
       }
+    } else {
+      addDebugLog('AnnouncementSection', 'Restore effect: no pending text', {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -84,10 +107,29 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     if (pendingComposeTextRef) pendingComposeTextRef.current = newAnnouncementText;
   }, [newAnnouncementText, pendingComposeTextRef]);
 
-  const [showShortcutsTip, setShowShortcutsTip] = useState(false);
+  // Handle recovered announcement selection (which announcement was being edited)
+  useEffect(() => {
+    if (recoveredSelectedAnnouncementIndex !== null && recoveredSelectedAnnouncementIndex !== undefined && selectedIndex === null) {
+      const debugData = {
+        recoveredIndex: recoveredSelectedAnnouncementIndex,
+        totalAnnouncements: config.announcementBar.announcements.length,
+      };
+      console.log('[ANNOUNCEMENT] Restoring selectedIndex from recovery:', debugData);
+      addDebugLog('AnnouncementSection', 'Restoring selectedIndex from recovery', debugData);
+      
+      if (recoveredSelectedAnnouncementIndex < config.announcementBar.announcements.length) {
+        setSelectedIndex(recoveredSelectedAnnouncementIndex);
+        onRestoreRecoveredSelection?.();
+        addDebugLog('AnnouncementSection', 'Successfully restored recovered announcement index', { index: recoveredSelectedAnnouncementIndex });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recoveredSelectedAnnouncementIndex]);
+
   const shortcutsTipShown = useRef(false);
   const [, setShowRichToolbar] = useState(true);
   const [loopCopies, setLoopCopies] = useState(1);
+  const [showShortcutsTip, setShowShortcutsTip] = useState(false);
 
   // Derived from config - always in sync
   const isThemeMode = !!(config.announcementBar.activeThemeId || matchAnnouncementTheme(
@@ -178,6 +220,30 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   const configRef = useRef(config);
   configRef.current = config;
   const scheduleRangeInvalidRef = useRef(false);
+
+  // Handle recovered announcement selection (which announcement was being edited)
+  useEffect(() => {
+    if (recoveredSelectedAnnouncementIndex !== null && recoveredSelectedAnnouncementIndex !== undefined && selectedIndex === null) {
+      const debugData = {
+        recoveredIndex: recoveredSelectedAnnouncementIndex,
+        totalAnnouncements: config.announcementBar.announcements.length,
+      };
+      console.log('[ANNOUNCEMENT] Restoring selectedIndex from recovery:', debugData);
+      addDebugLog('AnnouncementSection', 'Restoring selectedIndex from recovery', debugData);
+      
+      if (recoveredSelectedAnnouncementIndex < config.announcementBar.announcements.length) {
+        setSelectedIndex(recoveredSelectedAnnouncementIndex);
+        onRestoreRecoveredSelection?.();
+        addDebugLog('AnnouncementSection', 'Successfully restored recovered announcement index', { index: recoveredSelectedAnnouncementIndex });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recoveredSelectedAnnouncementIndex]);
+
+  // Track selectedIndex changes in localStorage for recovery on next crash
+  useEffect(() => {
+    saveSelectedAnnouncementIndex(selectedIndex);
+  }, [selectedIndex]);
 
   const [editorDefaultColor, setEditorDefaultColor] = useState('#1a1c1f');
 
@@ -815,7 +881,9 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
 
         {showShortcutsTip && (
           <div className="fixed top-5 left-5 z-50 animate-bounce-in">
-            <div className="bg-black/10 backdrop-blur-sm border border-white/10 rounded-2xl shadow-2xl px-5 py-4 w-[380px]">
+            {/* <div className="bg-black/10 backdrop-blur-sm border border-white/10 rounded-2xl shadow-2xl px-5 py-4 w-[380px]"> */}
+              <div className=" bg-black/10 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl px-5 py-4 w-[380px]">
+              
               <p className="text-[13px] text-on-surface leading-relaxed">
                 💡 You can also add emojis!<br />Press <kbd className="inline bg-primary/10 text-primary border border-primary/70 px-1.5 py-0.5 rounded text-[11px] font-mono font-medium whitespace-nowrap">{navigator.platform?.includes('Mac') ? '⌘ + Ctrl + Space' : 'Win + .'}</kbd> to open the emoji picker
               </p>

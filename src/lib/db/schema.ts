@@ -43,6 +43,8 @@ export const users = campaignSchema.table('users', {
   provider: text('provider').notNull().default('password'),
   passwordHash: text('password_hash'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  homeDeviceId: text('home_device_id'),
+  homeDeviceLabel: text('home_device_label'),
 });
 
 /**
@@ -67,6 +69,8 @@ export const userDevicePresence = campaignSchema.table(
     deviceId: text('device_id').notNull(),
     deviceLabel: text('device_label').notNull(),
     hasUnsavedLocalChanges: boolean('has_unsaved_local_changes').notNull().default(false),
+    hasUnsavedPromo: boolean('has_unsaved_promo').notNull().default(false),
+    hasUnsavedAnnouncement: boolean('has_unsaved_announcement').notNull().default(false),
     lastUnsavedAt: timestamp('last_unsaved_at').notNull().defaultNow(),
   },
   (table) => ({

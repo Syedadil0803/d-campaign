@@ -14,23 +14,32 @@ export interface ElsewhereUnsaved {
   deviceId: string;
   deviceLabel: string;
   at: string;
+  isHomeDevice: boolean;
+  hasUnsavedPromo: boolean;
+  hasUnsavedAnnouncement: boolean;
 }
 
-export function reportUnsaved(hasUnsaved: boolean): void {
+export function reportUnsaved(
+  flags: { promo: boolean; announcement: boolean } | false,
+): void {
   const deviceId = getDeviceId();
-  if (!deviceId) return; // No stable id (private mode) — nothing to claim.
+  if (!deviceId) return;
 
-  const body = JSON.stringify({ hasUnsaved, deviceId, deviceLabel: getDeviceLabel() });
+  const hasUnsaved = flags !== false && (flags.promo || flags.announcement);
+  const body = JSON.stringify({
+    hasUnsaved,
+    deviceId,
+    deviceLabel: getDeviceLabel(),
+    ...(hasUnsaved
+      ? { hasUnsavedPromo: flags && flags.promo, hasUnsavedAnnouncement: flags && flags.announcement }
+      : {}),
+  });
   fetch('/api/presence', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body,
-    // Survives the navigation when this is the last thing a closing or
-    // timing-out page does.
     keepalive: true,
-  }).catch(() => {
-    // A missed flag costs a notice on another device, never the work itself.
-  });
+  }).catch(() => {});
 }
 
 /**
@@ -44,14 +53,12 @@ export async function fetchUnsavedElsewhere(): Promise<ElsewhereUnsaved | null> 
   const deviceId = getDeviceId();
   if (!deviceId) return null;
   try {
-    const response = await fetch(`/api/presence?deviceId=${encodeURIComponent(deviceId)}`);
+    const label = getDeviceLabel();
+    const params = new URLSearchParams({ deviceId, deviceLabel: label });
+    const response = await fetch(`/api/presence?${params}`);
     if (!response.ok) return null;
     const data = await response.json();
     const elsewhere = (data?.elsewhere as ElsewhereUnsaved | null) ?? null;
-    // Raised once per batch of work, not once per visit. The browser holding
-    // it is normally the only thing that can clear the flag, and it may never
-    // be opened again — so without this the notice repeats forever and the
-    // only way out is a destructive button nobody should have to press.
     if (elsewhere && alreadySeen(elsewhere)) return null;
     return elsewhere;
   } catch {

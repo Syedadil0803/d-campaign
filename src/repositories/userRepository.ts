@@ -18,6 +18,9 @@ export interface ElsewhereUnsaved {
   deviceId: string;
   deviceLabel: string;
   at: string;
+  isHomeDevice: boolean;
+  hasUnsavedPromo: boolean;
+  hasUnsavedAnnouncement: boolean;
 }
 
 export const userRepository = {
@@ -73,10 +76,17 @@ export const userRepository = {
 
     const row = rows[0];
     if (!row) return null;
+
+    const user = await getDb().select({ homeDeviceId: users.homeDeviceId })
+      .from(users).where(eq(users.id, userId)).limit(1);
+
     return {
       deviceId: row.deviceId,
       deviceLabel: row.deviceLabel,
       at: row.lastUnsavedAt.toISOString(),
+      isHomeDevice: user[0]?.homeDeviceId === row.deviceId,
+      hasUnsavedPromo: row.hasUnsavedPromo,
+      hasUnsavedAnnouncement: row.hasUnsavedAnnouncement,
     };
   },
 
@@ -118,7 +128,13 @@ export const userRepository = {
    */
   async setDevicePresence(
     userId: string,
-    presence: { hasUnsaved: boolean; deviceId: string; deviceLabel: string },
+    presence: {
+      hasUnsaved: boolean;
+      deviceId: string;
+      deviceLabel: string;
+      hasUnsavedPromo?: boolean;
+      hasUnsavedAnnouncement?: boolean;
+    },
   ): Promise<boolean> {
     try {
       if (!presence.hasUnsaved) {
@@ -136,6 +152,8 @@ export const userRepository = {
       const values = {
         deviceLabel: presence.deviceLabel,
         hasUnsavedLocalChanges: true,
+        hasUnsavedPromo: presence.hasUnsavedPromo ?? false,
+        hasUnsavedAnnouncement: presence.hasUnsavedAnnouncement ?? false,
         lastUnsavedAt: new Date(),
       };
       await getDb()
@@ -172,6 +190,43 @@ export const userRepository = {
     } catch (error) {
       console.error('[DB] setDevicePresence failed:', error);
       return false;
+    }
+  },
+
+  /**
+   * Register the current device as the home device if none is set yet.
+   * Returns whether this device is the home device.
+   */
+  async ensureHomeDevice(
+    userId: string,
+    deviceId: string,
+    deviceLabel: string,
+  ): Promise<{ isHome: boolean; homeDeviceId: string | null; homeDeviceLabel: string | null }> {
+    try {
+      const rows = await getDb()
+        .select({ homeDeviceId: users.homeDeviceId, homeDeviceLabel: users.homeDeviceLabel })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      const user = rows[0];
+      if (!user) return { isHome: false, homeDeviceId: null, homeDeviceLabel: null };
+
+      if (!user.homeDeviceId) {
+        await getDb()
+          .update(users)
+          .set({ homeDeviceId: deviceId, homeDeviceLabel: deviceLabel })
+          .where(and(eq(users.id, userId), sql`home_device_id IS NULL`));
+        return { isHome: true, homeDeviceId: deviceId, homeDeviceLabel: deviceLabel };
+      }
+
+      return {
+        isHome: user.homeDeviceId === deviceId,
+        homeDeviceId: user.homeDeviceId,
+        homeDeviceLabel: user.homeDeviceLabel,
+      };
+    } catch (error) {
+      console.error('[DB] ensureHomeDevice failed:', error);
+      return { isHome: false, homeDeviceId: null, homeDeviceLabel: null };
     }
   },
 };

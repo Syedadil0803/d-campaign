@@ -15,6 +15,8 @@ import {
   AlertCircle,
   Info as InfoIcon,
   FolderOpen,
+  Monitor,
+  X,
 } from 'lucide-react';
 import type { CampaignConfig } from '@/types/campaign';
 import { stripHtml, getBackgroundStyle } from '@/lib/utils';
@@ -57,8 +59,11 @@ interface DashboardLifecycleCardsProps {
   promoRecovered?: boolean;
   /** Recovered-but-unsaved content that belongs to the announcement card specifically. */
   announcementRecovered?: boolean;
-  onRestoreRecovery?: () => void;
-  onDismissRecovery?: () => void;
+  /** Scoped to the card the banner belongs to — see handleRestoreRecovery. */
+  onRestoreRecovery?: (side: 'promo' | 'announcement') => void;
+  onDismissRecovery?: (side: 'promo' | 'announcement') => void;
+  /** Recovered announcement compose text that was being typed. */
+  onDismissAnnouncementComposeRecovery?: () => void;
   promoUnpublished?: boolean;
   announcementUnpublished?: boolean;
   onOpenDraft?: () => void;
@@ -68,6 +73,9 @@ interface DashboardLifecycleCardsProps {
   /** When the announcement side of the draft was last actually saved — independent of promoSavedAt. */
   announcementSavedAt?: string | null;
   onStartNewWithDraft?: () => void;
+  /** Another device holds unsaved work for this account. */
+  elsewhereNotice?: { deviceLabel: string; at: string | null; hasUnsavedPromo: boolean; hasUnsavedAnnouncement: boolean } | null;
+  onDismissElsewhere?: () => void;
 }
 
 /**
@@ -100,6 +108,7 @@ export function DashboardLifecycleCards({
   announcementRecovered = false,
   onRestoreRecovery = () => { },
   onDismissRecovery = () => { },
+  onDismissAnnouncementComposeRecovery = () => { },
   promoUnpublished = false,
   announcementUnpublished = false,
   onOpenDraft = () => { },
@@ -107,6 +116,8 @@ export function DashboardLifecycleCards({
   promoSavedAt = null,
   announcementSavedAt = null,
   onStartNewWithDraft = () => { },
+  elsewhereNotice = null,
+  onDismissElsewhere = () => { },
 }: DashboardLifecycleCardsProps) {
   return (
     <section className="grid grid-cols-2 gap-6 md:gap-6">
@@ -245,9 +256,19 @@ export function DashboardLifecycleCards({
           </div>
         </div>
 
-        {/* [HELPER ZONE] 40px */}
-        <div className="flex h-10 shrink-0 items-center">
-          {promoRecovered ? (
+        {/* [HELPER ZONE] 40px — grows when the elsewhere alert wraps */}
+        <div className={`flex shrink-0 items-center ${elsewhereNotice?.hasUnsavedPromo ? 'min-h-[40px]' : 'h-10'}`}>
+          {elsewhereNotice?.hasUnsavedPromo ? (
+            <div className="flex w-full items-start gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 dark:border-violet-800 dark:bg-violet-950">
+              <Monitor className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
+              <span className="flex-1 text-[12px] leading-snug text-violet-900 dark:text-violet-100">
+                We noticed you logged in from another device. Unsaved changes are on <span className="font-semibold">{elsewhereNotice.deviceLabel}</span> — use that device to recover them, or continue here.
+              </span>
+              <button type="button" onClick={onDismissElsewhere} className="mt-0.5 shrink-0 rounded p-0.5 text-violet-500 hover:bg-violet-100 dark:hover:bg-violet-900">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : promoRecovered ? (
             <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 dark:border-amber-800 dark:bg-amber-950">
               <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
               <span className="text-[13px] font-medium text-amber-900 dark:text-amber-100">
@@ -280,14 +301,14 @@ export function DashboardLifecycleCards({
           <div className="flex h-[42px] gap-2.5">
             <button
               type="button"
-              onClick={onRestoreRecovery}
+              onClick={() => onRestoreRecovery('promo')}
               className={`${PRIMARY_BTN} flex-1`}
             >
               Save & Continue
             </button>
             <button
               type="button"
-              onClick={onDismissRecovery}
+              onClick={() => onDismissRecovery('promo')}
               className={`${GHOST_BTN} flex-1`}
             >
               Discard & Start New
@@ -431,14 +452,27 @@ export function DashboardLifecycleCards({
           </div>
         </div>
 
-        {/* Helper/Alert Zone */}
-        <div className="flex h-10 shrink-0 items-center">
-          {announcementRecovered ? (
+        {/* Helper/Alert Zone — grows when the elsewhere alert wraps */}
+        <div className={`flex shrink-0 items-center ${elsewhereNotice?.hasUnsavedAnnouncement ? 'min-h-[40px]' : 'h-10'}`}>
+          {elsewhereNotice?.hasUnsavedAnnouncement ? (
+            <div className="flex w-full items-start gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 dark:border-violet-800 dark:bg-violet-950">
+              <Monitor className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
+              <span className="flex-1 text-[12px] leading-snug text-violet-900 dark:text-violet-100">
+                We noticed you logged in from another device. Unsaved changes are on <span className="font-semibold">{elsewhereNotice.deviceLabel}</span> — use that device to recover them, or continue here.
+              </span>
+              <button type="button" onClick={onDismissElsewhere} className="mt-0.5 shrink-0 rounded p-0.5 text-violet-500 hover:bg-violet-100 dark:hover:bg-violet-900">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : announcementRecovered ? (
             <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 dark:border-amber-800 dark:bg-amber-950">
               <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span className="text-[13px] font-medium text-amber-900 dark:text-amber-100">
-                Unsaved session recovered from browser cache
+              <span className="flex-1 text-[13px] font-medium text-amber-900 dark:text-amber-100">
+                Recovered changes
               </span>
+              <button type="button" onClick={onDismissAnnouncementComposeRecovery} className="mt-0.5 shrink-0 rounded p-0.5 text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-900">
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
           ) : /* Draft status - show only when announcement has unpublished changes and draft exists */
           announcementUnpublished && announcementSavedAt ? (
@@ -477,14 +511,14 @@ export function DashboardLifecycleCards({
           <div className="flex h-[42px] gap-2.5">
             <button
               type="button"
-              onClick={onRestoreRecovery}
+              onClick={() => onRestoreRecovery('announcement')}
               className={`${PRIMARY_BTN} flex-1`}
             >
               Save & Continue
             </button>
             <button
               type="button"
-              onClick={onDismissRecovery}
+              onClick={() => onDismissRecovery('announcement')}
               className={`${GHOST_BTN} flex-1`}
             >
               Discard & Start New

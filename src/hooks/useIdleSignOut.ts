@@ -32,6 +32,7 @@ interface UseIdleSignOutArgs {
   hasAnnouncementChangesRef: RefObject<boolean>;
   hasPromoChangesRef: RefObject<boolean>;
   draftSignatureRef: RefObject<string | null>;
+  announcementComposeTextRef: RefObject<string>;
   /** Why the session ended, read by the sign-in screen on the way back. */
   exitReasonRef: RefObject<'logout' | 'timeout' | null>;
   /** The countdown shown in the warning, as state and as a ref. */
@@ -69,6 +70,7 @@ export function useIdleSignOut({
   hasAnnouncementChangesRef,
   hasPromoChangesRef,
   draftSignatureRef,
+  announcementComposeTextRef,
   exitReasonRef,
   idleSecondsLeftRef,
   setIdleSecondsLeft,
@@ -124,12 +126,28 @@ export function useIdleSignOut({
          * when the network write itself fails.
          */
         const result = await saveDraftRef.current(configRef.current);
-        if (result !== 'saved') {
-          writeRecovery(configRef.current, 'idle');
-        }
         // Also save messages draft if present
         saveMessagesRef?.current?.();
-        reportUnsaved(true);
+
+        if (result === 'saved') {
+          /**
+           * It reached the cloud, so it is not stranded on this machine — it
+           * is a draft, reachable from anywhere. Flagging it as unsaved here
+           * sent the user to this device to rescue work that was already
+           * waiting for them on the one they had moved to.
+           */
+          reportUnsaved(false);
+        } else {
+          writeRecovery(
+            configRef.current,
+            'idle',
+            announcementComposeTextRef.current || undefined,
+          );
+          reportUnsaved({
+            promo: !!promoWorkNotInDraftRef.current,
+            announcement: hasAnnouncementChangesRef.current,
+          });
+        }
       }
 
       standDown();

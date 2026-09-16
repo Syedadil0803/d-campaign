@@ -156,6 +156,38 @@ export function useCampaignDraft({
    * every single save, just because it existed — not because anything
    * about it had changed.
    */
+  /**
+   * The saved-draft baseline, advanced for the saved side ONLY.
+   *
+   * `getConfigSignature` serialises both cards into one string, and every save
+   * path used to stamp the whole thing — so saving the promo card told the app
+   * the announcement had been saved too. The announcement's unsaved work then
+   * went invisible: `editorWorkAtRisk` compared it against a baseline that
+   * already contained it, the next save skipped its PUT as "unchanged", and
+   * the unsaved-elsewhere flag cleared itself. The server was always scoped
+   * correctly; this is the client's bookkeeping catching up.
+   *
+   * Both strings are already normalised by `getConfigSignature`, so the side
+   * that was not saved keeps its previous normalised sub-object verbatim.
+   */
+  function mergedSavedSignature(
+    cfg: CampaignConfig,
+    sides: ('promo' | 'announcement')[],
+  ): string {
+    const nextSig = getConfigSignature(cfg);
+    const prevSig = draftSignatureRef.current;
+    if (!prevSig) return nextSig;
+    try {
+      const next = JSON.parse(nextSig);
+      const prev = JSON.parse(prevSig);
+      if (!sides.includes('promo')) next.promoCard = prev.promoCard;
+      if (!sides.includes('announcement')) next.announcementBar = prev.announcementBar;
+      return JSON.stringify(next);
+    } catch {
+      return nextSig;
+    }
+  }
+
   function startScopedDraftPuts(cfg: CampaignConfig) {
     const campaign = campaignRef.current!;
     const now = new Date();
@@ -265,10 +297,15 @@ export function useCampaignDraft({
     sides: ('promo' | 'announcement')[],
     options: { markHandled?: boolean } = {},
   ) {
-    // Whole-config bookkeeping other draft features (offer/accept, "draft
-    // exists" for the promo flow) still rely on — unaffected by the split.
-    setSavedDraftSignature(getConfigSignature(cfg));
-    setSavedMessagesSignature(getMessagesSignature(cfg));
+    // Advanced per side: the card that wasn't written keeps the baseline it
+    // was already being compared against, so its unsaved work stays visible.
+    const savedSig = mergedSavedSignature(cfg, sides);
+    setSavedDraftSignature(savedSig);
+    // Messages live on the announcement, so their baseline only moves when
+    // the announcement was the side that actually went to the server.
+    if (sides.includes('announcement')) {
+      setSavedMessagesSignature(getMessagesSignature(cfg));
+    }
     if (sides.includes('promo')) {
       setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
       setPromoSavedAt(now);
@@ -286,8 +323,10 @@ export function useCampaignDraft({
     }
     if (sides.length > 0) setDraftSavedAt(now);
     if (options.markHandled !== false) {
-      draftSignatureRef.current = getConfigSignature(cfg);
-      messagesSignatureRef.current = getMessagesSignature(cfg);
+      draftSignatureRef.current = savedSig;
+      if (sides.includes('announcement')) {
+        messagesSignatureRef.current = getMessagesSignature(cfg);
+      }
     }
   }
 
@@ -400,7 +439,7 @@ export function useCampaignDraft({
           const restored = { ...campaign.configRef.current, promoCard: savedDraft };
           campaign.setConfig(restored);
           campaign.configRef.current = restored;
-          draftSignatureRef.current = getConfigSignature(restored);
+          draftSignatureRef.current = mergedSavedSignature(restored, ['promo']);
           campaign.savedPromoSignatureRef.current = getPromoSignature(restored);
 
           // Suppress build dialog since this is a restoration, not a new action
@@ -430,7 +469,7 @@ export function useCampaignDraft({
     };
     campaign.setConfig(next);
     campaign.configRef.current = next;
-    draftSignatureRef.current = getConfigSignature(next);
+    draftSignatureRef.current = mergedSavedSignature(next, ['promo']);
     campaign.savedPromoSignatureRef.current = getPromoSignature(next);
     campaign.setHasPromoChanges(getConfigSignature(next) !== campaign.publishedConfigRef.current);
     campaign.setEditorResetKey((k) => k + 1);
@@ -462,8 +501,12 @@ export function useCampaignDraft({
       .then((res) => {
         if (res.ok) {
           const now = new Date();
-          draftSignatureRef.current = getConfigSignature(cfg);
-          setSavedDraftSignature(getConfigSignature(cfg));
+          // Only /api/draft/promo was written, so only the promo half of the
+          // baseline may advance — stamping the whole config here marked the
+          // announcement as saved when it had never left the browser.
+          const savedSig = mergedSavedSignature(cfg, ['promo']);
+          draftSignatureRef.current = savedSig;
+          setSavedDraftSignature(savedSig);
           setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
           setDraftSavedAt(now);
           setPromoSavedAt(now);
@@ -481,36 +524,60 @@ export function useCampaignDraft({
   }
 
   /**
-   * Writes a recovered snapshot to the draft row — both sides, since a
-   * crash/idle recovery may hold unsaved work on either or both cards.
-   * Used only by the recovery-restore flow (handleRestoreRecovery in
-   * page.tsx); every other save path is scoped to one card via
-   * writeDraftNow / saveMessagesDraft / saveDraft above.
+   * Writes a recovered snapshot to the draft row, for the named sides only.
+   *
+   * A recovery may hold work on either or both cards, but "Save & Continue"
+   * is clicked on ONE card's banner — so it must not drag the other card's
+   * half of the snapshot into the draft with it. Writing both unconditionally
+   * meant restoring an announcement-only crash also overwrote the promo
+   * column with whatever the snapshot happened to hold for it.
    */
-  async function writeRecoveredDraft(cfg: CampaignConfig): Promise<void> {
+  async function writeRecoveredDraft(
+    cfg: CampaignConfig,
+    sides: ('promo' | 'announcement')[],
+  ): Promise<void> {
+    if (sides.length === 0) return;
     setSavingDraft(true);
     try {
+      const wantsPromo = sides.includes('promo');
+      const wantsAnn = sides.includes('announcement');
       const [promoRes, annRes] = await Promise.all([
-        fetch('/api/draft/promo', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ promoCard: cfg.promoCard }),
-        }),
-        fetch('/api/draft/announcement', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ announcementBar: cfg.announcementBar }),
-        }),
+        wantsPromo
+          ? fetch('/api/draft/promo', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ promoCard: cfg.promoCard }),
+            })
+          : Promise.resolve(null),
+        wantsAnn
+          ? fetch('/api/draft/announcement', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ announcementBar: cfg.announcementBar }),
+            })
+          : Promise.resolve(null),
       ]);
       const now = new Date();
-      draftSignatureRef.current = getConfigSignature(cfg);
-      setSavedDraftSignature(getConfigSignature(cfg));
-      if (promoRes.ok) {
+      const written: ('promo' | 'announcement')[] = [];
+      if (promoRes?.ok) written.push('promo');
+      if (annRes?.ok) written.push('announcement');
+
+      const savedSig = mergedSavedSignature(cfg, written);
+      draftSignatureRef.current = savedSig;
+      setSavedDraftSignature(savedSig);
+
+      if (promoRes?.ok) {
         setDraftPromoCard(JSON.parse(JSON.stringify(cfg.promoCard)));
         setPromoSavedAt(now);
+        campaignRef.current?.setHasPromoChanges(false);
       }
-      if (annRes.ok) setAnnouncementSavedAt(now);
-      if (promoRes.ok || annRes.ok) setDraftSavedAt(now);
+      if (annRes?.ok) {
+        setAnnouncementSavedAt(now);
+        setSavedMessagesSignature(getMessagesSignature(cfg));
+        messagesSignatureRef.current = getMessagesSignature(cfg);
+        campaignRef.current?.setHasAnnouncementChanges(false);
+      }
+      if (written.length > 0) setDraftSavedAt(now);
     } catch (e) {
       console.error('Failed to write recovered draft:', e);
     } finally {
@@ -541,6 +608,13 @@ export function useCampaignDraft({
         const now = new Date();
         setSavedMessagesSignature(getMessagesSignature(cfg));
         messagesSignatureRef.current = getMessagesSignature(cfg);
+        // The announcement half of the baseline has to move too, or the work
+        // that was just written stays flagged as unsaved. The promo half is
+        // left exactly as it was — nothing of it went to the server here.
+        const savedSig = mergedSavedSignature(cfg, ['announcement']);
+        draftSignatureRef.current = savedSig;
+        setSavedDraftSignature(savedSig);
+        campaign.setHasAnnouncementChanges(false);
         setDraftSavedAt(now);
         setAnnouncementSavedAt(now);
         toast('Messages saved');
@@ -592,9 +666,9 @@ export function useCampaignDraft({
     campaign.setHasAnnouncementChanges(false);
     campaign.setHasPromoChanges(false);
     campaign.setReadyToPublishAnnouncement(false);
-    // Reload published campaign.config
+    // Reload the published config
     try {
-      const response = await fetch('/api/campaign.config');
+      const response = await fetch('/api/config');
       if (response.ok) {
         const data = await response.json();
         const migrated = migrateConfig(data, data.version);
@@ -627,11 +701,23 @@ export function useCampaignDraft({
    * its own column, so announcement's draft — saved or not — simply can't
    * be affected by this, by construction.
    */
-  async function discardPromoDraft() {
+  /**
+   * Clears the promo draft and leaves the editor on a blank skeleton.
+   *
+   * Returns a callback that puts the discarded draft back — card, draft row
+   * and canvas — or null when there was nothing to discard. The caller owns
+   * the toast so the offer appears alongside the cleared canvas it applies
+   * to, rather than on the dashboard the user is leaving.
+   */
+  async function discardPromoDraft(): Promise<(() => void) | null> {
     const campaign = campaignRef.current!;
+    // Captured before anything clears it — this is what Undo puts back.
+    const previousDraft: PromoCard | null = draftPromoCard
+      ? JSON.parse(JSON.stringify(draftPromoCard))
+      : null;
 
     try {
-      const response = await fetch('/api/campaign.config');
+      const response = await fetch('/api/config');
       if (response.ok) {
         const data = await response.json();
         const migrated = migrateConfig(data, data.version);
@@ -642,10 +728,17 @@ export function useCampaignDraft({
           announcementBar: campaign.configRef.current.announcementBar,
         };
         campaign.setConfig(nextConfig);
-        draftSignatureRef.current = getConfigSignature(nextConfig);
+        campaign.configRef.current = nextConfig;
+        draftSignatureRef.current = mergedSavedSignature(nextConfig, ['promo']);
         campaign.savedPromoSignatureRef.current = getPromoSignature(nextConfig);
         campaign.publishedConfigRef.current = getConfigSignature(migrated);
         campaign.publishedConfigObjRef.current = migrated;
+        // The title/subtitle/description are contentEditable nodes seeded
+        // imperatively, so setConfig alone leaves them painted with the draft
+        // that was just thrown away. This signal is what makes them re-read —
+        // same mechanism resetPromoEditorToDefault uses to clear the canvas.
+        campaign.setConfigLoadedSignal((n) => n + 1);
+        setBlankStart?.(true);
       }
     } catch (e) {
       console.error('Failed to reload config:', e);
@@ -664,10 +757,41 @@ export function useCampaignDraft({
         setPromoSavedAt(null);
       } else {
         console.error('[discardPromoDraft] Failed to clear promo draft');
+        return null;
       }
     } catch (e) {
       console.error('[discardPromoDraft] Failed to clear promo draft:', e);
+      return null;
     }
+
+    if (!previousDraft) return null;
+
+    return () => {
+      const restored: CampaignConfig = {
+        ...campaign.configRef.current,
+        promoCard: previousDraft,
+      };
+      campaign.setConfig(restored);
+      campaign.configRef.current = restored;
+      draftSignatureRef.current = mergedSavedSignature(restored, ['promo']);
+      setSavedDraftSignature(draftSignatureRef.current);
+      campaign.savedPromoSignatureRef.current = getPromoSignature(restored);
+      setDraftPromoCard(previousDraft);
+      setPromoSavedAt(new Date());
+      // Same reason as the clear above — the editors have to be told to
+      // re-read, or Undo restores the card everywhere except on screen.
+      campaign.setConfigLoadedSignal((n) => n + 1);
+      setBlankStart?.(false);
+      setSuppressBuildFlow?.(true);
+
+      fetch('/api/draft/promo', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ promoCard: previousDraft }),
+        keepalive: true,
+      }).catch(() => {});
+      toast('Draft restored');
+    };
   }
 
   return {
@@ -675,6 +799,7 @@ export function useCampaignDraft({
     setSavedDraftSignature,
     savedDraftSignatureRef,
     draftSignatureRef,
+    mergedSavedSignature,
     draftPromoCard,
     setDraftPromoCard,
     savingDraft,
