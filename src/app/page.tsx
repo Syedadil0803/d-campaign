@@ -1514,6 +1514,19 @@ export default function Home() {
                 pendingComposeTextRef={announcementComposeTextRef}
                 recoveredSelectedAnnouncementIndex={recoveredSelectedAnnouncementIndex}
                 onRestoreRecoveredSelection={() => setRecoveredSelectedAnnouncementIndex(null)}
+                saveDraftNow={(cfg) => {
+                  /**
+                   * The ref, not just markAnnouncementChanged(). That marker
+                   * defers to a setTimeout and sets state, so the ref the draft
+                   * PUT is gated on is still false on this tick — staging would
+                   * have skipped the write in silence and the message would
+                   * never have reached the user's other devices. The signature
+                   * check inside still stops a redundant write.
+                   */
+                  hasAnnouncementChangesRef.current = true;
+                  return saveDraft(cfg);
+                }}
+                publishNow={handlePublishAnnouncement}
               />
             )}
 

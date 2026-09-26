@@ -286,6 +286,18 @@ export function useRichTextEditor(
           return;
       }
 
+      /**
+       * Tell the world the editor changed, the same way typing does.
+       *
+       * Formatting reaches the DOM by several routes — execCommand, which
+       * raises `input` itself, and direct style mutation, which raises
+       * nothing. So resizing a run that already had a size span was silent:
+       * React never re-read the HTML and the preview kept the old text. One
+       * event here, on every route, is the single contract everything else
+       * can rely on: the editor changed.
+       */
+      editor.dispatchEvent(new InputEvent('input', { bubbles: true }));
+
       // Only update size from DOM, preserve other formats set by user
       const selection = window.getSelection();
       if (selection?.anchorNode) {

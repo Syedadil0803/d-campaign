@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, type RefObject } from 'react';
-import type { CampaignConfig, GradientStyle } from '@/types/campaign';
+import type { Announcement, CampaignConfig, GradientStyle } from '@/types/campaign';
 import type { AnnouncementTheme } from '@/lib/announcement/announcementThemes';
 import type { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import type { useEditorHistory } from '@/hooks/useEditorHistory';
@@ -58,6 +58,17 @@ export interface AnnouncementEditorApi
   linkDeletingRef: RefObject<boolean>;
   justDeletedStyledRef: RefObject<boolean>;
   activeFormatsRef: RefObject<ReturnType<typeof useRichTextEditor>['activeFormats']>;
+  /** The message added but not yet published. Null means the editor is free. */
+  staged: Announcement | null;
+  /** Index of the published message the staged one replaces, or null when new. */
+  stagedIndex: number | null;
+  /** Returns the staged message to the editor and reopens the input. */
+  editStaged: () => void;
+  /** Drops the staged message without publishing it. */
+  discardStaged: () => void;
+  /** Moves the staged message into the list and publishes it. */
+  publishStaged: () => void;
+  publishingStaged: boolean;
 }
 
 const AnnouncementEditorContext = createContext<AnnouncementEditorApi | null>(null);

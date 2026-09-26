@@ -80,10 +80,17 @@ export function useCampaignPublishing({
 
   // Publishing content turns the campaign On Air (BR: "On Air starts the moment
   // you click Publish"). New/edited content always goes live on publish.
-  async function handlePublishAnnouncement() {
+  /**
+   * `from` publishes a config the caller has just built instead of the one in
+   * state. The staged-message chip needs this: it promotes the message and
+   * publishes in the same click, and `config` here is the render's value, which
+   * would still be the pre-promotion one and would publish the message away.
+   */
+  async function handlePublishAnnouncement(from?: CampaignConfig) {
+    const base = from ?? config;
     const next = {
-      ...config,
-      announcementBar: { ...config.announcementBar, active: true },
+      ...base,
+      announcementBar: { ...base.announcementBar, active: true },
     };
     // Flip the chip to On Air only AFTER the publish finishes — so it appears
     // when the "Publishing…" loader completes, not at the start.
@@ -216,7 +223,9 @@ export function useCampaignPublishing({
   }
 
   function handlePublishAnnouncementWithValidation() {
-    setPublishConfirm({ warnings: [], onConfirm: handlePublishAnnouncement });
+    // Wrapped, not passed by reference: the dialog's button calls onConfirm as
+    // a click handler, which would hand the MouseEvent to the `from` argument.
+    setPublishConfirm({ warnings: [], onConfirm: () => handlePublishAnnouncement() });
   }
 
   return {

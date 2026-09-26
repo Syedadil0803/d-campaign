@@ -47,11 +47,16 @@ export function useAnnouncementPopups({
     }
   }, [showLinkPopup]);
 
-  // Position schedule popup below its button
+  // Position schedule popup beside its button, to the right. Below it, an open
+  // calendar ran past the bottom of the window and made the page scroll; the
+  // top is also lifted so the popup, calendar open, stays inside the window.
   useLayoutEffect(() => {
     if (showSchedulePopup && scheduleBtnRef.current) {
       const rect = scheduleBtnRef.current.getBoundingClientRect();
-      setSchedulePos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
+      // ponytail: estimated height with one calendar open; measure the popup if it changes shape
+      const POPUP_HEIGHT = 480;
+      const top = Math.max(8, Math.min(rect.top, window.innerHeight - POPUP_HEIGHT - 8));
+      setSchedulePos({ top: top + window.scrollY, left: rect.right + window.scrollX + 8 });
     }
   }, [showSchedulePopup]);
 

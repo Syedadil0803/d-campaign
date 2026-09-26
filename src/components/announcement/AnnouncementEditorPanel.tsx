@@ -1,11 +1,14 @@
 'use client';
 
-import { Sparkles } from 'lucide-react';
+import { CalendarClock, Sparkles, Trash2 } from 'lucide-react';
 import { getBackgroundStyle } from '@/lib/utils';
 import { rgbToHex } from '@/lib/editor/colorUtils';
 import RichTextToolbar from '@/components/shared/RichTextToolbar';
 import { useAnnouncementEditor } from '@/components/announcement/AnnouncementEditorContext';
 import { AnnouncementEditorPopups } from '@/components/announcement/AnnouncementEditorPopups';
+import { AnnouncementDraftChip } from '@/components/announcement/AnnouncementDraftChip';
+import { startsLater } from '@/lib/announcement/stagedDraft';
+import { canSchedule, SCHEDULE_LIMIT_MESSAGE } from '@/lib/announcement/listSections';
 
 /**
  * The left-hand card: the message editor, its toolbar, and the three popups
@@ -18,6 +21,13 @@ import { AnnouncementEditorPopups } from '@/components/announcement/Announcement
  */
 export function AnnouncementEditorPanel() {
   const {
+    config,
+    staged,
+    stagedIndex,
+    editStaged,
+    discardStaged,
+    publishStaged,
+    publishingStaged,
     activeFormats,
     applyColor,
     applyEditorSnapshot,
@@ -69,8 +79,23 @@ export function AnnouncementEditorPanel() {
   // Check if text exceeds limit
   const isOverLimit = getPlainTextLength(newAnnouncementText) > 120;
 
+  /**
+   * A future start date turns staging into scheduling, so the button says so
+   * before the click rather than after it.
+   */
+  const stageLabel = startsLater(selectedStartDate) ? 'Schedule' : 'Stage draft';
+
+  /**
+   * All three schedule slots are taken and this message would need a fourth.
+   * Editing a message that is already scheduled doesn't count — it keeps its
+   * own slot.
+   */
+  const scheduleFull =
+    startsLater(selectedStartDate) &&
+    !canSchedule(config.announcementBar.announcements, selectedIndex);
+
   return (
-    <div className="box-border h-[320px] rounded-2xl border border-border campaign-card-surface px-6 py-[30px] shadow-sm flex flex-col transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
+    <div className="box-border h-[415px] rounded-2xl border border-border campaign-card-surface px-6 py-[30px] shadow-sm flex flex-col transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
 
       {/* Zone 1: Header Block (52px) */}
       <div className="shrink-0 flex flex-col gap-1">
@@ -88,9 +113,35 @@ export function AnnouncementEditorPanel() {
       {/* ── Body ── */}
       <div className="flex flex-col flex-1 min-h-0">
 
+        {/*
+          With a message staged there is nothing left to compose, so the chip
+          takes the place of the whole toolbar-and-input body. Its three
+          actions are the only ways on from here.
+        */}
+        {staged ? (
+          <div className="flex flex-1 flex-col min-h-0">
+            <AnnouncementDraftChip
+              staged={staged}
+              replacing={stagedIndex != null}
+              onEdit={editStaged}
+              onDiscard={discardStaged}
+              onPublish={publishStaged}
+              publishing={publishingStaged}
+            />
+            {/* The same footer rule as the compose state, so the card keeps its
+                shape and the line stays level with the list's footer. */}
+            <p className="mt-3 flex h-7 shrink-0 items-center border-t border-border pt-2 text-[11px] text-on-surface-variant/70">
+              Saved to your account — you can publish it from any device.
+            </p>
+          </div>
+        ) : (
+          <>
+
         {/* Toolbar sub-card */}
-        <div className="shrink-0 rounded-lg border border-border bg-surface-subtle px-3 pt-3 pb-3">
-          <div className="flex items-center justify-between mb-2.5">
+        {/* Roomier than before: the card has the height, and a toolbar with
+            space around it reads as the main control rather than squeezed in. */}
+        <div className="shrink-0 rounded-lg border border-border bg-surface-subtle px-4 py-6">
+          <div className="flex items-center justify-between mb-4">
             <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant/60 leading-none">
               Formatting &amp; Options
             </span>
@@ -101,6 +152,7 @@ export function AnnouncementEditorPanel() {
           <div className="flex items-center gap-1">
             <div className="flex-1 min-w-0">
               <RichTextToolbar
+                large
                 activeFormats={activeFormats}
                 onFormat={(format) => {
                   const sel = window.getSelection();
@@ -162,7 +214,7 @@ export function AnnouncementEditorPanel() {
                 }}
                 extraActions={
                   <>
-                    <div className="border-l border-border h-4 mx-2 shrink-0" />
+                    <div className="border-l border-border h-5 mx-2 shrink-0" />
                     <button
                       ref={linkBtnRef}
                       onMouseDown={(e) => {
@@ -172,10 +224,10 @@ export function AnnouncementEditorPanel() {
                         setShowSchedulePopup(false);
                       }}
                       disabled={!newAnnouncementText.trim() || isOverLimit}
-                      className={`cursor-pointer flex items-center gap-1 px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed text-xs ${selectedUrl ? 'border-primary/80 bg-primary/10 text-primary' : 'border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
+                      className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed text-sm ${selectedUrl ? 'border-primary/80 bg-primary/10 text-primary' : 'border-on-surface/25 hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
                       title={newAnnouncementText.trim() ? (isOverLimit ? 'Character limit exceeded' : 'Add link') : 'Enter text first'}
                     >
-                      <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                       </svg>
                       <span className="leading-none">Link</span>
@@ -190,10 +242,10 @@ export function AnnouncementEditorPanel() {
                         setShowLinkPopup(false);
                       }}
                       disabled={!newAnnouncementText.trim() || isOverLimit}
-                      className={`cursor-pointer flex items-center gap-1 px-1.5 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed text-xs ${(selectedStartDate || selectedEndDate) ? 'border-primary/80 bg-primary/10 text-primary' : 'border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
+                      className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed text-sm ${(selectedStartDate || selectedEndDate) ? 'border-primary/80 bg-primary/10 text-primary' : 'border-on-surface/25 hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
                       title={newAnnouncementText.trim() ? (isOverLimit ? 'Character limit exceeded' : 'Schedule this message') : 'Enter text first'}
                     >
-                      <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                       <span className="leading-none">Schedule</span>
@@ -207,10 +259,10 @@ export function AnnouncementEditorPanel() {
                       e.preventDefault();
                       openChatGptWithPrompt();
                     }}
-                    className="cursor-pointer flex items-center gap-1 px-1.5 py-1 border rounded transition-colors shrink-0 border-border hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant text-xs"
+                    className="cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 border rounded transition-colors shrink-0 border-on-surface/25 hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant text-sm"
                     title="Open ChatGPT with a prompt"
                   >
-                    <Sparkles className="w-3 h-3" />
+                    <Sparkles className="w-3.5 h-3.5" />
                   </button>
                 }
               />
@@ -219,12 +271,41 @@ export function AnnouncementEditorPanel() {
         </div>
 
         {/* ── Message input section ── */}
-        <div className="mt-4 flex-1 flex flex-col min-h-0">
-          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] leading-none">
-            Message
-          </label>
+        <div className="mt-8 flex-1 flex flex-col min-h-0">
+          <div className="flex items-center justify-between">
+            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] leading-none">
+              Message
+            </label>
+            {/* Empties the text only — link, dates and the row being edited are
+                kept. Snapshotted first, so Ctrl+Z brings the text back. */}
+            {/* Always shown so its place never jumps; disabled while empty.
+                Styled like the list's old "Clear all". */}
+            <button
+              type="button"
+              disabled={!newAnnouncementText.replace(/<[^>]*>/g, '').replace(/\u200B/g, '').trim()}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const editor = richEditorRef.current;
+                if (!editor || !newAnnouncementText.replace(/<[^>]*>/g, '').replace(/\u200B/g, '').trim()) return;
+                pushImmediateState(getEditorSnapshot());
+                editor.innerHTML = '';
+                onRichTextInput();
+                setActiveFormats({ bold: false, italic: false, size: 'md', color: editorDefaultColor });
+                editor.focus();
+              }}
+              className="flex items-center gap-1 text-[11px] font-medium leading-none text-on-surface-variant transition-colors hover:text-rose-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-on-surface-variant"
+              title="Clear the message (Ctrl+Z to undo)"
+            >
+              <Trash2 className="h-3 w-3" />
+              Clear
+            </button>
+          </div>
 
-          <div className="flex gap-2 mt-2 flex-1">
+          {/* One line, level with the button, growing with the text to three
+              lines. The card's spare height (it matches the list's 415px) sits
+              in the toolbar card's padding and the gap above this label — not
+              in an oversized input. */}
+          <div className="flex gap-2 mt-2">
             <div className="flex-1 min-w-0 flex flex-col">
               <div
                 ref={richEditorRef}
@@ -409,7 +490,7 @@ export function AnnouncementEditorPanel() {
                     if (richEditorRef.current) richEditorRef.current.innerHTML = '';
                   }
                 }}
-                className="rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden break-words transition-colors focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 border-border resize-y min-h-[44px] max-h-[120px]"
+                className="rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden break-words transition-colors focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 border-on-surface/25 min-h-[44px] max-h-[88px]"
                 //add here in styles background: getBackgroundStyle(previewBg) for the preview background color
                 style={{ wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%', caretColor: 'auto' }}
               />
@@ -417,28 +498,44 @@ export function AnnouncementEditorPanel() {
             <button
               onMouseDown={(e) => {
                 e.preventDefault();
-                if (!isOverLimit && newAnnouncementText.trim()) {
+                if (!isOverLimit && newAnnouncementText.trim() && !scheduleFull) {
                   addAnnouncement();
                 }
               }}
-              disabled={!newAnnouncementText.trim() || isOverLimit}
-              className="h-11 px-4 border border-transparent text-sm font-medium rounded-md shadow-sm text-on-primary bg-primary hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap shrink-0 self-start"
+              disabled={!newAnnouncementText.trim() || isOverLimit || scheduleFull}
+              title={scheduleFull ? SCHEDULE_LIMIT_MESSAGE : undefined}
+              className="h-11 px-4 border border-transparent text-sm font-medium rounded-md shadow-sm text-on-primary bg-primary hover:opacity-95 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap shrink-0 self-end"
             >
-              {selectedIndex !== null ? 'Update' : 'Add'}
+              {stageLabel}
             </button>
           </div>
 
-          {/* Footer hint with character count and limit warning */}
-          <div className="mt-2 flex items-center justify-between shrink-0">
+          {/* Shown only once all three slots are taken and a future date is
+              picked — the moment the Schedule button above stops working. */}
+          {scheduleFull && (
+            <p className="mt-2 flex shrink-0 items-start gap-1.5 text-[11px] leading-4 text-amber-600 dark:text-amber-400">
+              <CalendarClock className="mt-px h-3.5 w-3.5 shrink-0" />
+              {SCHEDULE_LIMIT_MESSAGE}
+            </p>
+          )}
+
+          {/*
+            Footer: character count and the Enter hint, pinned to the card's
+            base with a rule. Same classes as the Manage Announcements footer,
+            so the two rules sit level across the pair.
+          */}
+          <div className="mt-auto flex h-7 shrink-0 items-center justify-between border-t border-border pt-2">
             <span className={`text-[11px] leading-none ${isOverLimit ? 'text-red-500 font-medium' : 'text-on-surface-variant/50'}`}>
               {(newAnnouncementText.replace(/<[^>]*>/g, '').replace(/\u200B/g, '').length)}&nbsp;/&nbsp;120 chars
               {isOverLimit && ' ⚠️ Limit exceeded'}
             </span>
             <span className="text-[11px] text-on-surface-variant/50 leading-none">
-              Press ↵ Enter to add
+              Press ↵ Enter to {stageLabel.toLowerCase()}
             </span>
           </div>
         </div>
+          </>
+        )}
 
       </div>
 

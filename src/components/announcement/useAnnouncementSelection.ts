@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, type RefObject } from 'react';
-import type { CampaignConfig } from '@/types/campaign';
+import type { Announcement, CampaignConfig } from '@/types/campaign';
 import { wrapBareTextWithFontSize } from '@/lib/editor/fontSizeUtils';
 
 interface UseAnnouncementSelectionArgs {
@@ -86,8 +86,17 @@ export function useAnnouncementSelection({
    * read.
    */
   function loadAnnouncementIntoSelection(index: number): string {
-    const ann = config.announcementBar.announcements[index];
     setSelectedIndex(index);
+    return loadAnnouncementFields(config.announcementBar.announcements[index]);
+  }
+
+  /**
+   * Fills the editor's fields from a message without claiming a row in the
+   * list. The staged draft is edited this way: it has no index, and leaving
+   * selectedIndex null is what keeps a later save staging it again rather than
+   * overwriting a published row.
+   */
+  function loadAnnouncementFields(ann: Announcement): string {
     setSelectedUrl(ann.url || '');
     setSelectedCtaType(ann.ctaType === 'whatsapp' ? 'whatsapp' : 'link');
     setSelectedWhatsappNumber(ann.whatsappNumber || '');
@@ -146,6 +155,7 @@ export function useAnnouncementSelection({
     selectedIndexRef,
     clearSelection,
     loadAnnouncementIntoSelection,
+    loadAnnouncementFields,
     selectAnnouncement,
   };
 }

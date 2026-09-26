@@ -54,9 +54,11 @@ export function useAnnouncementRowMenu({
   function openActionMenu(index: number, button: HTMLButtonElement) {
     const rect = button.getBoundingClientRect();
     setActionMenuIndex(index);
+    // Opens to the left of the ⋮ button (menu is 180px wide). To the right it
+    // hung past the list card's edge.
     setActionMenuPos({
       top: rect.top + window.scrollY,
-      left: rect.right + window.scrollX + 8,
+      left: rect.left + window.scrollX - 180 - 8,
     });
     setShowLinkPopup(false);
     setShowSchedulePopup(false);

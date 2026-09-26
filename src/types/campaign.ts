@@ -3,7 +3,7 @@ import type { GradientStyle, PromoStyle } from '@/types/promoStyle';
 
 export type { GradientStyle } from '@/types/promoStyle';
 
-interface Announcement {
+export interface Announcement {
   text: string;
   /**
    * Where the message points. For a WhatsApp CTA this holds the derived
@@ -96,6 +96,20 @@ export interface CampaignConfig {
     /** Marquee speed in pixels per second (0 = paused). Absent means the default pace. */
     speed?: number;
     announcements: Announcement[];
+    /**
+     * The one message staged but not yet published. Absent or null means the
+     * editor is free. It rides along in the draft config, so a staged message
+     * reaches the cloud with the next draft save and is found again on any
+     * device. Optional, so configs written before this existed still parse.
+     */
+    staged?: Announcement | null;
+    /**
+     * Which published message the staged one replaces, or null when it is a
+     * new message. Editing a live message goes through the same stage-then-
+     * publish pipeline as writing a new one, so the list only ever changes on
+     * Publish — this is how Publish knows whether to replace or append.
+     */
+    stagedIndex?: number | null;
     startDate: string;
     endDate: string;
     style: {

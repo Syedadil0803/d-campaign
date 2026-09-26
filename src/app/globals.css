@@ -119,9 +119,14 @@
   animation: scrollLeft var(--scroll-duration, 30s) linear infinite;
 }
 
-/* Pause animation on hover */
+/* Pause animation on hover, and while the user is composing — text that slides
+   away mid-edit can't be read. Held rather than reset: the same freeze as hover,
+   so the message keeps its place and carries on when the user stops. Distinct
+   from .announcement-paused below, which is the user's own Pause and collapses
+   the loop down to one centred copy. */
 .group:hover .animate-scroll-left,
-.announcement-bar-container:hover .animate-scroll-left {
+.announcement-bar-container:hover .animate-scroll-left,
+.announcement-editing .animate-scroll-left {
   animation-play-state: paused;
 }
 

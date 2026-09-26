@@ -6,7 +6,7 @@ import { visibleAnnouncements } from '@/lib/announcement/announcementWindow';
 import { marqueeDurationSeconds, DEFAULT_PX_PER_SEC } from '@/lib/announcement/scrollSpeed';
 import { buildAnnouncementAiPrompt, chatGptUrl } from '@/lib/announcement/announcementAiPrompt';
 import { readFormatsFromHtml } from '@/lib/editor/readFormatsFromHtml';
-import { CampaignConfig, GradientStyle, defaultConfig } from '@/types/campaign';
+import { CampaignConfig, GradientStyle, defaultConfig, type Announcement } from '@/types/campaign';
 import { stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { rgbToHex } from '@/lib/editor/colorUtils';
@@ -33,6 +33,9 @@ import {
   type AnnouncementTheme,
 } from '@/lib/announcement/announcementThemes';
 import { addDebugLog, saveSelectedAnnouncementIndex } from '@/lib/recovery';
+import { buildPreviewList, hasVisibleText, startsLater } from '@/lib/announcement/stagedDraft';
+import { canSchedule, SCHEDULE_LIMIT_MESSAGE } from '@/lib/announcement/listSections';
+import { useComposeActivity } from '@/hooks/useComposeActivity';
 
 interface AnnouncementSectionProps {
   config: CampaignConfig;
@@ -53,6 +56,14 @@ interface AnnouncementSectionProps {
   recoveredSelectedAnnouncementIndex?: number | null;
   /** Called after recovered selection is applied. */
   onRestoreRecoveredSelection?: () => void;
+  /**
+   * Writes a draft to the cloud straight away. Staging a message has to reach
+   * the database on the click, not on the next idle save, or the user would
+   * not find it on another device.
+   */
+  saveDraftNow?: (cfg: CampaignConfig) => boolean;
+  /** Publishes the given config — the chip promotes and publishes in one click. */
+  publishNow?: (cfg: CampaignConfig) => Promise<void>;
 }
 
 function getThemeOnSurfaceHex(): string {
@@ -64,7 +75,7 @@ function getThemeOnSurfaceHex(): string {
   return rgbToHex(`rgb(${r}, ${g}, ${b})`);
 }
 
-export function AnnouncementSection({ config, setConfig, markChanged, canReactivate, onStop, onGoOnAir, pendingComposeTextRef, recoveredSelectedAnnouncementIndex, onRestoreRecoveredSelection }: AnnouncementSectionProps) {
+export function AnnouncementSection({ config, setConfig, markChanged, canReactivate, onStop, onGoOnAir, pendingComposeTextRef, recoveredSelectedAnnouncementIndex, onRestoreRecoveredSelection, saveDraftNow, publishNow }: AnnouncementSectionProps) {
   const [newAnnouncementText, setNewAnnouncementText] = useState('');
   const richEditorRef = useRef<HTMLDivElement>(null);
 
@@ -189,8 +200,17 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     selectedIndexRef,
     clearSelection,
     loadAnnouncementIntoSelection,
+    loadAnnouncementFields,
     selectAnnouncement,
   } = selection;
+
+  /** True only while the staged message's publish request is in flight. */
+  const [publishingStaged, setPublishingStaged] = useState(false);
+  /** Holds a staged message's HTML between Edit and the input remounting. */
+  const restoreStagedHtmlRef = useRef<string | null>(null);
+  /** The marquee pauses while the user is composing; see useComposeActivity. */
+  const { active: composing, signal: signalComposeActivity } = useComposeActivity();
+  const composeWatchStartedRef = useRef(false);
 
   const popups = useAnnouncementPopups({ selectedStartDate, selectedEndDate });
   const {
@@ -372,9 +392,17 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   }, []);
 
   function addAnnouncement() {
+    // The cap is enforced here, where every route to staging arrives — the
+    // button, Enter, anything added later — not only on the disabled button.
+    if (
+      startsLater(selectedStartDate) &&
+      !canSchedule(config.announcementBar.announcements, selectedIndex)
+    ) {
+      toast(SCHEDULE_LIMIT_MESSAGE, true, undefined, 4000);
+      return;
+    }
     commitHistory();
     const html = getNormalizedHTML();
-    const updated = [...config.announcementBar.announcements];
     const destination =
       selectedCtaType === 'whatsapp'
         ? {
@@ -390,44 +418,171 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
           whatsappCountryCode: undefined,
         };
 
-    if (selectedIndex !== null) {
-      updated[selectedIndex] = {
-        ...updated[selectedIndex],
-        text: html,
-        ...destination,
-        openInNewTab: selectedOpenInNewTab || undefined,
-        startDate: selectedStartDate || undefined,
-        endDate: selectedEndDate || undefined,
-        richText: true,
-      };
-    } else {
-      updated.push({
-        text: html,
-        ...destination,
-        openInNewTab: selectedOpenInNewTab || undefined,
-        startDate: selectedStartDate || undefined,
-        endDate: selectedEndDate || undefined,
-        richText: true,
-      });
-    }
+    const composed = {
+      text: html,
+      ...destination,
+      openInNewTab: selectedOpenInNewTab || undefined,
+      startDate: selectedStartDate || undefined,
+      endDate: selectedEndDate || undefined,
+      richText: true,
+    };
 
-    setConfig({
+    /**
+     * Nothing reaches the list here, whether the message is new or an edit of
+     * a published one. Both stage, and only Publish changes what the site
+     * shows — one pipeline, so the Manage Announcements list is never a step
+     * ahead of the website.
+     *
+     * An edit keeps the index of the row it came from, so Publish replaces
+     * that row instead of adding a second copy.
+     */
+    const next: CampaignConfig = {
       ...config,
       announcementBar: {
         ...config.announcementBar,
-        announcements: updated,
+        staged: composed,
+        stagedIndex: selectedIndex,
       },
-    });
+    };
 
+    setConfig(next);
     clearSelection();
     detectFormats();
     markChanged();
+    // Straight to the cloud, so the message is on the user's other devices
+    // before they look for it there.
+    saveDraftNow?.(next);
     toast(
-      selectedIndex !== null ? 'Announcement updated' : 'Announcement added',
+      startsLater(selectedStartDate)
+        ? 'Message staged — schedule when ready'
+        : 'Message staged — publish when ready',
       false,
       undefined,
       2500,
     );
+  }
+
+  /**
+   * Puts the staged message back in the editor and frees the input again.
+   *
+   * The text cannot be written into the editor here: while a message is staged
+   * the panel renders the chip in place of the input, so the contentEditable is
+   * not mounted yet and richEditorRef is still null. The HTML is parked for the
+   * effect below, which runs once the input is back on screen.
+   *
+   * Nothing is written to the cloud. The staged record stays as it was until
+   * the message is staged again or discarded, so an abandoned edit leaves the
+   * saved message intact rather than wiping it.
+   */
+  function editStaged() {
+    const staged = config.announcementBar.staged;
+    if (!staged) return;
+    restoreStagedHtmlRef.current = loadAnnouncementFields(staged);
+    setShowRichToolbar(true);
+    // An edit of a published message keeps hold of its row, so staging it
+    // again still replaces that row rather than adding a copy.
+    setSelectedIndex(config.announcementBar.stagedIndex ?? null);
+    setConfig({
+      ...config,
+      announcementBar: { ...config.announcementBar, staged: null, stagedIndex: null },
+    });
+    markChanged();
+  }
+
+  /**
+   * Fills the input once it is back on screen after Edit. Refs are attached
+   * before effects run, so by here the contentEditable exists.
+   */
+  useEffect(() => {
+    if (config.announcementBar.staged) return;
+    const html = restoreStagedHtmlRef.current;
+    const editor = richEditorRef.current;
+    if (!html || !editor) return;
+    restoreStagedHtmlRef.current = null;
+    editor.innerHTML = html;
+    editor.focus();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    const selectionNow = window.getSelection();
+    selectionNow?.removeAllRanges();
+    selectionNow?.addRange(range);
+    detectFormatsForSelectMode(html);
+  }, [config.announcementBar.staged]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Throws the staged message away. The editor is left empty, not repopulated. */
+  function discardStaged() {
+    if (!config.announcementBar.staged) return;
+    const next: CampaignConfig = {
+      ...config,
+      announcementBar: { ...config.announcementBar, staged: null, stagedIndex: null },
+    };
+    setConfig(next);
+    clearSelection();
+    markChanged();
+    saveDraftNow?.(next);
+    toast(
+      config.announcementBar.stagedIndex != null
+        ? 'Edit discarded — the published message is unchanged'
+        : 'Message discarded',
+      false,
+      undefined,
+      2500,
+    );
+  }
+
+  /**
+   * Moves the staged message into the list and publishes in one step.
+   *
+   * The built config is handed to `publishNow` rather than left to state:
+   * setConfig has not committed by the time publish reads it, so publishing
+   * from state would push the version without the message.
+   */
+  async function publishStaged() {
+    const staged = config.announcementBar.staged;
+    if (!staged || publishingStaged) return;
+
+    // Checked again at publish: the list can have filled up since this was
+    // staged — on another device, where the draft was picked up from.
+    if (
+      startsLater(staged.startDate) &&
+      !canSchedule(config.announcementBar.announcements, config.announcementBar.stagedIndex ?? null)
+    ) {
+      toast(SCHEDULE_LIMIT_MESSAGE, true, undefined, 4000);
+      return;
+    }
+
+    /**
+     * An edit replaces the row it came from; a new message joins the end. The
+     * index is re-checked rather than trusted: the row can be deleted from the
+     * list while its edit sits staged, and appending is better than writing
+     * past the end of the array.
+     */
+    const list = [...config.announcementBar.announcements];
+    const target = config.announcementBar.stagedIndex;
+    if (target != null && target >= 0 && target < list.length) {
+      list[target] = { ...list[target], ...staged };
+    } else {
+      list.push(staged);
+    }
+
+    const next: CampaignConfig = {
+      ...config,
+      announcementBar: {
+        ...config.announcementBar,
+        announcements: list,
+        staged: null,
+        stagedIndex: null,
+      },
+    };
+    setPublishingStaged(true);
+    try {
+      setConfig(next);
+      clearSelection();
+      await publishNow?.(next);
+    } finally {
+      setPublishingStaged(false);
+    }
   }
 
   function removeAnnouncement(index: number) {
@@ -449,21 +604,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
 
     markChanged();
     toast('Announcement deleted', false, undoListAction(previous));
-  }
-
-  function clearAnnouncements() {
-    if (config.announcementBar.announcements.length === 0) return;
-    const previous = [...config.announcementBar.announcements];
-    setConfig({
-      ...config,
-      announcementBar: {
-        ...config.announcementBar,
-        announcements: [],
-      },
-    });
-    clearSelection();
-    markChanged();
-    toast('All announcements cleared', false, undoListAction(previous));
   }
 
   function startFresh() {
@@ -715,6 +855,60 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   scheduleRangeInvalidRef.current = scheduleRangeInvalid;
 
   const visible = visibleAnnouncements(config.announcementBar.announcements);
+  const staged = config.announcementBar.staged ?? null;
+
+  /**
+   * What the editor currently holds, shaped as a message so the preview can
+   * render it exactly as it will look once published. The HTML is passed
+   * through untouched — stripping it would show unstyled text that changed
+   * appearance the moment it went live.
+   */
+  const typing: Announcement | null = hasVisibleText(newAnnouncementText)
+    ? {
+      text: newAnnouncementText,
+      url: selectedUrl || undefined,
+      startDate: selectedStartDate || undefined,
+      endDate: selectedEndDate || undefined,
+      richText: true,
+    }
+    : null;
+
+  const stagedIndex = config.announcementBar.stagedIndex ?? null;
+  const previewList = buildPreviewList({
+    visible,
+    staged,
+    stagedReplaces: stagedIndex !== null
+      ? config.announcementBar.announcements[stagedIndex] ?? null
+      : null,
+    editing: selectedIndex !== null
+      ? config.announcementBar.announcements[selectedIndex] ?? null
+      : null,
+    typing,
+  });
+
+  /**
+   * Hold the marquee still while the user is composing.
+   *
+   * Keyed on what the preview actually renders, so every editing action is
+   * covered by one watcher: typing, size, bold, italic, colour, the link and
+   * the dates all change this string. The first run is skipped — arriving at
+   * the page is not composing.
+   */
+  const previewSignature = previewList
+    .map((m) => `${m.text}|${m.url ?? ''}|${m.startDate ?? ''}|${m.endDate ?? ''}`)
+    .join('␟');
+
+  useEffect(() => {
+    if (!composeWatchStartedRef.current) {
+      composeWatchStartedRef.current = true;
+      return;
+    }
+    signalComposeActivity();
+  }, [previewSignature, signalComposeActivity]);
+
+  useEffect(() => {
+    scrollContainerRef.current?.classList.toggle('announcement-editing', composing);
+  }, [composing]);
 
   const editorApi: AnnouncementEditorApi = {
     ...styleDropdowns,
@@ -757,6 +951,12 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     linkDeletingRef,
     justDeletedStyledRef,
     activeFormatsRef,
+    staged,
+    stagedIndex,
+    editStaged,
+    discardStaged,
+    publishStaged,
+    publishingStaged,
   };
 
   return (
@@ -844,7 +1044,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
           <AnnouncementPreview
             config={config}
             previewBg={previewBg}
-            visibleAnnouncements={visible}
+            visibleAnnouncements={previewList}
             loopCopies={loopCopies}
             scrollContainerRef={scrollContainerRef}
             loop={config.announcementBar.loop !== false}
@@ -867,7 +1067,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
               clearSelection={clearSelection}
               loadAnnouncementIntoSelection={loadAnnouncementIntoSelection}
               detectFormatsForSelectMode={detectFormatsForSelectMode}
-              clearAnnouncements={clearAnnouncements}
               reorderAnnouncements={reorderAnnouncements}
               draggedIndex={draggedIndex}
               setDraggedIndex={setDraggedIndex}
@@ -875,6 +1074,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
               scheduleCloseActionMenu={scheduleCloseActionMenu}
               cancelCloseActionMenu={cancelCloseActionMenu}
               richEditorRef={richEditorRef}
+              locked={staged !== null}
+              stagedIndex={stagedIndex}
             />
           </div>
         </div>
