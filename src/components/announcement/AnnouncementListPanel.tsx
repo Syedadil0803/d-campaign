@@ -260,7 +260,7 @@ export function AnnouncementListPanel({
   const tabs: { value: Filter; label: string; dot?: string }[] = [
     { value: 'active', label: `Active ${liveRows.length}`, dot: 'bg-emerald-500' },
     { value: 'scheduled', label: `Upcoming ${scheduled.length}`, dot: 'bg-amber-500' },
-    { value: 'all', label: `All (${allRows.length})` },
+    { value: 'all', label: `All ${allRows.length}` },
   ];
 
   return (
@@ -291,13 +291,13 @@ export function AnnouncementListPanel({
                     key={tab.value}
                     type="button"
                     onClick={() => setFilter(tab.value)}
-                    className={`flex flex-1 items-center justify-center gap-1 rounded-md py-1 transition-colors ${
+                    className={`flex min-w-0 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1 py-1 transition-colors ${
                       filter === tab.value
                         ? 'bg-surface-elevated text-on-surface shadow-sm'
                         : 'text-on-surface-variant hover:text-on-surface'
                     }`}
                   >
-                    {tab.dot && <span className={`h-1.5 w-1.5 rounded-full ${tab.dot}`} aria-hidden="true" />}
+                    {tab.dot && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tab.dot}`} aria-hidden="true" />}
                     {tab.label}
                   </button>
                 ))}
