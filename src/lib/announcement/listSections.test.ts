@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canSchedule, groupRows, rowState, rowTiming } from '@/lib/announcement/listSections';
+import { canSchedule, groupRows, insertIndexForPosition, rowState, rowTiming, rowDates } from '@/lib/announcement/listSections';
 import type { Announcement } from '@/types/campaign';
 
 function dayOffset(days: number): string {
@@ -94,19 +94,68 @@ describe('rowTiming', () => {
     expect(rowTiming({ text: 'x' }, 'active')).toBe('');
   });
 
-  it('shows an open-ended run starting today', () => {
-    expect(rowTiming({ text: 'x', startDate: dayOffset(0) }, 'active')).toBe('From Today onwards');
+  it('shows an open-ended run by when it began', () => {
+    expect(rowTiming({ text: 'x', startDate: '2026-05-01' }, 'active')).toMatch(/^Since /);
   });
 
-  it('shows a scheduled open-ended message by its start', () => {
-    expect(rowTiming({ text: 'x', startDate: dayOffset(5) }, 'scheduled')).toMatch(/^Starts /);
+  it('shows a date window with an en dash, not an arrow', () => {
+    expect(rowTiming({ text: 'x', startDate: '2026-05-01', endDate: '2026-05-10' }, 'active')).toContain(' – ');
   });
 
-  it('shows a scheduled range with both ends', () => {
-    expect(rowTiming({ text: 'x', startDate: dayOffset(5), endDate: dayOffset(9) }, 'scheduled')).toContain('→');
+  it('shows an upcoming message by its start only', () => {
+    expect(rowTiming({ text: 'x', startDate: dayOffset(5), endDate: dayOffset(9) }, 'scheduled')).toMatch(/^Starts /);
   });
 
   it('says when an ended message ended', () => {
     expect(rowTiming({ text: 'x', startDate: dayOffset(-9), endDate: dayOffset(-2) }, 'ended')).toMatch(/^Ended /);
+  });
+
+  it('reads a stored date as that calendar day, whatever the time zone', () => {
+    // 2026-05-01 must never show as Apr 30.
+    expect(rowTiming({ text: 'x', startDate: '2026-05-01' }, 'active')).toContain('1');
+    expect(rowTiming({ text: 'x', startDate: '2026-05-01' }, 'active')).not.toContain('30');
+  });
+});
+
+describe('rowDates', () => {
+  it('calls an undated message continuous', () => {
+    expect(rowDates({ text: 'x' }, 'active')).toBe('Continuous');
+  });
+
+  it('counts a window inclusive of both days', () => {
+    expect(rowDates({ text: 'x', startDate: '2026-05-01', endDate: '2026-05-10' }, 'active')).toMatch(/\(10 days\)$/);
+    expect(rowDates({ text: 'x', startDate: '2026-05-01', endDate: '2026-05-01' }, 'active')).toMatch(/\(1 day\)$/);
+  });
+
+  it('says Starts for an upcoming open-ended message, Since for a running one', () => {
+    expect(rowDates({ text: 'x', startDate: '2026-05-01' }, 'scheduled')).toMatch(/^Starts /);
+    expect(rowDates({ text: 'x', startDate: '2026-05-01' }, 'active')).toMatch(/^Since /);
+  });
+});
+
+describe('insertIndexForPosition', () => {
+  const list: Announcement[] = [
+    { text: 'live-a' },
+    { text: 'later', startDate: dayOffset(5) },
+    { text: 'live-b' },
+    { text: 'live-c' },
+  ];
+
+  it('puts position 1 before the first live message', () => {
+    expect(insertIndexForPosition(list, 1)).toBe(0);
+  });
+
+  it('counts only live messages, skipping upcoming ones', () => {
+    // Position 2 = before live-b, which is stored at index 2.
+    expect(insertIndexForPosition(list, 2)).toBe(2);
+  });
+
+  it('puts the last position just after the last live message', () => {
+    expect(insertIndexForPosition(list, 4)).toBe(4);
+    expect(insertIndexForPosition(list, 99)).toBe(4);
+  });
+
+  it('starts an empty list at the top', () => {
+    expect(insertIndexForPosition([], 3)).toBe(0);
   });
 });

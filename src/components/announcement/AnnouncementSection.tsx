@@ -34,7 +34,7 @@ import {
 } from '@/lib/announcement/announcementThemes';
 import { addDebugLog, saveSelectedAnnouncementIndex } from '@/lib/recovery';
 import { buildPreviewList, hasVisibleText, startsLater } from '@/lib/announcement/stagedDraft';
-import { canSchedule, SCHEDULE_LIMIT_MESSAGE } from '@/lib/announcement/listSections';
+import { canSchedule, insertIndexForPosition, SCHEDULE_LIMIT_MESSAGE } from '@/lib/announcement/listSections';
 import { useComposeActivity } from '@/hooks/useComposeActivity';
 
 interface AnnouncementSectionProps {
@@ -64,6 +64,8 @@ interface AnnouncementSectionProps {
   saveDraftNow?: (cfg: CampaignConfig) => boolean;
   /** Publishes the given config — the chip promotes and publishes in one click. */
   publishNow?: (cfg: CampaignConfig) => Promise<void>;
+  /** Shows the publish confirmation; runs `onConfirm` only if the user agrees. */
+  confirmPublish?: (onConfirm: () => Promise<void>) => void;
 }
 
 function getThemeOnSurfaceHex(): string {
@@ -75,7 +77,7 @@ function getThemeOnSurfaceHex(): string {
   return rgbToHex(`rgb(${r}, ${g}, ${b})`);
 }
 
-export function AnnouncementSection({ config, setConfig, markChanged, canReactivate, onStop, onGoOnAir, pendingComposeTextRef, recoveredSelectedAnnouncementIndex, onRestoreRecoveredSelection, saveDraftNow, publishNow }: AnnouncementSectionProps) {
+export function AnnouncementSection({ config, setConfig, markChanged, canReactivate, onStop, onGoOnAir, pendingComposeTextRef, recoveredSelectedAnnouncementIndex, onRestoreRecoveredSelection, saveDraftNow, publishNow, confirmPublish }: AnnouncementSectionProps) {
   const [newAnnouncementText, setNewAnnouncementText] = useState('');
   const richEditorRef = useRef<HTMLDivElement>(null);
 
@@ -199,13 +201,14 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     selectedCountryCode,
     selectedIndexRef,
     clearSelection,
-    loadAnnouncementIntoSelection,
     loadAnnouncementFields,
     selectAnnouncement,
   } = selection;
 
   /** True only while the staged message's publish request is in flight. */
   const [publishingStaged, setPublishingStaged] = useState(false);
+  /** Where a new live message will sit in the order, 1 = top. Chosen before publishing. */
+  const [stagedPosition, setStagedPosition] = useState(1);
   /** Holds a staged message's HTML between Edit and the input remounting. */
   const restoreStagedHtmlRef = useRef<string | null>(null);
   /** The marquee pauses while the user is composing; see useComposeActivity. */
@@ -229,12 +232,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     selectAnnouncement,
     removeAnnouncement,
   });
-  const {
-    openActionMenu,
-    scheduleCloseActionMenu,
-    cancelCloseActionMenu,
-  } = rowMenu;
-
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   selectedIndexRef.current = selectedIndex;
   const configRef = useRef(config);
@@ -513,6 +510,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   /** Throws the staged message away. The editor is left empty, not repopulated. */
   function discardStaged() {
     if (!config.announcementBar.staged) return;
+    setStagedPosition(1);
     const next: CampaignConfig = {
       ...config,
       announcementBar: { ...config.announcementBar, staged: null, stagedIndex: null },
@@ -555,15 +553,19 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     /**
      * An edit replaces the row it came from; a new message joins the end. The
      * index is re-checked rather than trusted: the row can be deleted from the
-     * list while its edit sits staged, and appending is better than writing
+     * list while its edit sits staged, and adding it is better than writing
      * past the end of the array.
      */
     const list = [...config.announcementBar.announcements];
     const target = config.announcementBar.stagedIndex;
     if (target != null && target >= 0 && target < list.length) {
       list[target] = { ...list[target], ...staged };
+    } else if (startsLater(staged.startDate)) {
+      // Upcoming messages are ordered by start date, not by position.
+      list.unshift(staged);
     } else {
-      list.push(staged);
+      // The position picked in the chip; 1 (top, newest first) by default.
+      list.splice(insertIndexForPosition(list, stagedPosition), 0, staged);
     }
 
     const next: CampaignConfig = {
@@ -575,14 +577,21 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
         stagedIndex: null,
       },
     };
-    setPublishingStaged(true);
-    try {
-      setConfig(next);
-      clearSelection();
-      await publishNow?.(next);
-    } finally {
-      setPublishingStaged(false);
-    }
+    // Nothing changes until the user confirms in the same "Publish to
+    // website?" dialog the header's Publish uses; Cancel leaves it staged.
+    const run = async () => {
+      setPublishingStaged(true);
+      try {
+        setConfig(next);
+        clearSelection();
+        setStagedPosition(1);
+        await publishNow?.(next);
+      } finally {
+        setPublishingStaged(false);
+      }
+    };
+    if (confirmPublish) confirmPublish(run);
+    else await run();
   }
 
   function removeAnnouncement(index: number) {
@@ -957,6 +966,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     discardStaged,
     publishStaged,
     publishingStaged,
+    stagedPosition,
+    setStagedPosition,
   };
 
   return (
@@ -1064,16 +1075,12 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
             <AnnouncementListPanel
               config={config}
               selectedIndex={selectedIndex}
-              clearSelection={clearSelection}
-              loadAnnouncementIntoSelection={loadAnnouncementIntoSelection}
-              detectFormatsForSelectMode={detectFormatsForSelectMode}
               reorderAnnouncements={reorderAnnouncements}
               draggedIndex={draggedIndex}
               setDraggedIndex={setDraggedIndex}
-              openActionMenu={openActionMenu}
-              scheduleCloseActionMenu={scheduleCloseActionMenu}
-              cancelCloseActionMenu={cancelCloseActionMenu}
-              richEditorRef={richEditorRef}
+              onEdit={selectAnnouncement}
+              onCancelEdit={clearSelection}
+              onDelete={rowMenu.handleMenuDelete}
               locked={staged !== null}
               stagedIndex={stagedIndex}
             />

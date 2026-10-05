@@ -33,8 +33,8 @@ interface RichTextToolbarProps {
   buttonFullWidth?: boolean;
   onButtonWidthChange?: (fullWidth: boolean) => void;
   compact?: boolean;
-  /** Bigger buttons and glyphs, for a toolbar with room around it. */
-  large?: boolean;
+  /** A firmer button outline, for a toolbar sitting on a tinted card. */
+  firmBorder?: boolean;
 }
 
 export default function RichTextToolbar({
@@ -50,19 +50,19 @@ export default function RichTextToolbar({
   buttonFullWidth = false,
   onButtonWidthChange,
   compact = false,
-  large = false,
+  firmBorder = false,
 }: RichTextToolbarProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
   const colorBtnRef = useRef<HTMLButtonElement>(null);
   const sizeBtnRef = useRef<HTMLButtonElement>(null);
   const sizeMenuRef = useRef<HTMLDivElement>(null);
-  const btnSize = compact ? 'px-1.5 py-0.5 text-[10px]' : large ? 'px-2.5 py-1.5 text-sm' : 'px-2 py-1 text-xs';
-  // The large toolbar sits on a tinted card, where the default hairline border
+  const btnSize = compact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-xs';
+  // A toolbar on a tinted card, where the default hairline border
   // all but disappears — so it gets a firmer one.
-  const btnBorder = large ? 'border-on-surface/25' : 'border-border';
+  const btnBorder = firmBorder ? 'border-on-surface/25' : 'border-border';
   const baseBtnClass = `${btnSize} border rounded transition-colors ${btnBorder} hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant`;
-  // ! so the active border beats the large toolbar's border colour, which
+  // ! so the active border beats the firm border colour, which
   // Tailwind emits later (on-surface is defined after primary).
   const activeBtnClass = 'bg-primary/10 text-primary !border-primary/80';
 
@@ -99,14 +99,14 @@ export default function RichTextToolbar({
               setShowColorPicker(!showColorPicker);
             }}
           >
-            <span className={`${large ? 'text-sm' : 'text-xs'} font-bold leading-none`}>A</span>
+            <span className="text-xs font-bold leading-none">A</span>
             {/*
               An empty color means the selection holds more than one, so the
               bar is left unpainted rather than showing whichever colour came
               first. A hairline keeps the control the same size either way.
             */}
             <span
-              className={`block ${large ? 'w-5' : 'w-4'} h-1 rounded-sm mt-0.5 ${
+              className={`block w-4 h-1 rounded-sm mt-0.5 ${
                 activeFormats.color ? '' : 'border border-dashed border-current opacity-50'
               }`}
               style={activeFormats.color ? { backgroundColor: activeFormats.color } : undefined}
@@ -166,7 +166,7 @@ export default function RichTextToolbar({
                 e.preventDefault();
                 setShowSizeDropdown((v) => !v);
               }}
-              className={`${baseBtnClass} flex ${large ? 'w-[68px]' : 'w-[58px]'} items-center justify-between gap-1`}
+              className={`${baseBtnClass} flex w-[58px] items-center justify-between gap-1`}
               title="Text size"
               aria-haspopup="listbox"
               aria-expanded={showSizeDropdown}

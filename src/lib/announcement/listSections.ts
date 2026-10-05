@@ -8,7 +8,7 @@
 
 import type { Announcement } from '@/types/campaign';
 import { isAnnouncementInWindow } from '@/lib/announcement/announcementWindow';
-import { formatDay, startsLater } from '@/lib/announcement/stagedDraft';
+import { startsLater } from '@/lib/announcement/stagedDraft';
 
 /**
  * 'active'    on air now — including a message with no dates, which is always on
@@ -83,38 +83,67 @@ function startTime(message: Announcement): number {
   return Number.isNaN(time) ? 0 : time;
 }
 
-function isToday(iso: string): boolean {
-  const date = new Date(iso);
-  const now = new Date();
-  return (
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate()
-  );
+/**
+ * Scheduling is by date only, so a stored 'YYYY-MM-DD' is read as that local
+ * calendar day. `new Date('2026-05-01')` would read it as UTC midnight, which
+ * shows as Apr 30 anywhere west of Greenwich.
+ */
+function localDay(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
 }
 
-function dayLabel(iso: string): string {
-  return isToday(iso) ? 'Today' : formatDay(iso);
+function shortDay(iso: string): string {
+  const date = localDay(iso);
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function longDay(iso: string): string {
+  const date = localDay(iso);
+  return Number.isNaN(date.getTime())
+    ? iso
+    : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 /**
- * The short timing string beside a row's badge. Empty for a message with no
- * dates: it simply runs, and the Live badge already says so.
+ * Line 2 of a list row: dates only, short. Empty for a message with no dates —
+ * it simply runs, and the row drops its second line.
  */
 export function rowTiming(message: Announcement, state: RowState): string {
   const { startDate, endDate } = message;
   if (!startDate && !endDate) return '';
+  if (state === 'ended') return endDate ? `Ended ${shortDay(endDate)}` : 'Ended';
+  if (state === 'scheduled') return `Starts ${shortDay(startDate!)}`;
+  if (startDate && endDate) return `${shortDay(startDate)} – ${shortDay(endDate)}`;
+  if (startDate) return `Since ${shortDay(startDate)}`;
+  return `Until ${shortDay(endDate!)}`;
+}
 
-  if (state === 'ended') return endDate ? `Ended ${formatDay(endDate)}` : 'Ended';
-
-  if (state === 'scheduled') {
-    return endDate
-      ? `${formatDay(startDate!)} → ${formatDay(endDate)}`
-      : `Starts ${formatDay(startDate!)}`;
+/** The inspector's Dates line: full dates, and a day count for a window. */
+export function rowDates(message: Announcement, state: RowState): string {
+  const { startDate, endDate } = message;
+  if (!startDate && !endDate) return 'Continuous';
+  if (startDate && endDate) {
+    const days = Math.round((localDay(endDate).getTime() - localDay(startDate).getTime()) / 86_400_000) + 1;
+    return `${longDay(startDate)} → ${longDay(endDate)} (${days} ${days === 1 ? 'day' : 'days'})`;
   }
+  if (startDate) return state === 'scheduled' ? `Starts ${longDay(startDate)}` : `Since ${longDay(startDate)}`;
+  return `Until ${longDay(endDate!)}`;
+}
 
-  if (startDate && endDate) return `${dayLabel(startDate)} → ${formatDay(endDate)}`;
-  // Open-ended is a choice, so it reads as one — not as a missing end date.
-  if (startDate) return `From ${dayLabel(startDate)} onwards`;
-  return `Until ${formatDay(endDate!)}`;
+/** Stored-array indices of the messages on air now, in rotation order. */
+export function liveIndices(announcements: Announcement[]): number[] {
+  return announcements.flatMap((message, index) => (rowState(message) === 'active' ? [index] : []));
+}
+
+/**
+ * Where to insert a new message so it becomes live message number `position`
+ * (1-based) — counted among live messages only, since upcoming and ended ones
+ * aren't in the running order. Past the last live message it goes just after it.
+ */
+export function insertIndexForPosition(announcements: Announcement[], position: number): number {
+  const live = liveIndices(announcements);
+  if (live.length === 0) return 0;
+  const slot = Math.min(Math.max(position, 1), live.length + 1);
+  return slot <= live.length ? live[slot - 1] : live[live.length - 1] + 1;
 }

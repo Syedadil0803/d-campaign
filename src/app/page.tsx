@@ -1527,6 +1527,7 @@ export default function Home() {
                   return saveDraft(cfg);
                 }}
                 publishNow={handlePublishAnnouncement}
+                confirmPublish={(onConfirm) => setPublishConfirm({ warnings: [], onConfirm })}
               />
             )}
 

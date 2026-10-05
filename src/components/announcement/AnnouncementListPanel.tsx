@@ -1,168 +1,123 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import type { ReactNode, RefObject } from 'react';
-import { GripVertical, Lightbulb, Lock, MoreVertical, TriangleAlert } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { CalendarClock, CalendarRange, Clock, Infinity as InfinityIcon, Lightbulb, Link2, Lock, Pencil, Trash2, TriangleAlert, X } from 'lucide-react';
+import type { Announcement } from '@/types/campaign';
 import type { CampaignConfig } from '@/types/campaign';
 import { stripHtml } from '@/lib/utils';
 import { isInvalidRange } from '@/lib/dateRange';
-import { groupRows, rowTiming, type ListRow, type RowState } from '@/lib/announcement/listSections';
+import { groupRows, rowState, rowDates, rowTiming, type ListRow, type RowState } from '@/lib/announcement/listSections';
+
+/** One small icon per kind of date: upcoming, a window, open-ended, or none. */
+function dateIcon(message: Announcement, state: RowState) {
+  if (!message.startDate && !message.endDate) return InfinityIcon;
+  if (state === 'scheduled') return CalendarClock;
+  if (message.startDate && message.endDate) return CalendarRange;
+  return Clock;
+}
 
 interface AnnouncementListPanelProps {
   config: CampaignConfig;
+  /** The row loaded in the editor, if any. */
   selectedIndex: number | null;
-  clearSelection: () => void;
-  loadAnnouncementIntoSelection: (index: number) => string;
-  detectFormatsForSelectMode: (html: string) => void;
   reorderAnnouncements: (fromIndex: number, toIndex: number) => void;
   draggedIndex: number | null;
   setDraggedIndex: (index: number | null) => void;
-  openActionMenu: (index: number, button: HTMLButtonElement) => void;
-  scheduleCloseActionMenu: () => void;
-  cancelCloseActionMenu: () => void;
-  richEditorRef: RefObject<HTMLDivElement | null>;
+  /** Loads a row into the editor. */
+  onEdit: (index: number) => void;
+  /** Stops editing: clears the editor and deselects the row. */
+  onCancelEdit: () => void;
+  /** Deletes a row (undoable from its toast). */
+  onDelete: (index: number) => void;
   /**
    * True while a message is staged. The list goes read-only: a staged edit
    * remembers its row by position, so deleting or dragging any row would shift
-   * that position and Publish would overwrite the wrong message.
+   * that position and Publish would overwrite the wrong message. Inspecting is
+   * still allowed — it changes nothing.
    */
   locked: boolean;
   /** The row a staged edit will replace, so it can be marked. */
   stagedIndex: number | null;
 }
 
+type Filter = 'all' | 'active' | 'scheduled';
+
 /**
- * Colours are the app's theme tokens, not the literal slate/white of the design
- * spec — the spec's values are light-only and would put a white card in dark
- * mode. Spacing, sizes and structure follow the spec.
+ * Status is carried by a small dot only; everything else stays in the app's
+ * neutral and primary tokens. Red is kept for invalid dates, being an error.
  */
-const BADGE: Record<RowState | 'invalid', { label: string; className: string; dot: string }> = {
-  active: {
-    label: 'Live',
-    className: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25',
-    dot: 'bg-emerald-500',
-  },
-  scheduled: {
-    label: 'Scheduled',
-    className: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25',
-    dot: 'bg-amber-500',
-  },
-  ended: {
-    label: 'Ended',
-    className: 'bg-on-surface/5 text-on-surface-variant border-border',
-    dot: 'bg-on-surface-variant/50',
-  },
-  invalid: {
-    label: 'Invalid',
-    className: 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/30',
-    dot: '',
-  },
+const STATE: Record<RowState | 'invalid', { label: string; dot: string }> = {
+  active: { label: 'Active on site', dot: 'bg-emerald-500' },
+  scheduled: { label: 'Upcoming', dot: 'bg-amber-500' },
+  ended: { label: 'Ended', dot: 'bg-on-surface-variant/40' },
+  invalid: { label: 'Invalid dates', dot: 'bg-red-500' },
 };
 
-function StatusBadge({ kind }: { kind: RowState | 'invalid' }) {
-  const badge = BADGE[kind];
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold shrink-0 ${badge.className}`}>
-      {kind === 'invalid'
-        ? <TriangleAlert className="h-3 w-3" />
-        : <span className={`h-1.5 w-1.5 rounded-full ${badge.dot}`} aria-hidden="true" />}
-      {badge.label}
-    </span>
-  );
-}
-
-function SectionLabel({ tone, children }: { tone: 'neutral' | 'active' | 'scheduled'; children: ReactNode }) {
-  const toneClass = {
-    neutral: 'text-on-surface-variant/60',
-    active: 'text-emerald-600 dark:text-emerald-400',
-    scheduled: 'text-amber-600 dark:text-amber-400',
-  }[tone];
-  return (
-    <p className={`mb-1 px-1 flex shrink-0 items-center gap-1.5 text-[10px] leading-4 font-bold uppercase tracking-wider ${toneClass}`}>
-      {tone === 'active' && <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />}
-      {tone === 'scheduled' && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />}
-      {children}
-    </p>
-  );
-}
-
+/**
+ * Manage Announcements: a master-detail card. The left pane lists and filters
+ * the messages (dragging a live one changes the rotation); the right pane
+ * inspects the one picked and holds its actions.
+ */
 export function AnnouncementListPanel({
   config,
   selectedIndex,
-  clearSelection,
-  loadAnnouncementIntoSelection,
-  detectFormatsForSelectMode,
   reorderAnnouncements,
   draggedIndex,
   setDraggedIndex,
-  openActionMenu,
-  scheduleCloseActionMenu,
-  cancelCloseActionMenu,
-  richEditorRef,
+  onEdit,
+  onCancelEdit,
+  onDelete,
   locked,
   stagedIndex,
 }: AnnouncementListPanelProps) {
   const announcements = config.announcementBar.announcements;
-  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [filter, setFilter] = useState<Filter>('active');
+  const [inspectedIndex, setInspectedIndex] = useState<number | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
   const prevLengthRef = useRef(announcements.length);
 
+  const { active, scheduled } = groupRows(announcements);
+  const liveRows = active.filter((row) => row.state === 'active');
+  const allRows = [...active, ...scheduled];
+  const rows = filter === 'active' ? liveRows : filter === 'scheduled' ? scheduled : allRows;
+
+  // The picked row, or the first one in view — the inspector is never blank
+  // while there is something to show.
+  const inspected = rows.find((row) => row.index === inspectedIndex) ?? rows[0] ?? null;
+  const isEmpty = announcements.length === 0;
+
   /**
-   * A newly published message is appended to the stored list, but it can land
-   * in either section — and Scheduled sorts by start date, so it is not
-   * necessarily last there. Find the row itself and scroll the section that
-   * holds it, only as far as needed to show it.
+   * A newly published message is added at the top of the stored list. Show it: switch
+   * to All (the current filter may hide it), inspect it, and scroll the list
+   * to it — Scheduled sorts by date, so it is not necessarily last.
    */
   useEffect(() => {
-    if (announcements.length > prevLengthRef.current && panelRef.current) {
-      const row = panelRef.current.querySelector<HTMLElement>(
-        `[data-row-index="${announcements.length - 1}"]`,
-      );
-      const scroller = row?.parentElement;
-      if (row && scroller) {
-        const top =
-          row.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-        const visible = top >= scroller.scrollTop && top + row.offsetHeight <= scroller.scrollTop + scroller.clientHeight;
-        if (!visible) scroller.scrollTo({ top: top + row.offsetHeight - scroller.clientHeight, behavior: 'smooth' });
-      }
+    if (announcements.length > prevLengthRef.current) {
+      const newIndex = 0; // new messages are added at the top
+      // Open the tab that holds it, so an upcoming one isn't hidden.
+      setFilter(rowState(announcements[0]) === 'scheduled' ? 'scheduled' : 'active');
+      setInspectedIndex(newIndex);
+      requestAnimationFrame(() => {
+        const list = listRef.current;
+        const row = list?.querySelector<HTMLElement>(`[data-row-index="${newIndex}"]`);
+        if (list && row) {
+          const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+          list.scrollTo({ top: top + row.offsetHeight - list.clientHeight, behavior: 'smooth' });
+        }
+      });
     }
     prevLengthRef.current = announcements.length;
-  }, [announcements.length]);
-
-  const { active, scheduled } = groupRows(announcements);
-  const hasScheduled = scheduled.length > 0;
-  const isEmpty = announcements.length === 0;
-  // Ended rows keep their place in the rotation section but are not on air,
-  // so they are counted apart rather than inflating the live number.
-  const liveCount = active.filter((row) => row.state === 'active').length;
-  const endedCount = active.length - liveCount;
-
-  function editRow(index: number) {
-    if (selectedIndex === index) return clearSelection();
-    const html = loadAnnouncementIntoSelection(index);
-    if (richEditorRef.current) {
-      richEditorRef.current.innerHTML = html;
-      richEditorRef.current.blur();
-    }
-    window.getSelection()?.removeAllRanges();
-    detectFormatsForSelectMode(html);
-  }
+  }, [announcements]); // runs on edits too, but acts only when the list grew
 
   function renderRow(row: ListRow) {
     const { message, index, state } = row;
     const invalid = isInvalidRange(message.startDate, message.endDate);
+    const look = STATE[invalid ? 'invalid' : state];
     // Scheduled rows are ordered by the calendar, so they are never dragged.
     const canDrag = !locked && state !== 'scheduled';
-    const text = stripHtml(message.text);
+    const isInspected = inspected?.index === index;
     const timing = rowTiming(message, state);
-    const hasStagedEdit = stagedIndex === index;
-
-    const tone = invalid
-      ? 'border-red-500/60 bg-red-500/5'
-      : selectedIndex === index
-        ? 'border-primary/80 bg-primary/10'
-        : state === 'scheduled'
-          ? 'border-amber-500/25 bg-amber-500/5 hover:bg-amber-500/10'
-          : 'border-border bg-on-surface/[0.03] hover:bg-on-surface/5 hover:border-on-surface/20';
+    const DateIcon = dateIcon(message, state);
 
     return (
       <div
@@ -183,186 +138,204 @@ export function AnnouncementListPanel({
           setDraggedIndex(null);
         } : undefined}
         onDragEnd={canDrag ? () => setDraggedIndex(null) : undefined}
-        // The menu opens from the ⋮ button only. Opening it on hover popped a
-        // menu on every row the pointer crossed on its way down the list.
-        onMouseEnter={locked ? undefined : cancelCloseActionMenu}
-        onMouseLeave={locked ? undefined : scheduleCloseActionMenu}
-        onClick={locked ? undefined : () => editRow(index)}
-        title={
-          invalid
-            ? 'This message ends before it starts — open it and fix or clear the schedule.'
-            : hasStagedEdit
-              ? 'An edit to this message is staged. It changes here when you publish.'
-              : undefined
-        }
-        className={`group mb-1.5 last:mb-0 flex h-9 shrink-0 items-center rounded-lg border px-3 text-xs shadow-[0_1px_1px_rgb(0_0_0/0.03)] transition-all duration-150 ${tone} ${
-          hasStagedEdit ? 'border-dashed !border-primary/60' : ''
-        } ${locked ? 'cursor-default' : 'cursor-pointer'} ${draggedIndex === index ? 'opacity-60' : ''}`}
+        onClick={() => setInspectedIndex(index)}
+        title={canDrag ? 'Drag to change its place in the rotation' : undefined}
+        className={`flex h-[50px] cursor-pointer flex-col justify-center rounded-lg border px-2 transition-colors ${
+          isInspected
+            ? 'border-primary/60 bg-primary/10'
+            : 'border-transparent bg-on-surface/[0.03] hover:bg-on-surface/[0.06]'
+        } ${stagedIndex === index ? 'outline outline-1 outline-dashed outline-primary/60' : ''} ${
+          draggedIndex === index ? 'opacity-60' : ''
+        }`}
       >
-        {/* Col 1 — drag handle, on every row. Where dragging isn't allowed it
-            stays, dimmed and with a not-allowed cursor, rather than vanishing:
-            an empty column read as the handle having been removed. */}
-        <div
-          className="flex w-5 shrink-0 justify-center"
-          title={
-            canDrag
-              ? 'Drag to reorder'
-              : state === 'scheduled'
-                ? 'Scheduled messages are ordered by start date'
-                : 'Publish or discard the staged message to reorder'
-          }
-        >
-          <GripVertical
-            className={`h-3.5 w-3.5 transition-colors ${
-              canDrag
-                ? 'cursor-grab text-on-surface-variant/60 hover:text-on-surface active:cursor-grabbing'
-                : 'cursor-not-allowed text-on-surface-variant/20'
-            }`}
-            aria-hidden="true"
-          />
-        </div>
-
-        {/* Col 2 — message, clipped to one line */}
-        <div
-          className={`min-w-0 flex-1 truncate pr-2 text-xs font-medium ${state === 'ended' ? 'text-on-surface-variant' : 'text-on-surface'}`}
-          title={text}
-        >
-          {text}
-        </div>
-
-        {/* Col 3 — status and timing */}
-        <div className="flex shrink-0 items-center gap-2">
-          <StatusBadge kind={invalid ? 'invalid' : state} />
-          {timing && (
-            <>
-              <span className="text-on-surface-variant/40" aria-hidden="true">•</span>
-              <span className="max-w-[160px] truncate text-[11px] text-on-surface-variant">{timing}</span>
-            </>
+        <div className="flex items-center gap-1.5">
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${look.dot}`} aria-hidden="true" />
+          <span className={`min-w-0 flex-1 truncate text-xs font-semibold ${state === 'ended' ? 'text-on-surface-variant' : 'text-on-surface'}`}>
+            {stripHtml(message.text)}
+          </span>
+          {selectedIndex === index && (
+            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-primary">Editing</span>
           )}
         </div>
+        {/* Dates only. An undated message just runs, so it has no second line. */}
+        {timing && (
+          <div className={`mt-0.5 flex items-center gap-1 pl-3 text-[10px] ${invalid ? 'text-red-600 dark:text-red-400' : 'text-on-surface-variant'}`}>
+            <DateIcon className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{timing}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
 
-        {/* Col 4 — row menu. Hidden while the list is locked. */}
-        <div className="flex w-7 shrink-0 justify-end">
-          {!locked && (
+  function renderInspector(row: ListRow) {
+    const { message, index, state } = row;
+    const invalid = isInvalidRange(message.startDate, message.endDate);
+    const look = STATE[invalid ? 'invalid' : state];
+    const slot = liveRows.findIndex((r) => r.index === index);
+    // A plain number in the order, 1 = top. A message that isn't running
+    // (upcoming or ended) has no place in it yet, so it reads 0.
+    const order = state === 'active' ? slot + 1 : 0;
+    const DateIcon = dateIcon(message, state);
+
+    return (
+      <div className="flex min-h-0 flex-1 flex-col justify-between pl-1">
+        {/* The whole message — up to the 120-character limit, which runs to
+            three lines here — growing with it rather than clipping. The pane
+            exists to read the message, so nothing else gets that height. */}
+        <div className="rounded-xl border border-border bg-surface-subtle px-3 py-2.5">
+          <p className="break-words text-xs font-semibold leading-snug text-on-surface">
+            {stripHtml(message.text)}
+          </p>
+        </div>
+
+        <dl className="space-y-1 text-[11px]">
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-on-surface-variant/70">Status</dt>
+            <dd className={`flex items-center gap-1.5 font-medium ${invalid ? 'text-red-600 dark:text-red-400' : 'text-on-surface'}`}>
+              {invalid
+                ? <TriangleAlert className="h-3 w-3" />
+                : <span className={`h-1.5 w-1.5 rounded-full ${look.dot}`} aria-hidden="true" />}
+              {look.label}
+            </dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-on-surface-variant/70">Dates</dt>
+            <dd className="flex min-w-0 items-center gap-1 font-medium text-on-surface">
+              <DateIcon className="h-3 w-3 shrink-0 text-on-surface-variant" />
+              <span className="truncate" title={rowDates(message, state)}>{rowDates(message, state)}</span>
+            </dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-on-surface-variant/70">Order</dt>
+            <dd className="font-medium tabular-nums text-on-surface">{order}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="text-on-surface-variant/70">Link</dt>
+            <dd className="flex min-w-0 items-center gap-1 font-medium text-on-surface">
+              <Link2 className="h-3 w-3 shrink-0 text-on-surface-variant" />
+              {message.url
+                ? <span className="truncate" title={message.url}>{message.url}</span>
+                : <span className="text-on-surface-variant/60">No link</span>}
+            </dd>
+          </div>
+        </dl>
+
+        <div className="flex items-center gap-2 border-t border-border pt-2">
+          {selectedIndex === index ? (
             <button
               type="button"
-              data-action-btn
-              onClick={(e) => {
-                e.stopPropagation();
-                openActionMenu(index, e.currentTarget);
-              }}
-              className="rounded-md p-1 text-on-surface-variant/50 transition-colors hover:bg-on-surface/5 hover:text-on-surface"
-              title="More options"
+              onClick={onCancelEdit}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary/10 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
             >
-              <MoreVertical className="h-3 w-3" />
+              <X className="h-3.5 w-3.5" />
+              Cancel edit
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={locked}
+              onClick={() => onEdit(index)}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-on-surface/5 py-1.5 text-xs font-semibold text-on-surface transition-colors hover:bg-on-surface/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
             </button>
           )}
+          <button
+            type="button"
+            disabled={locked}
+            onClick={() => onDelete(index)}
+            title="Delete (Undo from the notice)"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-on-surface/5 py-1.5 text-xs font-semibold text-on-surface transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </button>
         </div>
       </div>
     );
   }
 
+  const tabs: { value: Filter; label: string; dot?: string }[] = [
+    { value: 'active', label: `Active ${liveRows.length}`, dot: 'bg-emerald-500' },
+    { value: 'scheduled', label: `Upcoming ${scheduled.length}`, dot: 'bg-amber-500' },
+    { value: 'all', label: `All (${allRows.length})` },
+  ];
+
   return (
-    <div className="w-full">
-      {/*
-        Capped, not fixed: at most 415px, and never under 180px. Side by side,
-        the grid stretches it to the editor's 415px; stacked on a narrow
-        screen, it hugs its rows.
-
-          card 415 − border 2 − padding 60 − header 52 − divider 41 − footer 28
-            = 232 for the body (sized to the live-only view, exactly)
-
-        With both sections: pb 8 + label 20 + two rows 78 + divider 25
-          + label 20 + two rows 78 = 229  → 3px to spare
-        Live only: pb 8 + label 20 + five rows 204 = 232  → exact fit
-      */}
-      <div ref={panelRef} className="box-border flex h-full min-h-[180px] max-h-[415px] flex-col rounded-2xl border border-border campaign-card-surface px-6 py-[30px] shadow-sm transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
-
-        {/* Header — identical to the editor card's, so the two titles and
-            divider lines sit level across the pair. */}
-        <div className="flex shrink-0 flex-col gap-1">
-          <h4 className="text-xl font-bold leading-[28px] text-on-surface">
-            Manage Announcements
-          </h4>
-          <p className="text-sm leading-[20px] text-on-surface-variant">Your messages, in the order they rotate.</p>
+    <div className="h-full w-full">
+      <div className="box-border flex h-[370px] flex-col overflow-hidden rounded-2xl border border-border campaign-card-surface p-5 shadow-sm transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
+        {/* Header — the original title and description, same as the editor
+            card's, so the two titles and divider rules sit level. */}
+        <div className="flex shrink-0 items-start justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <h4 className="text-xl font-bold leading-[28px] text-on-surface">Manage Announcements</h4>
+            <p className="text-sm leading-[20px] text-on-surface-variant">View, reorder, and manage your messages.</p>
+          </div>
         </div>
         <div className="my-5 h-[1px] w-full shrink-0 bg-border" />
 
-        {/*
-          Body. Each section scrolls on its own, so Scheduled never gets pushed
-          out of sight by a long active list: it is pinned at the bottom, sized
-          to its rows up to one row plus a sliver of the next (the sliver is the
-          cue that it scrolls), and Active Now takes whatever height is left.
-          Section labels sit outside the scrollers so they never scroll away.
-        */}
-        <div className="flex min-h-0 flex-1 flex-col pb-2">
-          {isEmpty ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-1 text-center">
-              <p className="text-xs font-medium text-on-surface">Published messages will appear here.</p>
-              <p className="text-[11px] text-on-surface-variant">Write one on the left, stage it, then publish.</p>
-            </div>
-          ) : (
-            <>
-              <SectionLabel tone={hasScheduled ? 'active' : 'neutral'}>
-                Live now ({liveCount}){endedCount > 0 && ` · ${endedCount} ended`}
-              </SectionLabel>
-              {/* Whole rows only (36px rows, 6px gaps), never a half-cut one:
-                  two when Scheduled sits below (2×36 + 6 = 78), five on its
-                  own (5×36 + 4×6 = 204). The count in the label says the rest. */}
-              <div
-                className={`campaign-custom-scrollbar flex-none overflow-y-auto pr-1 ${hasScheduled ? 'max-h-[78px]' : 'max-h-[204px]'}`}
-                style={{ scrollbarGutter: 'stable' }}
-              >
-                {active.map(renderRow)}
-              </div>
-
-              {hasScheduled && (
-                <div className="shrink-0">
-                  <div className="my-3 border-b border-dashed border-border" />
-                  <SectionLabel tone="scheduled">Scheduled ({scheduled.length})</SectionLabel>
-                  {/* Two whole rows (2×36 + 6 = 78) of the three allowed; the
-                      third scrolls. One row hid too much behind a tiny scroller. */}
-                  <div
-                    className="campaign-custom-scrollbar max-h-[78px] overflow-y-auto pr-1"
-                    style={{ scrollbarGutter: 'stable' }}
+        {isEmpty ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-1 text-center">
+            <p className="text-xs font-medium text-on-surface">Published messages will appear here.</p>
+            <p className="text-[11px] text-on-surface-variant">Write one on the left, stage it, then publish.</p>
+          </div>
+        ) : (
+          <div className="grid min-h-0 flex-1 grid-cols-12 gap-4 pb-3">
+            {/* Left pane: filters and the list (5/12). */}
+            <div className="col-span-5 flex min-h-0 flex-col border-r border-border pr-3">
+              <div className="mb-2 flex shrink-0 items-center gap-1 rounded-lg bg-on-surface/5 p-0.5 text-[10px] font-semibold">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    onClick={() => setFilter(tab.value)}
+                    className={`flex flex-1 items-center justify-center gap-1 rounded-md py-1 transition-colors ${
+                      filter === tab.value
+                        ? 'bg-surface-elevated text-on-surface shadow-sm'
+                        : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
                   >
-                    {scheduled.map(renderRow)}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+                    {tab.dot && <span className={`h-1.5 w-1.5 rounded-full ${tab.dot}`} aria-hidden="true" />}
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              {/* Exactly three whole rows (3×50 + 2×6 = 162): the fourth sits fully
+                  below the fold, never half-shown. */}
+              <div ref={listRef} className="campaign-custom-scrollbar h-[162px] flex-none space-y-1.5 overflow-y-auto pr-1">
+                {rows.length > 0
+                  ? rows.map(renderRow)
+                  : <p className="px-1 py-4 text-center text-[11px] text-on-surface-variant">Nothing here yet.</p>}
+              </div>
+            </div>
 
-        {/* Footer — pinned under the scroll */}
-        {!isEmpty && (
-          <div className="flex h-7 shrink-0 items-center justify-between gap-3 border-t border-border pt-2 text-[11px] font-medium text-on-surface-variant">
-            {/* The lock note lives here rather than above the rows: in the body
-                it cost 24px and pushed the third row out of view. */}
-            {locked ? (
-              <span className="flex min-w-0 items-center gap-1.5">
-                <Lock className="h-3 w-3 shrink-0" />
-                <span className="truncate">Publish or discard the staged message to change this list.</span>
-              </span>
-            ) : hasScheduled ? (
-              <span className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-                {liveCount} Live
-                <span className="text-on-surface-variant/40" aria-hidden="true">•</span>
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
-                {scheduled.length} Scheduled
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5">
-                <Lightbulb className="h-3 w-3 shrink-0" />
-                Sequence position defines rotation priority.
-              </span>
-            )}
-
+            {/* Right pane: the picked message (7/12). */}
+            <div className="col-span-7 flex min-h-0 flex-col">
+              {inspected
+                ? renderInspector(inspected)
+                : <p className="m-auto text-[11px] text-on-surface-variant">Pick a message to see it here.</p>}
+            </div>
           </div>
         )}
-      </div>
 
+        {/* Footer */}
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border pt-2 text-[11px] leading-4 text-on-surface-variant">
+          {locked ? (
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Lock className="h-3 w-3 shrink-0" />
+              <span className="truncate">Publish or discard the staged message to change this list.</span>
+            </span>
+          ) : (
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Lightbulb className="h-3 w-3 shrink-0" />
+              <span className="truncate">Drag active messages to change the rotation order.</span>
+            </span>
+          )}
+          <span className="shrink-0 font-medium">{liveRows.length} active on site</span>
+        </div>
+      </div>
     </div>
   );
 }

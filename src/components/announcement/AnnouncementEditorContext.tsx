@@ -69,6 +69,9 @@ export interface AnnouncementEditorApi
   /** Moves the staged message into the list and publishes it. */
   publishStaged: () => void;
   publishingStaged: boolean;
+  /** New live message's place in the order (1 = top), picked before publishing. */
+  stagedPosition: number;
+  setStagedPosition: (position: number) => void;
 }
 
 const AnnouncementEditorContext = createContext<AnnouncementEditorApi | null>(null);

@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarClock, Sparkles, Trash2 } from 'lucide-react';
+import { CalendarClock, Sparkles, Trash2, X } from 'lucide-react';
 import { getBackgroundStyle } from '@/lib/utils';
 import { rgbToHex } from '@/lib/editor/colorUtils';
 import RichTextToolbar from '@/components/shared/RichTextToolbar';
@@ -8,7 +8,8 @@ import { useAnnouncementEditor } from '@/components/announcement/AnnouncementEdi
 import { AnnouncementEditorPopups } from '@/components/announcement/AnnouncementEditorPopups';
 import { AnnouncementDraftChip } from '@/components/announcement/AnnouncementDraftChip';
 import { startsLater } from '@/lib/announcement/stagedDraft';
-import { canSchedule, SCHEDULE_LIMIT_MESSAGE } from '@/lib/announcement/listSections';
+import { canSchedule, liveIndices, SCHEDULE_LIMIT_MESSAGE } from '@/lib/announcement/listSections';
+import { clipChars, countChars, messageLength, MESSAGE_LIMIT } from '@/lib/announcement/messageLength';
 
 /**
  * The left-hand card: the message editor, its toolbar, and the three popups
@@ -28,6 +29,8 @@ export function AnnouncementEditorPanel() {
     discardStaged,
     publishStaged,
     publishingStaged,
+    stagedPosition,
+    setStagedPosition,
     activeFormats,
     applyColor,
     applyEditorSnapshot,
@@ -46,6 +49,7 @@ export function AnnouncementEditorPanel() {
     scheduleBtnRef,
     selectedEndDate,
     selectedIndex,
+    clearSelection,
     selectedStartDate,
     selectedUrl,
     setActiveFormats,
@@ -71,13 +75,9 @@ export function AnnouncementEditorPanel() {
     scheduleRangeInvalid,
   } = useAnnouncementEditor();
 
-  // Get plain text length
-  const getPlainTextLength = (html: string) => {
-    return html.replace(/<[^>]*>/g, '').replace(/\u200B/g, '').length;
-  };
-
-  // Check if text exceeds limit
-  const isOverLimit = getPlainTextLength(newAnnouncementText) > 120;
+  // Counted as a reader sees it: spaces, letters and whole emoji once each.
+  const charCount = messageLength(newAnnouncementText);
+  const isOverLimit = charCount > MESSAGE_LIMIT;
 
   /**
    * A future start date turns staging into scheduling, so the button says so
@@ -90,14 +90,20 @@ export function AnnouncementEditorPanel() {
    * Editing a message that is already scheduled doesn't count — it keeps its
    * own slot.
    */
+  /** Live messages in order — the slots a new message can be placed between. */
+  const liveMessages = liveIndices(config.announcementBar.announcements).map(
+    (i) => config.announcementBar.announcements[i],
+  );
+
   const scheduleFull =
     startsLater(selectedStartDate) &&
     !canSchedule(config.announcementBar.announcements, selectedIndex);
 
   return (
-    <div className="box-border h-[415px] rounded-2xl border border-border campaign-card-surface px-6 py-[30px] shadow-sm flex flex-col transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
+    <div className="box-border h-[370px] rounded-2xl border border-border campaign-card-surface p-5 shadow-sm flex flex-col transition-all hover:border-primary/70 hover:shadow-md hover:shadow-primary/20">
 
-      {/* Zone 1: Header Block (52px) */}
+      {/* Header — the original title and description; the Manage
+          Announcements card beside it uses the same, so they sit level. */}
       <div className="shrink-0 flex flex-col gap-1">
         <h4 className="text-xl font-bold leading-[28px] text-on-surface">
           Announcement Content
@@ -106,9 +112,7 @@ export function AnnouncementEditorPanel() {
           Create your message, optionally attach a link, and add timing only if needed.
         </p>
       </div>
-
-      {/* Divider Line & Margins (41px Total - Divider sits exactly at 102px Y-offset) */}
-      <div className="my-5 h-[1px] w-full bg-border" />
+      <div className="my-5 h-[1px] w-full shrink-0 bg-border" />
 
       {/* ── Body ── */}
       <div className="flex flex-col flex-1 min-h-0">
@@ -127,10 +131,15 @@ export function AnnouncementEditorPanel() {
               onDiscard={discardStaged}
               onPublish={publishStaged}
               publishing={publishingStaged}
+              position={stagedIndex == null && !startsLater(staged.startDate) ? {
+                value: Math.min(stagedPosition, liveMessages.length + 1),
+                max: liveMessages.length + 1,
+                onChange: (value) => setStagedPosition(Math.min(Math.max(value, 1), liveMessages.length + 1)),
+              } : undefined}
             />
             {/* The same footer rule as the compose state, so the card keeps its
                 shape and the line stays level with the list's footer. */}
-            <p className="mt-3 flex h-7 shrink-0 items-center border-t border-border pt-2 text-[11px] text-on-surface-variant/70">
+            <p className="mt-3 flex shrink-0 items-center border-t border-border pt-2 text-[11px] leading-4 text-on-surface-variant/70">
               Saved to your account — you can publish it from any device.
             </p>
           </div>
@@ -152,7 +161,7 @@ export function AnnouncementEditorPanel() {
           <div className="flex items-center gap-1">
             <div className="flex-1 min-w-0">
               <RichTextToolbar
-                large
+                firmBorder
                 activeFormats={activeFormats}
                 onFormat={(format) => {
                   const sel = window.getSelection();
@@ -214,7 +223,7 @@ export function AnnouncementEditorPanel() {
                 }}
                 extraActions={
                   <>
-                    <div className="border-l border-border h-5 mx-2 shrink-0" />
+                    <div className="border-l border-border h-4 mx-2 shrink-0" />
                     <button
                       ref={linkBtnRef}
                       onMouseDown={(e) => {
@@ -224,10 +233,10 @@ export function AnnouncementEditorPanel() {
                         setShowSchedulePopup(false);
                       }}
                       disabled={!newAnnouncementText.trim() || isOverLimit}
-                      className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed text-sm ${selectedUrl ? 'border-primary/80 bg-primary/10 text-primary' : 'border-on-surface/25 hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
+                      className={`cursor-pointer flex items-center gap-1 px-2 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed text-xs ${selectedUrl ? 'border-primary/80 bg-primary/10 text-primary' : 'border-on-surface/25 hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
                       title={newAnnouncementText.trim() ? (isOverLimit ? 'Character limit exceeded' : 'Add link') : 'Enter text first'}
                     >
-                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                       </svg>
                       <span className="leading-none">Link</span>
@@ -242,10 +251,10 @@ export function AnnouncementEditorPanel() {
                         setShowLinkPopup(false);
                       }}
                       disabled={!newAnnouncementText.trim() || isOverLimit}
-                      className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed text-sm ${(selectedStartDate || selectedEndDate) ? 'border-primary/80 bg-primary/10 text-primary' : 'border-on-surface/25 hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
+                      className={`cursor-pointer flex items-center gap-1 px-2 py-1 border rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed text-xs ${(selectedStartDate || selectedEndDate) ? 'border-primary/80 bg-primary/10 text-primary' : 'border-on-surface/25 hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant'}`}
                       title={newAnnouncementText.trim() ? (isOverLimit ? 'Character limit exceeded' : 'Schedule this message') : 'Enter text first'}
                     >
-                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                       <span className="leading-none">Schedule</span>
@@ -259,10 +268,10 @@ export function AnnouncementEditorPanel() {
                       e.preventDefault();
                       openChatGptWithPrompt();
                     }}
-                    className="cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 border rounded transition-colors shrink-0 border-on-surface/25 hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant text-sm"
+                    className="cursor-pointer flex items-center gap-1 px-2 py-1 border rounded transition-colors shrink-0 border-on-surface/25 hover:border-primary/70 hover:bg-primary/10 hover:text-primary text-on-surface-variant text-xs"
                     title="Open ChatGPT with a prompt"
                   >
-                    <Sparkles className="w-3.5 h-3.5" />
+                    <Sparkles className="w-3 h-3" />
                   </button>
                 }
               />
@@ -271,13 +280,26 @@ export function AnnouncementEditorPanel() {
         </div>
 
         {/* ── Message input section ── */}
-        <div className="mt-8 flex-1 flex flex-col min-h-0">
+        <div className="mt-6 flex-1 flex flex-col min-h-0">
           <div className="flex items-center justify-between">
             <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-[0.08em] leading-none">
               Message
             </label>
             {/* Empties the text only — link, dates and the row being edited are
                 kept. Snapshotted first, so Ctrl+Z brings the text back. */}
+            <div className="flex items-center gap-3">
+            {/* Editing a published message: the way out without changing it. */}
+            {selectedIndex !== null && (
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); clearSelection(); }}
+                className="flex items-center gap-1 text-[11px] font-medium leading-none text-primary transition-colors hover:opacity-80"
+                title="Stop editing — the published message stays as it is"
+              >
+                <X className="h-3 w-3" />
+                Cancel edit
+              </button>
+            )}
             {/* Always shown so its place never jumps; disabled while empty.
                 Styled like the list's old "Clear all". */}
             <button
@@ -299,12 +321,12 @@ export function AnnouncementEditorPanel() {
               <Trash2 className="h-3 w-3" />
               Clear
             </button>
+            </div>
           </div>
 
-          {/* One line, level with the button, growing with the text to three
-              lines. The card's spare height (it matches the list's 415px) sits
-              in the toolbar card's padding and the gap above this label — not
-              in an oversized input. */}
+          {/* One line to start, growing with the text to two (the 120-char
+              limit fits in two). The card is 370px to match Manage
+              Announcements, which leaves no room for a third. */}
           <div className="flex gap-2 mt-2">
             <div className="flex-1 min-w-0 flex flex-col">
               <div
@@ -317,12 +339,11 @@ export function AnnouncementEditorPanel() {
                 onPaste={(e) => {
                   e.preventDefault();
                   const text = e.clipboardData.getData('text/plain');
-                  const currentText = richEditorRef.current?.textContent?.replace(/\u200B/g, '') || '';
-                  const remaining = 120 - currentText.length;
+                  const remaining = MESSAGE_LIMIT - countChars(richEditorRef.current?.textContent ?? '');
 
                   if (remaining <= 0) return;
-                  // Truncate pasted text to fit remaining characters
-                  const pasteText = text.slice(0, remaining);
+                  // Truncate to what fits, without splitting an emoji
+                  const pasteText = clipChars(text, remaining);
                   document.execCommand('insertText', false, pasteText);
                 }}
                 onMouseDown={() => { }}
@@ -363,8 +384,7 @@ export function AnnouncementEditorPanel() {
                 onKeyDown={(e) => {
                   // Prevent typing if at limit
                   if (!e.metaKey && !e.ctrlKey && e.key.length === 1) {
-                    const currentText = richEditorRef.current?.textContent?.replace(/\u200B/g, '') || '';
-                    if (currentText.length >= 120) {
+                    if (countChars(richEditorRef.current?.textContent ?? '') >= MESSAGE_LIMIT) {
                       e.preventDefault();
                       return;
                     }
@@ -490,7 +510,7 @@ export function AnnouncementEditorPanel() {
                     if (richEditorRef.current) richEditorRef.current.innerHTML = '';
                   }
                 }}
-                className="rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden break-words transition-colors focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 border-on-surface/25 min-h-[44px] max-h-[88px]"
+                className="rich-editor shadow-sm block w-full sm:text-sm rounded-md p-3 border outline-none overflow-y-auto overflow-x-hidden break-words transition-colors focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70 border-on-surface/25 min-h-[44px] max-h-[64px]"
                 //add here in styles background: getBackgroundStyle(previewBg) for the preview background color
                 style={{ wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%', caretColor: 'auto' }}
               />
@@ -524,9 +544,9 @@ export function AnnouncementEditorPanel() {
             base with a rule. Same classes as the Manage Announcements footer,
             so the two rules sit level across the pair.
           */}
-          <div className="mt-auto flex h-7 shrink-0 items-center justify-between border-t border-border pt-2">
+          <div className="mt-auto flex shrink-0 items-center justify-between border-t border-border pt-2 leading-4">
             <span className={`text-[11px] leading-none ${isOverLimit ? 'text-red-500 font-medium' : 'text-on-surface-variant/50'}`}>
-              {(newAnnouncementText.replace(/<[^>]*>/g, '').replace(/\u200B/g, '').length)}&nbsp;/&nbsp;120 chars
+              {charCount}&nbsp;/&nbsp;{MESSAGE_LIMIT} chars
               {isOverLimit && ' ⚠️ Limit exceeded'}
             </span>
             <span className="text-[11px] text-on-surface-variant/50 leading-none">
