@@ -69,7 +69,7 @@ describe('hasVisibleText', () => {
 describe('previewMessages', () => {
   it('adds a message that is on air now', () => {
     const result = previewMessages(published, { text: 'staged' });
-    expect(result.map((m) => m.text)).toEqual(['first', 'second', 'staged']);
+    expect(result.map((m) => m.text)).toEqual(['staged', 'first', 'second']);
   });
 
   it('keeps a future-dated message out until its start date', () => {
@@ -85,7 +85,7 @@ describe('previewMessages', () => {
       text: 'today',
       startDate: dayOffset(0),
     });
-    expect(result.map((m) => m.text)).toEqual(['first', 'second', 'today']);
+    expect(result.map((m) => m.text)).toEqual(['today', 'first', 'second']);
   });
 
   it('ignores an empty message', () => {
@@ -94,7 +94,7 @@ describe('previewMessages', () => {
   });
 
   it('passes the markup through, so the preview matches what publishes', () => {
-    const [, , staged] = previewMessages(published, {
+    const [staged] = previewMessages(published, {
       text: '<span style="color: red">sale</span>',
     });
     expect(staged.text).toBe('<span style="color: red">sale</span>');
@@ -109,7 +109,7 @@ describe('buildPreviewList', () => {
       editing: null,
       typing: null,
     });
-    expect(result.map((m) => m.text)).toEqual(['first', 'second', 'staged']);
+    expect(result.map((m) => m.text)).toEqual(['staged', 'first', 'second']);
   });
 
   it('prefers the staged message over anything left in the editor', () => {
@@ -119,7 +119,7 @@ describe('buildPreviewList', () => {
       editing: null,
       typing: { text: 'typing' },
     });
-    expect(result.map((m) => m.text)).toEqual(['first', 'second', 'staged']);
+    expect(result.map((m) => m.text)).toEqual(['staged', 'first', 'second']);
   });
 
   it('shows a staged EDIT in the row it replaces, not as a second message', () => {
@@ -133,7 +133,7 @@ describe('buildPreviewList', () => {
     expect(result.map((m) => m.text)).toEqual(['first', 'second, restyled']);
   });
 
-  it('appends a staged message that replaces nothing', () => {
+  it('puts a staged message that replaces nothing at the top', () => {
     const result = buildPreviewList({
       visible: published,
       staged: { text: 'new one' },
@@ -141,7 +141,7 @@ describe('buildPreviewList', () => {
       editing: null,
       typing: null,
     });
-    expect(result.map((m) => m.text)).toEqual(['first', 'second', 'new one']);
+    expect(result.map((m) => m.text)).toEqual(['new one', 'first', 'second']);
   });
 
   it('REPLACES the row being edited rather than showing it twice', () => {
@@ -154,14 +154,14 @@ describe('buildPreviewList', () => {
     expect(result.map((m) => m.text)).toEqual(['first', 'second, edited']);
   });
 
-  it('appends a brand-new message being typed', () => {
+  it('puts a brand-new message being typed at the top', () => {
     const result = buildPreviewList({
       visible: published,
       staged: null,
       editing: null,
       typing: { text: 'brand new' },
     });
-    expect(result.map((m) => m.text)).toEqual(['first', 'second', 'brand new']);
+    expect(result.map((m) => m.text)).toEqual(['brand new', 'first', 'second']);
   });
 
   it('leaves the list alone when the editor is empty', () => {
@@ -196,5 +196,22 @@ describe('describeWindow', () => {
 
   it('shows both ends of a dated run', () => {
     expect(describeWindow(dayOffset(0), dayOffset(10))).toContain('→');
+  });
+});
+
+describe('new-message position in the preview', () => {
+  it('shows a new message at the position it will be published to', () => {
+    const result = buildPreviewList({
+      visible: published,
+      staged: { text: 'new' },
+      editing: null,
+      typing: null,
+      position: 2,
+    });
+    expect(result.map((m) => m.text)).toEqual(['first', 'new', 'second']);
+  });
+
+  it('clamps a position past the end to the last place', () => {
+    expect(previewMessages(published, { text: 'new' }, 99).map((m) => m.text)).toEqual(['first', 'second', 'new']);
   });
 });

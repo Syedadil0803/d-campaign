@@ -135,6 +135,7 @@ export function AnnouncementEditorPanel() {
                 value: Math.min(stagedPosition, liveMessages.length + 1),
                 max: liveMessages.length + 1,
                 onChange: (value) => setStagedPosition(Math.min(Math.max(value, 1), liveMessages.length + 1)),
+                liveTexts: liveMessages.map((m) => m.text),
               } : undefined}
             />
             {/* The same footer rule as the compose state, so the card keeps its

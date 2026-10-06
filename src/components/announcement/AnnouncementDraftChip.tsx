@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { CalendarClock, Clock, Link2, Minus, Pencil, Plus, Rocket, Trash2 } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { CalendarClock, ChevronDown, Clock, Link2, Pencil, Rocket, Trash2 } from 'lucide-react';
 import type { Announcement } from '@/types/campaign';
 import { chipExcerpt, describeWindow, startsLater } from '@/lib/announcement/stagedDraft';
 
@@ -23,6 +24,8 @@ interface AnnouncementDraftChipProps {
     /** Live messages + 1 — the slot after the last one. */
     max: number;
     onChange: (value: number) => void;
+    /** Live messages in order, for the slot menu's labels. */
+    liveTexts: string[];
   };
 }
 
@@ -126,85 +129,179 @@ export function AnnouncementDraftChip({
 
       {/* Pinned to the bottom of the card, however long the message is. */}
       <div className="mt-auto shrink-0 border-t border-amber-400/20 pt-2">
-        <div className="flex items-center gap-3">
-        {position && position.max > 1 && (
-          // Position: − / + around plain text, one control beside Publish.
-          <div className="flex h-9 min-w-0 flex-1 items-center justify-between rounded-md border border-on-surface/25 text-on-surface-variant" role="group" aria-label="Order">
-            <button
-              type="button"
-              onClick={() => position.onChange(position.value - 1)}
-              disabled={publishing || position.value <= 1}
-              aria-label="Move up in the order"
-              className="flex h-full items-center px-3 transition-colors hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              <Minus className="h-3.5 w-3.5" />
-            </button>
-            {/* The number reads as plain text but can be typed into, so a far
-                position is one entry rather than many clicks. */}
-            <span className="flex items-center text-sm font-medium tabular-nums text-on-surface">
-              Order
-              <PositionInput position={position} disabled={publishing} />
-              of {position.max}
-            </span>
-            <button
-              type="button"
-              onClick={() => position.onChange(position.value + 1)}
-              disabled={publishing || position.value >= position.max}
-              aria-label="Move down in the order"
-              className="flex h-full items-center px-3 transition-colors hover:text-primary disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </button>
-          </div>
+        {position && position.max > 1 ? (
+          <SplitPublish
+            position={position}
+            publishing={publishing}
+            onPublish={onPublish}
+            icon={<ActionIcon className="h-4 w-4" />}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={onPublish}
+            disabled={publishing}
+            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <ActionIcon className="h-4 w-4" />
+            {publishing ? busyLabel : actionLabel}
+          </button>
         )}
-        <button
-          type="button"
-          onClick={onPublish}
-          disabled={publishing}
-          className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <ActionIcon className="h-4 w-4" />
-          {publishing ? busyLabel : actionLabel}
-        </button>
-        </div>
       </div>
     </div>
   );
 }
 
+
+type PositionProp = NonNullable<AnnouncementDraftChipProps['position']>;
+
+/** Short, one-line label for a message in the slot menu. */
+function shortText(html: string): string {
+  return chipExcerpt(html, 24);
+}
+
 /**
- * The typeable number. Applies as you type — no Enter to discover — and falls
- * back to the last valid position if left empty or out of range.
+ * Split-action button: the left zone publishes to the chosen slot, the right
+ * chevron opens the slot menu. Each zone has its own hover, with a divider
+ * between them, so they never read as one button. The menu floats over the
+ * page (portal) and never changes the card's height; it opens downward and
+ * flips upward when there isn't room below.
  */
-function PositionInput({
+function SplitPublish({
   position,
-  disabled,
+  publishing,
+  onPublish,
+  icon,
 }: {
-  position: { value: number; max: number; onChange: (value: number) => void };
-  disabled: boolean;
+  position: PositionProp;
+  publishing: boolean;
+  onPublish: () => void;
+  icon: ReactNode;
 }) {
-  const [text, setText] = useState(String(position.value));
-  // Follow − / + presses made while not typing.
-  useEffect(() => setText(String(position.value)), [position.value]);
+  const [open, setOpen] = useState(false);
+  const [place, setPlace] = useState<{ right: number; top: number; width: number } | null>(null);
+  const anchorRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const { value, max, liveTexts } = position;
+
+  const slotLabel = (n: number) =>
+    n === 1 ? `Slot #1 (Top)` : n === max ? `Slot #${n} (End)` : `Slot #${n} (After ${shortText(liveTexts[n - 2])})`;
+
+  // Opens below the button; it floats, so the card never grows.
+  useLayoutEffect(() => {
+    if (!open || !anchorRef.current) return;
+    const r = anchorRef.current.getBoundingClientRect();
+    // Anchored to the button's right edge (the ▾ that opens it), a little
+    // narrower than the button itself.
+    setPlace({ right: window.innerWidth - r.right, top: r.bottom + 8, width: Math.round(r.width * 0.75) });
+  }, [open]);
+
+  // Close on outside click, Escape, or scroll/resize (the anchor moves).
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!menuRef.current?.contains(t) && !anchorRef.current?.contains(t)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    const close = () => setOpen(false);
+    // Scrolling the menu's own list is fine; only the page moving the
+    // button away closes it.
+    const onScroll = (e: Event) => { if (!menuRef.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open]);
 
   return (
-    <input
-      type="text"
-      inputMode="numeric"
-      value={text}
-      disabled={disabled}
-      aria-label={`Order, 1 to ${position.max}`}
-      title="Click to type a number"
-      onFocus={(e) => e.target.select()}
-      onChange={(e) => {
-        const digits = e.target.value.replace(/\D/g, '');
-        setText(digits);
-        const n = parseInt(digits, 10);
-        if (n >= 1 && n <= position.max) position.onChange(n);
-      }}
-      onBlur={() => setText(String(position.value))}
-      style={{ width: `${String(position.max).length + 1}ch` }}
-      className="mx-1 cursor-text border-b-2 border-primary/60 bg-transparent text-center font-semibold text-primary outline-none hover:border-primary focus:border-primary"
-    />
+    <>
+      <div ref={anchorRef} className="flex h-9 w-full overflow-hidden rounded-md bg-primary text-on-primary shadow-sm">
+        {/* Zone A — publish */}
+        <button
+          type="button"
+          onClick={onPublish}
+          disabled={publishing}
+          className="flex min-w-0 flex-1 items-center justify-center gap-2 px-4 text-sm font-semibold transition-colors hover:bg-black/20 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {icon}
+          {publishing ? (
+            <span className="truncate">Publishing to Slot #{value}…</span>
+          ) : (
+            <span className="flex min-w-0 items-baseline gap-1">
+              <span className="shrink-0">Publish as</span>
+              <span className="truncate">{slotLabel(value)}</span>
+            </span>
+          )}
+        </button>
+        {/* Zone B — slot menu */}
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          disabled={publishing}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label="Change position in rotation"
+          title="Change position in rotation"
+          className="flex w-[72px] shrink-0 items-center justify-center border-l border-white/25 transition-colors hover:bg-black/25 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+
+      {open && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={menuRef}
+          role="listbox"
+          aria-label="Select rotation slot"
+          style={{ position: 'fixed', right: place?.right ?? -9999, top: place?.top, width: place?.width, zIndex: 60 }}
+          className="campaign-custom-scrollbar max-h-[204px] overflow-y-auto rounded-xl border border-border bg-surface-elevated py-1.5 shadow-xl"
+        >
+          <p className="px-3 pb-2 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Select rotation slot</p>
+          {Array.from({ length: max }, (_, i) => i + 1).map((n) => {
+            const selected = n === value;
+            const pushed = liveTexts[n - 1];
+            const what =
+              n === 1 ? 'Insert at start (Default)'
+                : n === max ? 'Insert at end of rotation'
+                  : `Insert after "${shortText(liveTexts[n - 2])}"`;
+            return (
+              <button
+                key={n}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => { position.onChange(n); setOpen(false); }}
+                className={`flex w-full items-start gap-3 border-t border-border px-3 py-2.5 text-left transition-colors first-of-type:border-t-0 hover:bg-on-surface/5 ${selected ? 'bg-primary/5' : ''}`}
+              >
+                <span className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-primary' : 'border-on-surface/30'}`}>
+                  {selected && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                </span>
+                <span className="min-w-0 flex-1 text-xs">
+                  <span className="block">
+                    <span className="font-semibold text-on-surface">
+                      Slot #{n}{n === 1 ? ' (Top)' : n === max ? ' (End)' : ''}
+                    </span>
+                    <span className="text-on-surface-variant"> ── {what}</span>
+                  </span>
+                  {pushed && n < max && (
+                    <span className="mt-0.5 block truncate text-[11px] text-on-surface-variant/70">
+                      └─ Will push &quot;{shortText(pushed)}&quot; to #{n + 1}
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }

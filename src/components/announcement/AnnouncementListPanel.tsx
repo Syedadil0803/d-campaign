@@ -40,7 +40,7 @@ interface AnnouncementListPanelProps {
   stagedIndex: number | null;
 }
 
-type Filter = 'all' | 'active' | 'scheduled';
+type Filter = 'active' | 'scheduled';
 
 /**
  * Status is carried by a small dot only; everything else stays in the app's
@@ -78,8 +78,7 @@ export function AnnouncementListPanel({
 
   const { active, scheduled } = groupRows(announcements);
   const liveRows = active.filter((row) => row.state === 'active');
-  const allRows = [...active, ...scheduled];
-  const rows = filter === 'active' ? liveRows : filter === 'scheduled' ? scheduled : allRows;
+  const rows = filter === 'active' ? liveRows : scheduled;
 
   // The picked row, or the first one in view — the inspector is never blank
   // while there is something to show.
@@ -260,7 +259,6 @@ export function AnnouncementListPanel({
   const tabs: { value: Filter; label: string; dot?: string }[] = [
     { value: 'active', label: `Active ${liveRows.length}`, dot: 'bg-emerald-500' },
     { value: 'scheduled', label: `Upcoming ${scheduled.length}`, dot: 'bg-amber-500' },
-    { value: 'all', label: `All ${allRows.length}` },
   ];
 
   return (

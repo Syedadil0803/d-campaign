@@ -50,10 +50,13 @@ export function hasVisibleText(html: string): boolean {
 export function previewMessages(
   visible: Announcement[],
   pending: Announcement | null | undefined,
+  /** Where it will be published, 1 = top (newest first, the default). */
+  position = 1,
 ): Announcement[] {
   if (!pending || !hasVisibleText(pending.text)) return visible;
   if (!isAnnouncementInWindow(pending.startDate, pending.endDate)) return visible;
-  return [...visible, pending];
+  const at = Math.min(Math.max(position, 1), visible.length + 1) - 1;
+  return [...visible.slice(0, at), pending, ...visible.slice(at)];
 }
 
 /**
@@ -70,6 +73,7 @@ export function buildPreviewList({
   stagedReplaces,
   editing,
   typing,
+  position = 1,
 }: {
   visible: Announcement[];
   staged: Announcement | null;
@@ -79,25 +83,29 @@ export function buildPreviewList({
   editing: Announcement | null;
   /** What is currently in the editor, or null when it is empty. */
   typing: Announcement | null;
+  /** Where a new message will be published, 1 = top. */
+  position?: number;
 }): Announcement[] {
-  if (staged) return replaceOrAppend(visible, stagedReplaces ?? null, staged);
+  if (staged) return replaceOrInsert(visible, stagedReplaces ?? null, staged, position);
   if (!typing) return visible;
-  return replaceOrAppend(visible, editing, typing);
+  return replaceOrInsert(visible, editing, typing, position);
 }
 
 /**
- * Swaps `pending` in for the row it belongs to, or adds it at the end.
+ * Swaps `pending` in for the row it belongs to, or adds a new one at the
+ * position it will be published to (top by default).
  *
  * Both the staged message and the one being typed follow this: an edit of a
  * published message stands in its own place, so the preview shows one changed
  * message rather than the old and the new side by side.
  */
-function replaceOrAppend(
+function replaceOrInsert(
   visible: Announcement[],
   target: Announcement | null,
   pending: Announcement,
+  position: number,
 ): Announcement[] {
-  if (!target) return previewMessages(visible, pending);
+  if (!target) return previewMessages(visible, pending, position);
   return visible.map((message) =>
     message === target ? { ...message, ...pending } : message,
   );

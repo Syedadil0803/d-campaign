@@ -325,43 +325,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
   }, []);
 
   const pxPerSec = config.announcementBar.speed ?? DEFAULT_PX_PER_SEC;
-  useEffect(() => {
-    if (!scrollContainerRef.current) return;
-    const container = scrollContainerRef.current;
-    const containerWidth = container.clientWidth;
-    if (containerWidth <= 0) return;
-
-    const track = container.querySelector('.animate-scroll-left') as HTMLElement | null;
-    if (!track) return;
-
-    const paused = pxPerSec <= 0;
-    container.classList.toggle('announcement-paused', paused);
-    track.dataset.pxPerSec = String(pxPerSec);
-
-    const halfWidth = track.scrollWidth / 2;
-    if (halfWidth <= 0) return;
-
-    if (paused) {
-      const firstSet = track.firstElementChild as HTMLElement | null;
-      const contentWidth = firstSet ? firstSet.scrollWidth : 0;
-      container.classList.toggle('paused-fits', contentWidth > 0 && contentWidth <= containerWidth);
-      return;
-    }
-    container.classList.remove('paused-fits');
-
-    if (config.announcementBar.loop !== false) {
-      const oneSetWidth = halfWidth / loopCopies;
-      if (oneSetWidth <= 0) return;
-      const needed = Math.max(1, Math.ceil(containerWidth / oneSetWidth));
-      if (needed !== loopCopies) setLoopCopies(needed);
-    } else {
-      container.style.setProperty('--set-min-width', `${containerWidth}px`);
-      setLoopCopies(1);
-    }
-
-    const duration = marqueeDurationSeconds(halfWidth, pxPerSec);
-    track.style.setProperty('--scroll-duration', `${duration.toFixed(1)}s`);
-  }, [config.announcementBar.announcements, config.announcementBar.active, config.announcementBar.loop, pxPerSec, loopCopies, resizeTick]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -579,6 +542,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     };
     // Nothing changes until the user confirms in the same "Publish to
     // website?" dialog the header's Publish uses; Cancel leaves it staged.
+    // The slot a new live message went to, for the success toast.
+    const placedAt = target == null && !startsLater(staged.startDate) ? stagedPosition : null;
     const run = async () => {
       setPublishingStaged(true);
       try {
@@ -586,6 +551,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
         clearSelection();
         setStagedPosition(1);
         await publishNow?.(next);
+        if (placedAt !== null) toast(`Announcement published to Slot #${placedAt}`);
       } finally {
         setPublishingStaged(false);
       }
@@ -893,20 +859,68 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
       ? config.announcementBar.announcements[selectedIndex] ?? null
       : null,
     typing,
+    position: stagedPosition,
   });
+  /** Changes whenever what the preview shows changes. Drives the marquee
+   *  layout below and the compose-pause watcher further down. */
+  const previewSignature = previewList
+    .map((m) => `${m.text}|${m.url ?? ''}|${m.startDate ?? ''}|${m.endDate ?? ''}`)
+    .join('␟');
+
+  /**
+   * Lays out the preview marquee: copies for loop, a full-width single pass,
+   * and the scroll duration for the chosen speed. Keyed on what the preview
+   * actually shows — published messages plus the staged or typed one — so a
+   * staged message into an empty bar gets measured. Keying it on the published
+   * list alone left a first staged message drawn twice (no single-pass width)
+   * and at the default speed until a speed button was pressed.
+   */
+  useEffect(() => {
+    if (!scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    const containerWidth = container.clientWidth;
+    if (containerWidth <= 0) return;
+
+    const track = container.querySelector('.animate-scroll-left') as HTMLElement | null;
+    if (!track) return;
+
+    const paused = pxPerSec <= 0;
+    container.classList.toggle('announcement-paused', paused);
+    track.dataset.pxPerSec = String(pxPerSec);
+
+    const halfWidth = track.scrollWidth / 2;
+    if (halfWidth <= 0) return;
+
+    if (paused) {
+      const firstSet = track.firstElementChild as HTMLElement | null;
+      const contentWidth = firstSet ? firstSet.scrollWidth : 0;
+      container.classList.toggle('paused-fits', contentWidth > 0 && contentWidth <= containerWidth);
+      return;
+    }
+    container.classList.remove('paused-fits');
+
+    if (config.announcementBar.loop !== false) {
+      const oneSetWidth = halfWidth / loopCopies;
+      if (oneSetWidth <= 0) return;
+      const needed = Math.max(1, Math.ceil(containerWidth / oneSetWidth));
+      if (needed !== loopCopies) setLoopCopies(needed);
+    } else {
+      container.style.setProperty('--set-min-width', `${containerWidth}px`);
+      setLoopCopies(1);
+    }
+
+    const duration = marqueeDurationSeconds(halfWidth, pxPerSec);
+    track.style.setProperty('--scroll-duration', `${duration.toFixed(1)}s`);
+  }, [previewSignature, config.announcementBar.active, config.announcementBar.loop, pxPerSec, loopCopies, resizeTick]);
 
   /**
    * Hold the marquee still while the user is composing.
    *
    * Keyed on what the preview actually renders, so every editing action is
    * covered by one watcher: typing, size, bold, italic, colour, the link and
-   * the dates all change this string. The first run is skipped — arriving at
+   * the dates all change previewSignature. The first run is skipped — arriving at
    * the page is not composing.
    */
-  const previewSignature = previewList
-    .map((m) => `${m.text}|${m.url ?? ''}|${m.startDate ?? ''}|${m.endDate ?? ''}`)
-    .join('␟');
-
   useEffect(() => {
     if (!composeWatchStartedRef.current) {
       composeWatchStartedRef.current = true;
