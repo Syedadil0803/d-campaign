@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { campaignService } from '@/services/campaignService';
-import { getSessionUserId } from '@/lib/auth/currentUser';
+import { withUser } from '@/lib/auth/withUser';
 import { PromoCard } from '@/types/campaign';
 
 // Scoped to the promo card only — never reads or writes announcementBar,
@@ -11,11 +11,7 @@ export const runtime = 'nodejs';
 
 // PUT → upsert just the promo side of the draft.
 export async function PUT(request: NextRequest) {
-  const start = Date.now();
-  try {
-    const userId = await getSessionUserId();
-    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
-
+  return withUser('[DRAFT/PROMO] PUT', 'Failed to save promo draft', async (userId, start) => {
     const { promoCard }: { promoCard: PromoCard } = await request.json();
     const result = await campaignService.savePromoDraft(userId, promoCard);
     if (!result.success) {
@@ -24,24 +20,14 @@ export async function PUT(request: NextRequest) {
     }
     console.log(`[DRAFT/PROMO] PUT -> OK (${Date.now() - start}ms)`);
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error(`[DRAFT/PROMO] PUT -> FAILED (${Date.now() - start}ms):`, error);
-    return NextResponse.json({ error: 'Failed to save promo draft' }, { status: 500 });
-  }
+  });
 }
 
 // DELETE → reset just the promo side to blank. Announcement is untouched.
 export async function DELETE() {
-  const start = Date.now();
-  try {
-    const userId = await getSessionUserId();
-    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
-
+  return withUser('[DRAFT/PROMO] DELETE', 'Failed to clear promo draft', async (userId, start) => {
     await campaignService.clearPromoDraft(userId);
     console.log(`[DRAFT/PROMO] DELETE -> OK (${Date.now() - start}ms)`);
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error(`[DRAFT/PROMO] DELETE -> FAILED (${Date.now() - start}ms):`, error);
-    return NextResponse.json({ error: 'Failed to clear promo draft' }, { status: 500 });
-  }
+  });
 }

@@ -1,5 +1,6 @@
 import type { PromoCard } from '@/types/campaign';
 import { toLocalISODate } from '@/lib/utils';
+import { shortDay } from '@/lib/calendarDates';
 import { whatsAppLooksShort } from '@/lib/whatsapp';
 import { fieldOverflows } from '@/lib/promo/promoFit';
 import { isOpenEnded } from '@/lib/promo/promoSchedule';
@@ -15,7 +16,6 @@ export function validatePromo(promoCard: PromoCard): string[] {
   const warnings: string[] = [];
   const pc = promoCard;
   const strip = (html: string) => html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
-  const formatDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
   // 1. Content fields
   if (!strip(pc.title || '')) warnings.push('Title is empty');
@@ -38,9 +38,9 @@ export function validatePromo(promoCard: PromoCard): string[] {
     if (!pc.startDate) {
       warnings.push('Start date is not set');
     } else if (pc.startDate <= toLocalISODate(new Date())) {
-      warnings.push(`Campaign will run from ${formatDate(pc.startDate)} until you stop it (starts immediately)`);
+      warnings.push(`Campaign will run from ${shortDay(pc.startDate)} until you stop it (starts immediately)`);
     } else {
-      warnings.push(`Campaign is scheduled from ${formatDate(pc.startDate)} until you stop it`);
+      warnings.push(`Campaign is scheduled from ${shortDay(pc.startDate)} until you stop it`);
     }
   } else if (!pc.startDate || !pc.endDate) {
     warnings.push('Start date or end date is not set');
@@ -52,9 +52,9 @@ export function validatePromo(promoCard: PromoCard): string[] {
     if (pc.endDate < today) {
       warnings.push('End date is in the past');
     } else if (pc.startDate <= today) {
-      warnings.push(`Campaign will run from ${formatDate(pc.startDate)} – ${formatDate(pc.endDate)} (starts immediately)`);
+      warnings.push(`Campaign will run from ${shortDay(pc.startDate)} – ${shortDay(pc.endDate)} (starts immediately)`);
     } else {
-      warnings.push(`Campaign is scheduled for ${formatDate(pc.startDate)} – ${formatDate(pc.endDate)}`);
+      warnings.push(`Campaign is scheduled for ${shortDay(pc.startDate)} – ${shortDay(pc.endDate)}`);
     }
   }
 

@@ -43,6 +43,16 @@ interface PromoBriefStepProps {
   ) => void;
 }
 
+/** How each answer is labelled in the summary list. */
+const SUMMARY_LABELS: Record<keyof PromoBrief, string> = {
+  offer: 'Offer',
+  tone: 'Tone',
+  timer: 'Countdown',
+  cta: 'Button',
+  colors: 'Colours',
+  extra: 'Notes',
+};
+
 /**
  * The brief: one question at a time, with chips for the common answers.
  *
@@ -148,7 +158,7 @@ export function PromoBriefStep({
                 <button
                   type="button"
                   onClick={() => setQuestionIndex((i) => i - 1)}
-                  className="rounded-lg px-2 py-1.5 text-xs font-medium text-on-surface-variant transition-colors hover:text-primary"
+                  className="rounded-lg py-1.5 pr-2 text-xs font-medium text-on-surface-variant transition-colors hover:text-primary"
                 >
                   Back
                 </button>
@@ -177,7 +187,7 @@ export function PromoBriefStep({
                 </button>
               )}
               <span className="ml-auto text-[10px] font-medium tabular-nums text-on-surface-variant">
-                {Math.min(questionIndex + 1, questions.length)} of {questions.length}
+                Question {Math.min(questionIndex + 1, questions.length)} of {questions.length}
               </span>
             </div>
 
@@ -187,7 +197,7 @@ export function PromoBriefStep({
                 {answeredSoFar.map(({ q, index: qi }) => (
                   <div key={q.key} className="flex gap-2 text-[11px] leading-snug">
                     <dt className="w-24 shrink-0 font-semibold text-on-surface-variant">
-                      {q.key === 'extra' ? 'Notes' : q.key}
+                      {SUMMARY_LABELS[q.key]}
                     </dt>
                     <dd className="min-w-0 flex-1 truncate text-on-surface">
                       {brief[q.key]}
@@ -206,8 +216,10 @@ export function PromoBriefStep({
           </div>
         </li>
 
-        <li className={`flex gap-2.5 ${promptCopied ? '' : 'opacity-55'}`}>
-          {stepBubble(2, promptCopied)}
+        {/* Pasting a reply without copying the prompt first is allowed, so a
+            card that was applied counts as past these steps too. */}
+        <li className={`flex gap-2.5 ${promptCopied || applied ? '' : 'opacity-55'}`}>
+          {stepBubble(2, promptCopied || applied)}
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-on-surface">Paste it into your AI tool</p>
             <p className="text-xs text-on-surface-variant">
@@ -216,25 +228,20 @@ export function PromoBriefStep({
           </div>
         </li>
 
-        <li className={`flex gap-2.5 ${promptCopied ? '' : 'opacity-55'}`}>
+        <li className={`flex gap-2.5 ${promptCopied || applied ? '' : 'opacity-55'}`}>
           {stepBubble(3, applied)}
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-on-surface">Bring the reply back</p>
-            <button
-              type="button"
-              onClick={() => setShowPaste(true)}
-              className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
-            >
-              <ClipboardPaste className="h-3.5 w-3.5" /> Paste reply
-            </button>
             {applied && (
-              <div className="mt-2 flex flex-col items-start gap-2">
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-                  <Check className="h-3.5 w-3.5" /> Applied to your card
-                </span>
-                {/* The step ended but the task didn't: closing the panel is
-                    what returns you to the card to refine it, and nothing was
-                    saying so. */}
+              <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                <Check className="h-3.5 w-3.5" /> Applied to your card
+              </span>
+            )}
+            <div className="mt-2 flex items-center gap-2">
+              {/* The step ended but the task didn't: closing the panel is
+                  what returns you to the card to refine it, and nothing was
+                  saying so. */}
+              {applied && (
                 <button
                   type="button"
                   onClick={onClose}
@@ -242,8 +249,15 @@ export function PromoBriefStep({
                 >
                   Continue in the editor <ArrowRight className="h-3.5 w-3.5" />
                 </button>
-              </div>
-            )}
+              )}
+              <button
+                type="button"
+                onClick={() => setShowPaste(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-on-surface-variant transition-colors hover:border-primary/70 hover:text-primary"
+              >
+                <ClipboardPaste className="h-3.5 w-3.5" /> {applied ? 'Paste another' : 'Paste reply'}
+              </button>
+            </div>
           </div>
         </li>
       </ol>

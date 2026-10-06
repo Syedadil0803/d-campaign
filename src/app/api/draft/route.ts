@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { campaignService } from '@/services/campaignService';
-import { getSessionUserId } from '@/lib/auth/currentUser';
+import { withUser } from '@/lib/auth/withUser';
 import { CampaignConfig } from '@/types/campaign';
 
 // The draft lives only in the DB (never R2 — it isn't published). Talks to the
@@ -13,11 +13,7 @@ export const runtime = 'nodejs';
 // share this one row, but are saved separately — see savePromoDraft /
 // saveAnnouncementDraft — so each needs its own "last saved" time).
 export async function GET() {
-  const start = Date.now();
-  try {
-    const userId = await getSessionUserId();
-    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
-
+  return withUser('[DRAFT] GET', 'Failed to load draft', async (userId, start) => {
     const result = await campaignService.getDraftWithTimestamps(userId);
     console.log(`[DRAFT] GET -> ${result ? 'OK' : 'EMPTY'} (${Date.now() - start}ms)`);
     return NextResponse.json({
@@ -25,19 +21,12 @@ export async function GET() {
       promoLastUpdated: result?.promoLastUpdated ?? null,
       announcementLastUpdated: result?.announcementLastUpdated ?? null,
     });
-  } catch (error) {
-    console.error(`[DRAFT] GET -> FAILED (${Date.now() - start}ms):`, error);
-    return NextResponse.json({ error: 'Failed to load draft' }, { status: 500 });
-  }
+  });
 }
 
 // PUT → upsert the draft.
 export async function PUT(request: NextRequest) {
-  const start = Date.now();
-  try {
-    const userId = await getSessionUserId();
-    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
-
+  return withUser('[DRAFT] PUT', 'Failed to save draft', async (userId, start) => {
     const config: CampaignConfig = await request.json();
     const result = await campaignService.saveDraft(userId, config);
     if (!result.success) {
@@ -46,24 +35,14 @@ export async function PUT(request: NextRequest) {
     }
     console.log(`[DRAFT] PUT -> OK (${Date.now() - start}ms)`);
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error(`[DRAFT] PUT -> FAILED (${Date.now() - start}ms):`, error);
-    return NextResponse.json({ error: 'Failed to save draft' }, { status: 500 });
-  }
+  });
 }
 
 // DELETE → clear the draft (on publish / discard).
 export async function DELETE() {
-  const start = Date.now();
-  try {
-    const userId = await getSessionUserId();
-    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
-
+  return withUser('[DRAFT] DELETE', 'Failed to clear draft', async (userId, start) => {
     await campaignService.clearDraft(userId);
     console.log(`[DRAFT] DELETE -> OK (${Date.now() - start}ms)`);
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error(`[DRAFT] DELETE -> FAILED (${Date.now() - start}ms):`, error);
-    return NextResponse.json({ error: 'Failed to clear draft' }, { status: 500 });
-  }
+  });
 }

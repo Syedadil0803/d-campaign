@@ -5,11 +5,12 @@
 
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import type { CampaignConfig } from '@/types/campaign';
 import { getBackgroundStyle } from '@/lib/utils';
 import { isAnnouncementInWindow } from '@/lib/announcement/announcementWindow';
-import { marqueeDurationSeconds, DEFAULT_PX_PER_SEC } from '@/lib/announcement/scrollSpeed';
+import { DEFAULT_PX_PER_SEC } from '@/lib/announcement/scrollSpeed';
+import { useMarqueeLayout } from '@/hooks/useMarqueeLayout';
 
 
 export function AnnouncementBarPreview({
@@ -17,65 +18,17 @@ export function AnnouncementBarPreview({
 }: {
   bar: CampaignConfig['announcementBar'];
 }): React.ReactElement {
-  const [loopCopies, setLoopCopies] = useState(1);
-  const [resizeTick, setResizeTick] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const isLoopOn = bar.loop !== false;
   const pxPerSec = bar.speed ?? DEFAULT_PX_PER_SEC;
   const visible = bar.announcements.filter((a) => isAnnouncementInWindow(a.startDate, a.endDate));
 
-  // Recompute on resize: the derived duration tracks the bar's width.
-  useEffect(() => {
-    let frame = 0;
-    const onResize = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => setResizeTick((t) => t + 1));
-    };
-    window.addEventListener('resize', onResize);
-    return () => { window.removeEventListener('resize', onResize); cancelAnimationFrame(frame); };
-  }, []);
-
-  // Match the Announcement tab: compute how many copies fill the bar and set a
-  // duration that keeps the scroll speed constant (see scrollSpeed.ts).
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const containerWidth = container.clientWidth;
-    if (containerWidth <= 0) return;
-    const track = container.querySelector('.animate-scroll-left') as HTMLElement | null;
-    if (!track) return;
-
-    // Set the paused/playing DOM state before measuring: paused hides all but one
-    // copy, so a width read while paused would be too small and resume would race.
-    const paused = pxPerSec <= 0;
-    container.classList.toggle('announcement-paused', paused);
-    track.dataset.pxPerSec = String(pxPerSec); // inspectable in DevTools Elements
-
-    const halfWidth = track.scrollWidth / 2;
-    if (halfWidth <= 0) return;
-
-    if (paused) {
-      const firstSet = track.firstElementChild as HTMLElement | null;
-      const contentWidth = firstSet ? firstSet.scrollWidth : 0;
-      container.classList.toggle('paused-fits', contentWidth > 0 && contentWidth <= containerWidth);
-      return;
-    }
-    container.classList.remove('paused-fits');
-
-    if (isLoopOn) {
-      const oneSetWidth = halfWidth / loopCopies;
-      if (oneSetWidth > 0) {
-        const needed = Math.max(1, Math.ceil(containerWidth / oneSetWidth));
-        if (needed !== loopCopies) setLoopCopies(needed);
-      }
-    } else {
-      container.style.setProperty('--set-min-width', `${containerWidth}px`);
-    }
-
-    const duration = marqueeDurationSeconds(halfWidth, pxPerSec);
-    track.style.setProperty('--scroll-duration', `${duration.toFixed(1)}s`);
-  }, [bar.announcements, bar.loop, isLoopOn, pxPerSec, loopCopies, resizeTick]);
+  const loopCopies = useMarqueeLayout(containerRef, {
+    loop: isLoopOn,
+    pxPerSec,
+    contentKey: visible.map((a) => a.text).join('\u0001'),
+  });
 
   if (visible.length === 0) {
     return (

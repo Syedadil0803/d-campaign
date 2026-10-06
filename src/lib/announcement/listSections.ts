@@ -9,6 +9,7 @@
 import type { Announcement } from '@/types/campaign';
 import { isAnnouncementInWindow } from '@/lib/announcement/announcementWindow';
 import { startsLater } from '@/lib/announcement/stagedDraft';
+import { shortDay } from '@/lib/calendarDates';
 
 /**
  * 'active'    on air now — including a message with no dates, which is always on
@@ -59,7 +60,7 @@ export function groupRows(announcements: Announcement[]): {
 }
 
 /** At most this many messages can be waiting to start at once. */
-export const SCHEDULE_LIMIT = 3;
+const SCHEDULE_LIMIT = 3;
 
 export const SCHEDULE_LIMIT_MESSAGE =
   'You can schedule up to 3 messages. Delete one, or wait for one to start, to free a slot.';
@@ -84,28 +85,6 @@ function startTime(message: Announcement): number {
 }
 
 /**
- * Scheduling is by date only, so a stored 'YYYY-MM-DD' is read as that local
- * calendar day. `new Date('2026-05-01')` would read it as UTC midnight, which
- * shows as Apr 30 anywhere west of Greenwich.
- */
-function localDay(iso: string): Date {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function shortDay(iso: string): string {
-  const date = localDay(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function longDay(iso: string): string {
-  const date = localDay(iso);
-  return Number.isNaN(date.getTime())
-    ? iso
-    : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-/**
  * Line 2 of a list row: dates only, short. Empty for a message with no dates —
  * it simply runs, and the row drops its second line.
  */
@@ -124,11 +103,11 @@ export function rowDates(message: Announcement, state: RowState): string {
   const { startDate, endDate } = message;
   if (!startDate && !endDate) return 'Continuous';
   if (startDate && endDate) {
-    const days = Math.round((localDay(endDate).getTime() - localDay(startDate).getTime()) / 86_400_000) + 1;
-    return `${longDay(startDate)} → ${longDay(endDate)} (${days} ${days === 1 ? 'day' : 'days'})`;
+    const days = Math.round((new Date(`${endDate}T00:00:00`).getTime() - new Date(`${startDate}T00:00:00`).getTime()) / 86_400_000) + 1;
+    return `${shortDay(startDate, true)} → ${shortDay(endDate, true)} (${days} ${days === 1 ? 'day' : 'days'})`;
   }
-  if (startDate) return state === 'scheduled' ? `Starts ${longDay(startDate)}` : `Since ${longDay(startDate)}`;
-  return `Until ${longDay(endDate!)}`;
+  if (startDate) return state === 'scheduled' ? `Starts ${shortDay(startDate, true)}` : `Since ${shortDay(startDate, true)}`;
+  return `Until ${shortDay(endDate!, true)}`;
 }
 
 /** Stored-array indices of the messages on air now, in rotation order. */

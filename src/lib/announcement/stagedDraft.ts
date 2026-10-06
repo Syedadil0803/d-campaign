@@ -10,6 +10,7 @@
  */
 
 import type { Announcement } from '@/types/campaign';
+import { shortDay } from '@/lib/calendarDates';
 import { isAnnouncementInWindow } from '@/lib/announcement/announcementWindow';
 
 /**
@@ -117,12 +118,6 @@ export function chipExcerpt(html: string, limit = 42): string {
   return text.length > limit ? `${text.slice(0, limit).trimEnd()}…` : text;
 }
 
-export function formatDay(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
 /**
  * How the chip describes the message's run: "Runs until you stop it", "From Sep 17 onwards",
  * "Today → Oct 20", "Starts Oct 25". Uses `isAnnouncementInWindow` rather than
@@ -131,9 +126,9 @@ export function formatDay(iso: string): string {
  */
 export function describeWindow(startDate?: string, endDate?: string): string {
   const onAir = isAnnouncementInWindow(startDate, endDate);
-  const start = startDate ? formatDay(startDate) : 'today';
+  const start = startDate ? shortDay(startDate) : 'today';
   if (!onAir) return `Starts ${start}`;
   // Open-ended is a choice, so it reads as one — not as a missing end date.
   if (!endDate) return startDate ? `From ${start} onwards` : 'Runs until you stop it';
-  return `${start} → ${formatDay(endDate)}`;
+  return `${start} → ${shortDay(endDate)}`;
 }

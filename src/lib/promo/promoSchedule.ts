@@ -17,5 +17,3 @@ export const hasCompleteSchedule = (
   card: Pick<PromoCard, 'scheduleMode' | 'startDate' | 'endDate'>,
 ): boolean => Boolean(card.startDate) && (isOpenEnded(card) || Boolean(card.endDate));
 
-/** A countdown needs an end to count towards, so it belongs to ranges alone. */
-export const canShowTimer = (card: Pick<PromoCard, 'scheduleMode'>): boolean => !isOpenEnded(card);

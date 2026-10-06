@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type RefObject, useCallback } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { useAnchoredPopover, useCenterSelected } from "@/hooks/useAnchoredPopover";
 import { X, Palette, Settings2 } from "lucide-react";
 import {
   announcementThemes,
@@ -30,7 +31,6 @@ export function BarAppearancePopover({
   const popoverRef = useRef<HTMLDivElement>(null);
   const themesContainerRef = useRef<HTMLDivElement>(null);
   const wasOpenRef = useRef(false);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("presets");
 
   const {
@@ -59,121 +59,9 @@ export function BarAppearancePopover({
     wasOpenRef.current = open;
   }, [open, isThemeMode]);
 
-  // Calculate popover position
-  const calculatePosition = useCallback(() => {
-    if (!triggerRef.current) return null;
-
-    const rect = triggerRef.current.getBoundingClientRect();
-    let left = rect.left;
-
-    if (left + POPOVER_WIDTH > window.innerWidth - 8) {
-      left = window.innerWidth - POPOVER_WIDTH - 8;
-    }
-
-    return {
-      top: rect.bottom + GAP,
-      left: Math.max(8, left),
-    };
-  }, [triggerRef]);
-
-  // Set position when popover opens
-  useEffect(() => {
-    if (!open) return;
-
-    const newPosition = calculatePosition();
-    if (newPosition) {
-      setPosition(newPosition);
-    }
-  }, [open, calculatePosition]);
-
-  // Auto-scroll to active theme - runs when popover is actually rendered
-  useEffect(() => {
-    if (!open || activeTab !== "presets" || !position) return;
-    if (!themesContainerRef.current) return;
-
-    const container = themesContainerRef.current;
-
-    const scrollToActive = () => {
-      const activeButton = container.querySelector(
-        'button[aria-selected="true"]'
-      ) as HTMLButtonElement | null;
-
-      if (activeButton) {
-        const containerRect = container.getBoundingClientRect();
-        const buttonRect = activeButton.getBoundingClientRect();
-
-        const scrollOffset =
-          buttonRect.top - containerRect.top - containerRect.height / 2 + buttonRect.height / 2;
-
-        container.scrollTo({
-          top: container.scrollTop + scrollOffset,
-          behavior: "instant",
-        });
-      }
-    };
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        scrollToActive();
-      });
-    });
-  }, [open, activeTab, activeThemeId, position]);
-
-  // Reposition on scroll/resize - ignore scrolls from inside popover
-  useEffect(() => {
-    if (!open) return;
-
-    const handleReposition = (event: Event) => {
-      if (popoverRef.current?.contains(event.target as Node)) {
-        return;
-      }
-      const newPosition = calculatePosition();
-      if (newPosition) {
-        setPosition(newPosition);
-      }
-    };
-
-    window.addEventListener("scroll", handleReposition, true);
-    window.addEventListener("resize", handleReposition);
-
-    return () => {
-      window.removeEventListener("scroll", handleReposition, true);
-      window.removeEventListener("resize", handleReposition);
-    };
-  }, [open, calculatePosition]);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-
-    const handleOutsideClick = (event: MouseEvent) => {
-      const target = event.target as Node;
-
-      const isInsidePopover = popoverRef.current?.contains(target);
-      const isInsideTrigger = triggerRef.current?.contains(target);
-
-      if (!isInsidePopover && !isInsideTrigger) {
-        onClose();
-      }
-    };
-
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, [open, onClose, triggerRef]);
-
-  // Close on Escape
-  useEffect(() => {
-    if (!open) return;
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [open, onClose]);
+  const position = useAnchoredPopover({ open, triggerRef, popoverRef, width: POPOVER_WIDTH, gap: GAP, onClose });
+  // Bring the active theme into view when the presets tab shows.
+  useCenterSelected(themesContainerRef, open && activeTab === "presets" && !!position, [activeThemeId, position]);
 
   const handleTabChange = (tab: Tab) => {
     setActiveTab(tab);

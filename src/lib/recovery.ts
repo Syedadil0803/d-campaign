@@ -47,23 +47,6 @@ export function addDebugLog(tag: string, message: string, data?: unknown) {
   }
 }
 
-export function getDebugLogs() {
-  try {
-    const raw = localStorage.getItem(DEBUG_LOG_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function clearDebugLogs() {
-  try {
-    localStorage.removeItem(DEBUG_LOG_KEY);
-  } catch {
-    /* nothing to do */
-  }
-}
-
 /**
  * Why the rescue copy was written.
  *

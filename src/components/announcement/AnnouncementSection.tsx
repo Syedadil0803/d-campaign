@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, type RefObject } from 'react';
 import { isInvalidRange } from '@/lib/dateRange';
 import { visibleAnnouncements } from '@/lib/announcement/announcementWindow';
-import { marqueeDurationSeconds, DEFAULT_PX_PER_SEC } from '@/lib/announcement/scrollSpeed';
+import { DEFAULT_PX_PER_SEC } from '@/lib/announcement/scrollSpeed';
 import { buildAnnouncementAiPrompt, chatGptUrl } from '@/lib/announcement/announcementAiPrompt';
 import { readFormatsFromHtml } from '@/lib/editor/readFormatsFromHtml';
 import { CampaignConfig, GradientStyle, defaultConfig, type Announcement } from '@/types/campaign';
@@ -14,7 +14,6 @@ import { Toast, TOAST_ACTION_MS, type ToastAction } from '@/components/shared/To
 import { useAnnouncementStyleDropdowns } from '@/components/announcement/useAnnouncementStyleDropdowns';
 import { useAnnouncementPopups } from '@/components/announcement/useAnnouncementPopups';
 import { useAnnouncementSelection } from '@/components/announcement/useAnnouncementSelection';
-import { useAnnouncementRowMenu } from '@/components/announcement/useAnnouncementRowMenu';
 import { useAnnouncementSnapshots } from '@/components/announcement/useAnnouncementSnapshots';
 import { useToast } from '@/hooks/useToast';
 import { AnnouncementEditorPanel } from '@/components/announcement/AnnouncementEditorPanel';
@@ -36,6 +35,7 @@ import { addDebugLog, saveSelectedAnnouncementIndex } from '@/lib/recovery';
 import { buildPreviewList, hasVisibleText, startsLater } from '@/lib/announcement/stagedDraft';
 import { canSchedule, insertIndexForPosition, SCHEDULE_LIMIT_MESSAGE } from '@/lib/announcement/listSections';
 import { useComposeActivity } from '@/hooks/useComposeActivity';
+import { useMarqueeLayout } from '@/hooks/useMarqueeLayout';
 
 interface AnnouncementSectionProps {
   config: CampaignConfig;
@@ -141,7 +141,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
 
   const shortcutsTipShown = useRef(false);
   const [, setShowRichToolbar] = useState(true);
-  const [loopCopies, setLoopCopies] = useState(1);
   const [showShortcutsTip, setShowShortcutsTip] = useState(false);
 
   // Derived from config - always in sync
@@ -226,12 +225,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     setShowSchedulePopup(false);
   };
 
-  const rowMenu = useAnnouncementRowMenu({
-    setShowLinkPopup,
-    setShowSchedulePopup,
-    selectAnnouncement,
-    removeAnnouncement,
-  });
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   selectedIndexRef.current = selectedIndex;
   const configRef = useRef(config);
@@ -312,17 +305,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     observer.observe(root, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
   }, [setActiveFormats]);
-
-  const [resizeTick, setResizeTick] = useState(0);
-  useEffect(() => {
-    let frame = 0;
-    const onResize = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => setResizeTick((t) => t + 1));
-    };
-    window.addEventListener('resize', onResize);
-    return () => { window.removeEventListener('resize', onResize); cancelAnimationFrame(frame); };
-  }, []);
 
   const pxPerSec = config.announcementBar.speed ?? DEFAULT_PX_PER_SEC;
 
@@ -868,50 +850,15 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     .join('␟');
 
   /**
-   * Lays out the preview marquee: copies for loop, a full-width single pass,
-   * and the scroll duration for the chosen speed. Keyed on what the preview
-   * actually shows — published messages plus the staged or typed one — so a
-   * staged message into an empty bar gets measured. Keying it on the published
-   * list alone left a first staged message drawn twice (no single-pass width)
-   * and at the default speed until a speed button was pressed.
+   * Keyed on what the preview actually shows — published messages plus the
+   * staged or typed one — so a first staged message into an empty bar gets
+   * measured (it used to draw twice, at the default speed).
    */
-  useEffect(() => {
-    if (!scrollContainerRef.current) return;
-    const container = scrollContainerRef.current;
-    const containerWidth = container.clientWidth;
-    if (containerWidth <= 0) return;
-
-    const track = container.querySelector('.animate-scroll-left') as HTMLElement | null;
-    if (!track) return;
-
-    const paused = pxPerSec <= 0;
-    container.classList.toggle('announcement-paused', paused);
-    track.dataset.pxPerSec = String(pxPerSec);
-
-    const halfWidth = track.scrollWidth / 2;
-    if (halfWidth <= 0) return;
-
-    if (paused) {
-      const firstSet = track.firstElementChild as HTMLElement | null;
-      const contentWidth = firstSet ? firstSet.scrollWidth : 0;
-      container.classList.toggle('paused-fits', contentWidth > 0 && contentWidth <= containerWidth);
-      return;
-    }
-    container.classList.remove('paused-fits');
-
-    if (config.announcementBar.loop !== false) {
-      const oneSetWidth = halfWidth / loopCopies;
-      if (oneSetWidth <= 0) return;
-      const needed = Math.max(1, Math.ceil(containerWidth / oneSetWidth));
-      if (needed !== loopCopies) setLoopCopies(needed);
-    } else {
-      container.style.setProperty('--set-min-width', `${containerWidth}px`);
-      setLoopCopies(1);
-    }
-
-    const duration = marqueeDurationSeconds(halfWidth, pxPerSec);
-    track.style.setProperty('--scroll-duration', `${duration.toFixed(1)}s`);
-  }, [previewSignature, config.announcementBar.active, config.announcementBar.loop, pxPerSec, loopCopies, resizeTick]);
+  const loopCopies = useMarqueeLayout(scrollContainerRef, {
+    loop: config.announcementBar.loop !== false,
+    pxPerSec,
+    contentKey: `${previewSignature}|${config.announcementBar.active}`,
+  });
 
   /**
    * Hold the marquee still while the user is composing.
@@ -937,7 +884,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     ...styleDropdowns,
     ...popups,
     ...selection,
-    ...rowMenu,
     ...richText,
     ...history,
     config,
@@ -1094,7 +1040,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
               setDraggedIndex={setDraggedIndex}
               onEdit={selectAnnouncement}
               onCancelEdit={clearSelection}
-              onDelete={rowMenu.handleMenuDelete}
+              onDelete={removeAnnouncement}
               locked={staged !== null}
               stagedIndex={stagedIndex}
             />

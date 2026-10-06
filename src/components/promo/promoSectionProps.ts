@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { CampaignConfig, PromoCard } from '@/types/campaign';
 
 /**
@@ -133,3 +134,17 @@ export interface PromoSectionProps {
   onDismissRecovery: () => void;
   onRestoreRecovery: () => void;
 }
+
+/** Asks before replacing the card on the canvas, then runs `action`. */
+export type ConfirmCardReplace = (
+  action: () => void,
+  opts: {
+    title: string;
+    body: ReactNode;
+    confirmLabel: string;
+    reassuranceBody?: ReactNode;
+    replacementLabel?: string;
+    nextCard?: PromoCard;
+    offerDraftSave?: boolean;
+  },
+) => void;

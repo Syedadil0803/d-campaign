@@ -66,3 +66,16 @@ export function formatScheduleRange(start?: string, end?: string): string {
   if (s && e) return `${s} → ${e}`;
   return s || e || '';
 }
+
+/**
+ * "Oct 6", or "Oct 6, 2026" with the year — the app's one short date format.
+ * A stored YYYY-MM-DD is read as that local day (see formatDateLabel). An
+ * unreadable value comes back as given.
+ */
+export function shortDay(iso: string, withYear = false): string {
+  const date = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString(undefined, withYear
+    ? { month: 'short', day: 'numeric', year: 'numeric' }
+    : { month: 'short', day: 'numeric' });
+}

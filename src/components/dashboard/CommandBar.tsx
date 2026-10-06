@@ -2,9 +2,16 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Check, ChevronDown, X } from 'lucide-react';
-import type { ActionableIssue } from '@/hooks/useCommandBar';
 
-export type { ActionableIssue };
+interface ActionableIssue {
+  id: string;
+  message: string;
+  severity: 'high' | 'medium' | 'low';
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
+}
 
 interface CommandBarProps {
   siteName?: string;
@@ -391,5 +398,3 @@ export function CommandBar({
     </div>
   );
 }
-
-export default CommandBar;

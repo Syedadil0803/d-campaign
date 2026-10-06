@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { campaignService } from '@/services/campaignService';
-import { getSessionUserId } from '@/lib/auth/currentUser';
+import { withUser } from '@/lib/auth/withUser';
 import { CampaignConfig } from '@/types/campaign';
 
 // Scoped to the announcement bar only — never reads or writes promoCard,
@@ -11,11 +11,7 @@ export const runtime = 'nodejs';
 
 // PUT → upsert just the announcement side of the draft.
 export async function PUT(request: NextRequest) {
-  const start = Date.now();
-  try {
-    const userId = await getSessionUserId();
-    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
-
+  return withUser('[DRAFT/ANNOUNCEMENT] PUT', 'Failed to save announcement draft', async (userId, start) => {
     const { announcementBar }: { announcementBar: CampaignConfig['announcementBar'] } =
       await request.json();
     const result = await campaignService.saveAnnouncementDraft(userId, announcementBar);
@@ -25,24 +21,14 @@ export async function PUT(request: NextRequest) {
     }
     console.log(`[DRAFT/ANNOUNCEMENT] PUT -> OK (${Date.now() - start}ms)`);
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error(`[DRAFT/ANNOUNCEMENT] PUT -> FAILED (${Date.now() - start}ms):`, error);
-    return NextResponse.json({ error: 'Failed to save announcement draft' }, { status: 500 });
-  }
+  });
 }
 
 // DELETE → reset just the announcement side to blank. Promo is untouched.
 export async function DELETE() {
-  const start = Date.now();
-  try {
-    const userId = await getSessionUserId();
-    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
-
+  return withUser('[DRAFT/ANNOUNCEMENT] DELETE', 'Failed to clear announcement draft', async (userId, start) => {
     await campaignService.clearAnnouncementDraft(userId);
     console.log(`[DRAFT/ANNOUNCEMENT] DELETE -> OK (${Date.now() - start}ms)`);
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error(`[DRAFT/ANNOUNCEMENT] DELETE -> FAILED (${Date.now() - start}ms):`, error);
-    return NextResponse.json({ error: 'Failed to clear announcement draft' }, { status: 500 });
-  }
+  });
 }

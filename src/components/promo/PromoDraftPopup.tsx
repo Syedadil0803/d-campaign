@@ -1,9 +1,10 @@
 'use client';
 
-import type { ReactNode } from 'react';
 import type { PromoCard } from '@/types/campaign';
 import { X } from 'lucide-react';
 import { PromoMiniPreview } from '@/components/shared/PromoMiniPreview';
+import type { ConfirmCardReplace } from '@/components/promo/promoSectionProps';
+
 
 /**
  * The saved draft, offered back.
@@ -33,18 +34,7 @@ export function PromoDraftPopup({
   onAskDelete: (asking: boolean) => void;
   onDelete: () => void;
   onRestore: (card: PromoCard) => void;
-  confirmCardReplace: (
-    action: () => void,
-    opts: {
-      title: string;
-      body: ReactNode;
-      confirmLabel: string;
-      reassuranceBody?: ReactNode;
-      replacementLabel?: string;
-      nextCard?: PromoCard;
-      offerDraftSave?: boolean;
-    },
-  ) => void;
+  confirmCardReplace: ConfirmCardReplace;
 }) {
   // The draft may already be what's on the canvas (you saved it, or just
   // restored it). Restoring it again would be a no-op, so offering to

@@ -9,13 +9,11 @@ import type { EditorSnapshot, LinkSnapshot } from '@/lib/editor/historyManager';
 import type { useAnnouncementStyleDropdowns } from '@/components/announcement/useAnnouncementStyleDropdowns';
 import type { useAnnouncementPopups } from '@/components/announcement/useAnnouncementPopups';
 import type { useAnnouncementSelection } from '@/components/announcement/useAnnouncementSelection';
-import type { useAnnouncementRowMenu } from '@/components/announcement/useAnnouncementRowMenu';
 
 export interface AnnouncementEditorApi
   extends ReturnType<typeof useAnnouncementStyleDropdowns>,
   ReturnType<typeof useAnnouncementPopups>,
   ReturnType<typeof useAnnouncementSelection>,
-  ReturnType<typeof useAnnouncementRowMenu>,
   ReturnType<typeof useRichTextEditor>,
   ReturnType<typeof useEditorHistory> {
   config: CampaignConfig;

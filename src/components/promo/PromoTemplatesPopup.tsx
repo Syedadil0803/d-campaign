@@ -1,11 +1,12 @@
 'use client';
 
-import type { ReactNode } from 'react';
 import type { PromoCard } from '@/types/campaign';
 import { SamplePromoTemplates } from '@/components/promo/SamplePromoTemplates';
 import { applyTemplateFull } from '@/lib/promo/promoTemplate';
 import { isOpenEnded } from '@/lib/promo/promoSchedule';
 import { X, ArrowLeft, FilePlus2 } from 'lucide-react';
+import type { ConfirmCardReplace } from '@/components/promo/promoSectionProps';
+
 
 /**
  * The Template Hub, shown over the editor.
@@ -30,18 +31,7 @@ export function PromoTemplatesPopup({
   onClose: () => void;
   onStartFresh: () => void;
   onApplyTemplate: (card: PromoCard, name: string) => void;
-  confirmCardReplace: (
-    action: () => void,
-    opts: {
-      title: string;
-      body: ReactNode;
-      confirmLabel: string;
-      reassuranceBody?: ReactNode;
-      replacementLabel?: string;
-      nextCard?: PromoCard;
-      offerDraftSave?: boolean;
-    },
-  ) => void;
+  confirmCardReplace: ConfirmCardReplace;
 }) {
   return (
     <div data-modal className="fixed inset-0 z-50 flex items-center justify-center p-4">

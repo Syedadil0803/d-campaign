@@ -1,25 +1,13 @@
 'use client';
 
-import type { RefObject, ReactNode } from 'react';
+import type { RefObject } from 'react';
 import type { CampaignConfig, PromoCard } from '@/types/campaign';
 import type { PromoVersion } from '@/lib/promo/promoVersions';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { PromoTemplatesPopup } from '@/components/promo/PromoTemplatesPopup';
 import { PromoDraftPopup } from '@/components/promo/PromoDraftPopup';
 import { PromoVersionsPopup } from '@/components/promo/PromoVersionsPopup';
-
-type ConfirmCardReplace = (
-  action: () => void,
-  opts: {
-    title: string;
-    body: ReactNode;
-    confirmLabel: string;
-    reassuranceBody?: ReactNode;
-    replacementLabel?: string;
-    nextCard?: PromoCard;
-    offerDraftSave?: boolean;
-  },
-) => void;
+import type { ConfirmCardReplace } from '@/components/promo/promoSectionProps';
 
 interface PromoSectionDialogsProps {
   showStopConfirm: boolean;

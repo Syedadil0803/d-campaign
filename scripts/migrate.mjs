@@ -9,10 +9,9 @@
  * recovery story rather than state this script would have to track.
  */
 import postgres from 'postgres';
-import * as dotenv from 'dotenv';
 import { readFile } from 'node:fs/promises';
 
-dotenv.config({ path: '.env.local' });
+try { process.loadEnvFile('.env.local'); } catch { /* no .env.local: use the real environment */ }
 
 const file = process.argv[2];
 if (!file) {

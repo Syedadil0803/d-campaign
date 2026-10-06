@@ -99,7 +99,7 @@ export interface BriefQuestion {
 export const CONTENT_QUESTIONS: BriefQuestion[] = [
   {
     key: 'offer',
-    title: 'What’s the offer, and what’s it on?',
+    title: 'The offer, and what it’s on',
     help: 'The product or collection, plus the deal — a discount, a bundle, free delivery, a code. Tap what applies, then add your own detail.',
     placeholder: '20% off all handwoven rugs, plus free UK delivery. Code RUGS20.',
     chipMode: 'multi',
@@ -115,7 +115,7 @@ export const CONTENT_QUESTIONS: BriefQuestion[] = [
   },
   {
     key: 'tone',
-    title: 'Who are you selling to, and how should it read?',
+    title: 'Your audience, and how it should read',
     help: 'Your shoppers, and the voice. Pick as many words as fit — “Bold, Premium, Urgent” shapes the copy more than any one of them alone.',
     placeholder: 'Returning customers who bought last winter. Warm, confident, not pushy.',
     chipMode: 'multi',
@@ -135,7 +135,7 @@ export const CONTENT_QUESTIONS: BriefQuestion[] = [
   },
   {
     key: 'timer',
-    title: 'Should the card show a countdown?',
+    title: 'Countdown on the card',
     help: 'Your dates are already set — this is only the wording that sits around the timer.',
     placeholder: 'Yes, with “Offer ends in”',
     chips: [
@@ -147,7 +147,7 @@ export const CONTENT_QUESTIONS: BriefQuestion[] = [
   },
   {
     key: 'cta',
-    title: 'Where should the button send people?',
+    title: 'Where the button sends people',
     help: 'A shop link, a WhatsApp number, or plain text with no link. It can be left off.',
     placeholder: 'My sale page: example.com/sale',
     chips: ['Link to my shop', 'WhatsApp me', 'Text only, no link', 'No button'],
@@ -156,7 +156,7 @@ export const CONTENT_QUESTIONS: BriefQuestion[] = [
 
 export const COLOR_QUESTION: BriefQuestion = {
   key: 'colors',
-  title: 'Which colors should it use?',
+  title: 'Colours for the card',
   help: 'Brand colors (hex codes help), a season or a mood — or hand the palette to AI. Stack as many as you like.',
   placeholder: 'Brand green #0f766e with warm cream, dark text',
   chipMode: 'multi',
@@ -176,7 +176,7 @@ export const COLOR_QUESTION: BriefQuestion = {
 
 export const EXTRA_QUESTION: BriefQuestion = {
   key: 'extra',
-  title: 'Anything it must say — or must avoid?',
+  title: 'Anything it must say or avoid',
   help: 'Optional. Claims you can’t make, words to steer clear of, a phrase you want included.',
   placeholder: 'Don’t say “cheap”. Do mention free 30-day returns.',
   optional: true,

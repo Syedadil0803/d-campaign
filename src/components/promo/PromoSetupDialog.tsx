@@ -14,6 +14,7 @@ import { isInvalidRange } from '@/lib/dateRange';
 import { ArrowRight, CalendarDays, PenLine, Sparkles, X } from 'lucide-react';
 import { PromoDatePicker } from '@/components/promo/PromoDatePicker';
 import { toLocalISODate } from '@/lib/utils';
+import { shortDay } from '@/lib/calendarDates';
 import type { PromoCard } from '@/types/campaign';
 
 export type BuildMethod = 'ai' | 'manual';
@@ -112,8 +113,7 @@ export function PromoSetupDialog({
 
   const summary = useMemo(() => {
     if (!scheduleReady) return null;
-    const fmt = (d: string) =>
-      new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const fmt = (d: string) => shortDay(d);
     if (openEnded) return 'Runs from today · until you stop it';
     const when = startDate > todayISO ? 'Scheduled' : 'Runs';
     return `${when} ${fmt(startDate)} → ${fmt(endDate)}${

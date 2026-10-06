@@ -18,7 +18,7 @@ export interface ElsewhereNotice {
  * so one of them has to be built first. This is the smaller surface, declared
  * as a port so the draft hook can be built second and handed in.
  */
-export interface RestoreNotice {
+interface RestoreNotice {
   /** When the local copy was taken. Empty for copies written before it was recorded. */
   localSavedAt: string | null;
   /** When the parked draft was saved, if there is one. Null means there isn't. */

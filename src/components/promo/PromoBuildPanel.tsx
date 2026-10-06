@@ -305,6 +305,29 @@ export function PromoBuildPanel({
   /** Numbered marker for the hand-off steps; fills in once that step is live. */
 
   /** Step 1 — the decision the user actually opened this for. */
+  // Shown in both layouts, so it is built once.
+  const briefStep = (
+    <PromoBriefStep
+      brief={brief}
+      setAnswer={setAnswer}
+      questions={questions}
+      question={question}
+      questionIndex={questionIndex}
+      setQuestionIndex={setQuestionIndex}
+      answeredSoFar={answeredSoFar}
+      briefDone={briefDone}
+      activeMode={activeMode}
+      setAiStep={setAiStep}
+      copyPrompt={copyPrompt}
+      promptCopied={promptCopied}
+      setShowPaste={setShowPaste}
+      applied={applied}
+      expanded={expanded}
+      onClose={onClose}
+      toast={toast}
+    />
+  );
+
   const aiWhat = (
     <div
       className={`gap-2 ${
@@ -426,27 +449,7 @@ export function PromoBuildPanel({
                   gridTemplateColumns: `minmax(0,1fr) minmax(300px, ${(pc.cardWidth || 400) + 40}px)`,
                 }}
               >
-                {aiStep === 'what' ? aiWhat : (
-                  <PromoBriefStep
-                    brief={brief}
-                    setAnswer={setAnswer}
-                    questions={questions}
-                    question={question}
-                    questionIndex={questionIndex}
-                    setQuestionIndex={setQuestionIndex}
-                    answeredSoFar={answeredSoFar}
-                    briefDone={briefDone}
-                    activeMode={activeMode}
-                    setAiStep={setAiStep}
-                    copyPrompt={copyPrompt}
-                    promptCopied={promptCopied}
-                    setShowPaste={setShowPaste}
-                    applied={applied}
-                    expanded={expanded}
-                    onClose={onClose}
-                    toast={toast}
-                  />
-                )}
+                {aiStep === 'what' ? aiWhat : briefStep}
                 {/* Expanded covers the editor's preview, so the card comes along. */}
                 <div className="flex min-h-0 flex-col gap-2">
                   <p className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-on-surface-variant">
@@ -465,29 +468,7 @@ export function PromoBuildPanel({
                   </div>
                 </div>
               </div>
-            ) : aiStep === 'what' ? (
-              aiWhat
-            ) : (
-                  <PromoBriefStep
-                    brief={brief}
-                    setAnswer={setAnswer}
-                    questions={questions}
-                    question={question}
-                    questionIndex={questionIndex}
-                    setQuestionIndex={setQuestionIndex}
-                    answeredSoFar={answeredSoFar}
-                    briefDone={briefDone}
-                    activeMode={activeMode}
-                    setAiStep={setAiStep}
-                    copyPrompt={copyPrompt}
-                    promptCopied={promptCopied}
-                    setShowPaste={setShowPaste}
-                    applied={applied}
-                    expanded={expanded}
-                    onClose={onClose}
-                    toast={toast}
-                  />
-                ))}
+            ) : aiStep === 'what' ? aiWhat : briefStep)}
         </div>
       </div>
 

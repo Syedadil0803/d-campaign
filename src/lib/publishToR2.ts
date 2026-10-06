@@ -70,4 +70,3 @@ export async function syncToR2(config: CampaignConfig): Promise<{ ok: boolean; e
   }
 }
 
-export { R2_CONFIG_KEY, R2_BUCKET_NAME };

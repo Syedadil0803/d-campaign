@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { campaignService } from '@/services/campaignService';
-import { getSessionUserId } from '@/lib/auth/currentUser';
+import { withUser } from '@/lib/auth/withUser';
 import { CampaignConfig } from '@/types/campaign';
 import { syncToR2 } from '@/lib/publishToR2';
 import { promoteDueScheduled } from '@/lib/promoteScheduled';
@@ -18,11 +18,7 @@ export const dynamic = 'force-dynamic';
  * publishes to the live site and to R2.
  */
 export async function GET() {
-  const start = Date.now();
-  try {
-    const userId = await getSessionUserId();
-    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
-
+  return withUser('[CONFIG] GET', 'Failed to load config', async (userId, start) => {
     // Swept here too, so scheduling works before any cron is wired up. The
     // endpoint stays the real trigger — nobody opening the tool means nobody
     // publishes, and a campaign due yesterday would sit waiting.
@@ -36,18 +32,11 @@ export async function GET() {
     ]);
     console.log(`[CONFIG] GET -> OK scheduled=${scheduled ? 'yes' : 'no'} (${Date.now() - start}ms)`);
     return NextResponse.json({ ...config, scheduled });
-  } catch (error) {
-    console.error(`[CONFIG] GET -> FAILED (${Date.now() - start}ms):`, error);
-    return NextResponse.json({ error: 'Failed to load config' }, { status: 500 });
-  }
+  });
 }
 
 export async function PUT(request: NextRequest) {
-  const start = Date.now();
-  try {
-    const userId = await getSessionUserId();
-    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
-
+  return withUser('[CONFIG] PUT', 'Failed to save config', async (userId, start) => {
     const config: CampaignConfig = await request.json();
     const result = await campaignService.saveConfig(config);
 
@@ -69,8 +58,5 @@ export async function PUT(request: NextRequest) {
       db: { saved: true },
       r2: { synced: r2.ok, ...(r2.ok ? {} : { error: r2.error }) },
     });
-  } catch (error) {
-    console.error(`[CONFIG] PUT -> FAILED (${Date.now() - start}ms):`, error);
-    return NextResponse.json({ error: 'Failed to save config' }, { status: 500 });
-  }
+  });
 }

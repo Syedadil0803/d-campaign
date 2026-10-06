@@ -25,7 +25,7 @@ export interface Announcement {
 /**
  * A message with text styling.
  */
-export interface Message {
+interface Message {
   id: string;
   content: string;
   styles: {

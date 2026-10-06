@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { campaignService } from '@/services/campaignService';
-import { getSessionUserId } from '@/lib/auth/currentUser';
+import { withUser } from '@/lib/auth/withUser';
 import { MAX_VERSIONS } from '@/lib/promo/promoVersions';
 
 /**
@@ -20,30 +20,19 @@ export const runtime = 'nodejs';
 
 // GET → the saved variants array (may be empty).
 export async function GET() {
-  const start = Date.now();
-  try {
-    // Checked here as well as in middleware. The guard is correct today, but a
-    // change to its path matcher would expose this route with nothing in the
-    // route itself to prevent it.
-    const userId = await getSessionUserId();
-    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
-
+  // Checked here as well as in middleware. The guard is correct today, but a
+  // change to its path matcher would expose this route with nothing in the
+  // route itself to prevent it.
+  return withUser('[VARIANTS] GET', 'Failed to load variants', async (userId, start) => {
     const variants = await campaignService.getVariants();
     console.log(`[VARIANTS] GET -> OK count=${variants.length} (${Date.now() - start}ms)`);
     return NextResponse.json({ variants });
-  } catch (error) {
-    console.error(`[VARIANTS] GET -> FAILED (${Date.now() - start}ms):`, error);
-    return NextResponse.json({ error: 'Failed to load variants' }, { status: 500 });
-  }
+  });
 }
 
 // PUT → replace the whole variants array (the client caps it at MAX_VERSIONS).
 export async function PUT(request: NextRequest) {
-  const start = Date.now();
-  try {
-    const userId = await getSessionUserId();
-    if (!userId) return NextResponse.json({ error: 'Not signed in' }, { status: 401 });
-
+  return withUser('[VARIANTS] PUT', 'Failed to save variants', async (userId, start) => {
     const body = await request.json();
     const variants = Array.isArray(body?.variants) ? body.variants : body;
     if (!Array.isArray(variants)) {
@@ -62,8 +51,5 @@ export async function PUT(request: NextRequest) {
     }
     console.log(`[VARIANTS] PUT -> OK count=${variants.length} (${Date.now() - start}ms)`);
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error(`[VARIANTS] PUT -> FAILED (${Date.now() - start}ms):`, error);
-    return NextResponse.json({ error: 'Failed to save variants' }, { status: 500 });
-  }
+  });
 }

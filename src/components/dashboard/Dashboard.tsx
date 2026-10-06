@@ -16,7 +16,7 @@ import {
 } from '@/components/dashboard/dashboardFormat';
 import { DashboardLifecycleCards } from '@/components/dashboard/DashboardLifecycleCards';
 import { DashboardPopups } from '@/components/dashboard/DashboardPopups';
-import { CommandBar } from '@/components/dashboard/CommandBar'; // <-- ADD THIS IMPORT
+import { CommandBar } from '@/components/dashboard/CommandBar';
 
 interface DashboardProps {
   config: CampaignConfig;

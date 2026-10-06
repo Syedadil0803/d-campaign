@@ -12,11 +12,10 @@
  * which is what you want when you have forgotten what you seeded it with.
  */
 import postgres from 'postgres';
-import * as dotenv from 'dotenv';
 import { randomBytes, scrypt as scryptCallback } from 'node:crypto';
 import { promisify } from 'node:util';
 
-dotenv.config({ path: '.env.local' });
+try { process.loadEnvFile('.env.local'); } catch { /* no .env.local: use the real environment */ }
 
 const scrypt = promisify(scryptCallback);
 

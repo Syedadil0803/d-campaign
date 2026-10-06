@@ -8,9 +8,8 @@
  * it, so nothing here can show you the work — only that it exists.
  */
 import postgres from 'postgres';
-import * as dotenv from 'dotenv';
 
-dotenv.config({ path: '.env.local' });
+try { process.loadEnvFile('.env.local'); } catch { /* no .env.local: use the real environment */ }
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {

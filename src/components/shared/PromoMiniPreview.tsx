@@ -68,10 +68,12 @@ export function PromoMiniPreview({ promoCard, faithful, scaffold }: PromoMiniPre
   return (
     <div
       ref={frameRef}
-      className="w-full overflow-hidden"
+      className="w-full"
       // The scaled card no longer contributes its real height to the layout,
-      // so the frame has to carry it or the tiles overlap.
-      style={{ height: cardHeight ? cardHeight * scale : undefined }}
+      // so the frame has to carry it or the tiles overlap. Clipped sideways
+      // only when scaled down (it's laid out at full width first); never
+      // vertically, which cut its shadow off flat along the bottom.
+      style={{ height: cardHeight ? cardHeight * scale : undefined, overflowX: scale < 1 ? "clip" : "visible", overflowY: "visible" }}
     >
     <div
       ref={cardRef}

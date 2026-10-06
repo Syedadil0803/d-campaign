@@ -223,25 +223,6 @@ export function promoHasVisibleContent(pc: CampaignConfig['promoCard']): boolean
   );
 }
 
-// Authoritative: is a draft worth restoring (→ show the banner)? Yes only if
-// the promo has authored text, OR the announcement actually differs from
-// what's published. A blank promo (Start Fresh) with unchanged announcements
-// is NOT restorable work, even though the announcement carries its messages.
-export function draftHasRestorableWork(
-  draft: CampaignConfig,
-  published: CampaignConfig | null,
-): boolean {
-  if (promoHasVisibleContent(draft.promoCard)) return true;
-  // endDate is work — even a blank card with a schedule is restorable.
-  // NOT startDate: withDefaultStartDate() stamps today's date onto any
-  // blank promo card during migration, so startDate is non-empty on every
-  // card whether or not it was ever actually scheduled — checking it here
-  // made a totally untouched promo card register as "restorable work".
-  if (draft.promoCard.endDate) return true;
-  if (!published) return false;
-  return announcementSignature(draft) !== announcementSignature(published);
-}
-
 // Messages signature (only text + styles, NOT bar background)
 export function getMessagesSignature(cfg: CampaignConfig | null): string {
   if (!cfg?.messages || cfg.messages.length === 0) return '';

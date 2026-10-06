@@ -1,13 +1,12 @@
 'use client';
 
-import { createPortal } from 'react-dom';
 import { AnnouncementLinkPopup } from '@/components/announcement/AnnouncementLinkPopup';
 import { AnnouncementSchedulePopup } from '@/components/announcement/AnnouncementSchedulePopup';
 import { useAnnouncementEditor } from '@/components/announcement/AnnouncementEditorContext';
 
 /**
  * Everything the announcement editor puts on top of itself: the link and
- * schedule popups, the row menu, and the styling panel.
+ * schedule popups.
  *
  * Takes no props. It reads the same context the panel does, so lifting it out
  * cost nothing — which is the point of that context being flat and named after
@@ -15,25 +14,17 @@ import { useAnnouncementEditor } from '@/components/announcement/AnnouncementEdi
  */
 export function AnnouncementEditorPopups() {
   const {
-    actionMenuIndex,
-    actionMenuPos,
-    actionMenuRef,
     annCountryBtnRef,
     annCountryMenuRef,
     annCountryPos,
     applyLinkSnapshot,
-    cancelCloseActionMenu,
     endDateCalendarRef,
     endDateView,
     getLinkSnapshot,
-    handleMenuAddLink,
-    handleMenuDelete,
-    handleMenuSchedule,
     linkPopupRef,
     linkPos,
     pushLinkState,
     redoLink,
-    scheduleCloseActionMenu,
     schedulePopupRef,
     schedulePos,
     selectedCountryCode,
@@ -122,40 +113,6 @@ export function AnnouncementEditorPopups() {
       endDateCalendarRef={endDateCalendarRef}
     />
 
-    {actionMenuIndex !== null && actionMenuPos && typeof document !== 'undefined' && createPortal(
-      <div
-        ref={actionMenuRef}
-        onMouseDown={(e) => e.stopPropagation()}
-        onMouseEnter={() => cancelCloseActionMenu()}
-        onMouseLeave={() => scheduleCloseActionMenu()}
-        style={{ position: 'absolute', top: actionMenuPos.top, left: actionMenuPos.left, zIndex: 9999 }}
-        className="bg-black/10 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl py-1 w-[180px]"
-      >
-        <button
-          type="button"
-          onMouseDown={(e) => { e.preventDefault(); handleMenuAddLink(actionMenuIndex); }}
-          className="w-full text-left px-3 py-2 text-sm text-on-surface hover:bg-surface-subtle"
-        >
-          Add link
-        </button>
-        <button
-          type="button"
-          onMouseDown={(e) => { e.preventDefault(); handleMenuSchedule(actionMenuIndex); }}
-          className="w-full text-left px-3 py-2 text-sm text-on-surface hover:bg-surface-subtle"
-        >
-          Schedule
-        </button>
-        <div className="my-1 h-px bg-border" />
-        <button
-          type="button"
-          onMouseDown={(e) => { e.preventDefault(); handleMenuDelete(actionMenuIndex); }}
-          className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-primary/10"
-        >
-          Delete
-        </button>
-      </div>,
-      document.body
-    )}
     </>
   );
 }

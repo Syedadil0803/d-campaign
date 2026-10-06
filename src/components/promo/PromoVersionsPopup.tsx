@@ -1,6 +1,5 @@
 'use client';
 
-import type { ReactNode } from 'react';
 import type { PromoCard } from '@/types/campaign';
 import type { PromoVersion } from '@/lib/promo/promoVersions';
 import { PromoMiniPreview } from '@/components/shared/PromoMiniPreview';
@@ -8,6 +7,8 @@ import { promoCardsEqual } from '@/lib/promo/promoCardIdentity';
 import { formatScheduleRange } from '@/lib/calendarDates';
 import { MAX_VERSIONS } from '@/lib/promo/promoVersions';
 import { X, Radio, CalendarDays } from 'lucide-react';
+import type { ConfirmCardReplace } from '@/components/promo/promoSectionProps';
+
 
 /**
  * "My Published" — the saved cards, with what is currently on the website
@@ -55,18 +56,7 @@ export function PromoVersionsPopup({
    * component states what it passes instead of depending on the shape of a
    * function it does not own.
    */
-  confirmCardReplace: (
-    action: () => void,
-    opts: {
-      title: string;
-      body: ReactNode;
-      confirmLabel: string;
-      reassuranceBody?: ReactNode;
-      replacementLabel?: string;
-      nextCard?: PromoCard;
-      offerDraftSave?: boolean;
-    },
-  ) => void;
+  confirmCardReplace: ConfirmCardReplace;
 }) {
   return (
     <div data-modal className="fixed inset-0 z-50 flex items-center justify-center p-4">
