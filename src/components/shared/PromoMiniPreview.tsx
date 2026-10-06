@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { PromoCard } from "@/types/campaign";
 import { getBackgroundStyle } from "@/lib/utils";
 import { getPreviewTimerHtml } from "@/lib/editor/timerPreview";
+import { PREVIEW_TEXT_FIELDS } from "@/components/promo/previewTextFields";
 
 interface PromoMiniPreviewProps {
   promoCard: PromoCard;
@@ -55,8 +56,14 @@ export function PromoMiniPreview({ promoCard, faithful, scaffold }: PromoMiniPre
     observer.observe(card);
     return () => observer.disconnect();
   }, [CARD_WIDTH]);
-  /** An empty band still needs height, same as the editor's empty fields. */
-  const EMPTY = "&nbsp;";
+  /**
+   * A scaffold field shows the editor's own placeholder text, faded, so a blank
+   * card reads as "headline goes here" rather than empty coloured bars.
+   */
+  const placeholderOf = (field: string) =>
+    PREVIEW_TEXT_FIELDS.find((f) => f.field === field)?.placeholder ?? "";
+  const filler = (field: string) =>
+    `<span style="opacity:0.45">${placeholderOf(field) || "&nbsp;"}</span>`;
   const show = (html?: string) => Boolean(html) || scaffold;
   return (
     <div
@@ -88,7 +95,7 @@ export function PromoMiniPreview({ promoCard, faithful, scaffold }: PromoMiniPre
             color: style.titleStyle.textColor,
             textAlign: style.titleStyle.textAlign || "center",
           }}
-          dangerouslySetInnerHTML={{ __html: promoCard.title || EMPTY }}
+          dangerouslySetInnerHTML={{ __html: promoCard.title || filler("title") }}
         />
       )}
       {show(promoCard.subtitle) && (
@@ -99,7 +106,7 @@ export function PromoMiniPreview({ promoCard, faithful, scaffold }: PromoMiniPre
             color: style.subheadingStyle.textColor,
             textAlign: style.subheadingStyle.textAlign || "center",
           }}
-          dangerouslySetInnerHTML={{ __html: promoCard.subtitle || EMPTY }}
+          dangerouslySetInnerHTML={{ __html: promoCard.subtitle || filler("subtitle") }}
         />
       )}
       {show(promoCard.description) && (
@@ -110,7 +117,7 @@ export function PromoMiniPreview({ promoCard, faithful, scaffold }: PromoMiniPre
             color: style.descriptionStyle.textColor,
             textAlign: style.descriptionStyle.textAlign || "left",
           }}
-          dangerouslySetInnerHTML={{ __html: promoCard.description || EMPTY }}
+          dangerouslySetInnerHTML={{ __html: promoCard.description || filler("description") }}
         />
       )}
       {promoCard.showTimer && show(promoCard.timerText) && (
@@ -141,7 +148,7 @@ export function PromoMiniPreview({ promoCard, faithful, scaffold }: PromoMiniPre
               background: getBackgroundStyle(style.buttonStyle.background),
               color: style.buttonStyle.textColor,
             }}
-            dangerouslySetInnerHTML={{ __html: promoCard.buttonText || EMPTY }}
+            dangerouslySetInnerHTML={{ __html: promoCard.buttonText || "&nbsp;" }}
           />
         </div>
       )}
