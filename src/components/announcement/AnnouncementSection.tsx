@@ -63,7 +63,7 @@ interface AnnouncementSectionProps {
    */
   saveDraftNow?: (cfg: CampaignConfig) => boolean;
   /** Publishes the given config — the chip promotes and publishes in one click. */
-  publishNow?: (cfg: CampaignConfig) => Promise<void>;
+  publishNow?: (cfg: CampaignConfig, successMessage?: string) => Promise<void>;
   /** Shows the publish confirmation; runs `onConfirm` only if the user agrees. */
   confirmPublish?: (onConfirm: () => Promise<void>) => void;
 }
@@ -550,8 +550,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
         setConfig(next);
         clearSelection();
         setStagedPosition(1);
-        await publishNow?.(next);
-        if (placedAt !== null) toast(`Announcement published to Slot #${placedAt}`);
+        // One toast, from the page: it names the slot when there is one.
+        await publishNow?.(next, placedAt !== null ? `Announcement published to Slot #${placedAt}` : undefined);
       } finally {
         setPublishingStaged(false);
       }

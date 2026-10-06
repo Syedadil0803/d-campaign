@@ -86,7 +86,7 @@ export function useCampaignPublishing({
    * publishes in the same click, and `config` here is the render's value, which
    * would still be the pre-promotion one and would publish the message away.
    */
-  async function handlePublishAnnouncement(from?: CampaignConfig) {
+  async function handlePublishAnnouncement(from?: CampaignConfig, successMessage = 'Campaign is live on your website') {
     const base = from ?? config;
     const next = {
       ...base,
@@ -94,7 +94,7 @@ export function useCampaignPublishing({
     };
     // Flip the chip to On Air only AFTER the publish finishes — so it appears
     // when the "Publishing…" loader completes, not at the start.
-    await persistConfig(next, 'Campaign is live on your website', 'announcement');
+    await persistConfig(next, successMessage, 'announcement');
     setConfig(next);
   }
 

@@ -179,7 +179,7 @@ function SplitPublish({
   icon: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const [place, setPlace] = useState<{ right: number; top: number; width: number } | null>(null);
+  const [place, setPlace] = useState<{ right: number; bottom: number; width: number } | null>(null);
   const anchorRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const { value, max, liveTexts } = position;
@@ -187,13 +187,12 @@ function SplitPublish({
   const slotLabel = (n: number) =>
     n === 1 ? `Slot #1 (Top)` : n === max ? `Slot #${n} (End)` : `Slot #${n} (After ${shortText(liveTexts[n - 2])})`;
 
-  // Opens below the button; it floats, so the card never grows.
+  // Opens above the button, lined up with its right edge (the ▾), floating
+  // over the page so the card never grows.
   useLayoutEffect(() => {
     if (!open || !anchorRef.current) return;
     const r = anchorRef.current.getBoundingClientRect();
-    // Anchored to the button's right edge (the ▾ that opens it), a little
-    // narrower than the button itself.
-    setPlace({ right: window.innerWidth - r.right, top: r.bottom + 8, width: Math.round(r.width * 0.75) });
+    setPlace({ right: window.innerWidth - r.right, bottom: window.innerHeight - r.top + 8, width: Math.round(r.width * 0.75) });
   }, [open]);
 
   // Close on outside click, Escape, or scroll/resize (the anchor moves).
@@ -251,19 +250,20 @@ function SplitPublish({
           title="Change position in rotation"
           className="flex w-[72px] shrink-0 items-center justify-center border-l border-white/25 transition-colors hover:bg-black/25 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`h-4 w-4 transition-transform ${open ? '' : 'rotate-180'}`} />
         </button>
       </div>
 
       {open && typeof document !== 'undefined' && createPortal(
         <div
           ref={menuRef}
-          role="listbox"
-          aria-label="Select rotation slot"
-          style={{ position: 'fixed', right: place?.right ?? -9999, top: place?.top, width: place?.width, zIndex: 60 }}
-          className="campaign-custom-scrollbar max-h-[204px] overflow-y-auto rounded-xl border border-border bg-surface-elevated py-1.5 shadow-xl"
+          style={{ position: 'fixed', right: place?.right ?? -9999, bottom: place?.bottom, width: place?.width, zIndex: 60 }}
+          className="overflow-hidden rounded-xl border border-border bg-surface-elevated shadow-xl"
         >
-          <p className="px-3 pb-2 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Select rotation slot</p>
+          {/* The heading sits outside the scroll, so it stays put and the
+              options never slide under it. */}
+          <p className="border-b border-border px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Select rotation slot</p>
+          <div role="listbox" aria-label="Select rotation slot" className="campaign-custom-scrollbar max-h-[172px] overflow-y-auto">
           {Array.from({ length: max }, (_, i) => i + 1).map((n) => {
             const selected = n === value;
             const pushed = liveTexts[n - 1];
@@ -278,7 +278,7 @@ function SplitPublish({
                 role="option"
                 aria-selected={selected}
                 onClick={() => { position.onChange(n); setOpen(false); }}
-                className={`flex w-full items-start gap-3 border-t border-border px-3 py-2.5 text-left transition-colors first-of-type:border-t-0 hover:bg-on-surface/5 ${selected ? 'bg-primary/5' : ''}`}
+                className={`flex w-full items-start gap-3 border-t border-border px-3 py-2.5 text-left transition-colors first:border-t-0 hover:bg-on-surface/5 ${selected ? 'bg-primary/5' : ''}`}
               >
                 <span className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-primary' : 'border-on-surface/30'}`}>
                   {selected && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
@@ -299,6 +299,7 @@ function SplitPublish({
               </button>
             );
           })}
+          </div>
         </div>,
         document.body,
       )}
