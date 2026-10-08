@@ -1,7 +1,6 @@
 'use client';
 
 import { CalendarClock, Sparkles, Trash2, X } from 'lucide-react';
-import { getBackgroundStyle } from '@/lib/utils';
 import { rgbToHex } from '@/lib/editor/colorUtils';
 import RichTextToolbar from '@/components/shared/RichTextToolbar';
 import { useAnnouncementEditor } from '@/components/announcement/AnnouncementEditorContext';
@@ -70,7 +69,6 @@ export function AnnouncementEditorPanel() {
     justDeletedStyledRef,
     onRichTextInput,
     openChatGptWithPrompt,
-    previewBg,
     restoringSnapshotRef,
     scheduleRangeInvalid,
   } = useAnnouncementEditor();

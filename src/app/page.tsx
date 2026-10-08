@@ -1,71 +1,44 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useDarkMode } from '@/hooks/useDarkMode';
-import {
-  useIdleSignOut,
-} from '@/hooks/useIdleSignOut';
 import {
   writeRecovery,
   clearRecovery,
-  readRecoveryEnvelope,
-  addDebugLog,
-  getSelectedAnnouncementIndex,
 } from '@/lib/recovery';
 import { isInvalidRange, anyInvalidRange } from '@/lib/dateRange';
-import { migrateConfig } from '@/lib/configMigration';
 import { CampaignConfig } from '@/types/campaign';
 import { cardIsNotUserWork } from '@/lib/promo/promoAuthorship';
 import { forgetVisit } from '@/lib/promo/blankLooks';
 import { isBlankLook } from '@/lib/promo/lookSignature';
 import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
 import { Header } from '@/components/shell/Header';
+import { PageDialogs } from '@/components/shell/PageDialogs';
 import { Dashboard } from '@/components/dashboard/Dashboard';
 import { AnnouncementSection } from '@/components/announcement/AnnouncementSection';
 import { PromoFlow } from '@/components/promo/PromoFlow';
-import { PromoSetupDialog } from '@/components/promo/PromoSetupDialog';
-import { usePromoSetupDialog, type ScheduleAnswer } from '@/components/promo/usePromoSetupDialog';
+import { usePromoSetupDialog } from '@/components/promo/usePromoSetupDialog';
 import { hasCompleteSchedule } from '@/lib/promo/promoSchedule';
 import { Toast, TOAST_ACTION_MS } from '@/components/shared/Toast';
-import {
-  IdleCountdownDialog,
-  NotificationsPromptDialog,
-} from '@/components/shell/SessionDialogs';
-import {
-  PostPublishDraftDialog,
-  WelcomeBackDialog,
-  DiscardDraftDialog,
-  ReplaceDraftDialog,
-} from '@/components/shell/DraftDialogs';
-import {
-  UnsavedWorkDialog,
-  VariantSlotFullDialog,
-  PublishConfirmDialog,
-  DashboardUnsavedDialog,
-} from '@/components/shell/UnsavedWorkDialogs';
-import { isFirstLoadOfVisit } from '@/lib/visit';
 import { useCampaignConfig } from '@/hooks/useCampaignConfig';
 import { useCampaignDraft } from '@/hooks/useCampaignDraft';
 import { useToast } from '@/hooks/useToast';
 import { usePromoVariantSaves } from '@/hooks/usePromoVariantSaves';
+import { useComposeTextRecovery } from '@/hooks/useComposeTextRecovery';
+import { useArrivalNotices } from '@/hooks/useArrivalNotices';
+import { useEditorExitGuards } from '@/hooks/useEditorExitGuards';
+import { useRecoveryActions } from '@/hooks/useRecoveryActions';
+import { useEditorWorkStatus } from '@/hooks/useEditorWorkStatus';
 import { useCampaignPublishing } from '@/hooks/useCampaignPublishing';
 import {
   getConfigSignature,
   normalizePromoForCompare,
   getPromoSignature,
-  promoHasVisibleContent,
-  announcementSignature,
   htmlHasVisibleText,
 } from '@/lib/configSignature';
 import {
-  fetchUnsavedElsewhere,
-  markElsewhereSeen,
   reportUnsaved,
 } from '@/lib/auth/presenceClient';
-import {
-  notificationPermission,
-  notificationsSupported,
-} from '@/lib/auth/sessionWarning';
 import {
 } from '@/lib/promo/promoVersions';
 
@@ -86,16 +59,6 @@ import {
 
 
 
-/**
- * The template cards, built once.
- *
- * sampleTemplates is a module constant, so mapping it inside the component
- * allocated a fresh twelve-element array on every render for a value that can
- * never change.
- */
-const TEMPLATE_CARDS = sampleTemplates.map(
-  (t) => t.promoCard as CampaignConfig['promoCard'],
-);
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'announcement' | 'promo'>('dashboard');
@@ -149,40 +112,13 @@ export default function Home() {
   // already up. There is no separate start screen any more.
   const [promoEntryStep, setPromoEntryStep] = useState<'ai' | 'build' | 'editor'>('editor');
   const mainScrollRef = useRef<HTMLElement>(null);
-  // Survives AnnouncementSection unmounting on a tab switch — see the prop's
-  // doc comment on AnnouncementSectionProps for why this can't just live
-  // inside that component.
-  const announcementComposeTextRef = useRef('');
-
-  // Restore recovered compose text on first mount
-  const hasRestoredRecoveryRef = useRef(false);
-  const [announcementComposeTextRecovered, setAnnouncementComposeTextRecovered] = useState(false);
-  const [recoveredSelectedAnnouncementIndex, setRecoveredSelectedAnnouncementIndex] = useState<number | null>(null);
-  
-  useEffect(() => {
-    if (hasRestoredRecoveryRef.current) return;
-    hasRestoredRecoveryRef.current = true;
-
-    const recovery = readRecoveryEnvelope();
-    const savedSelectedIndex = getSelectedAnnouncementIndex();
-    
-    if (recovery?.announcementComposeText) {
-      const debugData = {
-        textLength: recovery.announcementComposeText.length,
-        textPreview: recovery.announcementComposeText.substring(0, 50),
-        selectedIndex: savedSelectedIndex,
-      };
-      console.log('[RECOVERY] Direct restore on mount:', debugData);
-      addDebugLog('page.tsx', 'Restoring compose text directly on mount', debugData);
-      announcementComposeTextRef.current = recovery.announcementComposeText;
-      setAnnouncementComposeTextRecovered(true);
-      if (savedSelectedIndex !== null) {
-        setRecoveredSelectedAnnouncementIndex(savedSelectedIndex);
-      }
-    } else {
-      addDebugLog('page.tsx', 'No compose text in recovery on mount', {});
-    }
-  }, []);
+  const {
+    announcementComposeTextRef,
+    announcementComposeTextRecovered,
+    setAnnouncementComposeTextRecovered,
+    recoveredSelectedAnnouncementIndex,
+    setRecoveredSelectedAnnouncementIndex,
+  } = useComposeTextRecovery();
 
   const [isConfirming, setIsConfirming] = useState(false);
   const { isDarkMode, toggleDarkMode } = useDarkMode();
@@ -218,7 +154,7 @@ export default function Home() {
    * the editor restores what they had and then says so; asking "want it back?"
    * makes an accident into a decision they have to get right.
    */
-  const [restoreNotice, setRestoreNotice] = useState<{
+  const [restoreNotice] = useState<{
     /** When the local copy was taken. Empty for copies written before it was recorded. */
     localSavedAt: string | null;
     /** When the parked draft was saved, if there is one. Null means there isn't. */
@@ -260,50 +196,13 @@ export default function Home() {
 
 
 
-  /**
-   * Raise the notification card, once per visit.
-   *
-   * Silent only when the permission is already granted. Denied still gets a
-   * card, because the way it usually happens is someone accepting here and
-   * then hitting Block in the browser's prompt — they wanted this and ended up
-   * without it. What it says changes, though: an Allow button against a denied
-   * permission is a button that does nothing.
-   */
-  useEffect(() => {
-    if (!notificationsSupported()) return;
-    const permission = notificationPermission();
-    if (permission === 'granted') return; // Nothing to ask for.
-    setAskNotifications(permission === 'denied' ? 'blocked' : 'ask');
-  }, []);
-
-  /**
-   * Is any OTHER browser holding unsaved work for this account?
-   *
-   * This browser names itself so the server can leave it out — its own flag is
-   * still up while it holds work, and reporting that back would tell someone
-   * their edits are elsewhere while they are looking at them. A device holding
-   * unsaved work cannot hand it over either, so the answer only ever explains
-   * why that work is not here.
-   */
-  useEffect(() => {
-    let cancelled = false;
-    // Said once a visit — see isFirstLoadOfVisit.
-    if (!isFirstLoadOfVisit()) return;
-
-    fetchUnsavedElsewhere().then((elsewhere) => {
-      if (cancelled || !elsewhere) return;
-      setElsewhereNotice({
-        deviceId: elsewhere.deviceId,
-        deviceLabel: elsewhere.deviceLabel,
-        at: elsewhere.at,
-        hasUnsavedPromo: elsewhere.hasUnsavedPromo,
-        hasUnsavedAnnouncement: elsewhere.hasUnsavedAnnouncement,
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const {
+    askNotifications,
+    setAskNotifications,
+    elsewhereNotice,
+    setElsewhereNotice,
+    dismissElsewhere,
+  } = useArrivalNotices();
 
 
   useEffect(() => {
@@ -333,6 +232,7 @@ export default function Home() {
     if (!offeredDraftRef.current) return;
     setDraftOffer(offeredDraftRef.current);
     offeredDraftRef.current = null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- offeredDraftRef and setDraftOffer are stable (useRef / useState setter) but are destructured from useCampaignDraft further down, so listing them here would read them before declaration (TDZ ReferenceError on render)
   }, [activeTab]);
 
   /**
@@ -344,7 +244,7 @@ export default function Home() {
     'create' | 'published' | null
   >(null);
   // Bumped to open the build panel when the flow is already mounted.
-  const [openBuildSignal, setOpenBuildSignal] = useState(0);
+  const [openBuildSignal] = useState(0);
   // Bumped once the real card lands from the DB. The editor mounts on
   // defaultConfig, so anything the editor seeds from the card at mount time
   // would otherwise freeze on the default template's look.
@@ -354,25 +254,6 @@ export default function Home() {
 
 
 
-  /**
-   * Unsaved work is sitting in a different browser.
-   *
-   * There is nothing to restore here — that is the whole message. Work that was
-   * never saved as a draft stays in the browser that made it, so the only
-   * honest thing to say is where it is and how to get it back.
-   */
-  const [elsewhereNotice, setElsewhereNotice] = useState<{
-    deviceId: string;
-    deviceLabel: string;
-    at: string | null;
-    hasUnsavedPromo: boolean;
-    hasUnsavedAnnouncement: boolean;
-  } | null>(null);
-
-  const dismissElsewhere = () => {
-    if (elsewhereNotice) markElsewhereSeen(elsewhereNotice.deviceId, elsewhereNotice.at);
-    setElsewhereNotice(null);
-  };
 
   /**
    * The draft is built before the campaign because the campaign needs its
@@ -453,7 +334,6 @@ export default function Home() {
     savedPromoSignatureRef,
     hasLoadedOnceRef,
     hasAnnouncementChanges,
-    setHasAnnouncementChanges,
     hasAnnouncementChangesRef,
     hasPromoChanges,
     setHasPromoChanges,
@@ -461,7 +341,6 @@ export default function Home() {
     configLoadedSignal,
     editorResetKey,
     setEditorResetKey,
-    blankPromoCard,
     recoveredComposeTextRef,
     markAnnouncementChanged,
     markPromoChanged,
@@ -519,6 +398,7 @@ export default function Home() {
 
   useEffect(() => {
     loadConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount; loadConfig is recreated each render and listing it would reload the config in a loop
   }, []);
 
   useEffect(() => {
@@ -548,6 +428,7 @@ export default function Home() {
 
     // DON'T write recovery here - it overwrites existing recovery!
     // Recovery is ONLY written on beforeunload/pagehide to capture absolute latest
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- editorWorkAtRisk is recreated each render; the effect is meant to re-run only when the work itself (config, changes, recovery banner) changes
   }, [config, hasAnnouncementChanges, hasRecoveredWork]);
 
   /**
@@ -555,168 +436,23 @@ export default function Home() {
    */
   useEffect(() => {
     promoWorkNotInDraftRef.current = hasPromoChanges;
-  }, [hasPromoChanges]);
+  }, [hasPromoChanges, promoWorkNotInDraftRef]);
 
-  /**
-   * Tells the server one bit: is work sitting unsaved somewhere.
-   *
-   * A boolean, which browser, and when — never the card itself. Uploading
-   * unsaved work would keep something the user never asked us to keep.
-   *
-   * `false` is sent only by the browser that said `true`. Otherwise a second
-   * device clears the first one's claim just by opening the editor, which is
-   * the warning this exists to give.
-   */
-  useEffect(() => {
-    // Nothing is knowable until the first load has settled — reporting against
-    // the default config would lower a flag this device raised last session.
-    if (!configLoadedSignal) return;
-
-    const promoAtRisk = !!promoWorkNotInDraftRef.current;
-    /**
-     * Scoped to the announcement half, the same way editorWorkAtRisk is.
-     * Comparing the WHOLE config against the baseline meant a dirty promo
-     * made the announcement report as unsaved too — so the other device was
-     * told to look for announcement work that was never there.
-     */
-    const annAtRisk = (() => {
-      if (!hasAnnouncementChanges) return false;
-      let savedAnnSig: string | null = null;
-      if (draftSignatureRef.current) {
-        try {
-          savedAnnSig = announcementSignature(JSON.parse(draftSignatureRef.current));
-        } catch {
-          // No parseable baseline — treat as nothing saved yet.
-        }
-      }
-      return announcementSignature(config) !== savedAnnSig;
-    })();
-
-    const prev = reportedUnsavedRef.current;
-    // null means "we have not told the server anything this session", so the
-    // first report always goes out — that is what lowers a flag left standing
-    // by a crash, once this device comes back and the work is resolved.
-    if (prev && prev.promo === promoAtRisk && prev.announcement === annAtRisk) return;
-
-    const id = window.setTimeout(() => {
-      const flags = { promo: promoAtRisk, announcement: annAtRisk };
-      reportedUnsavedRef.current = flags;
-      if (!flags.promo && !flags.announcement) {
-        reportUnsaved(false);
-      } else {
-        reportUnsaved(flags);
-      }
-    }, 1000);
-    return () => window.clearTimeout(id);
-  }, [config, hasAnnouncementChanges, configLoadedSignal]);
-
-  // Declared here because useIdleSignOut takes them.
-  const [idleSecondsLeft, setIdleSecondsLeft] = useState<number | null>(null);
-  const idleRestartRef = useRef<(() => void) | null>(null);
-  const exitReasonRef = useRef<'logout' | 'timeout' | null>(null);
-  const idleSecondsLeftRef = useRef<number | null>(null);
-  const saveDraftRef = useRef(saveDraftAndWaitForCloud);
-  saveDraftRef.current = saveDraftAndWaitForCloud;
-  const saveMessagesRef = useRef(saveMessagesDraft);
-  saveMessagesRef.current = saveMessagesDraft;
-  useIdleSignOut({
+  const { idleSecondsLeft, idleRestartRef, exitReasonRef } = useEditorExitGuards({
+    config,
+    hasAnnouncementChanges,
+    configLoadedSignal,
     configRef,
     promoWorkNotInDraftRef,
     hasAnnouncementChangesRef,
     hasPromoChangesRef,
     draftSignatureRef,
     announcementComposeTextRef,
-    exitReasonRef,
-    idleSecondsLeftRef,
-    setIdleSecondsLeft,
-    idleRestartRef,
-    saveDraftRef,
-    saveMessagesRef,
+    saveDraftAndWaitForCloud,
+    saveMessagesDraft,
     toast,
+    editorWorkAtRisk: () => editorWorkAtRisk(),
   });
-
-  /**
-   * Closing the tab asks nothing. The work is written to disk before the page
-   * goes, and offered back on the way in — the same path a crash takes.
-   *
-   * There is deliberately no "Leave site?" prompt. The browser never says
-   * which button was pressed, so the tool would have to guess, and guessing
-   * wrong throws the work away.
-   */
-  useEffect(() => {
-    const preserveWork = () => {
-      // Synchronous localStorage write — the only thing guaranteed to survive
-      // an abrupt close. Cloud draft is NOT written here: the page is dying,
-      // keepalive fetches race the session cookie, and when they land the next
-      // login sees an identical draft + recovery (Case 3) and silently discards
-      // the recovery banner the user should have seen.
-      writeRecovery(
-        configRef.current,
-        'crash',
-        announcementComposeTextRef.current || undefined,
-      );
-
-      // The debounce may not have fired yet (or may never have run) — raise the
-      // flag here so the crash is still visible from the user's other devices.
-      const rep = reportedUnsavedRef.current;
-      if (!rep?.promo && !rep?.announcement) {
-        const pDirty = !!promoWorkNotInDraftRef.current;
-        const aDirty = hasAnnouncementChangesRef.current;
-        if (pDirty || aDirty) reportUnsaved({ promo: pDirty, announcement: aDirty });
-      }
-    };
-
-    /**
-     * Browser close: show warning prompt if there's unsaved work.
-     * Modern browsers restrict the message, so it's just generic text.
-     * User can still close if they confirm.
-     * 
-     * BUT: Skip the warning if we're already signing out (manual logout or timeout).
-     */
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Don't warn if logout or timeout is happening
-      if (exitReasonRef.current === 'logout' || exitReasonRef.current === 'timeout') return;
-
-      if (!editorWorkAtRisk()) return;
-      e.preventDefault();
-      e.returnValue = '';
-    };
-
-    /**
-     * The page is going.
-     *
-     * `persisted` means it is being frozen for back/forward cache rather than
-     * closed — it will be resumed with everything still in memory, so there is
-     * nothing to save and no visit to restore on.
-     *
-     * Signing out is the one exit that still discards: it is a deliberate act,
-     * and the user was offered the draft slot on the way. Everything else —
-     * closing, timing out, the lid shutting — keeps the copy.
-     */
-    const handlePageHide = (e: PageTransitionEvent) => {
-      if (e.persisted) return;
-      if (exitReasonRef.current === 'logout') return;
-      preserveWork();
-    };
-
-    /**
-     * A tab is hidden before it is discarded, and on mobile a page can be
-     * killed while hidden without `pagehide` ever firing. Saving here as well
-     * costs a localStorage write on a tab switch and buys the phone case.
-     */
-    const handleVisibility = () => {
-      if (document.visibilityState === 'hidden' && !exitReasonRef.current) preserveWork();
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('pagehide', handlePageHide);
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('pagehide', handlePageHide);
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, []);
 
   /**
    * Rebuild both flags from the card each time one loads.
@@ -751,7 +487,7 @@ export default function Home() {
     // Only armed while the end date is still the missing piece. A restored
     // card that already has one must not have its countdown switched on for it.
     setPromoTimerAutoArmed(wearingBlank && !card.endDate);
-  }, [configLoadedSignal]);
+  }, [configLoadedSignal, configRef, hasLoadedOnceRef]);
 
   useEffect(() => {
     if (!configLoadedSignal) return;
@@ -759,50 +495,8 @@ export default function Home() {
       announcementComposeTextRef.current = recoveredComposeTextRef.current;
       recoveredComposeTextRef.current = null;
     }
-  }, [configLoadedSignal]);
+  }, [configLoadedSignal, announcementComposeTextRef, recoveredComposeTextRef]);
 
-  /**
-   * Why the page is leaving, when the app is the one making it leave.
-   *
-   * Both cases have to skip the browser's leave prompt — it is meant for a
-   * user closing a tab, not for the app navigating on their behalf. They then
-   * split on the local copy: signing out is a decision, and follows the same
-   * rule as answering Leave to the close prompt, so the copy goes. Timing out
-   * is not a decision at all, so the copy stays and is what gets restored on
-   * the way back in.
-   */
-
-  /** What we last told the server, so a save clears only a flag we raised. */
-  /** What this device last told the server. null until it has said anything. */
-  const reportedUnsavedRef = useRef<{ promo: boolean; announcement: boolean } | null>(null);
-
-  /**
-   * Seconds left before an idle sign-out, or null when nothing is pending.
-   *
-   * Only the button clears it. Ordinary activity resets the timer right up
-   * until the warning appears, but once it is on screen it wants an answer —
-   * a stray scroll from a cat on the keyboard is not somebody saying they are
-   * still there, and the dialog blocks the editor anyway.
-   */
-
-  /**
-   * The notification card has two things to say.
-   *
-   * 'ask' comes before the browser's own prompt, so "Not now" costs nothing —
-   * only someone who chose Allow ever reaches the real one, and a browser prompt
-   * can be answered only once.
-   *
-   * 'blocked' is Allow here, then Block in the browser. The offer cannot be
-   * repeated (a denied permission resolves instantly without prompting), so all
-   * that is left is to say where the switch is.
-   */
-  const [askNotifications, setAskNotifications] = useState<
-    'ask' | 'blocked' | 'enabled' | null
-  >(null);
-
-  /** Mirrors the countdown for the activity listener, which is bound once. */
-  idleSecondsLeftRef.current = idleSecondsLeft;
-  /** Lets the dialog's button reach the timer that owns the countdown. */
 
   /**
    * One dialog for arriving, not three.
@@ -844,6 +538,7 @@ export default function Home() {
     if (activeTab !== 'promo') {
       setup.setVisible(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setup is a new object every render; listing it would hide the dialog on every render while off the promo tab instead of only on the tab change
   }, [activeTab]);
 
   /** Bumped to remount the editors so they re-read a reverted config. */
@@ -924,6 +619,7 @@ export default function Home() {
       }
       setActiveTab(tab);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setup is a new object every render and would make this callback unstable; configRef is read via .current
     [activeTab],
   );
 
@@ -1040,77 +736,6 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /**
-   * Commits the schedule from the dashboard dialog and opens the editor with
-   * the build panel up. The dashboard asks WHEN; the editor asks HOW, next to
-   * the card that the answer applies to.
-   */
-  function startNewPromo(answer?: ScheduleAnswer) {
-    // The dialog hands over its answer, because it sets that answer and calls
-    // this in the same tick — reading it back here would see the old one.
-    const { scheduleMode: mode, startDate: start, endDate: end } = answer ?? setup.current();
-    /**
-     * "Create new" starts from a blank card, not from whatever was last on the
-     * canvas. Keeping the old card meant AI wrote on top of a previous
-     * campaign's leftovers, and the AI panel previewed a card the user wasn't
-     * making. Unsaved work is already protected by the guard that runs before
-     * this — by the time we're here, the user has agreed to move on.
-     *
-     * The schedule-only path (an existing card missing dates) leaves the card
-     * alone: nothing about that flow says "start over".
-     */
-    const startingFresh = setup.intent === 'new';
-
-    setConfig((prev) => ({
-      ...prev,
-      promoCard: startingFresh
-        ? {
-          ...blankPromoCard(),
-          // On-air state belongs to the website, not the card being drafted;
-          // creating a new one must never take the live campaign down.
-          active: prev.promoCard.active,
-          stoppedByUser: prev.promoCard.stoppedByUser,
-          startDate: start,
-          endDate: end,
-          scheduleMode: mode,
-          // An open-ended campaign has no end to count towards, so a
-          // countdown left on from a previous answer would render nothing.
-          ...(mode === 'openEnded' ? { showTimer: false } : {}),
-        }
-        : {
-          ...prev.promoCard,
-          startDate: start,
-          endDate: end,
-          scheduleMode: mode,
-          ...(mode === 'openEnded' ? { showTimer: false, timerText: '' } : {}),
-        },
-    }));
-    markPromoChanged();
-    if (startingFresh) {
-      // A blank card, so the skeleton outlines belong here too...
-      setPromoBlankStart(true);
-      // ...but the dates were answered in the dialog a moment ago, so the
-      // countdown stays off until the user asks for it. Without this the
-      // auto-on rule sees a blank card with a complete schedule and switches
-      // it on before they have even seen the card.
-      setPromoTimerAutoArmed(false);
-    }
-    // Remount so the contentEditable fields re-read the blank card; without it
-    // the old text stays visible even though state has been replaced.
-    if (startingFresh) setEditorResetKey((k) => k + 1);
-    setup.setVisible(false);
-    // "Create new" always continues to the build panel — that's the point of
-    // it. The schedule-only prompt returns to the card it interrupted, unless
-    // that card is blank, in which case building is what comes next anyway.
-    const hasContent = promoHasVisibleContent(configRef.current.promoCard);
-    const goToBuild = setup.intent === 'new' || !hasContent;
-    setPromoEntryStep(goToBuild ? 'build' : 'editor');
-    // Covers the case where the promo tab is already open: initialStep is only
-    // read at mount, so without this the dialog closed onto nothing.
-    if (goToBuild) setOpenBuildSignal((n) => n + 1);
-    setActiveTab('promo');
-  }
-
   // Dashboard shortcuts (Edit / the card itself) open an existing campaign, so
   // they bypass the guided picker and land in the editor.
   const handleDashboardTabSwitch = useCallback(
@@ -1135,108 +760,23 @@ export default function Home() {
 
 
 
-  /**
-   * "Save & Continue" on a recovery banner.
-   *
-   * Scoped to the card whose banner was clicked. The banners are per-card, so
-   * restoring from the announcement's must not also push the snapshot's promo
-   * half into the draft — that overwrote a promo draft the user never touched
-   * during the crashed session.
-   */
-  async function handleRestoreRecovery(side?: 'promo' | 'announcement') {
-    // Load the recovered config from localStorage
-    const recoveryEnvelope = readRecoveryEnvelope();
-    if (recoveryEnvelope?.config) {
-      const recovered = migrateConfig(recoveryEnvelope.config, recoveryEnvelope.config.version);
-
-      const sides: ('promo' | 'announcement')[] = side
-        ? [side]
-        : ([
-            recoveredAffectsPromo ? 'promo' : null,
-            recoveredAffectsAnnouncement ? 'announcement' : null,
-          ].filter(Boolean) as ('promo' | 'announcement')[]);
-
-      // Take only the recovered half/halves being restored; the other card
-      // keeps whatever the editor is already holding.
-      const next: CampaignConfig = {
-        ...configRef.current,
-        ...(sides.includes('promo') ? { promoCard: recovered.promoCard } : {}),
-        ...(sides.includes('announcement')
-          ? { announcementBar: recovered.announcementBar }
-          : {}),
-      };
-
-      // Update the campaign hook's configRef so PromoSection sees it immediately
-      if (campaignRef.current) {
-        campaignRef.current.configRef.current = next;
-      }
-
-      await writeRecoveredDraft(next, sides);
-
-      // Update draft state so dashboard knows about it
-      if (sides.includes('promo')) {
-        setDraftPromoCard(JSON.parse(JSON.stringify(next.promoCard)));
-      }
-
-      // Restore any in-flight announcement compose text
-      if (sides.includes('announcement') && recoveryEnvelope.announcementComposeText) {
-        announcementComposeTextRef.current = recoveryEnvelope.announcementComposeText;
-      }
-
-      // Update state for editor re-render
-      setConfig(next);
-
-      // Bump signal so PromoSection re-reads the recovered config
-      if (campaignRef.current) {
-        campaignRef.current.setConfigLoadedSignal((n) => n + 1);
-      }
-
-      // The other card may still be holding recovered work it hasn't been
-      // asked about yet — keep its banner, and the copy on disk behind it.
-      const promoLeft = recoveredAffectsPromo && !sides.includes('promo');
-      const annLeft = recoveredAffectsAnnouncement && !sides.includes('announcement');
-      setRecoveredAffectsPromo(promoLeft);
-      setRecoveredAffectsAnnouncement(annLeft);
-      if (!promoLeft && !annLeft) clearRecovery();
-
-      const recoveryTargetTab: 'promo' | 'announcement' = sides.includes('promo')
-        ? 'promo'
-        : 'announcement';
-      if (recoveryTargetTab === 'promo') setPromoEntryStep('editor');
-
-      // Switch tabs AFTER React processes the state update
-      setTimeout(() => {
-        setActiveTab(recoveryTargetTab);
-      }, 0);
-
-      toast('Recovery saved to draft');
-
-      if (promoLeft || annLeft) return;
-    }
-
-    // Close the recovery alert
-    setHasRecoveredWork(false);
-    setRecoveryReason(null);
-  }
-
-  // Remove the useEffect that was trying to handle the tab switch
-
-  /**
-   * "Start new" on a recovery banner — discards that card's recovered work.
-   *
-   * Scoped like the restore: dismissing the announcement's offer must leave
-   * the promo's banner (and the copy on disk behind it) standing.
-   */
-  function handleDismissRecovery(side?: 'promo' | 'announcement') {
-    const promoLeft = recoveredAffectsPromo && side === 'announcement';
-    const annLeft = recoveredAffectsAnnouncement && side === 'promo';
-    setRecoveredAffectsPromo(promoLeft);
-    setRecoveredAffectsAnnouncement(annLeft);
-    if (promoLeft || annLeft) return;
-    setHasRecoveredWork(false);
-    setRecoveryReason(null);
-    clearRecovery(); // Clear the local recovery
-  }
+  const { handleRestoreRecovery, handleDismissRecovery } = useRecoveryActions({
+    recoveredAffectsPromo,
+    recoveredAffectsAnnouncement,
+    setRecoveredAffectsPromo,
+    setRecoveredAffectsAnnouncement,
+    setHasRecoveredWork,
+    setRecoveryReason,
+    configRef,
+    campaignRef,
+    writeRecoveredDraft,
+    setDraftPromoCard,
+    announcementComposeTextRef,
+    setConfig,
+    setPromoEntryStep,
+    setActiveTab,
+    toast,
+  });
 
 
 
@@ -1304,142 +844,24 @@ export default function Home() {
 
   const selectedPendingVariant = getSelectedPendingVariant();
 
-  // "Go on air" is a one-click reactivation, allowed only when the announcement
-  // is off AND its content matches what's currently published (same content,
-  // not new/edited). Otherwise the user must Save → Publish.
-  const announcementCanReactivate = (() => {
-    if (config.announcementBar.active) return false;
-    if (!publishedConfigRef.current) return false;
-    try {
-      const pub = JSON.parse(publishedConfigRef.current) as CampaignConfig;
-      const sig = (ab: CampaignConfig['announcementBar']) => {
-        const clone: Record<string, unknown> = { ...ab };
-        delete clone.active;
-        return JSON.stringify(clone);
-      };
-      return sig(config.announcementBar) === sig(pub.announcementBar);
-    } catch {
-      return false;
-    }
-  })();
-
-  // Same rule for the promo card (ignore active + stoppedByUser status flags).
-  /**
-   * Is there a promo card worth publishing right now?
-   *
-   * True when the card differs from what is published, OR when nothing is on air
-   * at all. The second half matters: picking a card from My Published while the
-   * campaign is stopped changes no content, so a plain comparison says "no
-   * changes" and leaves the one button that puts it back on the site unlit.
-   *
-   * Requires content, so a blank canvas does not light Publish.
-   */
-  const promoWorthPublishing =
-    (hasPromoChanges && promoHasVisibleContent(config.promoCard)) ||
-    (!publishedConfig.promoCard.active &&
-      promoHasVisibleContent(config.promoCard));
-
-  const promoCanReactivate = (() => {
-    if (config.promoCard.active) return false;
-    if (!publishedConfigRef.current) return false;
-    try {
-      const pub = JSON.parse(publishedConfigRef.current) as CampaignConfig;
-      const sig = (pc: CampaignConfig['promoCard']) => {
-        const clone: Record<string, unknown> = { ...pc };
-        delete clone.active;
-        delete clone.stoppedByUser;
-        return JSON.stringify(clone);
-      };
-      return sig(config.promoCard) === sig(pub.promoCard);
-    } catch {
-      return false;
-    }
-  })();
-
-  // Work worth protecting: the promo differs from what's live AND isn't the
-  // thing already sitting in the draft.
-  /**
-   * Computed from the cards themselves rather than from `hasPromoChanges`.
-   *
-   * That flag is only recalculated when something calls markPromoChanged(), so
-   * it survives events that make it untrue — deleting the saved draft being the
-   * one that bit: the flag stayed true, the guard fired, and "Create new" asked
-   * to save work into a draft the user had just deleted. A refresh "fixed" it
-   * only because reloading recomputed everything from scratch.
-   */
-  /**
-   * Recomputed only when one of the cards it compares actually changes.
-   *
-   * This ran in the render body, so every keystroke in the editor re-ran the
-   * whole comparison: a deep normalise and stringify of the current card, the
-   * published card, the draft, and EVERY saved variant, plus the authorship
-   * check, which walks all twelve templates twice — once for their words and
-   * once for their looks. With ten saved cards that is roughly forty full-card
-   * serialisations per character typed, to answer a question whose inputs had
-   * not moved.
-   */
-  promoWorkNotInDraftRef.current = useMemo(() => {
-    // Normalised, like every other comparison: a raw stringify counts the
-    // app's own rewrites (the injected default font-size span, zero-width
-    // characters, the re-serialised timer, the auto cardWidth) as edits — so
-    // simply opening the editor made "Create new" claim there was unsaved work.
-    const sig = (card: CampaignConfig['promoCard']) =>
-      JSON.stringify(
-        normalizePromoForCompare(card as unknown as Record<string, unknown>),
-      );
-    const current = sig(config.promoCard);
-    const differsFromLive = current !== sig(publishedConfig.promoCard);
-    const differsFromDraft = !draftPromoCard || current !== sig(draftPromoCard);
-    // My Published counts as saved. Matching any variant in there means the
-    // card can be brought back, so there is nothing to protect.
-    const differsFromSaved = !promoVariants.some((v) => sig(v.promoCard) === current);
-    /**
-     * Differing from everything stored is not the same as being worth saving.
-     * A cleared canvas matches nothing, so the guard fired on the way to
-     * "Create new" offering to preserve a blank card; a freshly picked
-     * template did the same for words nobody wrote.
-     */
-    const worthProtecting = !cardIsNotUserWork(
-      config.promoCard,
-      TEMPLATE_CARDS,
-    );
-    return worthProtecting && differsFromLive && differsFromDraft && differsFromSaved;
-  }, [config.promoCard, publishedConfig.promoCard, draftPromoCard, promoVariants]);
-
-  /**
-   * Is there anything in the editor the user would lose?
-   *
-   * Not the same as "is the config dirty". Some load paths blank the canvas
-   * deliberately — the draft offer does — and the dirty flag follows, which
-   * had the welcome-back dialog warning about losing a blank card the app had
-   * just created.
-   *
-   * The promo half is the authorship test: a blank canvas, an untouched
-   * template, or a card already in the draft are all nothing to lose.
-   */
-  const editorWorkAtRisk = () => {
-    if (promoWorkNotInDraftRef.current) return true;
-
-    if (hasAnnouncementChangesRef.current) {
-      const currentAnnSig = announcementSignature(configRef.current);
-      let savedAnnSig: string | null = null;
-
-      if (draftSignatureRef.current) {
-        try {
-          const savedCfg = JSON.parse(draftSignatureRef.current);
-          savedAnnSig = announcementSignature(savedCfg);
-        } catch {
-          // If parse fails, treat as no saved version
-        }
-      }
-
-      if (currentAnnSig !== savedAnnSig) return true;
-    }
-
-    if (htmlHasVisibleText(announcementComposeTextRef.current)) return true;
-
-    return false;
-  };
+  const {
+    announcementCanReactivate,
+    promoWorthPublishing,
+    promoCanReactivate,
+    editorWorkAtRisk,
+  } = useEditorWorkStatus({
+    config,
+    publishedConfig,
+    publishedConfigRef,
+    configRef,
+    hasPromoChanges,
+    hasAnnouncementChangesRef,
+    draftSignatureRef,
+    draftPromoCard,
+    promoVariants,
+    promoWorkNotInDraftRef,
+    announcementComposeTextRef,
+  });
 
 
   return (
@@ -1579,135 +1001,45 @@ export default function Home() {
         </main>
       </div>
 
-      {/* A draft outlived a publish and holds something else. Asked rather
-          than assumed: it is the user's copy, and only they know whether the
-          card they just put live replaced it or was never related to it. */}
-      <PostPublishDraftDialog
+      <PageDialogs
         postPublishDraft={postPublishDraft}
         setPostPublishDraft={setPostPublishDraft}
         clearDraft={clearDraft}
         toast={toast}
-      />
-
-      {/* One dialog for one moment.
-          Coming back to work in progress has three shapes — edits rescued from
-          a session that ended, those edits alongside a parked draft, or a
-          draft on its own — and they were being told by two different dialogs
-          with two different voices. They describe the same situation from
-          different angles, so they are one thing that reads its state.
-          Held until the promo tab: it talks about the canvas and My Draft,
-          which are that editor's. Announcement work is still restored, just
-          not announced here — this message has nowhere to say it. */}
-      <WelcomeBackDialog
         welcomeBack={welcomeBack}
         draftOffer={draftOffer}
         editorWorkAtRisk={editorWorkAtRisk()}
         acceptOfferedDraft={acceptOfferedDraft}
         dismissWelcomeBack={dismissWelcomeBack}
-      />
-
-      {/* The countdown.
-          Always a dialog in the page, because that is the only warning
-          everyone gets — permission may never have been granted, and a desktop
-          notification is suppressed while the tab is visible anyway. It blocks
-          the editor on purpose: the point is to be answered. */}
-      <IdleCountdownDialog
         idleSecondsLeft={idleSecondsLeft}
         idleRestartRef={idleRestartRef}
-      />
-
-      {/* Our ask, in front of the browser's.
-          The browser's own prompt is a one-shot: decline it and no code can
-          raise it again. So "Not now" closes only this, and the real prompt is
-          reached solely by someone who chose Allow.
-
-          A corner card rather than a modal. This is an offer, not a decision
-          the editor should be held up for — a full dialog gave a small
-          convenience the same weight as losing work, and it was the first
-          thing people met on the way in. */}
-      <NotificationsPromptDialog
         askNotifications={askNotifications}
         setAskNotifications={setAskNotifications}
-        welcomeBack={welcomeBack}
-        idleSecondsLeft={idleSecondsLeft}
-      />
-
-      <UnsavedWorkDialog
         pendingDraftAction={pendingDraftAction}
         savedDraftSignature={savedDraftSignature}
         setPendingDraftAction={setPendingDraftAction}
         saveDraftAndContinue={saveDraftAndContinue}
         continueWithoutDraft={continueWithoutDraft}
-      />
-
-      <VariantSlotFullDialog
         pendingVariantSave={pendingVariantSave}
         selectedPendingVariant={selectedPendingVariant}
         savePendingVariantAndClose={savePendingVariantAndClose}
         updateExistingVariantAndClose={updateExistingVariantAndClose}
         cancelPendingVariantSave={cancelPendingVariantSave}
-      />
-
-      {/* No "welcome back" popup. Saving a draft is a deliberate act, so
-          announcing it back on every load interrupts the one moment someone
-          wants to start working. The draft is restored into the editor
-          silently and the My Draft chip carries a dot instead. */}
-
-      {/* Publish Confirmation */}
-      <PublishConfirmDialog
         publishConfirm={publishConfirm}
         isConfirming={isConfirming}
         setIsConfirming={setIsConfirming}
         setIsPublishing={setIsPublishing}
         setPublishConfirm={setPublishConfirm}
-      />
-
-      {/* First-run campaign setup, opened from the dashboard's "Create promo
-          card". Same dialog the guided flow uses, so the questions asked are
-          identical wherever a campaign starts. */}
-      {/* HIDDEN: Set up your campaign
-      {setup.visible && (
-        <PromoSetupDialog
-          sourceLabel="a blank card"
-          scheduleOnly
-          onContinue={startNewPromo}
-          startDate={setup.startDate}
-          endDate={setup.endDate}
-          scheduleMode={setup.mode}
-          onChangeMode={setup.setMode}
-          onChangeStart={setup.setStartDate}
-          onChangeEnd={setup.setEndDate}
-          onChoose={() => startNewPromo()}
-          onClose={() => setup.setVisible(false)}
-        />
-      )}
-      */}
-
-      {/* Unsaved promo work, caught at the dashboard before an action that
-          would replace the canvas. Saving is offered, never required — the
-          same rule as Clear Canvas. */}
-      <DashboardUnsavedDialog
         pendingDashboardAction={pendingDashboardAction}
-        savedDraftSignature={savedDraftSignature}
         setPendingDashboardAction={setPendingDashboardAction}
         writeDraftNow={writeDraftNow}
         startCreatePromo={startCreatePromo}
         openPublishedPicker={openPublishedPicker}
-      />
-
-      {/* Discard Draft consent — deleting a draft is destructive, so confirm first */}
-      <DiscardDraftDialog
         confirmDiscardDraft={confirmDiscardDraft}
         setConfirmDiscardDraft={setConfirmDiscardDraft}
         discardDraft={discardDraft}
-      />
-
-      {/* Replace-draft consent — there's only one draft slot, so saving again
-          overwrites whatever's already there. */}
-      <ReplaceDraftDialog
         confirmReplaceDraft={confirmReplaceDraft}
         setConfirmReplaceDraft={setConfirmReplaceDraft}
-        writeDraftNow={writeDraftNow}
       />
 
       <Toast

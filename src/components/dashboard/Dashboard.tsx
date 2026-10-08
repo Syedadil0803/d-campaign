@@ -59,7 +59,6 @@ function isPromoUncreated(promo: CampaignConfig['promoCard']): boolean {
 
 export function Dashboard({
   config,
-  draftConfig,
   draftSavedAt,
   promoSavedAt,
   announcementSavedAt,
@@ -78,7 +77,6 @@ export function Dashboard({
   hasRecoveredWork,
   recoveredAffectsPromo,
   recoveredAffectsAnnouncement,
-  recoveryReason,
   onRestoreRecovery,
   onDismissRecovery,
   announcementComposeTextRecovered,

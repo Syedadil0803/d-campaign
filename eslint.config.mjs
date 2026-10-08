@@ -19,6 +19,7 @@ const config = [
       'public/sw.js',
       'security-reports/**',
       'next-env.d.ts',
+      'coverage/**',
     ],
   },
 

@@ -27,7 +27,6 @@ import {
   MICRO,
   PRIMARY_BTN,
   STOP_BTN,
-  statusPill,
 } from '@/components/dashboard/dashboardStyles';
 
 interface DashboardLifecycleCardsProps {
@@ -103,7 +102,6 @@ export function DashboardLifecycleCards({
   setShowAnnPreview,
   onCreatePromo,
   remainingLabel,
-  progressPct,
   promoRecovered = false,
   announcementRecovered = false,
   onRestoreRecovery = () => { },
@@ -112,7 +110,6 @@ export function DashboardLifecycleCards({
   promoUnpublished = false,
   announcementUnpublished = false,
   onOpenDraft = () => { },
-  draftSavedAt = null,
   promoSavedAt = null,
   announcementSavedAt = null,
   onStartNewWithDraft = () => { },

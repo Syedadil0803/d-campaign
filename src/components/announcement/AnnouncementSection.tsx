@@ -6,22 +6,23 @@ import { visibleAnnouncements } from '@/lib/announcement/announcementWindow';
 import { DEFAULT_PX_PER_SEC } from '@/lib/announcement/scrollSpeed';
 import { buildAnnouncementAiPrompt, chatGptUrl } from '@/lib/announcement/announcementAiPrompt';
 import { readFormatsFromHtml } from '@/lib/editor/readFormatsFromHtml';
-import { CampaignConfig, GradientStyle, defaultConfig, type Announcement } from '@/types/campaign';
+import { CampaignConfig, GradientStyle, type Announcement } from '@/types/campaign';
 import { stripHtml } from '@/lib/utils';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { rgbToHex } from '@/lib/editor/colorUtils';
-import { Toast, TOAST_ACTION_MS, type ToastAction } from '@/components/shared/Toast';
+import { Toast, TOAST_ACTION_MS } from '@/components/shared/Toast';
 import { useAnnouncementStyleDropdowns } from '@/components/announcement/useAnnouncementStyleDropdowns';
 import { useAnnouncementPopups } from '@/components/announcement/useAnnouncementPopups';
 import { useAnnouncementSelection } from '@/components/announcement/useAnnouncementSelection';
 import { useAnnouncementSnapshots } from '@/components/announcement/useAnnouncementSnapshots';
+import { useAnnouncementListActions } from '@/components/announcement/useAnnouncementListActions';
+import { useAnnouncementStaged } from '@/components/announcement/useAnnouncementStaged';
 import { useToast } from '@/hooks/useToast';
 import { AnnouncementEditorPanel } from '@/components/announcement/AnnouncementEditorPanel';
 import {
   AnnouncementEditorProvider,
   type AnnouncementEditorApi,
 } from '@/components/announcement/AnnouncementEditorContext';
-import { whatsAppUrl } from '@/lib/whatsapp';
 import { useEditorHistory } from '@/hooks/useEditorHistory';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { AnnouncementHeader } from '@/components/announcement/AnnouncementHeader';
@@ -32,8 +33,7 @@ import {
   type AnnouncementTheme,
 } from '@/lib/announcement/announcementThemes';
 import { addDebugLog, saveSelectedAnnouncementIndex } from '@/lib/recovery';
-import { buildPreviewList, hasVisibleText, startsLater } from '@/lib/announcement/stagedDraft';
-import { canSchedule, insertIndexForPosition, SCHEDULE_LIMIT_MESSAGE } from '@/lib/announcement/listSections';
+import { buildPreviewList, hasVisibleText } from '@/lib/announcement/stagedDraft';
 import { useComposeActivity } from '@/hooks/useComposeActivity';
 import { useMarqueeLayout } from '@/hooks/useMarqueeLayout';
 
@@ -149,25 +149,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     config.announcementBar.style.textColor
   ));
 
-  type AnnouncementList = CampaignConfig['announcementBar']['announcements'];
-
-  function undoListAction(previous: AnnouncementList): ToastAction {
-    return {
-      label: 'Undo',
-      onClick: () => {
-        setConfig({
-          ...configRef.current,
-          announcementBar: {
-            ...configRef.current.announcementBar,
-            announcements: previous,
-          },
-        });
-        clearSelection();
-        markChanged();
-      },
-    };
-  }
-
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   const [showStopConfirm, setShowStopConfirm] = useState(false);
@@ -192,15 +173,10 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     selectedIndex,
     setSelectedIndex,
     selectedUrl,
-    selectedOpenInNewTab,
     selectedStartDate,
     selectedEndDate,
-    selectedCtaType,
-    selectedWhatsappNumber,
-    selectedCountryCode,
     selectedIndexRef,
     clearSelection,
-    loadAnnouncementFields,
     selectAnnouncement,
   } = selection;
 
@@ -308,289 +284,40 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
 
   const pxPerSec = config.announcementBar.speed ?? DEFAULT_PX_PER_SEC;
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const idx = selectedIndexRef.current;
-      if (idx === null) return;
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        const target = e.target as HTMLElement;
-        const tag = target.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
-        e.preventDefault();
-        const currentConfig = configRef.current;
-        const previous = [...currentConfig.announcementBar.announcements];
-        const updated = currentConfig.announcementBar.announcements.filter((_, i) => i !== idx);
-        setConfig({
-          ...currentConfig,
-          announcementBar: { ...currentConfig.announcementBar, announcements: updated },
-        });
-        clearSelection();
-        markChanged();
-        toast('Announcement deleted', false, undoListAction(previous));
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  const { removeAnnouncement, startFresh, reorderAnnouncements } = useAnnouncementListActions({
+    config,
+    setConfig,
+    markChanged,
+    configRef,
+    selectedIndex,
+    setSelectedIndex,
+    selectedIndexRef,
+    clearSelection,
+    commitHistory,
+    toast,
+  });
 
-  function addAnnouncement() {
-    // The cap is enforced here, where every route to staging arrives — the
-    // button, Enter, anything added later — not only on the disabled button.
-    if (
-      startsLater(selectedStartDate) &&
-      !canSchedule(config.announcementBar.announcements, selectedIndex)
-    ) {
-      toast(SCHEDULE_LIMIT_MESSAGE, true, undefined, 4000);
-      return;
-    }
-    commitHistory();
-    const html = getNormalizedHTML();
-    const destination =
-      selectedCtaType === 'whatsapp'
-        ? {
-          ctaType: 'whatsapp' as const,
-          url: whatsAppUrl(selectedCountryCode, selectedWhatsappNumber) || undefined,
-          whatsappNumber: selectedWhatsappNumber || undefined,
-          whatsappCountryCode: selectedCountryCode,
-        }
-        : {
-          ctaType: undefined,
-          url: selectedUrl || undefined,
-          whatsappNumber: undefined,
-          whatsappCountryCode: undefined,
-        };
-
-    const composed = {
-      text: html,
-      ...destination,
-      openInNewTab: selectedOpenInNewTab || undefined,
-      startDate: selectedStartDate || undefined,
-      endDate: selectedEndDate || undefined,
-      richText: true,
-    };
-
-    /**
-     * Nothing reaches the list here, whether the message is new or an edit of
-     * a published one. Both stage, and only Publish changes what the site
-     * shows — one pipeline, so the Manage Announcements list is never a step
-     * ahead of the website.
-     *
-     * An edit keeps the index of the row it came from, so Publish replaces
-     * that row instead of adding a second copy.
-     */
-    const next: CampaignConfig = {
-      ...config,
-      announcementBar: {
-        ...config.announcementBar,
-        staged: composed,
-        stagedIndex: selectedIndex,
-      },
-    };
-
-    setConfig(next);
-    clearSelection();
-    detectFormats();
-    markChanged();
-    // Straight to the cloud, so the message is on the user's other devices
-    // before they look for it there.
-    saveDraftNow?.(next);
-    toast(
-      startsLater(selectedStartDate)
-        ? 'Message staged — schedule when ready'
-        : 'Message staged — publish when ready',
-      false,
-      undefined,
-      2500,
-    );
-  }
-
-  /**
-   * Puts the staged message back in the editor and frees the input again.
-   *
-   * The text cannot be written into the editor here: while a message is staged
-   * the panel renders the chip in place of the input, so the contentEditable is
-   * not mounted yet and richEditorRef is still null. The HTML is parked for the
-   * effect below, which runs once the input is back on screen.
-   *
-   * Nothing is written to the cloud. The staged record stays as it was until
-   * the message is staged again or discarded, so an abandoned edit leaves the
-   * saved message intact rather than wiping it.
-   */
-  function editStaged() {
-    const staged = config.announcementBar.staged;
-    if (!staged) return;
-    restoreStagedHtmlRef.current = loadAnnouncementFields(staged);
-    setShowRichToolbar(true);
-    // An edit of a published message keeps hold of its row, so staging it
-    // again still replaces that row rather than adding a copy.
-    setSelectedIndex(config.announcementBar.stagedIndex ?? null);
-    setConfig({
-      ...config,
-      announcementBar: { ...config.announcementBar, staged: null, stagedIndex: null },
-    });
-    markChanged();
-  }
-
-  /**
-   * Fills the input once it is back on screen after Edit. Refs are attached
-   * before effects run, so by here the contentEditable exists.
-   */
-  useEffect(() => {
-    if (config.announcementBar.staged) return;
-    const html = restoreStagedHtmlRef.current;
-    const editor = richEditorRef.current;
-    if (!html || !editor) return;
-    restoreStagedHtmlRef.current = null;
-    editor.innerHTML = html;
-    editor.focus();
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(false);
-    const selectionNow = window.getSelection();
-    selectionNow?.removeAllRanges();
-    selectionNow?.addRange(range);
-    detectFormatsForSelectMode(html);
-  }, [config.announcementBar.staged]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  /** Throws the staged message away. The editor is left empty, not repopulated. */
-  function discardStaged() {
-    if (!config.announcementBar.staged) return;
-    setStagedPosition(1);
-    const next: CampaignConfig = {
-      ...config,
-      announcementBar: { ...config.announcementBar, staged: null, stagedIndex: null },
-    };
-    setConfig(next);
-    clearSelection();
-    markChanged();
-    saveDraftNow?.(next);
-    toast(
-      config.announcementBar.stagedIndex != null
-        ? 'Edit discarded — the published message is unchanged'
-        : 'Message discarded',
-      false,
-      undefined,
-      2500,
-    );
-  }
-
-  /**
-   * Moves the staged message into the list and publishes in one step.
-   *
-   * The built config is handed to `publishNow` rather than left to state:
-   * setConfig has not committed by the time publish reads it, so publishing
-   * from state would push the version without the message.
-   */
-  async function publishStaged() {
-    const staged = config.announcementBar.staged;
-    if (!staged || publishingStaged) return;
-
-    // Checked again at publish: the list can have filled up since this was
-    // staged — on another device, where the draft was picked up from.
-    if (
-      startsLater(staged.startDate) &&
-      !canSchedule(config.announcementBar.announcements, config.announcementBar.stagedIndex ?? null)
-    ) {
-      toast(SCHEDULE_LIMIT_MESSAGE, true, undefined, 4000);
-      return;
-    }
-
-    /**
-     * An edit replaces the row it came from; a new message joins the end. The
-     * index is re-checked rather than trusted: the row can be deleted from the
-     * list while its edit sits staged, and adding it is better than writing
-     * past the end of the array.
-     */
-    const list = [...config.announcementBar.announcements];
-    const target = config.announcementBar.stagedIndex;
-    if (target != null && target >= 0 && target < list.length) {
-      list[target] = { ...list[target], ...staged };
-    } else if (startsLater(staged.startDate)) {
-      // Upcoming messages are ordered by start date, not by position.
-      list.unshift(staged);
-    } else {
-      // The position picked in the chip; 1 (top, newest first) by default.
-      list.splice(insertIndexForPosition(list, stagedPosition), 0, staged);
-    }
-
-    const next: CampaignConfig = {
-      ...config,
-      announcementBar: {
-        ...config.announcementBar,
-        announcements: list,
-        staged: null,
-        stagedIndex: null,
-      },
-    };
-    // Nothing changes until the user confirms in the same "Publish to
-    // website?" dialog the header's Publish uses; Cancel leaves it staged.
-    // The slot a new live message went to, for the success toast.
-    const placedAt = target == null && !startsLater(staged.startDate) ? stagedPosition : null;
-    const run = async () => {
-      setPublishingStaged(true);
-      try {
-        setConfig(next);
-        clearSelection();
-        setStagedPosition(1);
-        // One toast, from the page: it names the slot when there is one.
-        await publishNow?.(next, placedAt !== null ? `Announcement published to Slot #${placedAt}` : undefined);
-      } finally {
-        setPublishingStaged(false);
-      }
-    };
-    if (confirmPublish) confirmPublish(run);
-    else await run();
-  }
-
-  function removeAnnouncement(index: number) {
-    const previous = [...config.announcementBar.announcements];
-    const updated = config.announcementBar.announcements.filter((_, currentIndex) => currentIndex !== index);
-    setConfig({
-      ...config,
-      announcementBar: {
-        ...config.announcementBar,
-        announcements: updated,
-      },
-    });
-
-    if (selectedIndex === index) {
-      clearSelection();
-    } else if (selectedIndex !== null && selectedIndex > index) {
-      setSelectedIndex(selectedIndex - 1);
-    }
-
-    markChanged();
-    toast('Announcement deleted', false, undoListAction(previous));
-  }
-
-  function startFresh() {
-    const previousBar = JSON.parse(
-      JSON.stringify(config.announcementBar),
-    ) as CampaignConfig['announcementBar'];
-    setConfig({
-      ...config,
-      announcementBar: {
-        ...config.announcementBar,
-        announcements: [],
-        loop: false,
-        startDate: '',
-        endDate: '',
-        activeThemeId: undefined,
-        style: JSON.parse(JSON.stringify(defaultConfig.announcementBar.style)),
-      },
-    });
-    clearSelection();
-    commitHistory();
-    markChanged();
-    toast('Started fresh — messages and styling reset to defaults', false, {
-      label: 'Undo',
-      onClick: () => {
-        setConfig({ ...configRef.current, announcementBar: previousBar });
-        clearSelection();
-        markChanged();
-      },
-    });
-  }
+  const { addAnnouncement, editStaged, discardStaged, publishStaged } = useAnnouncementStaged({
+    config,
+    setConfig,
+    markChanged,
+    saveDraftNow,
+    publishNow,
+    confirmPublish,
+    selection,
+    richEditorRef,
+    setShowRichToolbar,
+    detectFormatsForSelectMode,
+    detectFormats,
+    getNormalizedHTML,
+    commitHistory,
+    toast,
+    publishingStaged,
+    setPublishingStaged,
+    stagedPosition,
+    setStagedPosition,
+    restoreStagedHtmlRef,
+  });
 
   useEffect(() => {
     if (!showResetMenu) return;
@@ -602,32 +329,6 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [showResetMenu]);
-
-  function reorderAnnouncements(fromIndex: number, toIndex: number) {
-    const previous = [...config.announcementBar.announcements];
-    const updated = [...config.announcementBar.announcements];
-    const [movedAnnouncement] = updated.splice(fromIndex, 1);
-    updated.splice(toIndex, 0, movedAnnouncement);
-    const currentSelectedIndex = selectedIndex;
-
-    setConfig({
-      ...config,
-      announcementBar: {
-        ...config.announcementBar,
-        announcements: updated,
-      },
-    });
-
-    if (currentSelectedIndex === fromIndex) {
-      setSelectedIndex(toIndex);
-    } else if (currentSelectedIndex !== null && fromIndex < currentSelectedIndex && currentSelectedIndex <= toIndex) {
-      setSelectedIndex(currentSelectedIndex - 1);
-    } else if (currentSelectedIndex !== null && toIndex <= currentSelectedIndex && currentSelectedIndex < fromIndex) {
-      setSelectedIndex(currentSelectedIndex + 1);
-    }
-    markChanged();
-    toast('Order changed', false, undoListAction(previous));
-  }
 
   const getEditorSnapshotRef = useRef(getEditorSnapshot);
   getEditorSnapshotRef.current = getEditorSnapshot;
@@ -692,6 +393,7 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('keydown', handleEscape);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- document listeners are attached once on mount; the undo/redo helpers and popup setters are recreated each render and listing them would re-subscribe every render
   }, []);
 
   function detectFormatsForSelectMode(html: string) {

@@ -4,7 +4,6 @@ import {
   useState,
   useEffect,
   useRef,
-  useMemo,
 } from "react";
 import { PromoCanvas } from '@/components/promo/PromoCanvas';
 import { PromoEditorPanel } from '@/components/promo/PromoEditorPanel';
@@ -22,28 +21,19 @@ import { usePromoRichText } from '@/components/promo/usePromoRichText';
 import {
 } from "lucide-react";
 import { PromoCard, PromoField } from '@/types/campaign';
-import { getISODateWithOffset } from '@/lib/utils';
 import {
   ourLooks,
-  timerWordingIsOurs,
 } from "@/lib/promo/promoAuthorship";
 import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
 
-import { isBlankLook, lookSignature } from '@/lib/promo/lookSignature';
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
 import { useSignalEffect } from '@/hooks/useSignalEffect';
 
 import {
 } from "@/lib/promo/promoVersions";
-import {
-  buildTimerDisplayHtml,
-  calculateTimeRemaining as calcTimerRemaining,
-} from "@/lib/editor/timerUtils";
 import type { LexicalTimerFieldHandle } from '@/components/timer-lexical/LexicalTimerField';
-import { getRequiredCardWidth } from '@/lib/promo/promoMeasure';
 import {
 } from '@/lib/promo/cardReplaceCopy';
-import { PromoThemeRow } from '@/components/promo/PromoThemeRow';
 import { PromoEditorStyles } from '@/components/promo/PromoEditorStyles';
 import { PromoSectionDialogs } from '@/components/promo/PromoSectionDialogs';
 import { usePromoCardLifecycle } from '@/components/promo/usePromoCardLifecycle';
@@ -63,10 +53,11 @@ import {
   PROMO_EDITOR_DEFAULT_COLOR,
   hasVisibleContent,
 } from '@/lib/promo/promoEditorSelection';
-import {
-  TIMER_MIN_CONTENT_WIDTH,
-  TIMER_MAX_CONTENT_WIDTH,
-} from "@/components/timer-lexical/lineMeasure";
+import { usePromoLastInteraction } from '@/components/promo/usePromoLastInteraction';
+import { usePromoScheduleDefaults } from '@/components/promo/usePromoScheduleDefaults';
+import { usePromoTimerFit } from '@/components/promo/usePromoTimerFit';
+import { getPromoCanvasContent, getPromoPreviewFlags } from '@/components/promo/promoCanvasContent';
+import { usePromoTimerAutoArm } from '@/components/promo/usePromoTimerAutoArm';
 
 
 
@@ -139,16 +130,7 @@ export function PromoSection(props: PromoSectionProps) {
   onTemplatesBack,
   pendingPopup,
   onPendingPopupHandled,
-  onSaveDraft,
-  savingDraft,
-  draftUpToDate,
-  draftExists,
   onUseAi,
-  hasRecoveredWork,
-  recoveryReason,
-  onDismissRecovery,
-  onRestoreRecovery,
-  onDeleteDraft,
 } = props;
 
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -188,28 +170,7 @@ export function PromoSection(props: PromoSectionProps) {
   /** Measured height of the field style panel, for keeping it in the canvas. */
   const fieldPopupHeightRef = useRef(0);
 
-  /**
-   * When the user last did something — a pointer press or a key.
-   *
-   * Focus alone does not mean intent. The browser restores focus to whatever
-   * held it when a native dialog closes, so dismissing the "Leave site?" prompt
-   * put the cursor back in the title and opened its style panel, as though the
-   * user had clicked into it. A real click or Tab always has an interaction
-   * immediately before the focus; a restored one has none.
-   */
-  const lastInteractionAtRef = useRef(0);
-
-  useEffect(() => {
-    const mark = () => {
-      lastInteractionAtRef.current = Date.now();
-    };
-    document.addEventListener('pointerdown', mark, true);
-    document.addEventListener('keydown', mark, true);
-    return () => {
-      document.removeEventListener('pointerdown', mark, true);
-      document.removeEventListener('keydown', mark, true);
-    };
-  }, []);
+  const lastInteractionAtRef = usePromoLastInteraction();
 
   const [currentField, setCurrentField] = useState<PromoField | null>(null);
   /**
@@ -278,16 +239,7 @@ export function PromoSection(props: PromoSectionProps) {
   /** Every menu in the editor, and the one effect that dismisses them. */
   const dropdowns = usePromoDropdowns();
   const {
-    cardPositionBtnRef,
-    cardPositionMenuRef,
-    showCardPositionDropdown,
-    setShowCardPositionDropdown,
-    cardPositionPos,
-    setCardPositionPos,
-    cardBgPopupBtnRef,
     setShowCardBgPopup,
-    setCardBgPopupTop,
-    getDropdownPosition,
     closeAllPromoDropdowns,
   } = dropdowns;
 
@@ -577,51 +529,7 @@ export function PromoSection(props: PromoSectionProps) {
     setShowPersistentScaffold(true);
   }, [config.promoCard.active]);
 
-  /**
-   * Fill in a missing schedule — except on a canvas the user just cleared.
-   *
-   * This exists so a card that arrives without dates still has a valid range.
-   * But it watches the whole config, so it also fired the instant Clear
-   * emptied the end date and wrote a new one straight back — which completed
-   * the schedule, which switched the countdown on. Three separate fixes to
-   * clearing the dates were all undone here, one render later.
-   *
-   * A blank start is the one case where an empty end date is the point: it is
-   * the decision being asked for, and the thing the countdown waits on.
-   */
-  useEffect(() => {
-    /**
-     * The prop cannot be trusted on the first render after a load.
-     *
-     * `blankStart` is decided in page.tsx and arrives here as a prop, so on the
-     * commit where a card is loaded this effect can still see `false` while the
-     * card on screen is plainly blank. It then filled in an end date, which
-     * completed the schedule, which armed the countdown — and a blank canvas
-     * came back from a login with a timer running.
-     *
-     * Asking the card directly removes the timing from the question: a card
-     * with no words wearing a blank palette is a blank start, whatever the
-     * prop currently says.
-     */
-    const plain = (html?: string) => String(html ?? '').replace(/<[^>]*>/g, '').trim();
-    const looksBlank =
-      isBlankLook(config.promoCard.style) &&
-      !plain(config.promoCard.title) &&
-      !plain(config.promoCard.subtitle) &&
-      !plain(config.promoCard.description) &&
-      !plain(config.promoCard.buttonText);
-
-    if (blankStart || looksBlank) return;
-    if (config.promoCard.startDate && config.promoCard.endDate) return;
-    setConfig({
-      ...config,
-      promoCard: {
-        ...config.promoCard,
-        startDate: config.promoCard.startDate || getISODateWithOffset(0),
-        endDate: config.promoCard.endDate || getISODateWithOffset(3),
-      },
-    });
-  }, [config, setConfig, blankStart]);
+  usePromoScheduleDefaults({ config, setConfig, blankStart });
 
 
 
@@ -639,68 +547,15 @@ export function PromoSection(props: PromoSectionProps) {
 
 
 
-
-
-
-  // Dynamic card width across the text fields AND the timer. The timer drives
-  // the 400→440 stretch too: if it wraps at the narrow card's content width
-  // (344) it needs the wide card. Measured on the live editor at a fixed
-  // width, so it's independent of the current card width (no race).
-  function computeCardWidth(promo: typeof config.promoCard): number {
-    const base = getRequiredCardWidth([
-      { html: promo.title || "", field: "title" },
-      { html: promo.subtitle || "", field: "subtitle" },
-      { html: promo.description || "", field: "description" },
-    ]);
-    if (base >= 440) return base;
-    if (lexicalTimerRef.current?.wrapsAtContentWidth(TIMER_MIN_CONTENT_WIDTH)) {
-      return 440;
-    }
-    return base;
-  }
 
 
 
   const scheduleUi = usePromoScheduleUi({ config, dateErrorPing });
 
-  // True when the timer — measured with its CURRENT countdown — can't fit one
-  // line at the widest card. Drives the persistent "Field limit reached" note
-  // (like the title's). NOTE: the rendered countdown WIDENS at rollovers
-  // ("2 days : 1 hours : 0 mins" → "1 days : 23 hours : 59 mins"), so the
-  // memo must also key on the countdown's current digits — they change at
-  // most once a minute, so the ghost-measure (a forced layout) runs per
-  // digit-change/edit, never per second. buildTimerDisplayHtml keeps the
-  // user's style spans so this measures what the card actually renders.
-  const timerRemaining = calcTimerRemaining(config.promoCard.endDate || '');
-  const timerLimitReached = useMemo(() => {
-    if (typeof document === 'undefined') return false;
-    if (!config.promoCard.showTimer) return false;
-    const tmpl = config.promoCard.timerText || '';
-    // Ignore an empty timer (no prefix/suffix around the countdown token).
-    const hasPrefixSuffix =
-      tmpl
-        .replace(/<[^>]*>/g, '')
-        .replace(/\{timer\}/gi, '')
-        .replace(/&nbsp;|​/g, '')
-        .trim().length > 0;
-    if (!hasPrefixSuffix) return false;
-    const ghost = document.createElement('div');
-    ghost.style.cssText =
-      'position:absolute;visibility:hidden;white-space:pre;font-size:16px;line-height:24px;letter-spacing:normal;' +
-      'font-family:-apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;';
-    ghost.innerHTML = buildTimerDisplayHtml(tmpl, timerRemaining);
-    document.body.appendChild(ghost);
-    const textW = ghost.getBoundingClientRect().width;
-    document.body.removeChild(ghost);
-    return textW > TIMER_MAX_CONTENT_WIDTH;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    config.promoCard.showTimer,
-    config.promoCard.timerText,
-    timerRemaining.days,
-    timerRemaining.hours,
-    timerRemaining.minutes,
-  ]);
+  const { computeCardWidth, timerLimitReached } = usePromoTimerFit({
+    config,
+    lexicalTimerRef,
+  });
 
 
 
@@ -882,45 +737,8 @@ export function PromoSection(props: PromoSectionProps) {
 
 
 
-  const hasTitle = hasVisibleContent(config.promoCard.title);
-  const hasSubtitle = hasVisibleContent(config.promoCard.subtitle);
-  const hasDescription = hasVisibleContent(config.promoCard.description);
-  const hasButtonText = hasVisibleContent(config.promoCard.buttonText);
-  /**
-   * Words the user wrote around the countdown — "Ends in", "left", and so on.
-   *
-   * The countdown token itself is stripped before checking, so an untouched
-   * timer does not count as work. The timer can also arm itself when dates are
-   * set, which is why enabling it is not the test: only text someone typed is.
-   */
-  /**
-   * Wording the user put on the countdown — not the wording we shipped.
-   *
-   * The default is "Ends In {timer}", which strips to "Ends In" and read as
-   * writing, so Clear and Save as draft stayed enabled on a canvas nobody had
-   * touched. timerWordingIsOurs is the same test cardIsBlank uses, so the two
-   * cannot disagree about it again.
-   */
-  const hasTimerText =
-    !timerWordingIsOurs(config.promoCard.timerText) &&
-    hasVisibleContent((config.promoCard.timerText || '').replace(/\{timer\}/gi, ''));
-  // Nothing to save, nothing to clear: no visible text in any field AND the
-  // style is still the fresh default. Styling-only work counts as work, so it
-  // must keep both actions enabled — same test as startFreshPromoCard's no-op
-  // guard.
-  const canvasIsEmpty =
-    !hasTitle &&
-    !hasSubtitle &&
-    !hasDescription &&
-    !hasButtonText &&
-    // Timer wording is work too. Without this, typing "Ends in" and nothing
-    // else left Clear disabled — the canvas plainly was not blank, and the one
-    // button that undoes it refused.
-    !hasTimerText &&
-    // Any blank palette, not this visit's. The palettes rotate per visit, so
-    // comparing against today's would say a canvas cleared last week is not
-    // empty — leaving Clear enabled on an empty card and treating it as work.
-    isBlankLook(config.promoCard.style);
+  const { hasTitle, hasSubtitle, hasDescription, canvasIsEmpty } =
+    getPromoCanvasContent(config.promoCard);
 
   const {
     themeBaseline,
@@ -993,34 +811,16 @@ export function PromoSection(props: PromoSectionProps) {
   } = lifecycle;
 
 
-  /**
-   * A schedule is what makes a countdown mean something, so setting both dates
-   * on a freshly cleared card turns the timer on.
-   *
-   * It starts off after a clear because a countdown with no dates behind it is
-   * a number nobody can act on. Once the dates exist the timer has something
-   * to count to, and switching it on is what the user was going to do next
-   * anyway.
-   *
-   * Only while blank-starting: on any other card the toggle is the user's, and
-   * flipping it under them because they edited a date would be the app
-   * overruling a choice they already made.
-   */
-  useEffect(() => {
-    if (!blankStart || !timerAutoArmed) return;
-    const { startDate, endDate, showTimer } = config.promoCard;
-    if (showTimer || !startDate || !endDate) return;
-    // Fires once. Turning the countdown back off by hand afterwards is a
-    // decision, and re-arming would overrule it on the next date edit.
-    onTimerAutoArmedChange(false);
-    setConfig({
-      ...configRef.current,
-      promoCard: { ...configRef.current.promoCard, showTimer: true },
-    });
-    markChanged();
-    onTimerAutoEnabled?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blankStart, timerAutoArmed, config.promoCard.startDate, config.promoCard.endDate]);
+  usePromoTimerAutoArm({
+    config,
+    configRef,
+    setConfig,
+    markChanged,
+    blankStart,
+    timerAutoArmed,
+    onTimerAutoArmedChange,
+    onTimerAutoEnabled,
+  });
 
   /**
    * The blank start ends when a design ARRIVES — a template, a variant, a
@@ -1038,30 +838,18 @@ export function PromoSection(props: PromoSectionProps) {
    * the flag from the card it just loaded.
    */
 
-  const showContentScaffold =
-    showPersistentScaffold ||
-    currentField === "title" ||
-    currentField === "subtitle" ||
-    currentField === "description" ||
-    currentField === "timer" ||
-    currentField === "button";
-  const showTitleInPreview = hasTitle || showContentScaffold;
-  const showSubtitleInPreview = hasSubtitle || showContentScaffold;
-  const showDescriptionInPreview = hasDescription || showContentScaffold;
-  /** Keyed forms of the three flags above, for the preview's field table. */
-  const previewFieldVisible = {
-    title: showTitleInPreview,
-    subtitle: showSubtitleInPreview,
-    description: showDescriptionInPreview,
-  } as const;
-  const previewFieldHasContent = {
-    title: hasTitle,
-    subtitle: hasSubtitle,
-    description: hasDescription,
-  } as const;
-  // The timer is opt-in via "Enable Timer" — it must follow the toggle only,
-  // NOT the editing scaffold, so disabling it hides the countdown immediately.
-  const showButtonInPreview = config.promoCard.showButton;
+  const {
+    showButtonInPreview,
+    previewFieldVisible,
+    previewFieldHasContent,
+  } = getPromoPreviewFlags({
+    showPersistentScaffold,
+    currentField,
+    hasTitle,
+    hasSubtitle,
+    hasDescription,
+    showButton: config.promoCard.showButton,
+  });
 
   /**
    * What the editor's parts read instead of taking props.

@@ -194,7 +194,7 @@ export function useCampaignDraft({
     const requests: { side: 'promo' | 'announcement'; request: Promise<Response> }[] = [];
 
     // DEBUG: Log to sessionStorage so we can see it after logout
-    const debugLog: any = {
+    const debugLog: Record<string, unknown> = {
       timestamp: new Date().toISOString(),
       hasPromoChangesRef: campaign.hasPromoChangesRef.current,
       hasAnnouncementChangesRef: campaign.hasAnnouncementChangesRef.current,
@@ -216,7 +216,7 @@ export function useCampaignDraft({
           savedPromoSig = JSON.stringify(
             normalizePromoForCompare(savedPromoObj),
           );
-        } catch (e) {
+        } catch {
           // If parse fails, treat as no saved version
           savedPromoSig = undefined;
         }
@@ -250,7 +250,7 @@ export function useCampaignDraft({
           // savedDraftSignatureRef is a JSON string of the full config
           const savedCfg = JSON.parse(savedDraftSignatureRef.current);
           savedAnnSig = announcementSignature(savedCfg);
-        } catch (e) {
+        } catch {
           // If parse fails, just treat as null (nothing saved yet)
         }
       }
@@ -284,7 +284,7 @@ export function useCampaignDraft({
       const recent = logs.slice(-10);
       sessionStorage.setItem('__debug_logs', JSON.stringify(recent));
       sessionStorage.setItem('__last_draft_save', JSON.stringify(debugLog));
-    } catch (e) {
+    } catch {
       // Ignore
     }
 

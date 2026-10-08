@@ -16,10 +16,7 @@ import {
 import { whatsAppUrl } from '@/lib/whatsapp';
 import { migrateConfig } from '@/lib/configMigration';
 import { withDefaultStartDate } from '@/lib/promo/promoCardIdentity';
-import { isFirstLoadOfVisit } from '@/lib/visit';
-import { cardIsNotUserWork } from '@/lib/promo/promoAuthorship';
-import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
-import { readRecoveryEnvelope, clearRecovery, addDebugLog } from '@/lib/recovery';
+import { readRecoveryEnvelope, clearRecovery } from '@/lib/recovery';
 
 interface CampaignDraftPort {
   clearDraft: () => void;

@@ -1,7 +1,7 @@
 'use client';
 
 import type { RefObject } from 'react';
-import { Megaphone, MoreVertical, Radio, Trash2 } from 'lucide-react';
+import { Megaphone, Radio } from 'lucide-react';
 import type { CampaignConfig } from '@/types/campaign';
 
 interface AnnouncementHeaderProps {
@@ -24,12 +24,8 @@ interface AnnouncementHeaderProps {
 export function AnnouncementHeader({
   config,
   canReactivate,
-  showResetMenu,
-  setShowResetMenu,
   setShowStopConfirm,
   setShowGoOnAirConfirm,
-  setShowResetConfirm,
-  resetMenuRef,
 }: AnnouncementHeaderProps) {
   return (
     <div className="px-4 py-2 border-border bg-surface/60 flex items-center justify-between">

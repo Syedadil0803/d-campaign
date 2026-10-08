@@ -187,7 +187,6 @@ function FlyoutDrawer({
       {/* Rows */}
       <div className="flex flex-col" style={{ gap: 8 }}>
         {issues.map((issue) => {
-          const styles = CHIP_STYLES[issue.severity];
           return (
             <div
               key={issue.id}
@@ -256,7 +255,6 @@ function getBarStyles(hasIssues: boolean, isLive: boolean) {
 
 export function CommandBar({
   siteName = 'Your Site',
-  lastPublished = '—',
   isLive = false,
   liveStatusText = 'No campaigns are currently live',
   initialIssues = [],

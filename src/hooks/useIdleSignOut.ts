@@ -3,7 +3,7 @@
 import { useEffect, type RefObject, type Dispatch, type SetStateAction } from 'react';
 import type { CampaignConfig } from '@/types/campaign';
 import { getConfigSignature } from '@/lib/configSignature';
-import { writeRecovery, clearRecovery } from '@/lib/recovery';
+import { writeRecovery } from '@/lib/recovery';
 import { reportUnsaved } from '@/lib/auth/presenceClient';
 import {
   describeDuration,
@@ -77,7 +77,6 @@ export function useIdleSignOut({
   idleRestartRef,
   saveDraftRef,
   saveMessagesRef,
-  toast,
 }: UseIdleSignOutArgs) {
   /**
    * Sign out after a spell of inactivity — and treat it as an accident, not a
@@ -253,5 +252,18 @@ export function useIdleSignOut({
       document.removeEventListener('visibilitychange', onVisibility);
       events.forEach((event) => window.removeEventListener(event, onActivity));
     };
-  }, []);
+  }, [
+    announcementComposeTextRef,
+    configRef,
+    draftSignatureRef,
+    exitReasonRef,
+    hasAnnouncementChangesRef,
+    hasPromoChangesRef,
+    idleRestartRef,
+    idleSecondsLeftRef,
+    promoWorkNotInDraftRef,
+    saveDraftRef,
+    saveMessagesRef,
+    setIdleSecondsLeft,
+  ]);
 }

@@ -263,6 +263,7 @@ export function PopupDropdown({
       initialButtonRectRef.current = null;
       initialMenuPosRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- menuPosition is a fresh object from callers each render and placeVertically is recreated each render; listing them would re-anchor the open menu on every render. Only its width is tracked deliberately
   }, [open, buttonRef, menuPosition?.width]);
 
   return (
