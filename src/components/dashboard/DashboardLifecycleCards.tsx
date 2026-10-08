@@ -130,7 +130,7 @@ export function DashboardLifecycleCards({
               <Gift className="h-5 w-5 text-primary" />
             </div>
             <div className="flex flex-col gap-0.5">
-              <h3 className="text-base font-semibold text-on-surface">Promo card</h3>
+              <h3 className="text-base font-semibold text-on-surface">Campaigns</h3>
               <p className={`${MICRO} text-on-surface-variant`}>Floating widget</p>
             </div>
           </div>
@@ -379,7 +379,7 @@ export function DashboardLifecycleCards({
               <Megaphone className="h-5 w-5 text-primary" />
             </div>
             <div className="flex flex-col gap-0.5">
-              <h3 className="text-base font-semibold text-on-surface">Announcement bar</h3>
+              <h3 className="text-base font-semibold text-on-surface">Broadcasts</h3>
               <p className={`${MICRO} text-on-surface-variant`}>Sitewide header</p>
             </div>
           </div>

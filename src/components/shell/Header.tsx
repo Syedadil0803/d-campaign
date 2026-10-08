@@ -96,7 +96,7 @@ export function Header({
               : 'border-transparent text-on-surface-variant hover:text-on-surface'
               }`}
           >
-            Announcement
+            Broadcasts
           </button>
           <button
             onClick={() => setActiveTab('promo')}
@@ -105,7 +105,7 @@ export function Header({
               : 'border-transparent text-on-surface-variant hover:text-on-surface'
               }`}
           >
-            Promo Card
+            Campaigns
           </button>
         </nav>
 

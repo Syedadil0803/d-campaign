@@ -104,7 +104,7 @@ export function AnnouncementEditorPanel() {
           Announcements card beside it uses the same, so they sit level. */}
       <div className="shrink-0 flex flex-col gap-1">
         <h4 className="text-xl font-bold leading-[28px] text-on-surface">
-          Announcement Content
+          Broadcast Content
         </h4>
         <p className="text-sm leading-[20px] text-on-surface-variant">
           Create your message, optionally attach a link, and add timing only if needed.

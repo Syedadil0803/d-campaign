@@ -268,7 +268,7 @@ export function AnnouncementListPanel({
             card's, so the two titles and divider rules sit level. */}
         <div className="flex shrink-0 items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
-            <h4 className="text-xl font-bold leading-[28px] text-on-surface">Manage Announcements</h4>
+            <h4 className="text-xl font-bold leading-[28px] text-on-surface">Manage Broadcasts</h4>
             <p className="text-sm leading-[20px] text-on-surface-variant">View, reorder, and manage your messages.</p>
           </div>
         </div>

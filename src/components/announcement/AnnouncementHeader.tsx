@@ -32,7 +32,7 @@ export function AnnouncementHeader({
       <div className="flex items-center">
         <div className="p-1 bg-primary/15 rounded-lg mr-3 border border-primary/60"><Megaphone className="w-4 h-4 text-primary" /></div>
         <div>
-          <h3 className="text-[1.75rem] leading-9 font-bold text-on-surface">Announcement Bar</h3>
+          <h3 className="text-[1.75rem] leading-9 font-bold text-on-surface">Broadcasts</h3>
           <p className="mt-2 max-w-2xl text-sm text-on-surface-variant">Top banner for site-wide alerts.</p>
         </div>
       </div>
