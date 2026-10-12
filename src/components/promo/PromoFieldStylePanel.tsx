@@ -38,6 +38,8 @@ interface PromoFieldStylePanelProps {
   getDropdownPosition: (button: HTMLButtonElement | null) => { top: number; left: number; width: number } | null;
   styleWarning: string | null;
   setStyleWarning: (message: string | null) => void;
+  /** Leave out the Field Background section — the Video Story countdown has no background. */
+  hideBackground?: boolean;
 }
 
 /**
@@ -71,6 +73,7 @@ export function PromoFieldStylePanel({
   getDropdownPosition,
   styleWarning,
   setStyleWarning,
+  hideBackground = false,
 }: PromoFieldStylePanelProps) {
   const isButton = field === 'button';
   const fbg = fieldStyle.background;
@@ -212,6 +215,7 @@ export function PromoFieldStylePanel({
                       document.body,
                     )}
 
+                    {!hideBackground && (
                     <div className="mt-2 pt-2 border-t border-white/10">
                       {/* Change here to reflect color updates on the selected field preview. */}
                       <label className="block text-xs text-on-surface-variant mb-1">
@@ -279,6 +283,7 @@ export function PromoFieldStylePanel({
                         />
                       </div>
                     </div>
+                    )}
                   </div>
   );
 }

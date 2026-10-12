@@ -1,6 +1,8 @@
 'use client';
 
 import { Gift, RotateCcw } from 'lucide-react';
+import { VideoStoryContent } from '@/components/videoStory/VideoStoryContent';
+import { useVideoStory, type CampaignKind } from '@/components/videoStory/VideoStoryContext';
 import { getBackgroundStyle } from '@/lib/utils';
 import { usePromoEditor } from '@/components/promo/PromoEditorContext';
 import { PromoCardActionDialog } from '@/components/promo/PromoCardActionDialog';
@@ -17,7 +19,13 @@ import { PANEL_TEXT_FIELDS } from '@/components/promo/panelTextFields';
  *
  * Reads the editor through context, like the canvas beside it.
  */
+const CAMPAIGN_KINDS: { kind: CampaignKind; label: string }[] = [
+  { kind: 'card', label: 'Smart Card' },
+  { kind: 'video', label: 'Video Story' },
+];
+
 export function PromoEditorPanel() {
+  const { kind: campaignKind, setKind: setCampaignKind } = useVideoStory();
   const {
     config,
     currentField,
@@ -104,6 +112,29 @@ export function PromoEditorPanel() {
         </div>
       </div>
 
+      {/* Smart Card or Video Story. Same pill as the schedule's Custom dates /
+          Open-ended switch, so the two read as one family of controls. */}
+      <div className="!mt-4 flex rounded-lg border border-border bg-surface-subtle p-0.5">
+        {CAMPAIGN_KINDS.map((opt) => {
+          const active = campaignKind === opt.kind;
+          return (
+            <button
+              key={opt.kind}
+              type="button"
+              onClick={() => setCampaignKind(opt.kind)}
+              aria-pressed={active}
+              className={`flex-1 rounded-md px-3.5 py-2 text-xs font-semibold transition-colors ${
+                active
+                  ? 'bg-primary text-on-primary shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Quick actions (Clear Canvas / My Published / Template Hub) now live
           in the action-tab strip above the Website Content Area preview. */}
 
@@ -113,12 +144,20 @@ export function PromoEditorPanel() {
         onDismiss={() => setCardActionConfirm(null)}
       />
 
+      {/* Only Content differs between the two kinds. The schedule (with its
+          countdown) and the call to action below are shared. */}
+      {campaignKind === 'video' ? (
+        <VideoStoryContent />
+      ) : (
+      <>
+
       {/* More room than the other sections get, because this is the only
           one that follows a heading rather than body text. "Promo Card" at
           28px and "Content" at 24px are close enough in size to compete,
           and the standard gap left them reading as two titles stacked
-          rather than a section beneath a page. */}
-      <div className="!mt-12 flex items-center justify-between gap-3">
+          rather than a section beneath a page. The Smart Card / Video Story
+          switch now sits between them, so less extra room is needed. */}
+      <div className="!mt-8 flex items-end justify-between gap-3">
         <div>
           <h4 className="text-2xl font-semibold leading-8 text-on-surface">
             Content
@@ -179,6 +218,8 @@ export function PromoEditorPanel() {
           smartPaste={smartPaste}
         />
       ))}
+      </>
+      )}
 
       {/* An open-ended campaign has no end and no countdown, so the section
           says what it actually does rather than promising timing it has not. */}

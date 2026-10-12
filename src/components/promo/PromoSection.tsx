@@ -1,5 +1,8 @@
 "use client";
 
+import { VideoStoryProvider } from '@/components/videoStory/VideoStoryContext';
+import { CampaignSwitch, VideoStoryCanvas } from '@/components/videoStory/VideoStoryCanvas';
+import { VideoStoryToolbar } from '@/components/videoStory/VideoStoryToolbar';
 import {
   useState,
   useEffect,
@@ -906,8 +909,22 @@ export function PromoSection(props: PromoSectionProps) {
     confirmClearCanvas,
   };
 
+  // Shared by both toolbars (Smart Card and Video Story).
+  const setCardPosition = (pos: string) => {
+    pushPromoState();
+    setConfig({
+      ...config,
+      promoCard: {
+        ...config.promoCard,
+        style: { ...config.promoCard.style, position: pos as PromoCard['style']['position'] },
+      },
+    });
+    markChanged();
+  };
+
   return (
     <PromoEditorProvider value={editorApi}>
+      <VideoStoryProvider>
       <>
       <div
         className="sticky top-0 flex gap-4 overflow-hidden"
@@ -926,6 +943,15 @@ export function PromoSection(props: PromoSectionProps) {
           {/* Action tabs — sit between the preview header and the Website
               Content Area, left-aligned. Fixed height so the preview below
               shrinks to keep the column scroll-free. */}
+          <CampaignSwitch
+            video={
+              <VideoStoryToolbar
+                setShowVersionsPopup={setShowVersionsPopup}
+                cardPositionPos={config.promoCard.style.position}
+                setCardPositionPos={setCardPosition}
+              />
+            }
+            card={
           <PromoEditorToolbar
             onUseAi={onUseAi}
             setTemplatesFromBuild={setTemplatesFromBuild}
@@ -933,26 +959,15 @@ export function PromoSection(props: PromoSectionProps) {
             setShowVersionsPopup={setShowVersionsPopup}
             openDraftPopup={openDraftPopup}
             cardPositionPos={config.promoCard.style.position}
-            setCardPositionPos={(pos) => {
-              pushPromoState();
-              setConfig({
-                ...config,
-                promoCard: {
-                  ...config.promoCard,
-                  style: {
-                    ...config.promoCard.style,
-                    position: pos as PromoCard['style']['position'],
-                  },
-                },
-              });
-              markChanged();
-            }}
+            setCardPositionPos={setCardPosition}
             customizeButtonRef={customizeButtonRef}
             onShowStylingPopover={() => setShowStylingPopover(!showStylingPopover)}
             stylingTriggerLabel={stylingTriggerLabel}
             showStylingPopover={showStylingPopover}
           />
-          <PromoCanvas />
+            }
+          />
+          <CampaignSwitch card={<PromoCanvas />} video={<VideoStoryCanvas />} />
 
           {/* <PromoThemeRow
             config={config}
@@ -1045,6 +1060,7 @@ export function PromoSection(props: PromoSectionProps) {
         }}
       />
       </>
+      </VideoStoryProvider>
     </PromoEditorProvider>
   );
 }
