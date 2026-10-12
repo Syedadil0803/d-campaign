@@ -721,6 +721,11 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
             loopCopies={loopCopies}
             scrollContainerRef={scrollContainerRef}
             loop={config.announcementBar.loop !== false}
+            motion={config.announcementBar.motion ?? 'scroll'}
+            onMotionChange={(next) => {
+              setConfig({ ...config, announcementBar: { ...config.announcementBar, motion: next } });
+              markChanged();
+            }}
             speed={pxPerSec}
             onLoopChange={(next) => {
               setConfig({ ...config, announcementBar: { ...config.announcementBar, loop: next } });

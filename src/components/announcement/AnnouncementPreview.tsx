@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { ArrowRight, Palette, Pause, Repeat } from 'lucide-react';
-import type { CampaignConfig, GradientStyle } from '@/types/campaign';
+import type { BarMotion, CampaignConfig, GradientStyle } from '@/types/campaign';
+import { BAR_MOTIONS, dwellSeconds } from '@/lib/announcement/barMotion';
+import { AnnouncementRotator } from '@/components/announcement/AnnouncementRotator';
 import { getBackgroundStyle } from '@/lib/utils';
 import { SPEED_PRESETS, DEFAULT_PX_PER_SEC } from '@/lib/announcement/scrollSpeed';
 import { announcementThemes } from '@/lib/announcement/announcementThemes';
@@ -19,6 +21,8 @@ interface AnnouncementPreviewProps {
   onLoopChange: (next: boolean) => void;
   speed: number;
   onSpeedChange: (next: number) => void;
+  motion: BarMotion;
+  onMotionChange: (next: BarMotion) => void;
 }
 
 function SegmentedControl<T>({
@@ -73,6 +77,8 @@ export function AnnouncementPreview({
   onLoopChange,
   speed,
   onSpeedChange,
+  motion,
+  onMotionChange,
 }: AnnouncementPreviewProps) {
   const isPaused = speed <= 0;
   const lastSpeedRef = useRef(speed > 0 ? speed : DEFAULT_PX_PER_SEC);
@@ -124,6 +130,23 @@ export function AnnouncementPreview({
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">Motion:</span>
+            <SegmentedControl
+              label="Motion"
+              value={motion}
+              onChange={onMotionChange}
+              options={BAR_MOTIONS.map((m) => ({ value: m.value, label: m.label, title: m.hint }))}
+            />
+          </div>
+
+          {/* Single / Loop only means something for the marquee. It stays in
+              place, greyed out, for the other motions — removing it made the
+              whole row jump each time the motion changed. */}
+          <div
+            className={`flex items-center gap-2 transition-opacity ${motion === 'scroll' ? '' : 'pointer-events-none opacity-40'}`}
+            aria-disabled={motion !== 'scroll'}
+            title={motion === 'scroll' ? undefined : 'Flow applies to Scroll only'}
+          >
             <span className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">FLOW:</span>
             <SegmentedControl
               label="Loop mode"
@@ -143,7 +166,7 @@ export function AnnouncementPreview({
                 type="button"
                 onClick={togglePause}
                 aria-pressed={isPaused}
-                title={isPaused ? 'Paused — click to resume' : 'Pause scrolling'}
+                title={isPaused ? 'Paused — click to resume' : motion === 'scroll' ? 'Pause scrolling' : 'Stay on one message'}
                 className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${isPaused ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
                   }`}
               >
@@ -158,7 +181,7 @@ export function AnnouncementPreview({
                     type="button"
                     onClick={() => onSpeedChange(p.pxPerSec)}
                     aria-pressed={active}
-                    title={p.hint}
+                    title={motion === 'scroll' ? p.hint : `Each message stays ${dwellSeconds(p.pxPerSec)} seconds`}
                     className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${active ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
                       }`}
                   >
@@ -172,7 +195,18 @@ export function AnnouncementPreview({
       </div>
 
       <div className="w-full bg-surface-elevated border-border rounded overflow-hidden">
-        {visibleAnnouncements.length > 0 && (
+        {visibleAnnouncements.length > 0 && motion !== 'scroll' && (
+          <div
+            className="h-10 text-sm font-medium"
+            style={{
+              background: getBackgroundStyle(previewBg),
+              color: config.announcementBar.style.textColor,
+            }}
+          >
+            <AnnouncementRotator messages={visibleAnnouncements} motion={motion} pxPerSec={speed} />
+          </div>
+        )}
+        {visibleAnnouncements.length > 0 && motion === 'scroll' && (
           <div
             ref={scrollContainerRef}
             className="h-10 text-sm font-medium overflow-hidden flex items-center group"

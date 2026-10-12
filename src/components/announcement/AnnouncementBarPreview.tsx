@@ -11,6 +11,7 @@ import { getBackgroundStyle } from '@/lib/utils';
 import { isAnnouncementInWindow } from '@/lib/announcement/announcementWindow';
 import { DEFAULT_PX_PER_SEC } from '@/lib/announcement/scrollSpeed';
 import { useMarqueeLayout } from '@/hooks/useMarqueeLayout';
+import { AnnouncementRotator } from '@/components/announcement/AnnouncementRotator';
 
 
 export function AnnouncementBarPreview({
@@ -37,6 +38,18 @@ export function AnnouncementBarPreview({
         style={{ background: getBackgroundStyle(bar.style.background), color: bar.style.textColor }}
       >
         <span className="opacity-60">Your announcement will appear here</span>
+      </div>
+    );
+  }
+
+  const motion = bar.motion ?? 'scroll';
+  if (motion !== 'scroll') {
+    return (
+      <div
+        className="h-10 text-sm font-medium"
+        style={{ background: getBackgroundStyle(bar.style.background), color: bar.style.textColor }}
+      >
+        <AnnouncementRotator messages={visible} motion={motion} pxPerSec={pxPerSec} />
       </div>
     );
   }

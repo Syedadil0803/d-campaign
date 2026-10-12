@@ -633,3 +633,23 @@ select {
     background: rgba(255, 255, 255, 0.14) !important;
   }
 }
+
+/* Broadcasts bar: one message at a time in the centre (Slide, Roll up, Fade).
+   The incoming and outgoing messages animate together, so the bar is never
+   empty mid-change. */
+@keyframes barSlideIn  { from { transform: translateX(100%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes barSlideOut { from { transform: none; opacity: 1; } to { transform: translateX(-100%); opacity: 0; } }
+@keyframes barRollIn   { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes barRollOut  { from { transform: none; } to { transform: translateY(-100%); } }
+@keyframes barFadeIn   { from { opacity: 0; } to { opacity: 1; } }
+@keyframes barFadeOut  { from { opacity: 1; } to { opacity: 0; } }
+.bar-slide-in  { animation: barSlideIn 500ms ease-out both; }
+.bar-slide-out { animation: barSlideOut 500ms ease-in both; }
+.bar-rollup-in  { animation: barRollIn 450ms ease-out both; }
+.bar-rollup-out { animation: barRollOut 450ms ease-in both; }
+.bar-fade-in  { animation: barFadeIn 300ms ease-out both; }
+.bar-fade-out { animation: barFadeOut 300ms ease-in both; }
+@media (prefers-reduced-motion: reduce) {
+  .bar-slide-in, .bar-rollup-in, .bar-fade-in { animation: barFadeIn 200ms both; }
+  .bar-slide-out, .bar-rollup-out, .bar-fade-out { animation: barFadeOut 200ms both; }
+}

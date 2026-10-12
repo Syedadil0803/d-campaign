@@ -87,6 +87,9 @@ export interface PromoCard {
   style: PromoStyle;
 }
 
+/** How the Broadcasts bar moves its messages. */
+export type BarMotion = 'scroll' | 'slide' | 'rollup' | 'fade';
+
 export interface CampaignConfig {
   version: string;
   lastUpdated: string;
@@ -95,6 +98,13 @@ export interface CampaignConfig {
     loop?: boolean;
     /** Marquee speed in pixels per second (0 = paused). Absent means the default pace. */
     speed?: number;
+    /**
+     * How messages move. 'scroll' is the marquee; the other three show one
+     * message at a time in the centre — 'slide' comes in from the right,
+     * 'rollup' rises from below, 'fade' blinks to the next. For those three,
+     * speed sets how long each message stays. Absent means 'scroll'.
+     */
+    motion?: BarMotion;
     announcements: Announcement[];
     /**
      * The one message staged but not yet published. Absent or null means the
