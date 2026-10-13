@@ -8,7 +8,7 @@ export const DEFAULT_PX_PER_SEC = 60;
 /**
  * Speeds offered in the preview pill, in the comfortable ticker band (~40–90).
  * `pxPerSec` drives the animation and is stored; `hint` is the on-screen text.
- * Pause (speed 0) is a separate toggle, not a row here.
+ * Speed 0 is the "Static" animation style, not a row here.
  */
 export const SPEED_PRESETS = [
   { pxPerSec: 40, label: 'Slow', hint: 'A relaxed pace, easiest to read' },

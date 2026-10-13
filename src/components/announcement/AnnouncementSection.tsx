@@ -724,10 +724,18 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
             motion={config.announcementBar.motion ?? 'scroll'}
             // Motion and loop are set together: picking "Scroll · Loop" changes
             // both, and two separate writes from the same config would drop one.
-            onMotionChange={(motion, loop) => {
+            // Motion, loop and speed are set in one write: picking a style can
+            // change all three (e.g. leaving Static restores the speed), and
+            // separate writes from the same config would drop all but the last.
+            onMotionChange={(motion, loop, speed) => {
               setConfig({
                 ...config,
-                announcementBar: { ...config.announcementBar, motion, ...(loop === undefined ? {} : { loop }) },
+                announcementBar: {
+                  ...config.announcementBar,
+                  motion,
+                  ...(loop === undefined ? {} : { loop }),
+                  ...(speed === undefined ? {} : { speed }),
+                },
               });
               markChanged();
             }}
