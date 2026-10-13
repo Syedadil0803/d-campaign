@@ -20,6 +20,8 @@ const config = [
       'security-reports/**',
       'next-env.d.ts',
       'coverage/**',
+      // The site embed is its own package (Svelte, own deps); it does not use Next's rules.
+      'widget/**',
     ],
   },
 

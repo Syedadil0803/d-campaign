@@ -1,0 +1,138 @@
+{
+  "version": "1.0",
+  "lastUpdated": "2026-10-13T09:00:00Z",
+  "announcementBar": {
+    "active": true,
+    "loop": true,
+    "speed": 60,
+    "motion": "slide",
+    "announcements": [
+      {
+        "text": "🎉 Winter Sale is live — <b>up to 40% off</b>"
+      },
+      {
+        "text": "Free delivery on orders over £50",
+        "url": "https://example.com/delivery"
+      },
+      {
+        "text": "This one ended last year",
+        "startDate": "2025-01-01",
+        "endDate": "2025-01-31"
+      }
+    ],
+    "startDate": "",
+    "endDate": "",
+    "style": {
+      "background": {
+        "type": "solid",
+        "startColor": "#1e1b4b",
+        "endColor": "#1e1b4b"
+      },
+      "textColor": "#fdf6e3"
+    }
+  },
+  "promoCard": {
+    "active": true,
+    "title": "<span style=\"font-size:1.6rem;font-weight:700\">Winter Sale</span>",
+    "subtitle": "Up to <b>40% off</b> everything",
+    "description": "Fresh stock every week. Free delivery over £50.<script>alert(1)</script><img src=x onerror=alert(1)>",
+    "buttonText": "Shop the sale",
+    "buttonUrl": "example.com/sale",
+    "ctaType": "link",
+    "buttonFullWidth": true,
+    "showButton": true,
+    "startDate": "2026-01-01",
+    "endDate": "2026-12-31",
+    "scheduleMode": "range",
+    "showTimer": true,
+    "timerText": "Ends in {timer}",
+    "cardWidth": 400,
+    "style": {
+      "position": "bottom-right",
+      "background": {
+        "type": "linear",
+        "startColor": "#a5b4fc",
+        "endColor": "#f0abfc",
+        "direction": "to bottom right",
+        "midpoint": 0
+      },
+      "textColor": "#312e81",
+      "titleStyle": {
+        "background": {
+          "type": "solid",
+          "startColor": "transparent",
+          "endColor": "transparent",
+          "direction": "to right",
+          "midpoint": 50
+        },
+        "textColor": "#312e81",
+        "textAlign": "center"
+      },
+      "subheadingStyle": {
+        "background": {
+          "type": "solid",
+          "startColor": "transparent",
+          "endColor": "transparent",
+          "direction": "to right",
+          "midpoint": 50
+        },
+        "textColor": "#4c1d95",
+        "textAlign": "center"
+      },
+      "descriptionStyle": {
+        "background": {
+          "type": "solid",
+          "startColor": "transparent",
+          "endColor": "transparent",
+          "direction": "to right",
+          "midpoint": 50
+        },
+        "textColor": "#581c87",
+        "textAlign": "left"
+      },
+      "dateStyle": {
+        "background": {
+          "type": "solid",
+          "startColor": "#ffffff99",
+          "endColor": "#ffffff99"
+        },
+        "textColor": "#312e81",
+        "textAlign": "center"
+      },
+      "buttonStyle": {
+        "background": {
+          "type": "solid",
+          "startColor": "#6d28d9",
+          "endColor": "#6d28d9"
+        },
+        "textColor": "#ffffff",
+        "textAlign": "center"
+      }
+    }
+  },
+  "videoStory": {
+    "active": true,
+    "videoUrl": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+    "position": "bottom-right",
+    "buttonText": "Chat on WhatsApp",
+    "buttonUrl": "",
+    "ctaType": "whatsapp",
+    "whatsappCountryCode": "+44",
+    "whatsappNumber": "07911 123456",
+    "showButton": true,
+    "startDate": "2026-01-01",
+    "endDate": "2026-11-30",
+    "scheduleMode": "range",
+    "showTimer": true,
+    "timerTextColor": "#ffffff",
+    "buttonStyle": {
+      "background": {
+        "type": "solid",
+        "startColor": "#16a34a",
+        "endColor": "#16a34a"
+      },
+      "textColor": "#ffffff",
+      "textAlign": "center"
+    }
+  }
+}

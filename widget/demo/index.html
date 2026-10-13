@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Campaign widget demo</title>
+  <link rel="icon" href="data:,">
+  <style>
+    /* A deliberately loud host page: its fonts and spacing must not leak into the widget. */
+    body { margin: 0; font: 18px/2 Georgia, serif; letter-spacing: 2px; color: #222; background: #f4f1ea; }
+    header { padding: 16px 24px; background: #fff; border-bottom: 1px solid #ddd; }
+    main { padding: 24px; max-width: 760px; }
+  </style>
+</head>
+<body>
+  <header><strong>Example Shop</strong></header>
+  <main>
+    <h1>Customer website</h1>
+    <p>Configs: <a href="?">all live</a> · <a href="?config=card-only.json">card only</a> · <a href="?config=nothing.json">nothing live</a></p>
+    <p>The embed below is the one line a customer pastes; this page only swaps its data-config for the demo links.</p>
+  </main>
+  <script>
+    // Demo only: pick the config from ?config=. A real site pastes the plain
+    // script tag from widget/README.md instead.
+    var s = document.createElement('script');
+    s.src = '../dist/campaign.js';
+    s.dataset.config = new URLSearchParams(location.search).get('config') || 'campaign-config.json';
+    s.async = true;
+    document.body.appendChild(s);
+  </script>
+</body>
+</html>
