@@ -50,18 +50,24 @@ export type PromoField =
   | 'timer'
   | 'button';
 
-export interface PromoCard {
-  active: boolean;
-  title: string;
-  subtitle: string;
-  description: string;
+/**
+ * The Call To Action fields, shared by every widget that carries a button.
+ *
+ * Pulled out of PromoCard so the Video Story reuses the same definition rather
+ * than a copy that drifts. PromoCard extends this, so its shape is unchanged.
+ */
+export interface CampaignCta {
   buttonText: string;
   buttonUrl: string;
   buttonFullWidth?: boolean;
   ctaType?: 'whatsapp' | 'link' | 'text';
   whatsappNumber?: string;
   whatsappCountryCode?: string;
-  cardWidth?: number;
+  showButton: boolean;
+}
+
+/** When a widget runs, and its countdown — shared for the same reason. */
+export interface CampaignSchedule {
   startDate: string;
   endDate: string | null;
   /**
@@ -76,9 +82,16 @@ export interface PromoCard {
    */
   scheduleMode?: 'range' | 'openEnded';
   showTimer: boolean;
-  showButton: boolean;
-  stoppedByUser?: boolean;
   timerText?: string;
+}
+
+export interface PromoCard extends CampaignCta, CampaignSchedule {
+  active: boolean;
+  title: string;
+  subtitle: string;
+  description: string;
+  cardWidth?: number;
+  stoppedByUser?: boolean;
   /** Full Lexical editor state (JSON) for the timer — carries per-character
    *  text styling AND the chip's per-cell styling, which the plain
    *  `timerText` string can't express. Source of truth for the editor +
@@ -86,6 +99,31 @@ export interface PromoCard {
   timerStateJson?: string;
   style: PromoStyle;
 }
+
+/**
+ * The second widget: a short looping clip with its own CTA and schedule.
+ *
+ * A sibling of promoCard rather than a mode of it, so both can be live at once
+ * (see docs/video-story-architecture.md). Optional on CampaignConfig, so every
+ * config saved before it existed still parses; migrateConfig fills the default.
+ */
+export interface VideoStory extends CampaignCta, CampaignSchedule {
+  active: boolean;
+  stoppedByUser?: boolean;
+  /** Stored address of the clip, once uploads exist. Empty means no clip. */
+  videoUrl: string;
+  position: 'bottom-left' | 'bottom-right';
+  /** The countdown is plain text over the video, so it has a colour, no background. */
+  timerTextColor: string;
+  buttonStyle: PromoStyle['buttonStyle'];
+}
+
+/**
+ * Which widget the Campaigns tab is editing. Lives here rather than in the
+ * Video Story context because the page reads it too: the header's Publish and
+ * the on-air chip act on whichever widget is open.
+ */
+export type CampaignKind = 'card' | 'video';
 
 /** How the Broadcasts bar moves its messages. */
 export type BarMotion = 'scroll' | 'slide' | 'rollup' | 'fade';
@@ -129,8 +167,35 @@ export interface CampaignConfig {
     activeThemeId?: string | null;
   };
   promoCard: PromoCard;
+  videoStory?: VideoStory;
   messages?: Message[];
 }
+
+/**
+ * The blank Video Story.
+ *
+ * Bottom-left because the card's blank look sits bottom-right — the two start
+ * in opposite corners, which is where placeWidgets puts them anyway once both
+ * are live. Off, with no clip, countdown or button: the same "no decisions made
+ * yet" rule as the blank promo card below.
+ */
+export const defaultVideoStory: VideoStory = {
+  active: false,
+  videoUrl: '',
+  position: 'bottom-left',
+  buttonText: '',
+  buttonUrl: '',
+  ctaType: 'whatsapp',
+  whatsappNumber: '',
+  showButton: false,
+  startDate: '',
+  endDate: '',
+  scheduleMode: 'range',
+  showTimer: false,
+  timerTextColor: '#ffffff',
+  // The card's blank button, so a new widget's button matches the card's.
+  buttonStyle: structuredClone(FIRST_BLANK_LOOK.buttonStyle),
+};
 
 export const defaultConfig: CampaignConfig = {
   version: '1.0',
@@ -204,5 +269,6 @@ export const defaultConfig: CampaignConfig = {
      */
     style: JSON.parse(JSON.stringify(FIRST_BLANK_LOOK)) as PromoCard['style'],
   },
+  videoStory: structuredClone(defaultVideoStory),
   messages: [],
 };

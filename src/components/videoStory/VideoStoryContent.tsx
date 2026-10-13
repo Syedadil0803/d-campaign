@@ -2,17 +2,21 @@
 
 import { RotateCcw } from 'lucide-react';
 import { useVideoStory } from '@/components/videoStory/VideoStoryContext';
+import { VideoUploadFlow } from '@/components/videoStory/VideoUploadFlow';
 
 /**
  * The Content section for a Video Story. Same heading, spacing and Start
- * Fresh button as the Smart Card's Content section. The video itself is
- * added from the toolbar's Upload button and shows in the preview, so this
- * section only holds the heading, Start Fresh and any problem with the file.
- * The schedule and the call to action below are shared with the Smart Card.
+ * Fresh button as the Smart Card's Content section. Below them, the whole
+ * upload (VideoUploadFlow); the clip itself plays in the preview.
+ * The schedule and call to action below it are its own (VideoStorySchedule,
+ * VideoStoryCta).
  */
 export function VideoStoryContent() {
-  const { draft } = useVideoStory();
-  const { clip, error, clear } = draft;
+  const { draft, videoStory, updateVideoStory } = useVideoStory();
+  const hasVideo = Boolean(draft.previewUrl || videoStory.videoUrl);
+  // Start Fresh drops the stored address too; the upload in R2 is left
+  // behind (a later cleanup's job — it costs fractions of a cent).
+  const clear = () => { draft.reset(); updateVideoStory({ videoUrl: '' }); };
 
   return (
     <>
@@ -26,9 +30,9 @@ export function VideoStoryContent() {
         <button
           type="button"
           onClick={clear}
-          disabled={!clip}
+          disabled={!hasVideo && draft.step.name === 'idle'}
           className="tool-chip relative inline-flex h-8 shrink-0 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-lg border border-on-surface-variant/25 px-2.5 text-xs font-medium text-on-surface-variant/80 transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
-          title={clip ? 'Remove the video and start again' : 'Nothing to refresh — no video yet.'}
+          title={hasVideo ? 'Remove the video and start again' : 'Nothing to refresh — no video yet.'}
         >
           <span aria-hidden="true" className="ai-sheen pointer-events-none absolute inset-0" />
           <RotateCcw className="h-3.5 w-3.5" />
@@ -36,7 +40,7 @@ export function VideoStoryContent() {
         </button>
       </div>
 
-      {error && <p className="!mt-2 text-xs font-medium text-red-600 dark:text-red-400">{error}</p>}
+      <VideoUploadFlow />
     </>
   );
 }

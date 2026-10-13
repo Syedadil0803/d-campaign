@@ -1,9 +1,7 @@
 import type { PromoCard } from '@/types/campaign';
-import { toLocalISODate } from '@/lib/utils';
-import { shortDay } from '@/lib/calendarDates';
-import { whatsAppLooksShort } from '@/lib/whatsapp';
+import { ctaWarnings } from '@/lib/campaignCta';
 import { fieldOverflows } from '@/lib/promo/promoFit';
-import { isOpenEnded } from '@/lib/promo/promoSchedule';
+import { isOpenEnded, scheduleWarnings } from '@/lib/promo/promoSchedule';
 
 /**
  * What the user should know before a promo card goes live.
@@ -32,31 +30,7 @@ export function validatePromo(promoCard: PromoCard): string[] {
 
   // 2. Schedule — publishing turns the card On Air, so it will run.
   const openEnded = isOpenEnded(pc);
-
-  if (openEnded) {
-    // No end to reach, so the only question is whether it has started.
-    if (!pc.startDate) {
-      warnings.push('Start date is not set');
-    } else if (pc.startDate <= toLocalISODate(new Date())) {
-      warnings.push(`Campaign will run from ${shortDay(pc.startDate)} until you stop it (starts immediately)`);
-    } else {
-      warnings.push(`Campaign is scheduled from ${shortDay(pc.startDate)} until you stop it`);
-    }
-  } else if (!pc.startDate || !pc.endDate) {
-    warnings.push('Start date or end date is not set');
-  } else {
-    // Local, not UTC: east of Greenwich a UTC "today" is still yesterday
-    // for the first hours of the day, which would flag a campaign ending
-    // today as already expired.
-    const today = toLocalISODate(new Date());
-    if (pc.endDate < today) {
-      warnings.push('End date is in the past');
-    } else if (pc.startDate <= today) {
-      warnings.push(`Campaign will run from ${shortDay(pc.startDate)} – ${shortDay(pc.endDate)} (starts immediately)`);
-    } else {
-      warnings.push(`Campaign is scheduled for ${shortDay(pc.startDate)} – ${shortDay(pc.endDate)}`);
-    }
-  }
+  warnings.push(...scheduleWarnings(pc, { describe: true }));
 
   // 3. Timer text
   if (pc.showTimer && !openEnded) {
@@ -64,41 +38,8 @@ export function validatePromo(promoCard: PromoCard): string[] {
     if (!timerPlain) warnings.push('Timer has no prefix or suffix — you can add text like "Ends in" or "Hurry!" around the countdown');
   }
 
-  // 4. CTA
-  if (pc.showButton) {
-    const btnText = strip(pc.buttonText || '');
-    const ctaType = pc.ctaType || 'whatsapp';
-    if (ctaType === 'text') {
-      if (!btnText) warnings.push('Button text is empty');
-    } else if (ctaType === 'whatsapp') {
-      const num = pc.whatsappNumber?.trim() || '';
-      const code = pc.whatsappCountryCode || '+44';
-      if (!btnText && !num) {
-        warnings.push('Button text and WhatsApp number are empty');
-      } else if (!btnText) {
-        warnings.push('Button text is empty');
-      } else if (!num) {
-        warnings.push('WhatsApp number is empty');
-      } else if (whatsAppLooksShort(code, num)) {
-        // The editor links any typed digit on purpose, so this is the last
-        // place a half-typed number can be caught before it reaches the site.
-        warnings.push(
-          `WhatsApp number looks short for ${code}: ${code} ${num}`,
-        );
-      } else {
-        warnings.push(`WhatsApp number: ${code} ${num}`);
-      }
-    } else {
-      const url = pc.buttonUrl?.trim() || '';
-      if (!btnText && !url) {
-        warnings.push('Button text and URL are empty');
-      } else if (!btnText) {
-        warnings.push('Button text is empty');
-      } else if (!url) {
-        warnings.push('Button URL is empty');
-      }
-    }
-  }
+  // 4. CTA — the rules the Video Story shares.
+  warnings.push(...ctaWarnings(pc));
 
   return warnings;
 }

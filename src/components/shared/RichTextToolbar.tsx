@@ -35,6 +35,12 @@ interface RichTextToolbarProps {
   compact?: boolean;
   /** A firmer button outline, for a toolbar sitting on a tinted card. */
   firmBorder?: boolean;
+  /**
+   * Colour only: no bold, italic or size. For plain-text fields with no rich
+   * editor behind them (the Video Story's button and countdown), where those
+   * controls would have nothing to act on.
+   */
+  colorOnly?: boolean;
 }
 
 export default function RichTextToolbar({
@@ -51,6 +57,7 @@ export default function RichTextToolbar({
   onButtonWidthChange,
   compact = false,
   firmBorder = false,
+  colorOnly = false,
 }: RichTextToolbarProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showSizeDropdown, setShowSizeDropdown] = useState(false);
@@ -123,6 +130,8 @@ export default function RichTextToolbar({
           )}
         </div>
 
+        {!colorOnly && (
+        <>
         {/* Bold Button */}
         <button
           onMouseDown={(e) => {
@@ -213,12 +222,14 @@ export default function RichTextToolbar({
             )}
           </div>
         ) : null}
+        </>
+        )}
 
         {extraActions}
       </div>
 
       <div className="flex items-center gap-1">
-        {compact && (
+        {compact && !colorOnly && (
           <div className="relative">
             <button
               ref={sizeBtnRef}

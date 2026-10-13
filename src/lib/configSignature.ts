@@ -11,7 +11,8 @@
  * call the content. Pulled out of page.tsx because none of it needs the
  * component: configs in, strings and booleans out.
  */
-import { CampaignConfig } from '@/types/campaign';
+import { CampaignConfig, VideoStory, defaultVideoStory } from '@/types/campaign';
+import { isOpenEnded } from '@/lib/promo/promoSchedule';
 
 /**
  * Strips differences the APP creates on its own, so they don't read as edits.
@@ -156,6 +157,60 @@ function normalizeAnnouncementsForCompare(
   };
 }
 
+/**
+ * Key order, made irrelevant. Postgres jsonb hands objects back with their keys
+ * re-sorted, so the same Video Story read from the database and built in code
+ * stringify differently. Sorting gives both one spelling.
+ */
+function sortKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortKeys);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((k) => [k, sortKeys((value as Record<string, unknown>)[k])]),
+  );
+}
+
+/**
+ * A Video Story reduced to its content: the live on/off flags dropped, exactly
+ * as for the promo card, so Go on air / Stop never reads as an unsaved edit.
+ * Its fields are plain values, not editor HTML, so nothing else needs stripping.
+ */
+function normalizeVideoStoryForCompare(vs: VideoStory): unknown {
+  const { active: _active, stoppedByUser: _stopped, endDate, ...content } = vs;
+  // An open-ended story has no end date by definition, and publishing sends
+  // it as null while the editor holds '' (or whatever end was picked before
+  // switching mode). Kept, that difference left "Unpublished changes" lit
+  // straight after a publish. For a range, null and '' both mean "not set".
+  return sortKeys(isOpenEnded(vs) ? content : { ...content, endDate: endDate ?? '' });
+}
+
+const videoSig = (vs: VideoStory | undefined) =>
+  JSON.stringify(normalizeVideoStoryForCompare(vs ?? defaultVideoStory));
+
+const DEFAULT_VIDEO_STORY_SIG = videoSig(defaultVideoStory);
+
+export function getVideoStorySignature(cfg: CampaignConfig): string {
+  return videoSig(cfg.videoStory);
+}
+
+/**
+ * Do two Video Stories differ in content? Missing counts as the blank default,
+ * for the reason getConfigSignature gives below. One comparison serves every
+ * question the video's lifecycle asks: unsaved (editor vs the draft, or live
+ * when there is no draft), unpublished (editor vs live), never made (live vs
+ * the default).
+ */
+export function videoStoryDiffers(a: VideoStory | undefined, b: VideoStory | undefined): boolean {
+  return videoSig(a) !== videoSig(b);
+}
+
+/** Worth a draft or a publish only once there is a clip to show. */
+export function videoStoryHasContent(vs: VideoStory | undefined): boolean {
+  return Boolean(vs?.videoUrl?.trim());
+}
+
 export function getConfigSignature(cfg: CampaignConfig) {
   // `active` / `stoppedByUser` are live on/off flags managed by Go-on-air /
   // Stop, not content. Exclude them so the Save/dirty check reflects real
@@ -172,13 +227,22 @@ export function getConfigSignature(cfg: CampaignConfig) {
   // identical configs compare as different — which meant a draft could never
   // match what's published, and the "Welcome back" banner fired for drafts
   // holding no real changes.
-  const { lastUpdated: _ignored, ...content } = cfg;
+  //
+  // `videoStory` is left out entirely while it is the blank default. These
+  // signatures are compared across snapshots taken by different code: a
+  // browser recovery copy or an in-memory baseline from before the Video Story
+  // existed has no key, a freshly migrated config has the default. Counting
+  // the key would make every one of those read as an unsaved change. A blank
+  // video story and no video story are the same content, so they sign the same.
+  const { lastUpdated: _ignored, videoStory: _video, ...content } = cfg;
+  const video = normalizeVideoStoryForCompare(cfg.videoStory ?? defaultVideoStory);
   return JSON.stringify({
     ...content,
     announcementBar: strip(cfg.announcementBar as unknown as Record<string, unknown>),
     promoCard: normalizePromoForCompare(
       cfg.promoCard as unknown as Record<string, unknown>,
     ),
+    ...(JSON.stringify(video) === DEFAULT_VIDEO_STORY_SIG ? {} : { videoStory: video }),
   });
 }
 

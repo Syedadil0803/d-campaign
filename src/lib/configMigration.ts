@@ -1,4 +1,4 @@
-import { type CampaignConfig } from '@/types/campaign';
+import { type CampaignConfig, defaultVideoStory } from '@/types/campaign';
 import {
   TIMER_FIXED_TOKEN,
   normalizeLegacyTimerTokens,
@@ -161,6 +161,14 @@ export function migrateConfig(stored: unknown, version: string): CampaignConfig 
   // the two still agree and nothing reads as unsaved just for being loaded.
   if (migrated.promoCard) {
     migrated.promoCard = withDefaultStartDate(migrated.promoCard);
+  }
+
+  // Every config saved before the Video Story existed has no videoStory, and a
+  // null database column comes back the same way. Filled here — the one path
+  // every load takes — so nothing downstream has to ask whether it exists.
+  // Version-independent on purpose: a 1.1 config is just as likely to lack it.
+  if (!migrated.videoStory) {
+    migrated.videoStory = structuredClone(defaultVideoStory);
   }
   
   // Check version and apply appropriate migrations

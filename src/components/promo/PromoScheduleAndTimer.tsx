@@ -196,7 +196,7 @@ export function PromoScheduleAndTimer({
             </span>
           </div>
           <p className="mt-1 text-sm text-on-surface-variant">
-            Show a dynamic countdown clock on the promo card to create urgency.
+            Show a dynamic countdown clock on the Smart Card to create urgency.
           </p>
         </div>
         {canUseTimer ? (

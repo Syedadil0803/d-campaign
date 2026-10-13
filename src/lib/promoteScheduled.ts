@@ -1,6 +1,7 @@
 import { campaignRepository } from '@/repositories/campaignRepository';
 import { syncToR2 } from '@/lib/publishToR2';
 import { toLocalISODate } from '@/lib/utils';
+import { mergeScheduled } from '@/lib/mergeScheduled';
 
 /**
  * Puts scheduled campaigns live once their start date arrives.
@@ -19,9 +20,15 @@ export async function promoteDueScheduled(): Promise<{ promoted: string[]; faile
   const promoted: string[] = [];
   const failed: string[] = [];
 
-  for (const { id, config } of await campaignRepository.listScheduled()) {
-    const startDate = config.promoCard?.startDate;
-    if (!startDate || startDate > today) continue; // not its day yet
+  const rows = await campaignRepository.listScheduled();
+  // Read once, only when there is something to sweep, and carried forward so a
+  // second promotion in the same sweep merges onto the first.
+  let live = rows.length ? await campaignRepository.getConfig() : null;
+
+  for (const { id, config: scheduled } of rows) {
+    const config = mergeScheduled(live, scheduled, today);
+    if (!config) continue; // not its day yet
+    const startDate = scheduled.promoCard.startDate;
 
     const userId = id.slice('scheduled:'.length);
 
@@ -33,6 +40,7 @@ export async function promoteDueScheduled(): Promise<{ promoted: string[]; faile
       failed.push(id);
       continue;
     }
+    live = config;
 
     const synced = await syncToR2(config);
     if (!synced.ok) {

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { CampaignConfig, PromoCard } from '@/types/campaign';
+import type { CampaignConfig, CampaignKind, PromoCard, VideoStory } from '@/types/campaign';
 
 /**
  * What the page hands the promo editor.
@@ -39,6 +39,14 @@ export interface PromoSectionProps {
    * still serving to visitors.
    */
   livePromoCard?: PromoCard;
+  /** The Video Story currently published, for the on-air chip on its tab. */
+  liveVideoStory?: VideoStory;
+  /**
+   * Smart Card or Video Story. Owned by the page, because the header's Publish
+   * and the on-air chip's handlers act on whichever widget is open.
+   */
+  campaignKind: CampaignKind;
+  onCampaignKindChange: (kind: CampaignKind) => void;
   /**
    * The promo card as saved in My Draft.
    *

@@ -4,6 +4,11 @@ import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type { CampaignConfig } from '@/types/campaign';
 import { clearRecovery, readRecoveryEnvelope } from '@/lib/recovery';
 import { migrateConfig } from '@/lib/configMigration';
+import {
+  getPromoSignature,
+  promoHasVisibleContent,
+  videoStoryDiffers,
+} from '@/lib/configSignature';
 import type { useCampaignConfig } from '@/hooks/useCampaignConfig';
 import type { useCampaignDraft } from '@/hooks/useCampaignDraft';
 
@@ -66,12 +71,28 @@ export function useRecoveryActions({
     if (recoveryEnvelope?.config) {
       const recovered = migrateConfig(recoveryEnvelope.config, recoveryEnvelope.config.version);
 
-      const sides: ('promo' | 'announcement')[] = side
+      const sides: ('promo' | 'announcement' | 'videoStory')[] = side
         ? [side]
         : ([
             recoveredAffectsPromo ? 'promo' : null,
             recoveredAffectsAnnouncement ? 'announcement' : null,
           ].filter(Boolean) as ('promo' | 'announcement')[]);
+      /**
+       * The Campaigns banner covers both of its widgets, so restoring it
+       * brings the Video Story back too — but only when the snapshot's video
+       * actually differs, or the restore would write a draft of nothing new.
+       * A video-only rescue leaves the card alone, by the same test the load
+       * used to decide the card had anything to recover.
+       */
+      if (sides.includes('promo')) {
+        const videoBack = videoStoryDiffers(recovered.videoStory, configRef.current.videoStory);
+        const cardBack =
+          promoHasVisibleContent(recovered.promoCard) &&
+          getPromoSignature(recovered) !== getPromoSignature(configRef.current);
+        if (videoBack) sides.push('videoStory');
+        if (videoBack && !cardBack) sides.splice(sides.indexOf('promo'), 1);
+      }
+      const campaignsRestored = sides.includes('promo') || sides.includes('videoStory');
 
       // Take only the recovered half/halves being restored; the other card
       // keeps whatever the editor is already holding.
@@ -81,6 +102,7 @@ export function useRecoveryActions({
         ...(sides.includes('announcement')
           ? { announcementBar: recovered.announcementBar }
           : {}),
+        ...(sides.includes('videoStory') ? { videoStory: recovered.videoStory } : {}),
       };
 
       // Update the campaign hook's configRef so PromoSection sees it immediately
@@ -110,13 +132,13 @@ export function useRecoveryActions({
 
       // The other card may still be holding recovered work it hasn't been
       // asked about yet — keep its banner, and the copy on disk behind it.
-      const promoLeft = recoveredAffectsPromo && !sides.includes('promo');
+      const promoLeft = recoveredAffectsPromo && !campaignsRestored;
       const annLeft = recoveredAffectsAnnouncement && !sides.includes('announcement');
       setRecoveredAffectsPromo(promoLeft);
       setRecoveredAffectsAnnouncement(annLeft);
       if (!promoLeft && !annLeft) clearRecovery();
 
-      const recoveryTargetTab: 'promo' | 'announcement' = sides.includes('promo')
+      const recoveryTargetTab: 'promo' | 'announcement' = campaignsRestored
         ? 'promo'
         : 'announcement';
       if (recoveryTargetTab === 'promo') setPromoEntryStep('editor');

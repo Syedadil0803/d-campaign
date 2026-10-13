@@ -1,7 +1,7 @@
 import { text, timestamp, jsonb, boolean, pgSchema, primaryKey } from 'drizzle-orm/pg-core';
 // Type-only: erased at build, so nothing from the editor's type module is
 // pulled into the server bundle.
-import type { CampaignConfig, PromoCard } from '@/types/campaign';
+import type { CampaignConfig, PromoCard, VideoStory } from '@/types/campaign';
 
 // Define the campaign schema
 export const campaignSchema = pgSchema('campaign');
@@ -26,6 +26,14 @@ export const campaignConfig = campaignSchema.table('campaign_config', {
    */
   promoLastUpdated: timestamp('promo_last_updated'),
   announcementLastUpdated: timestamp('announcement_last_updated'),
+  /**
+   * The second widget, beside promoCard rather than inside it. Nullable: every
+   * row written before it existed has none, and null reads back as the default
+   * Video Story (migrateConfig fills it). Its own draft timestamp for the same
+   * reason the two above exist.
+   */
+  videoStory: jsonb('video_story').$type<VideoStory>(),
+  videoStoryLastUpdated: timestamp('video_story_last_updated'),
 });
 
 /**

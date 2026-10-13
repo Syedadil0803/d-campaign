@@ -1,5 +1,7 @@
 import { LayoutDashboard, Upload, Sun, Moon, LogOut, Loader2, Check, MonitorDown } from 'lucide-react';
 import { useInstallPrompt } from '@/hooks/useInstallPrompt';
+import type { CampaignKind } from '@/types/campaign';
+import { CampaignsNavMenu } from '@/components/shell/CampaignsNavMenu';
 
 interface HeaderProps {
   activeTab: 'dashboard' | 'announcement' | 'promo';
@@ -17,6 +19,9 @@ interface HeaderProps {
   handlePublishAnnouncement: () => Promise<void> | void;
   handlePublishPromo: () => Promise<void> | void;
   handleLogout: () => void;
+  /** The Campaigns page showing. */
+  campaignKind: CampaignKind;
+  onSelectCampaign: (kind: CampaignKind) => void;
 }
 
 export function Header({
@@ -33,6 +38,8 @@ export function Header({
   handlePublishAnnouncement,
   handlePublishPromo,
   handleLogout,
+  campaignKind,
+  onSelectCampaign,
 }: HeaderProps) {
 
   // Only ever true on a browser that can actually install, and only until it
@@ -70,19 +77,21 @@ export function Header({
   }
 
   return (
-    <header className="sticky top-0 z-20 h-14 border-b border-border bg-surface/95 shadow-sm backdrop-blur px-6 py-3">
+    <header className="sticky top-0 z-20 h-14 border-b border-border bg-surface/95 shadow-sm backdrop-blur px-3 py-3 sm:px-6">
       <div className="flex h-full items-center justify-between">
         {/* Left Group */}
         <div className="flex items-center">
-          <LayoutDashboard className="mr-3 hidden h-6 w-6 text-primary sm:block" />
-          <h1 className="text-xl font-bold leading-7 text-on-surface">Campaign Admin</h1>
+          <LayoutDashboard className="mr-3 h-6 w-6 text-primary" />
+          <h1 className="hidden text-xl font-bold leading-7 text-on-surface lg:block">Campaign Admin</h1>
         </div>
 
-        {/* Center Group - Navigation Tabs */}
-        <nav className="absolute left-1/2 -translate-x-1/2 flex items-center gap-6 overflow-x-auto whitespace-nowrap">
+        {/* Center Group - Navigation Tabs. Truly centred from lg up; below
+            that it sits in the row, so it can never run under the logo or
+            the actions. */}
+        <nav className="flex items-center gap-1 whitespace-nowrap lg:absolute lg:left-1/2 lg:-translate-x-1/2 lg:gap-6">
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`rounded-md border-b-2 px-3 py-2 text-sm font-semibold leading-5 transition-colors ${activeTab === 'dashboard'
+            className={`rounded-md border-b-2 px-1.5 py-2 text-[13px] font-semibold leading-5 transition-colors sm:px-3 sm:text-sm ${activeTab === 'dashboard'
               ? 'border-primary text-primary'
               : 'border-transparent text-on-surface-variant hover:text-on-surface'
               }`}
@@ -91,26 +100,22 @@ export function Header({
           </button>
           <button
             onClick={() => setActiveTab('announcement')}
-            className={`rounded-md border-b-2 px-3 py-2 text-sm font-semibold leading-5 transition-colors ${activeTab === 'announcement'
+            className={`rounded-md border-b-2 px-1.5 py-2 text-[13px] font-semibold leading-5 transition-colors sm:px-3 sm:text-sm ${activeTab === 'announcement'
               ? 'border-primary text-primary'
               : 'border-transparent text-on-surface-variant hover:text-on-surface'
               }`}
           >
             Broadcasts
           </button>
-          <button
-            onClick={() => setActiveTab('promo')}
-            className={`rounded-md border-b-2 px-3 py-2 text-sm font-semibold leading-5 transition-colors ${activeTab === 'promo'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-on-surface-variant hover:text-on-surface'
-              }`}
-          >
-            Campaigns
-          </button>
+          <CampaignsNavMenu
+            active={activeTab === 'promo'}
+            kind={campaignKind}
+            onSelect={onSelectCampaign}
+          />
         </nav>
 
         {/* Right Group */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3">
           {canInstall && activeTab === 'dashboard' && (
             <button
               onClick={install}
@@ -135,19 +140,19 @@ export function Header({
             <>
               {/* Status badge */}
               {state === 'unsaved' && (
-                <div className="hidden items-center text-sm font-medium text-primary sm:flex">
+                <div className="hidden items-center text-sm font-medium text-primary xl:flex">
                   <span className="mr-2 h-2 w-2 animate-pulse rounded-full bg-primary"></span>
                   Unsaved changes
                 </div>
               )}
               {state === 'ready' && (
-                <div className="hidden items-center text-sm font-medium text-primary sm:flex">
+                <div className="hidden items-center text-sm font-medium text-primary xl:flex">
                   <span className="mr-2 h-2 w-2 rounded-full bg-primary"></span>
                   Unpublished changes
                 </div>
               )}
               {state === 'published' && (
-                <div className="hidden items-center text-sm font-medium text-primary sm:flex">
+                <div className="hidden items-center text-sm font-medium text-primary xl:flex">
                   <Check className="mr-1.5 h-4 w-4" />
                   All changes published
                 </div>

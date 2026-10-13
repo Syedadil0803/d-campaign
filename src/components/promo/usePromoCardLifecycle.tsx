@@ -12,7 +12,7 @@ import { clonePromoCard, cardSignature, withDefaultDates } from '@/lib/promo/pro
 import { cardReplaceConsent } from '@/lib/promo/cardReplaceConsent';
 import { applyTemplateFull } from '@/lib/promo/promoTemplate';
 import { serializeTimerHtml } from '@/lib/editor/timerUtils';
-import { whatsAppUrl } from '@/lib/whatsapp';
+import { deriveButtonUrl } from '@/lib/campaignCta';
 import { deleteVersion, restoreVersion } from '@/lib/promo/promoVersions';
 import {
   overwritesDraftCopy,
@@ -115,21 +115,11 @@ export function usePromoCardLifecycle({
     setConfirmDeleteDraft,
   } = popupFlags;
 
-  /** The URL this card's button opens on the live site, if it opens anything. */
+  /** The URL this card's button opens on the live site, if it opens anything.
+   *  The publish's own rule (deriveButtonUrl), so the preview cannot open
+   *  somewhere the live button does not. */
   function ctaDestination(card?: PromoCard): string | null {
-    const c = card ?? configRef.current.promoCard;
-    if (c.ctaType === 'link') {
-      const url = (c.buttonUrl || '').trim();
-      if (!url) return null;
-      return /^https?:\/\//i.test(url) ? url : `https://${url}`;
-    }
-    if ((c.ctaType || 'whatsapp') === 'whatsapp') {
-      // Any typed national digit makes a link. The old rule counted the
-      // dialling code too, so the real minimum slid by country and a
-      // half-typed number left the button dead with no explanation.
-      return whatsAppUrl(c.whatsappCountryCode, c.whatsappNumber);
-    }
-    return null;
+    return deriveButtonUrl(card ?? configRef.current.promoCard) || null;
   }
 
   function isLiveVersion(version: PromoVersion): boolean {

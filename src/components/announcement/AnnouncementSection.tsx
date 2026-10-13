@@ -645,14 +645,14 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
 
         <ConfirmDialog
           open={showStopConfirm}
-          title="Switch off this campaign?"
-          confirmLabel="Yes, switch off"
+          title="Switch off this campaign"
+          confirmLabel="Switch off"
           tone="danger"
           onCancel={() => setShowStopConfirm(false)}
           onConfirm={confirmStop}
         >
           <p className="mt-2 text-sm text-on-surface-variant">
-            If you switch off the campaign, the entire campaign stops displaying on your website. Are you sure you want to do it?
+            Switching off takes the entire campaign off your website right away.
           </p>
           <p className="mt-2 text-xs text-on-surface-variant/80">
             You can switch it back on anytime with <strong>Go on air</strong> — as long as the content hasn&apos;t changed. New content needs Save &amp; Publish.
@@ -661,8 +661,8 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
 
         <ConfirmDialog
           open={showGoOnAirConfirm}
-          title="Go on air?"
-          confirmLabel="Yes, go on air"
+          title="Put this campaign back on air"
+          confirmLabel="Go on air"
           onCancel={() => setShowGoOnAirConfirm(false)}
           onConfirm={confirmGoOnAir}
         >
@@ -722,15 +722,16 @@ export function AnnouncementSection({ config, setConfig, markChanged, canReactiv
             scrollContainerRef={scrollContainerRef}
             loop={config.announcementBar.loop !== false}
             motion={config.announcementBar.motion ?? 'scroll'}
-            onMotionChange={(next) => {
-              setConfig({ ...config, announcementBar: { ...config.announcementBar, motion: next } });
+            // Motion and loop are set together: picking "Scroll · Loop" changes
+            // both, and two separate writes from the same config would drop one.
+            onMotionChange={(motion, loop) => {
+              setConfig({
+                ...config,
+                announcementBar: { ...config.announcementBar, motion, ...(loop === undefined ? {} : { loop }) },
+              });
               markChanged();
             }}
             speed={pxPerSec}
-            onLoopChange={(next) => {
-              setConfig({ ...config, announcementBar: { ...config.announcementBar, loop: next } });
-              markChanged();
-            }}
             onSpeedChange={(next) => {
               setConfig({ ...config, announcementBar: { ...config.announcementBar, speed: next } });
               markChanged();

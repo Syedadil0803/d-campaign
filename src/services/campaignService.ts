@@ -1,5 +1,5 @@
 import { campaignRepository } from '@/repositories/campaignRepository';
-import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
+import { CampaignConfig, PromoCard, VideoStory, defaultConfig } from '@/types/campaign';
 
 export const campaignService = {
   async getConfig(): Promise<CampaignConfig> {
@@ -74,6 +74,22 @@ export const campaignService = {
       : { success: false, message: 'Failed to save announcement draft' };
   },
 
+  /** Writes only the Video Story side of the draft — the other two are untouched. */
+  async saveVideoStoryDraft(
+    userId: string,
+    videoStory: VideoStory,
+  ): Promise<{ success: boolean; message: string }> {
+    // Request body, so checked rather than trusted: anything that is not an
+    // object would be stored as the widget and break every later load.
+    if (!videoStory || typeof videoStory !== 'object' || Array.isArray(videoStory)) {
+      return { success: false, message: 'Invalid video story' };
+    }
+    const success = await campaignRepository.saveVideoStoryDraft(userId, videoStory);
+    return success
+      ? { success: true, message: 'Video story draft saved' }
+      : { success: false, message: 'Failed to save video story draft' };
+  },
+
   /** Full wipe — both sides. Only for an explicit "delete my saved draft" action. */
   async clearDraft(userId: string): Promise<{ success: boolean }> {
     const success = await campaignRepository.deleteDraft(userId);
@@ -87,6 +103,11 @@ export const campaignService = {
 
   async clearAnnouncementDraft(userId: string): Promise<{ success: boolean }> {
     const success = await campaignRepository.clearAnnouncementDraft(userId);
+    return { success };
+  },
+
+  async clearVideoStoryDraft(userId: string): Promise<{ success: boolean }> {
+    const success = await campaignRepository.clearVideoStoryDraft(userId);
     return { success };
   },
 

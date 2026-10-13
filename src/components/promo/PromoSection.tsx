@@ -61,6 +61,7 @@ import { usePromoScheduleDefaults } from '@/components/promo/usePromoScheduleDef
 import { usePromoTimerFit } from '@/components/promo/usePromoTimerFit';
 import { getPromoCanvasContent, getPromoPreviewFlags } from '@/components/promo/promoCanvasContent';
 import { usePromoTimerAutoArm } from '@/components/promo/usePromoTimerAutoArm';
+import { cornerClash } from '@/lib/videoStory/placeWidgets';
 
 
 
@@ -118,6 +119,9 @@ export function PromoSection(props: PromoSectionProps) {
   configLoadedSignal,
   canReactivate,
   livePromoCard,
+  liveVideoStory,
+  campaignKind,
+  onCampaignKindChange,
   draftPromoCard,
   onCardReplaced,
   onTimerEdited,
@@ -154,7 +158,10 @@ export function PromoSection(props: PromoSectionProps) {
    * Stopping is safe from any editor state: it is built from the published
    * config, so it never pushes whatever happens to be on the canvas.
    */
-  const liveIsOnAir = Boolean(livePromoCard?.active);
+  // The chip speaks for whichever widget's tab is open.
+  const liveIsOnAir = Boolean(
+    campaignKind === 'video' ? liveVideoStory?.active : livePromoCard?.active,
+  );
 
   const livePromoCardRef = useRef<PromoCard | null | undefined>(livePromoCard);
   livePromoCardRef.current = livePromoCard;
@@ -176,6 +183,9 @@ export function PromoSection(props: PromoSectionProps) {
   const lastInteractionAtRef = usePromoLastInteraction();
 
   const [currentField, setCurrentField] = useState<PromoField | null>(null);
+  // A style popup belongs to the campaign it was opened on; switching
+  // campaign (from the top menu) closes it.
+  useEffect(() => setCurrentField(null), [campaignKind]);
   /**
    * Which control opened the style popup, so it can appear beside whatever was
    * clicked. Opening it from the style icon next to an input on the left, then
@@ -502,7 +512,7 @@ export function PromoSection(props: PromoSectionProps) {
     markChanged();
     // Callers that already show their own toast (e.g. deleting the live card)
     // pass silent so the user doesn't get two messages for one action.
-    if (!options.silent) toastWithUndo("Fresh promo card started", before);
+    if (!options.silent) toastWithUndo("Fresh Smart Card started", before);
     onCardReplaced?.();
   }
 
@@ -909,7 +919,6 @@ export function PromoSection(props: PromoSectionProps) {
     confirmClearCanvas,
   };
 
-  // Shared by both toolbars (Smart Card and Video Story).
   const setCardPosition = (pos: string) => {
     pushPromoState();
     setConfig({
@@ -924,7 +933,7 @@ export function PromoSection(props: PromoSectionProps) {
 
   return (
     <PromoEditorProvider value={editorApi}>
-      <VideoStoryProvider>
+      <VideoStoryProvider kind={campaignKind} setKind={onCampaignKindChange} livePromoCard={livePromoCard}>
       <>
       <div
         className="sticky top-0 flex gap-4 overflow-hidden"
@@ -939,17 +948,18 @@ export function PromoSection(props: PromoSectionProps) {
             canReactivate={canReactivate}
             setShowStopConfirm={setShowStopConfirm}
             setShowGoOnAirConfirm={setShowGoOnAirConfirm}
+            hint={
+              campaignKind === 'video'
+                ? 'See your video story as visitors will — styles open from the palettes on the left.'
+                : undefined
+            }
           />
           {/* Action tabs — sit between the preview header and the Website
               Content Area, left-aligned. Fixed height so the preview below
               shrinks to keep the column scroll-free. */}
           <CampaignSwitch
             video={
-              <VideoStoryToolbar
-                setShowVersionsPopup={setShowVersionsPopup}
-                cardPositionPos={config.promoCard.style.position}
-                setCardPositionPos={setCardPosition}
-              />
+              <VideoStoryToolbar setShowVersionsPopup={setShowVersionsPopup} />
             }
             card={
           <PromoEditorToolbar
@@ -960,6 +970,7 @@ export function PromoSection(props: PromoSectionProps) {
             openDraftPopup={openDraftPopup}
             cardPositionPos={config.promoCard.style.position}
             setCardPositionPos={setCardPosition}
+            positionWarning={cornerClash(config.promoCard.style.position, liveVideoStory, 'Video Story')}
             customizeButtonRef={customizeButtonRef}
             onShowStylingPopover={() => setShowStylingPopover(!showStylingPopover)}
             stylingTriggerLabel={stylingTriggerLabel}

@@ -189,7 +189,7 @@ export function WelcomeBackDialog({
           Welcome back — your draft is waiting
         </h2>
         <p className="mt-1.5 text-sm text-on-surface-variant">
-          Your promo card from {describeWhen(welcomeBack.draftSavedAt)} is
+          Your Smart Card from {describeWhen(welcomeBack.draftSavedAt)} is
           still in My Draft, just as you left it.
         </p>
 

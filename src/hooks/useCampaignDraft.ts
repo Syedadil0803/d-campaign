@@ -17,8 +17,11 @@ import {
 } from '@/lib/configSignature';
 import { markElsewhereSeen } from '@/lib/auth/presenceClient';
 import { migrateConfig } from '@/lib/configMigration';
+import { useVideoStoryDraftSync } from '@/hooks/useVideoStoryDraftSync';
 
 type Campaign = ReturnType<typeof useCampaignConfig>;
+/** The draft row's independently saved columns. */
+type DraftSide = 'promo' | 'announcement' | 'videoStory';
 
 interface UseCampaignDraftArgs {
   /**
@@ -99,6 +102,7 @@ export function useCampaignDraft({
   const [postPublishDraft, setPostPublishDraft] = useState(false);
   const [pendingDraftAction, setPendingDraftAction] = useState<PendingDraftAction | null>(null);
   const promoWorkNotInDraftRef = useRef(false);
+  const video = useVideoStoryDraftSync();
 
   /** Take up the offered draft — what the old silent restore did, on request. */
   function acceptOfferedDraft(draft: CampaignConfig) {
@@ -172,7 +176,7 @@ export function useCampaignDraft({
    */
   function mergedSavedSignature(
     cfg: CampaignConfig,
-    sides: ('promo' | 'announcement')[],
+    sides: DraftSide[],
   ): string {
     const nextSig = getConfigSignature(cfg);
     const prevSig = draftSignatureRef.current;
@@ -182,6 +186,12 @@ export function useCampaignDraft({
       const prev = JSON.parse(prevSig);
       if (!sides.includes('promo')) next.promoCard = prev.promoCard;
       if (!sides.includes('announcement')) next.announcementBar = prev.announcementBar;
+      // getConfigSignature leaves a blank Video Story out, so "keep the old
+      // half" includes keeping its absence.
+      if (!sides.includes('videoStory')) {
+        if (prev.videoStory) next.videoStory = prev.videoStory;
+        else delete next.videoStory;
+      }
       return JSON.stringify(next);
     } catch {
       return nextSig;
@@ -191,7 +201,7 @@ export function useCampaignDraft({
   function startScopedDraftPuts(cfg: CampaignConfig) {
     const campaign = campaignRef.current!;
     const now = new Date();
-    const requests: { side: 'promo' | 'announcement'; request: Promise<Response> }[] = [];
+    const requests: { side: DraftSide; request: Promise<Response> }[] = [];
 
     // DEBUG: Log to sessionStorage so we can see it after logout
     const debugLog: Record<string, unknown> = {
@@ -274,6 +284,12 @@ export function useCampaignDraft({
       }
     }
 
+    // The Video Story is judged against its own saved copy, never the card's
+    // or the bar's flags — see useVideoStoryDraftSync.
+    if (video.videoNeedsSaving(cfg, campaign.publishedConfigObjRef.current)) {
+      requests.push({ side: 'videoStory', request: video.putVideoDraft(cfg.videoStory, true) });
+    }
+
     // Save debug log to sessionStorage
     debugLog.totalRequests = requests.length;
     try {
@@ -294,7 +310,7 @@ export function useCampaignDraft({
   function applyScopedDraftSaveState(
     cfg: CampaignConfig,
     now: Date,
-    sides: ('promo' | 'announcement')[],
+    sides: DraftSide[],
     options: { markHandled?: boolean } = {},
   ) {
     // Advanced per side: the card that wasn't written keeps the baseline it
@@ -321,6 +337,7 @@ export function useCampaignDraft({
       const campaign = campaignRef.current!;
       campaign.setHasAnnouncementChanges(false);
     }
+    if (sides.includes('videoStory')) video.markVideoSaved(cfg, now);
     if (sides.length > 0) setDraftSavedAt(now);
     if (options.markHandled !== false) {
       draftSignatureRef.current = savedSig;
@@ -385,6 +402,8 @@ export function useCampaignDraft({
     draftSignatureRef.current = null;
     setSavedDraftSignature(null);
     setDraftPromoCard(null);
+    // The DELETE removes the whole row, the video's column with it.
+    video.forgetVideoDraft();
   }
 
   /**
@@ -534,14 +553,14 @@ export function useCampaignDraft({
    */
   async function writeRecoveredDraft(
     cfg: CampaignConfig,
-    sides: ('promo' | 'announcement')[],
+    sides: DraftSide[],
   ): Promise<void> {
     if (sides.length === 0) return;
     setSavingDraft(true);
     try {
       const wantsPromo = sides.includes('promo');
       const wantsAnn = sides.includes('announcement');
-      const [promoRes, annRes] = await Promise.all([
+      const [promoRes, annRes, videoRes] = await Promise.all([
         wantsPromo
           ? fetch('/api/draft/promo', {
               method: 'PUT',
@@ -556,11 +575,13 @@ export function useCampaignDraft({
               body: JSON.stringify({ announcementBar: cfg.announcementBar }),
             })
           : Promise.resolve(null),
+        sides.includes('videoStory') ? video.putVideoDraft(cfg.videoStory) : Promise.resolve(null),
       ]);
       const now = new Date();
-      const written: ('promo' | 'announcement')[] = [];
+      const written: DraftSide[] = [];
       if (promoRes?.ok) written.push('promo');
       if (annRes?.ok) written.push('announcement');
+      if (videoRes?.ok) written.push('videoStory');
 
       const savedSig = mergedSavedSignature(cfg, written);
       draftSignatureRef.current = savedSig;
@@ -577,6 +598,7 @@ export function useCampaignDraft({
         messagesSignatureRef.current = getMessagesSignature(cfg);
         campaignRef.current?.setHasAnnouncementChanges(false);
       }
+      if (videoRes?.ok) video.markVideoSaved(cfg, now);
       if (written.length > 0) setDraftSavedAt(now);
     } catch (e) {
       console.error('Failed to write recovered draft:', e);
@@ -846,5 +868,7 @@ export function useCampaignDraft({
     setPromoSavedAt,
     announcementSavedAt,
     setAnnouncementSavedAt,
+    // The Video Story's own column, baseline and at-risk flag.
+    ...video,
   };
 }

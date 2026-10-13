@@ -1,8 +1,10 @@
 'use client';
 
-import { Gift, RotateCcw } from 'lucide-react';
+import { Clapperboard, Gift, RotateCcw } from 'lucide-react';
 import { VideoStoryContent } from '@/components/videoStory/VideoStoryContent';
-import { useVideoStory, type CampaignKind } from '@/components/videoStory/VideoStoryContext';
+import { VideoStorySchedule } from '@/components/videoStory/VideoStorySchedule';
+import { VideoStoryCta } from '@/components/videoStory/VideoStoryCta';
+import { useVideoStory } from '@/components/videoStory/VideoStoryContext';
 import { getBackgroundStyle } from '@/lib/utils';
 import { usePromoEditor } from '@/components/promo/PromoEditorContext';
 import { PromoCardActionDialog } from '@/components/promo/PromoCardActionDialog';
@@ -19,13 +21,9 @@ import { PANEL_TEXT_FIELDS } from '@/components/promo/panelTextFields';
  *
  * Reads the editor through context, like the canvas beside it.
  */
-const CAMPAIGN_KINDS: { kind: CampaignKind; label: string }[] = [
-  { kind: 'card', label: 'Smart Card' },
-  { kind: 'video', label: 'Video Story' },
-];
 
 export function PromoEditorPanel() {
-  const { kind: campaignKind, setKind: setCampaignKind } = useVideoStory();
+  const { kind: campaignKind } = useVideoStory();
   const {
     config,
     currentField,
@@ -99,40 +97,24 @@ export function PromoEditorPanel() {
       <div className="flex items-center justify-between">
         <div className="flex items-center">
           <div className="p-1 bg-primary/15 rounded-lg mr-3 border border-primary/60">
-            <Gift className="w-4 h-4 text-primary" />
+            {campaignKind === 'video' ? (
+              <Clapperboard className="w-4 h-4 text-primary" />
+            ) : (
+              <Gift className="w-4 h-4 text-primary" />
+            )}
           </div>
           <div>
+            {/* The Campaigns menu in the header chooses the widget; the heading names it. */}
             <h3 className="text-[1.75rem] leading-9 font-bold text-on-surface">
-                Campaigns
+              {campaignKind === 'video' ? 'Video Story' : 'Smart Card'}
             </h3>
             <p className="max-w-2xl text-sm text-on-surface-variant">
-              Floating widget for special offers.
+              {campaignKind === 'video'
+                ? 'Short vertical video floating on your site.'
+                : 'Floating card for offers, sales and pitches.'}
             </p>
           </div>
         </div>
-      </div>
-
-      {/* Smart Card or Video Story. Same pill as the schedule's Custom dates /
-          Open-ended switch, so the two read as one family of controls. */}
-      <div className="!mt-4 flex rounded-lg border border-border bg-surface-subtle p-0.5">
-        {CAMPAIGN_KINDS.map((opt) => {
-          const active = campaignKind === opt.kind;
-          return (
-            <button
-              key={opt.kind}
-              type="button"
-              onClick={() => setCampaignKind(opt.kind)}
-              aria-pressed={active}
-              className={`flex-1 rounded-md px-3.5 py-2 text-xs font-semibold transition-colors ${
-                active
-                  ? 'bg-primary text-on-primary shadow-sm'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              }`}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
       </div>
 
       {/* Quick actions (Clear Canvas / My Published / Template Hub) now live
@@ -144,15 +126,20 @@ export function PromoEditorPanel() {
         onDismiss={() => setCardActionConfirm(null)}
       />
 
-      {/* Only Content differs between the two kinds. The schedule (with its
-          countdown) and the call to action below are shared. */}
+      {/* Each widget edits its own content, schedule and call to action:
+          the Video Story's sections write config.videoStory, everything
+          below them config.promoCard. */}
       {campaignKind === 'video' ? (
-        <VideoStoryContent />
+        <>
+          <VideoStoryContent />
+          <VideoStorySchedule />
+          <VideoStoryCta />
+        </>
       ) : (
       <>
 
       {/* More room than the other sections get, because this is the only
-          one that follows a heading rather than body text. "Promo Card" at
+          one that follows a heading rather than body text. "Smart Card" at
           28px and "Content" at 24px are close enough in size to compete,
           and the standard gap left them reading as two titles stacked
           rather than a section beneath a page. The Smart Card / Video Story
@@ -175,7 +162,7 @@ export function PromoEditorPanel() {
           title={
             canvasIsEmpty
               ? 'Nothing to refresh — the canvas is already blank.'
-              : 'Start from a blank promo card'
+              : 'Start from a blank Smart Card'
           }
         >
           <span aria-hidden="true" className="ai-sheen pointer-events-none absolute inset-0" />
@@ -218,8 +205,6 @@ export function PromoEditorPanel() {
           smartPaste={smartPaste}
         />
       ))}
-      </>
-      )}
 
       {/* An open-ended campaign has no end and no countdown, so the section
           says what it actually does rather than promising timing it has not. */}
@@ -348,6 +333,8 @@ export function PromoEditorPanel() {
         closeAllPromoDropdowns={closeAllPromoDropdowns}
         getDropdownPosition={getDropdownPosition}
       />
+      </>
+      )}
     </div>
   );
 }

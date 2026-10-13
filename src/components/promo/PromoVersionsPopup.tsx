@@ -68,7 +68,7 @@ export function PromoVersionsPopup({
         <div className="flex items-center justify-between border-border px-6 py-2">
           <div>
             <p className="text-sm text-on-surface-variant">
-              Click a variant to apply it to your promo card ({versions.length}/
+              Click a variant to apply it to your Smart Card ({versions.length}/
               {MAX_VERSIONS}).
             </p>
           </div>

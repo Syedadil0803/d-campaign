@@ -100,14 +100,14 @@ export function PromoSectionDialogs({
       {/* Stop Campaign Confirmation — immediate (no save/publish needed) */}
       <ConfirmDialog
         open={showStopConfirm}
-        title="Switch off this campaign?"
-        confirmLabel="Yes, switch off"
+        title="Switch off this campaign"
+        confirmLabel="Switch off"
         tone="danger"
         onCancel={() => setShowStopConfirm(false)}
         onConfirm={confirmStopCampaign}
       >
         <p className="mt-2 text-sm text-on-surface-variant">
-          If you switch off the campaign, the entire campaign stops displaying on your website. Are you sure you want to do it?
+          Switching off takes the entire campaign off your website right away.
         </p>
         <p className="mt-2 text-xs text-on-surface-variant/80">
           You can switch it back on anytime with <strong>Go on air</strong> — as long as the content hasn&apos;t changed. New content needs Save &amp; Publish.
@@ -117,8 +117,8 @@ export function PromoSectionDialogs({
       {/* Go On Air Confirmation — reactivate the same published content */}
       <ConfirmDialog
         open={showGoOnAirConfirm}
-        title="Go on air?"
-        confirmLabel="Yes, go on air"
+        title="Put this campaign back on air"
+        confirmLabel="Go on air"
         onCancel={() => setShowGoOnAirConfirm(false)}
         onConfirm={confirmGoOnAir}
       >

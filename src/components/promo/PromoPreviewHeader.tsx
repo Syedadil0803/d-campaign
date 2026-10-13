@@ -9,6 +9,8 @@ interface PromoPreviewHeaderProps {
   canReactivate: boolean;
   setShowStopConfirm: (open: boolean) => void;
   setShowGoOnAirConfirm: (open: boolean) => void;
+  /** The line under "Preview"; each campaign type describes its own preview. */
+  hint?: string;
 }
 
 /**
@@ -25,6 +27,7 @@ export function PromoPreviewHeader({
   canReactivate,
   setShowStopConfirm,
   setShowGoOnAirConfirm,
+  hint = 'See your Smart Card update as you edit — click any field to restyle it.',
 }: PromoPreviewHeaderProps) {
   return (
     <div className="space-y-1">
@@ -34,7 +37,7 @@ export function PromoPreviewHeader({
             Preview
           </h4>
           <p className="mt-2 text-sm text-on-surface-variant">
-            See your promo card update as you edit — click any field to restyle it.
+            {hint}
           </p>
         </div>
         <div className="shrink-0">

@@ -1,7 +1,7 @@
 import { getDb } from '@/lib/db/db';
 import { campaignConfig } from '@/lib/db/schema';
 import { eq, like } from 'drizzle-orm';
-import { CampaignConfig, PromoCard, defaultConfig } from '@/types/campaign';
+import { CampaignConfig, PromoCard, VideoStory, defaultConfig } from '@/types/campaign';
 
 // One-line summary of a config for logs — key fields only, never the full blob.
 function summarize(config: CampaignConfig): string {
@@ -29,6 +29,25 @@ const draftId = (userId: string) => `draft:${userId}`;
 // them would be a promise the site cannot keep.
 const scheduledId = (userId: string) => `scheduled:${userId}`;
 
+/**
+ * A stored row as a config. One mapping for every read, so a new column cannot
+ * reach some reads and not others.
+ *
+ * A null video_story comes back as no key at all, not as a default: the
+ * promoter needs to tell "this row carries no video story" from "this row
+ * carries a blank one", and every load goes through migrateConfig, which fills
+ * the default anyway.
+ */
+function rowToConfig(row: typeof campaignConfig.$inferSelect): CampaignConfig {
+  return {
+    version: row.version,
+    announcementBar: row.announcementBar,
+    promoCard: row.promoCard,
+    ...(row.videoStory ? { videoStory: row.videoStory } : {}),
+    lastUpdated: row.lastUpdated.toISOString(),
+  };
+}
+
 export const campaignRepository = {
   async getConfig(id: string = DEFAULT_ID): Promise<CampaignConfig | null> {
     const start = Date.now();
@@ -43,12 +62,7 @@ export const campaignRepository = {
       const row = result[0];
       console.log(`[DB] getConfig id=${id} -> OK version=${row.version} (${Date.now() - start}ms)`);
 
-      return {
-        version: row.version,
-        announcementBar: row.announcementBar as CampaignConfig['announcementBar'],
-        promoCard: row.promoCard as CampaignConfig['promoCard'],
-        lastUpdated: row.lastUpdated.toISOString(),
-      };
+      return rowToConfig(row);
     } catch (error) {
       console.error(`[DB] getConfig id=${id} -> FAILED (${Date.now() - start}ms):`, error);
       return null;
@@ -66,6 +80,7 @@ export const campaignRepository = {
           version: config.version,
           announcementBar: config.announcementBar,
           promoCard: config.promoCard,
+          videoStory: config.videoStory,
           lastUpdated: new Date(config.lastUpdated),
         })
         .onConflictDoUpdate({
@@ -74,6 +89,9 @@ export const campaignRepository = {
             version: config.version,
             announcementBar: config.announcementBar,
             promoCard: config.promoCard,
+            // Undefined is skipped by the update, so a config sent by a build
+            // that predates the Video Story leaves the stored one alone.
+            videoStory: config.videoStory,
             lastUpdated: new Date(config.lastUpdated),
           },
         });
@@ -106,6 +124,7 @@ export const campaignRepository = {
     config: CampaignConfig;
     promoLastUpdated: string | null;
     announcementLastUpdated: string | null;
+    videoStoryLastUpdated: string | null;
   } | null> {
     const start = Date.now();
     try {
@@ -121,15 +140,13 @@ export const campaignRepository = {
       const row = result[0];
       console.log(`[DB] getDraftWithTimestamps -> OK (${Date.now() - start}ms)`);
       return {
-        config: {
-          version: row.version,
-          announcementBar: row.announcementBar as CampaignConfig['announcementBar'],
-          promoCard: row.promoCard as CampaignConfig['promoCard'],
-          lastUpdated: row.lastUpdated.toISOString(),
-        },
+        config: rowToConfig(row),
         promoLastUpdated: row.promoLastUpdated ? row.promoLastUpdated.toISOString() : null,
         announcementLastUpdated: row.announcementLastUpdated
           ? row.announcementLastUpdated.toISOString()
+          : null,
+        videoStoryLastUpdated: row.videoStoryLastUpdated
+          ? row.videoStoryLastUpdated.toISOString()
           : null,
       };
     } catch (error) {
@@ -240,6 +257,58 @@ export const campaignRepository = {
     }
   },
 
+  /**
+   * Mirror of savePromoDraft — writes only videoStory (+ its timestamp). The
+   * insert seeds the two required columns with blanks, as the others do.
+   */
+  async saveVideoStoryDraft(userId: string, videoStory: VideoStory): Promise<boolean> {
+    const start = Date.now();
+    const id = draftId(userId);
+    const now = new Date();
+    try {
+      await getDb()
+        .insert(campaignConfig)
+        .values({
+          id,
+          version: '1.1',
+          videoStory,
+          promoCard: defaultConfig.promoCard,
+          announcementBar: defaultConfig.announcementBar,
+          lastUpdated: now,
+          videoStoryLastUpdated: now,
+        })
+        .onConflictDoUpdate({
+          target: campaignConfig.id,
+          set: { videoStory, lastUpdated: now, videoStoryLastUpdated: now },
+        });
+      console.log(`[DB] saveVideoStoryDraft -> OK (${Date.now() - start}ms)`);
+      return true;
+    } catch (error) {
+      console.error(`[DB] saveVideoStoryDraft -> FAILED (${Date.now() - start}ms):`, error);
+      return false;
+    }
+  },
+
+  /**
+   * Mirror of clearPromoDraft — resets only videoStory. Null rather than a
+   * written-out default: null already reads back as the default, and stays
+   * correct if the default ever changes.
+   */
+  async clearVideoStoryDraft(userId: string): Promise<boolean> {
+    const start = Date.now();
+    try {
+      await getDb()
+        .update(campaignConfig)
+        .set({ videoStory: null, videoStoryLastUpdated: null })
+        .where(eq(campaignConfig.id, draftId(userId)));
+      console.log(`[DB] clearVideoStoryDraft -> OK (${Date.now() - start}ms)`);
+      return true;
+    } catch (error) {
+      console.error(`[DB] clearVideoStoryDraft -> FAILED (${Date.now() - start}ms):`, error);
+      return false;
+    }
+  },
+
   /** Every campaign waiting for its start date, for the promoter to sweep. */
   async listScheduled(): Promise<{ id: string; config: CampaignConfig }[]> {
     const rows = await getDb()
@@ -247,15 +316,7 @@ export const campaignRepository = {
       .from(campaignConfig)
       .where(like(campaignConfig.id, 'scheduled:%'));
 
-    return rows.map((row) => ({
-      id: row.id,
-      config: {
-        version: row.version,
-        lastUpdated: row.lastUpdated.toISOString(),
-        announcementBar: row.announcementBar,
-        promoCard: row.promoCard,
-      } as CampaignConfig,
-    }));
+    return rows.map((row) => ({ id: row.id, config: rowToConfig(row) }));
   },
 
   getScheduled(userId: string): Promise<CampaignConfig | null> {

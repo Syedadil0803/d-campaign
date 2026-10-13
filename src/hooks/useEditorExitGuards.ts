@@ -13,6 +13,7 @@ interface UseEditorExitGuardsArgs {
   configLoadedSignal: number;
   configRef: RefObject<CampaignConfig>;
   promoWorkNotInDraftRef: RefObject<boolean>;
+  videoWorkNotInDraftRef: RefObject<boolean>;
   hasAnnouncementChangesRef: RefObject<boolean>;
   hasPromoChangesRef: RefObject<boolean>;
   draftSignatureRef: RefObject<string | null>;
@@ -42,6 +43,7 @@ export function useEditorExitGuards({
   configLoadedSignal,
   configRef,
   promoWorkNotInDraftRef,
+  videoWorkNotInDraftRef,
   hasAnnouncementChangesRef,
   hasPromoChangesRef,
   draftSignatureRef,
@@ -90,7 +92,12 @@ export function useEditorExitGuards({
     // the default config would lower a flag this device raised last session.
     if (!configLoadedSignal) return;
 
-    const promoAtRisk = !!promoWorkNotInDraftRef.current;
+    /**
+     * The video rides on the promo flag. Both widgets live on the Campaigns
+     * tab, whose dashboard card shows the notice, and a flag of its own would
+     * need a new presence column — a migration this does not justify.
+     */
+    const promoAtRisk = !!promoWorkNotInDraftRef.current || !!videoWorkNotInDraftRef.current;
     /**
      * Scoped to the announcement half, the same way editorWorkAtRisk is.
      * Comparing the WHOLE config against the baseline meant a dirty promo
@@ -126,7 +133,7 @@ export function useEditorExitGuards({
       }
     }, 1000);
     return () => window.clearTimeout(id);
-  }, [config, hasAnnouncementChanges, configLoadedSignal, draftSignatureRef, promoWorkNotInDraftRef]);
+  }, [config, hasAnnouncementChanges, configLoadedSignal, draftSignatureRef, promoWorkNotInDraftRef, videoWorkNotInDraftRef]);
 
   // Declared here because useIdleSignOut takes them.
   const [idleSecondsLeft, setIdleSecondsLeft] = useState<number | null>(null);
@@ -140,6 +147,7 @@ export function useEditorExitGuards({
   useIdleSignOut({
     configRef,
     promoWorkNotInDraftRef,
+    videoWorkNotInDraftRef,
     hasAnnouncementChangesRef,
     hasPromoChangesRef,
     draftSignatureRef,
@@ -178,7 +186,8 @@ export function useEditorExitGuards({
       // flag here so the crash is still visible from the user's other devices.
       const rep = reportedUnsavedRef.current;
       if (!rep?.promo && !rep?.announcement) {
-        const pDirty = !!promoWorkNotInDraftRef.current;
+        // Video on the promo flag, as in the report above.
+        const pDirty = !!promoWorkNotInDraftRef.current || !!videoWorkNotInDraftRef.current;
         const aDirty = hasAnnouncementChangesRef.current;
         if (pDirty || aDirty) reportUnsaved({ promo: pDirty, announcement: aDirty });
       }

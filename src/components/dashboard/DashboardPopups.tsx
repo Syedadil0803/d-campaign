@@ -8,6 +8,10 @@ import { PromoMiniPreview } from '@/components/shared/PromoMiniPreview';
 import { fmtDate } from '@/components/dashboard/dashboardFormat';
 import { MICRO } from '@/components/dashboard/dashboardStyles';
 
+/** A live change waiting for the user to confirm it — one shape for the
+ *  dashboard, its cards and this dialog. */
+export type PendingAction = { kind: 'stop' | 'goOnAir'; target: 'promo' | 'announcement' | 'videoStory' };
+
 interface DashboardPopupsProps {
   promo: CampaignConfig['promoCard'];
   ann: CampaignConfig['announcementBar'];
@@ -24,9 +28,9 @@ interface DashboardPopupsProps {
   scheduleFilter: 'all' | 'scheduled' | 'unscheduled';
   setScheduleFilter: (filter: 'all' | 'scheduled' | 'unscheduled') => void;
   /** The live change awaiting confirmation, and the words for it. */
-  pending: { kind: 'stop' | 'goOnAir'; target: 'promo' | 'announcement' } | null;
+  pending: PendingAction | null;
   setPending: (
-    pending: { kind: 'stop' | 'goOnAir'; target: 'promo' | 'announcement' } | null,
+    pending: PendingAction | null,
   ) => void;
   pendingCopy: { title: string; body: string; cta: string; danger?: boolean } | null;
   confirmPending: () => void;
@@ -71,7 +75,7 @@ export function DashboardPopups({
           }
         >
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-on-surface">Promo card preview</h2>
+            <h2 className="text-base font-semibold text-on-surface">Smart Card preview</h2>
             <button
               type="button"
               onClick={() => setShowPromoPreview(false)}
@@ -99,7 +103,7 @@ export function DashboardPopups({
           <div className="overflow-hidden rounded-xl border border-border shadow-2xl">
             <div className="flex items-center justify-between gap-3 border-b border-border bg-surface-elevated px-4 py-2.5">
               <div>
-                <h2 className="text-sm font-semibold text-on-surface">Announcement bar preview</h2>
+                <h2 className="text-sm font-semibold text-on-surface">Broadcasts preview</h2>
                 <p className={`mt-0.5 ${MICRO} text-on-surface-variant`}>
                   {annCount} message{annCount === 1 ? '' : 's'} · {ann.loop === false ? 'No loop' : 'Continuous loop'} · hover to pause
                 </p>
@@ -215,7 +219,7 @@ export function DashboardPopups({
             <div className="flex items-start gap-2">
               <InfinityIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700 dark:text-emerald-300" />
               <span>
-                <strong className="font-medium text-on-surface">Always on</strong> — shows whenever the announcement bar is active (no dates set).
+                <strong className="font-medium text-on-surface">Always on</strong> — shows whenever the Broadcasts are on (no dates set).
               </span>
             </div>
             <div className="flex items-start gap-2">

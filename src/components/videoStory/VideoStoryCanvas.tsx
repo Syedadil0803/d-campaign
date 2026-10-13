@@ -2,8 +2,9 @@
 
 import { useRef, type ReactNode } from 'react';
 import { Clapperboard, Maximize2, X } from 'lucide-react';
+import type { GradientStyle } from '@/types/campaign';
 import { getBackgroundStyle } from '@/lib/utils';
-import { stripHtmlText } from '@/lib/promo/promoCardIdentity';
+import { deriveButtonUrl } from '@/lib/campaignCta';
 import { calculateTimeRemaining } from '@/lib/editor/timerUtils';
 import { isOpenEnded } from '@/lib/promo/promoSchedule';
 import { VIDEO_WIDGET as size } from '@/lib/videoStory/videoRules';
@@ -24,7 +25,8 @@ function timeLeft(endDate: string): string {
  * close button on its top corner, the countdown along its bottom edge, an
  * expand hint on hover, and the call to action below it with no backing card
  * of its own, so the video is never covered. Sits on
- * the same "Website Content Area" surface and corner as the Smart Card.
+ * the same "Website Content Area" surface as the Smart Card, in the corner
+ * the user picked.
  */
 export function VideoStoryCanvas() {
   const editor = usePromoEditor();
@@ -32,14 +34,23 @@ export function VideoStoryCanvas() {
   // Our own ref for the widget: the card's promoCardRef is measured by the
   // card's sizing code, and pointing it at the video would resize the card.
   const widgetRef = useRef<HTMLDivElement>(null);
-  const { draft, openPicker } = useVideoStory();
-  const card = config.promoCard;
-  const pos = card.style.position;
-  const onLeft = pos === 'bottom-left' || pos === 'top-left';
-  const place = `${onLeft ? 'justify-self-start' : 'justify-self-end'} ${pos.startsWith('top') ? 'self-start' : 'self-end'}`;
-  const showTimer = card.showTimer && !isOpenEnded(card) && Boolean(card.endDate);
-  const buttonText = stripHtmlText(card.buttonText);
-  const clip = draft.clip;
+  const { draft, openPicker, videoStory: vs, updateVideoStory } = useVideoStory();
+  // The stored choice, even when it shares the live card's corner: the
+  // toolbar warns about that, and the preview shows what was picked.
+  const onLeft = vs.position === 'bottom-left';
+  const place = `${onLeft ? 'justify-self-start' : 'justify-self-end'} self-end`;
+  const showTimer = vs.showTimer && !isOpenEnded(vs) && Boolean(vs.endDate);
+  const buttonText = vs.buttonText.trim();
+  const href = deriveButtonUrl(vs);
+  // The local copy while there is one (instant, and the review candidate);
+  // otherwise the stored address, e.g. a draft reopened later.
+  const src = draft.previewUrl || vs.videoUrl;
+  const button = vs.buttonStyle;
+
+  /** The Button and Timer style popups write here, not to the card. */
+  const setButtonStyle = (patch: Partial<typeof button>) =>
+    updateVideoStory({ buttonStyle: { ...button, ...patch } });
+  const timerStyle = { ...button, textColor: vs.timerTextColor };
 
   return (
     <div data-promo-canvas className="campaign-card-surface relative min-h-0 flex-1 rounded-lg border border-gray-200 px-5 pb-2 pt-5 dark:border-gray-600">
@@ -53,10 +64,10 @@ export function VideoStoryCanvas() {
           style={{ width: size.width }}
         >
           <div className="group relative overflow-hidden rounded-2xl bg-black shadow-2xl" style={{ height: size.videoHeight }}>
-            {clip ? (
+            {src ? (
               <video
-                key={clip.url}
-                src={clip.url}
+                key={src}
+                src={src}
                 muted
                 loop
                 autoPlay
@@ -84,22 +95,22 @@ export function VideoStoryCanvas() {
             {/* Countdown at the bottom, just above the button — the same place
                 as on the Smart Card. Plain text with no background; its text
                 colour comes from the timer style popup (the palette beside
-                "Timer Text" on the left). */}
+                "Countdown Colour" on the left). */}
             {showTimer && (
               <span
                 className={`pointer-events-none absolute inset-x-2 bottom-2 truncate text-center text-sm font-semibold tabular-nums ${
                   currentField === 'timer' ? 'rounded ring-1 ring-primary/70' : ''
                 }`}
                 style={{
-                  color: card.style.dateStyle.textColor,
+                  color: vs.timerTextColor,
                   textShadow: '0 1px 3px rgba(0,0,0,.45)',
                 }}
               >
-                {timeLeft(card.endDate!)}
+                {timeLeft(vs.endDate!)}
               </span>
             )}
 
-            {clip && (
+            {src && (
               <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/0 opacity-0 transition group-hover:bg-black/30 group-hover:opacity-100">
                 <span className="grid h-10 w-10 place-items-center rounded-full bg-black/55 text-white backdrop-blur-md">
                   <Maximize2 className="h-4 w-4" />
@@ -109,32 +120,38 @@ export function VideoStoryCanvas() {
           </div>
 
           <div className="flex items-center" style={{ height: size.trayHeight }}>
-            {card.showButton && buttonText ? (
-              <span
+            {vs.showButton && buttonText ? (
+              // A real link when there is a destination, so it can be tried
+              // from the preview the same way the card's button can.
+              <a
+                href={href || undefined}
+                title={href ? `Opens ${href} in a new tab` : undefined}
+                target="_blank"
+                rel="noopener noreferrer"
                 className={`block h-10 w-full truncate rounded-lg px-3 text-sm font-semibold leading-10 shadow-lg ${
                   currentField === 'button' ? 'ring-1 ring-primary/70' : ''
                 }`}
                 style={{
-                  background: getBackgroundStyle(card.style.buttonStyle.background),
-                  color: card.style.buttonStyle.textColor,
-                  textAlign: card.style.buttonStyle.textAlign || 'center',
+                  background: getBackgroundStyle(button.background),
+                  color: button.textColor,
+                  textAlign: button.textAlign || 'center',
                 }}
-                // Same markup the card's button shows, so bold/size/colour set
-                // in the Button style popup carry over.
-                dangerouslySetInnerHTML={{ __html: card.buttonText }}
-              />
+              >
+                {buttonText}
+              </a>
             ) : (
               <span className="w-full text-center text-xs text-gray-400">Call To Action shows here</span>
             )}
           </div>
 
           {/* The same style popups the Smart Card uses, opened from the
-              palettes beside "Button Text" and "Timer Text" on the left.
-              Reused as they are. */}
+              palettes beside "Button Text" and the countdown on the left.
+              Every write is redirected to the Video Story; the text controls
+              are hidden because both fields are plain text. */}
           {(currentField === 'button' || currentField === 'timer') && (
             <PromoFieldStylePanel
               field={currentField}
-              fieldStyle={editor.getPopupFieldStyle(currentField)}
+              fieldStyle={currentField === 'timer' ? timerStyle : button}
               fieldLabel={editor.getPopupFieldLabel(currentField)}
               positionStyle={fieldStylePopupPosition({
                 card: widgetRef.current,
@@ -144,24 +161,26 @@ export function VideoStoryCanvas() {
                 cardIsOnTheLeft: onLeft,
               })}
               config={config}
-              activeFormats={editor.activeFormats}
+              activeFormats={{
+                ...editor.activeFormats,
+                color: currentField === 'timer' ? vs.timerTextColor : button.textColor,
+              }}
               fieldPopupHeightRef={editor.fieldPopupHeightRef}
               setCurrentField={editor.setCurrentField}
               handlePromoToolbarFormat={editor.handlePromoToolbarFormat}
-              // The card's timer is a rich editor that takes colour per
-              // character; the video's countdown is one line of plain text,
-              // so its colour is the timer style's text colour.
-              handlePromoToolbarColor={
+              // The card colours characters inside a rich editor; the video's
+              // fields are plain text, so colour is the whole field's.
+              handlePromoToolbarColor={(color) =>
                 currentField === 'timer'
-                  ? (color) =>
-                      editor.updateField('style', {
-                        ...config.promoCard.style,
-                        dateStyle: { ...config.promoCard.style.dateStyle, textColor: color },
-                      })
-                  : editor.handlePromoToolbarColor
+                  ? updateVideoStory({ timerTextColor: color })
+                  : setButtonStyle({ textColor: color })
               }
-              setFieldAlignment={editor.setFieldAlignment}
-              updateFieldBg={editor.updateFieldBg}
+              setFieldAlignment={
+                currentField === 'button' ? (textAlign) => setButtonStyle({ textAlign }) : undefined
+              }
+              updateFieldBg={(patch: Partial<GradientStyle>) =>
+                setButtonStyle({ background: { ...button.background, ...patch } })
+              }
               updateField={editor.updateField}
               showFieldBgTypeDropdown={editor.showFieldBgTypeDropdown}
               setShowFieldBgTypeDropdown={editor.setShowFieldBgTypeDropdown}
@@ -174,6 +193,7 @@ export function VideoStoryCanvas() {
               styleWarning={editor.styleWarning}
               setStyleWarning={editor.setStyleWarning}
               hideBackground={currentField === 'timer'}
+              hideTextFormatting
             />
           )}
         </div>

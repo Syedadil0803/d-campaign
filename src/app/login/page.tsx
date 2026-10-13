@@ -73,7 +73,7 @@ function LoginForm() {
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-semibold text-on-surface">Campaign Admin</h1>
           <p className="mt-1.5 text-sm text-on-surface-variant">
-            Sign in to manage your announcements and promo cards.
+            Sign in to manage your Broadcasts and Smart Cards.
           </p>
         </div>
 

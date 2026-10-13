@@ -29,6 +29,7 @@ interface UseIdleSignOutArgs {
   configRef: RefObject<CampaignConfig>;
   /** Whether work would be lost — the two editors answer separately. */
   promoWorkNotInDraftRef: RefObject<boolean>;
+  videoWorkNotInDraftRef: RefObject<boolean>;
   hasAnnouncementChangesRef: RefObject<boolean>;
   hasPromoChangesRef: RefObject<boolean>;
   draftSignatureRef: RefObject<string | null>;
@@ -67,6 +68,7 @@ interface UseIdleSignOutArgs {
 export function useIdleSignOut({
   configRef,
   promoWorkNotInDraftRef,
+  videoWorkNotInDraftRef,
   hasAnnouncementChangesRef,
   hasPromoChangesRef,
   draftSignatureRef,
@@ -108,6 +110,7 @@ export function useIdleSignOut({
     const signOutIdle = async () => {
       const atRisk =
         promoWorkNotInDraftRef.current ||
+        videoWorkNotInDraftRef.current ||
         hasPromoChangesRef.current ||
         (hasAnnouncementChangesRef.current &&
           draftSignatureRef.current !== getConfigSignature(configRef.current));
@@ -143,7 +146,8 @@ export function useIdleSignOut({
             announcementComposeTextRef.current || undefined,
           );
           reportUnsaved({
-            promo: !!promoWorkNotInDraftRef.current,
+            // The video rides on the promo flag — see useEditorExitGuards.
+            promo: !!promoWorkNotInDraftRef.current || !!videoWorkNotInDraftRef.current,
             announcement: hasAnnouncementChangesRef.current,
           });
         }
@@ -265,5 +269,6 @@ export function useIdleSignOut({
     saveDraftRef,
     saveMessagesRef,
     setIdleSecondsLeft,
+    videoWorkNotInDraftRef,
   ]);
 }

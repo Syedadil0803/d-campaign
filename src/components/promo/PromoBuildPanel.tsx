@@ -384,7 +384,7 @@ export function PromoBuildPanel({
         className="fixed z-40 flex flex-col overflow-hidden rounded-2xl border border-border bg-surface-elevated shadow-2xl ring-1 ring-black/5 transition-all duration-200"
         style={panelBox}
         role="dialog"
-        aria-label="Build your promo card"
+        aria-label="Build your Smart Card"
       >
         <PromoBuildHeader
           stage={stage}

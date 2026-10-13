@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, type RefObject } from 'react';
-import type { CampaignConfig, PromoCard } from '@/types/campaign';
+import { defaultVideoStory, type CampaignConfig, type PromoCard, type VideoStory } from '@/types/campaign';
 import type { PromoVersion } from '@/lib/promo/promoVersions';
 import { cardIsNotUserWork } from '@/lib/promo/promoAuthorship';
 import { sampleTemplates } from '@/lib/promo/sampleTemplateCards';
@@ -10,6 +10,8 @@ import {
   promoHasVisibleContent,
   announcementSignature,
   htmlHasVisibleText,
+  getVideoStorySignature,
+  videoStoryDiffers,
 } from '@/lib/configSignature';
 
 /**
@@ -35,6 +37,9 @@ interface UseEditorWorkStatusArgs {
   promoVariants: PromoVersion[];
   promoWorkNotInDraftRef: RefObject<boolean>;
   announcementComposeTextRef: RefObject<string>;
+  /** The Video Story saved in the draft row, and the flag this fills in. */
+  videoDraft: VideoStory | null;
+  videoWorkNotInDraftRef: RefObject<boolean>;
 }
 
 /**
@@ -58,6 +63,8 @@ export function useEditorWorkStatus({
   promoVariants,
   promoWorkNotInDraftRef,
   announcementComposeTextRef,
+  videoDraft,
+  videoWorkNotInDraftRef,
 }: UseEditorWorkStatusArgs) {
   // "Go on air" is a one-click reactivation, allowed only when the announcement
   // is off AND its content matches what's currently published (same content,
@@ -162,6 +169,31 @@ export function useEditorWorkStatus({
   }, [config.promoCard, publishedConfig.promoCard, draftPromoCard, promoVariants]);
 
   /**
+   * The Video Story's answers to the same two questions.
+   *
+   * Worth publishing when it differs from the live one or nothing is live;
+   * the clip itself is not required here, because validateVideoStory raises
+   * its absence in the publish dialog. Going back on air needs a video the
+   * user stopped, unchanged since — the default blank one never qualifies.
+   * Read from the published copy, since publishing leaves the editor's flags.
+   */
+  const videoMatchesLive =
+    getVideoStorySignature(config) === getVideoStorySignature(publishedConfig);
+  // A blank Video Story (nothing changed from the default) has nothing to
+  // publish, whether or not one is live.
+  const videoIsBlank = !videoStoryDiffers(config.videoStory, defaultVideoStory);
+  const videoWorthPublishing =
+    !videoIsBlank && (!videoMatchesLive || !publishedConfig.videoStory?.active);
+  const videoCanReactivate =
+    videoMatchesLive && publishedConfig.videoStory?.stoppedByUser === true;
+  // Unsaved video work: differs from where it would come back from — the
+  // draft if one is saved, otherwise live. A plain field compare, so no memo.
+  videoWorkNotInDraftRef.current = videoStoryDiffers(
+    config.videoStory,
+    videoDraft ?? publishedConfig.videoStory,
+  );
+
+  /**
    * Is there anything in the editor the user would lose?
    *
    * Not the same as "is the config dirty". Some load paths blank the canvas
@@ -174,6 +206,7 @@ export function useEditorWorkStatus({
    */
   const editorWorkAtRisk = () => {
     if (promoWorkNotInDraftRef.current) return true;
+    if (videoWorkNotInDraftRef.current) return true;
 
     if (hasAnnouncementChangesRef.current) {
       const currentAnnSig = announcementSignature(configRef.current);
@@ -200,6 +233,8 @@ export function useEditorWorkStatus({
     announcementCanReactivate,
     promoWorthPublishing,
     promoCanReactivate,
+    videoWorthPublishing,
+    videoCanReactivate,
     editorWorkAtRisk,
   };
 }

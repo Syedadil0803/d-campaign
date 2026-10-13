@@ -1,19 +1,20 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { defaultConfig, type CampaignConfig, type PromoCard } from '@/types/campaign';
+import { defaultConfig, defaultVideoStory, type CampaignConfig, type PromoCard, type VideoStory } from '@/types/campaign';
 import {
   getConfigSignature,
   getPromoSignature,
   normalizePromoForCompare,
   announcementSignature,
   htmlHasVisibleText,
+  videoStoryDiffers,
 } from '@/lib/configSignature';
 import {
   blankLookForVisit,
   currentBlankLook,
 } from '@/lib/promo/blankLooks';
-import { whatsAppUrl } from '@/lib/whatsapp';
+import { deriveButtonUrl } from '@/lib/campaignCta';
 import { migrateConfig } from '@/lib/configMigration';
 import { withDefaultStartDate } from '@/lib/promo/promoCardIdentity';
 import { readRecoveryEnvelope, clearRecovery } from '@/lib/recovery';
@@ -29,6 +30,9 @@ interface CampaignDraftPort {
   setDraftSavedAt: (value: Date | null) => void;
   setPromoSavedAt: (value: Date | null) => void;
   setAnnouncementSavedAt: (value: Date | null) => void;
+  setVideoDraft: (vs: VideoStory | null) => void;
+  setVideoSavedAt: (value: Date | null) => void;
+  forgetVideoDraft: () => void;
 }
 
 interface UseCampaignConfigArgs {
@@ -146,7 +150,7 @@ export function useCampaignConfig({
   async function persistConfig(
     cfg: CampaignConfig,
     successMessage = 'Settings saved successfully',
-    scope?: 'announcement' | 'promo',
+    scope?: 'announcement' | 'promo' | 'videoStory',
     options: { preserveDraft?: boolean } = {},
   ) {
     try {
@@ -160,31 +164,35 @@ export function useCampaignConfig({
        * what's already live, completely untouched by editor state.
        */
       const live = publishedConfigObjRef.current;
-      const scopedCfg: CampaignConfig =
-        scope === 'announcement' && live
-          ? { ...cfg, promoCard: live.promoCard }
-          : scope === 'promo' && live
-            ? { ...cfg, announcementBar: live.announcementBar }
-            : cfg;
+      // The Video Story follows the same rule, and is pinned to live for every
+      // publish but its own — including an unscoped one, because nothing but
+      // its own Publish should ever put a Video Story on the site. With no live
+      // row yet there is nothing to pin to, so it is pinned to the blank one.
+      const scopedCfg: CampaignConfig = !live
+        ? scope === 'videoStory'
+          ? cfg
+          : { ...cfg, videoStory: structuredClone(defaultVideoStory) }
+        : scope === 'announcement'
+          ? { ...cfg, promoCard: live.promoCard, videoStory: live.videoStory }
+          : scope === 'promo'
+            ? { ...cfg, announcementBar: live.announcementBar, videoStory: live.videoStory }
+            : scope === 'videoStory'
+              ? { ...cfg, promoCard: live.promoCard, announcementBar: live.announcementBar }
+              : { ...cfg, videoStory: live.videoStory };
 
       // Anything going live gets a saved variant first, so the write below can
       // never publish a card that My Published doesn't know about.
-      const guaranteed = await ensureLivePromoVariant(scopedCfg);
-      // Build the button destination from the CTA type
+      // A Video Story publish carries the live card unchanged, which already
+      // has its variant — so there is nothing to guarantee, and no reason to
+      // list variants on every video publish. With no live row the card is
+      // the editor's, so it still goes through the check.
+      const guaranteed =
+        scope === 'videoStory' && live ? scopedCfg : await ensureLivePromoVariant(scopedCfg);
+      // Build each button's destination from its CTA type — see deriveButtonUrl.
       const cfgToSend = { ...guaranteed };
-      const pc = cfgToSend.promoCard;
-      const cta = pc.ctaType || 'whatsapp';
-      if (cta === 'whatsapp') {
-        // The same builder the editor preview uses, so what goes live is
-        // exactly what the preview button opens. Unconditional, so switching
-        // from a link CTA to WhatsApp can't publish the old URL.
-        cfgToSend.promoCard = {
-          ...pc,
-          buttonUrl: whatsAppUrl(pc.whatsappCountryCode, pc.whatsappNumber) ?? '',
-        };
-      } else if (cta === 'text') {
-        // Plain text CTA: styled button with no link
-        cfgToSend.promoCard = { ...pc, buttonUrl: '' };
+      cfgToSend.promoCard = { ...cfgToSend.promoCard, buttonUrl: deriveButtonUrl(cfgToSend.promoCard) };
+      if (cfgToSend.videoStory) {
+        cfgToSend.videoStory = { ...cfgToSend.videoStory, buttonUrl: deriveButtonUrl(cfgToSend.videoStory) };
       }
 
       const response = await fetch('/api/config', {
@@ -206,7 +214,9 @@ export function useCampaignConfig({
         if (!options.preserveDraft) {
           if (scope === 'announcement') setHasAnnouncementChanges(false);
           else if (scope === 'promo') setHasPromoChanges(false);
-          else { setHasAnnouncementChanges(false); setHasPromoChanges(false); }
+          // The Video Story needs no flag to reset: its unpublished state is
+          // derived from the editor against live (useEditorWorkStatus).
+          else if (scope !== 'videoStory') { setHasAnnouncementChanges(false); setHasPromoChanges(false); }
           // Live now, so anything the recovery slot was holding is moot.
           clearRecovery();
           /**
@@ -248,11 +258,21 @@ export function useCampaignConfig({
             } catch (e) {
               console.error('[persistConfig] Failed to clear promo draft after publish:', e);
             }
+          } else if (scope === 'videoStory') {
+            try {
+              const res = await fetch('/api/draft/video-story', { method: 'DELETE' });
+              // Same rule as the promo above: the local baseline drops only
+              // once the server confirms the column is empty.
+              if (res.ok) draftPort.forgetVideoDraft();
+              else console.error('[persistConfig] Failed to clear video story draft after publish');
+            } catch (e) {
+              console.error('[persistConfig] Failed to clear video story draft after publish:', e);
+            }
           } else if (draftPort.savedDraftSignatureRef.current !== null) {
             draftPort.clearDraft();
           }
           // The card is live now, so the editor starts fresh for the next one.
-          if (scope !== 'announcement') resetPromoEditorToDefault();
+          if (scope !== 'announcement' && scope !== 'videoStory') resetPromoEditorToDefault();
         }
         toast(successMessage);
       } else {
@@ -298,6 +318,7 @@ export function useCampaignConfig({
       let draft: CampaignConfig | null = null;
       let promoHasTimestamp = false;
       let announcementHasTimestamp = false;
+      let videoHasTimestamp = false;
       if (draftResponse.ok) {
         const draftData = await draftResponse.json();
         draft = (draftData?.draft as CampaignConfig | null) ?? null;
@@ -308,6 +329,10 @@ export function useCampaignConfig({
         if (draftData?.announcementLastUpdated) {
           draftPort.setAnnouncementSavedAt(new Date(draftData.announcementLastUpdated));
           announcementHasTimestamp = true;
+        }
+        if (draftData?.videoStoryLastUpdated) {
+          draftPort.setVideoSavedAt(new Date(draftData.videoStoryLastUpdated));
+          videoHasTimestamp = true;
         }
         if (draft?.lastUpdated) {
           draftPort.setDraftSavedAt(new Date(draft.lastUpdated));
@@ -342,9 +367,11 @@ export function useCampaignConfig({
             setHasRecoveredWork(true);
             setRecoveryReason(recoveredEnvelope?.reason ?? 'crash');
             setRecoveredConfig?.(restored);
+            // The Campaigns tab's banner speaks for both of its widgets.
             setRecoveredAffectsPromo?.(
-              promoContentSignature(restored) !== promoContentSignature(publishedCfg) &&
-              hasPromoVisibleContent(restored.promoCard),
+              (promoContentSignature(restored) !== promoContentSignature(publishedCfg) &&
+                hasPromoVisibleContent(restored.promoCard)) ||
+              videoStoryDiffers(restored.videoStory, publishedCfg.videoStory),
             );
             setRecoveredAffectsAnnouncement?.(
               announcementSignature(restored) !== announcementSignature(publishedCfg) &&
@@ -364,6 +391,7 @@ export function useCampaignConfig({
               ...migrated,
               promoCard: promoHasTimestamp ? migrated.promoCard : publishedCfg.promoCard,
               announcementBar: announcementHasTimestamp ? migrated.announcementBar : publishedCfg.announcementBar,
+              videoStory: videoHasTimestamp ? migrated.videoStory : publishedCfg.videoStory,
             };
             if (getConfigSignature(restored) !== getConfigSignature(cloudForEditor)) {
               // Case 2: Both exist AND differ
@@ -377,6 +405,7 @@ export function useCampaignConfig({
               if (promoHasTimestamp) {
                 draftPort.setDraftPromoCard(JSON.parse(JSON.stringify(cloudForEditor.promoCard)));
               }
+              if (videoHasTimestamp) draftPort.setVideoDraft(cloudForEditor.videoStory ?? null);
               if (promoHasTimestamp && promoContentSignature(cloudForEditor) !== promoContentSignature(publishedCfg)) {
                 setHasPromoChanges(true);
               }
@@ -394,8 +423,9 @@ export function useCampaignConfig({
               // Only flag recovery as affecting a card if it differs from current AND has visible content
               // This prevents flagging empty/default blanks as "meaningful recovery"
               setRecoveredAffectsPromo?.(
-                promoContentSignature(restored) !== promoContentSignature(cloudForEditor) &&
-                hasPromoVisibleContent(restored.promoCard),
+                (promoContentSignature(restored) !== promoContentSignature(cloudForEditor) &&
+                  hasPromoVisibleContent(restored.promoCard)) ||
+                videoStoryDiffers(restored.videoStory, cloudForEditor.videoStory),
               );
               setRecoveredAffectsAnnouncement?.(
                 announcementSignature(restored) !== announcementSignature(cloudForEditor) &&
@@ -429,12 +459,13 @@ export function useCampaignConfig({
        * was the root cause of "saving announcement lights up promo" and
        * every variant of that cross-contamination bug.
        */
-      if (draft && publishedCfg && (promoHasTimestamp || announcementHasTimestamp)) {
+      if (draft && publishedCfg && (promoHasTimestamp || announcementHasTimestamp || videoHasTimestamp)) {
         const migrated = migrateConfig(draft, draft.version);
         const forEditor: CampaignConfig = {
           ...migrated,
           promoCard: promoHasTimestamp ? migrated.promoCard : publishedCfg.promoCard,
           announcementBar: announcementHasTimestamp ? migrated.announcementBar : publishedCfg.announcementBar,
+          videoStory: videoHasTimestamp ? migrated.videoStory : publishedCfg.videoStory,
         };
 
         if (getConfigSignature(forEditor) !== getConfigSignature(publishedCfg)) {
@@ -453,6 +484,9 @@ export function useCampaignConfig({
           if (announcementHasTimestamp && announcementSignature(forEditor) !== announcementSignature(publishedCfg)) {
             setHasAnnouncementChanges(true);
           }
+          // No flag to raise: the video's unsaved/unpublished state is derived
+          // from this baseline against the editor and live.
+          if (videoHasTimestamp) draftPort.setVideoDraft(forEditor.videoStory ?? null);
           setPromoEntryStep(promoHasTimestamp ? 'editor' : 'build');
           setBlankStart?.(true);
           setConfigLoadedSignal((n) => n + 1);

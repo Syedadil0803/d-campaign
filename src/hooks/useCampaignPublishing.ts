@@ -4,7 +4,10 @@ import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type { CampaignConfig } from '@/types/campaign';
 import { isInvalidRange } from '@/lib/dateRange';
 import { validatePromo } from '@/lib/promo/validatePromo';
-import { defaultConfig } from '@/types/campaign';
+import { validateVideoStory } from '@/lib/videoStory/validateVideoStory';
+import { cornerClash } from '@/lib/videoStory/placeWidgets';
+import { isOpenEnded } from '@/lib/promo/promoSchedule';
+import { defaultConfig, defaultVideoStory } from '@/types/campaign';
 import {
   markLiveVersion,
   listVersions,
@@ -17,7 +20,7 @@ interface UseCampaignPublishingArgs {
   setConfig: Dispatch<SetStateAction<CampaignConfig>>;
   publishedConfigObjRef: RefObject<CampaignConfig | null>;
   setPublishedConfig: (cfg: CampaignConfig) => void;
-  persistConfig: (cfg: CampaignConfig, successMessage?: string, scope?: 'announcement' | 'promo', options?: { preserveDraft?: boolean }) => Promise<void>;
+  persistConfig: (cfg: CampaignConfig, successMessage?: string, scope?: 'announcement' | 'promo' | 'videoStory', options?: { preserveDraft?: boolean }) => Promise<void>;
   pendingDraftRef: RefObject<boolean>;
   setPromoDateErrorPing: Dispatch<SetStateAction<number>>;
   setPublishConfirm: (
@@ -104,18 +107,17 @@ export function useCampaignPublishing({
   // excluded from the dirty signature, so mirroring it into the editing config
   // doesn't create phantom "unsaved changes".
 
-  async function setLiveActive(scope: 'promo' | 'announcement', active: boolean) {
+  async function setLiveActive(scope: 'promo' | 'announcement' | 'videoStory', active: boolean) {
     const pending = pendingDraftRef.current;
     const base = publishedConfigObjRef.current ?? configRef.current;
-    const next: CampaignConfig =
-      scope === 'promo'
-        ? { ...base, promoCard: { ...base.promoCard, active, stoppedByUser: !active } }
-        : { ...base, announcementBar: { ...base.announcementBar, active } };
-    setConfig((c) =>
+    const flip = (c: CampaignConfig): CampaignConfig =>
       scope === 'promo'
         ? { ...c, promoCard: { ...c.promoCard, active, stoppedByUser: !active } }
-        : { ...c, announcementBar: { ...c.announcementBar, active } },
-    );
+        : scope === 'videoStory'
+          ? { ...c, videoStory: { ...(c.videoStory ?? defaultVideoStory), active, stoppedByUser: !active } }
+          : { ...c, announcementBar: { ...c.announcementBar, active } };
+    const next = flip(base);
+    setConfig(flip);
     // Optimistically reflect the live status on the Dashboard right away;
     // persistConfig re-confirms it on a successful write.
     setPublishedConfig(next);
@@ -126,7 +128,10 @@ export function useCampaignPublishing({
         ? 'Campaign is live on your website'
         : 'Campaign switched off — no longer on your website',
       scope,
-      { preserveDraft: pending },
+      // pendingDraftRef tracks only the card and the bar. A toggle never
+      // publishes editor content, so a saved Video Story draft always survives
+      // it — otherwise Stop on the video would delete the draft column.
+      { preserveDraft: scope === 'videoStory' || pending },
     );
   }
 
@@ -219,7 +224,41 @@ export function useCampaignPublishing({
   function handlePublishPromoWithValidation() {
     if (blockPromoSaveIfInvalidRange()) return;
     const warnings = validatePromo(config.promoCard);
+    // Against the live video, not the draft: only what is on the site can overlap.
+    const clash = cornerClash(config.promoCard.style.position, publishedConfigObjRef.current?.videoStory, 'Video Story');
+    if (clash) warnings.push(clash);
     setPublishConfirm({ warnings, onConfirm: handlePublishPromo });
+  }
+
+  /**
+   * Publishes the Video Story alone — persistConfig's 'videoStory' scope pins
+   * the card and the bar to what is already live. Unlike the card, the editor
+   * keeps the video afterwards: it has no My Published yet to come back to it
+   * from.
+   */
+  async function handlePublishVideoStory() {
+    const vs = config.videoStory ?? defaultVideoStory;
+    const next: CampaignConfig = {
+      ...config,
+      videoStory: {
+        ...vs,
+        active: true,
+        stoppedByUser: false,
+        ...(isOpenEnded(vs) && { endDate: null }),
+      },
+    };
+    // The on-air chip reads the published copy, which persistConfig updates,
+    // so the editor's own flags are left alone.
+    await persistConfig(next, 'Video Story is live on your website', 'videoStory');
+  }
+
+  function handlePublishVideoStoryWithValidation() {
+    const vs = config.videoStory ?? defaultVideoStory;
+    const warnings = validateVideoStory(vs);
+    const card = publishedConfigObjRef.current?.promoCard;
+    const clash = cornerClash(vs.position, card && { position: card.style.position, active: card.active }, 'Smart Card');
+    if (clash) warnings.push(clash);
+    setPublishConfirm({ warnings, onConfirm: handlePublishVideoStory });
   }
 
   function handlePublishAnnouncementWithValidation() {
@@ -239,6 +278,7 @@ export function useCampaignPublishing({
     goOnAirPromoNow,
     handlePublishPromo,
     handlePublishPromoWithValidation,
+    handlePublishVideoStoryWithValidation,
     handlePublishAnnouncementWithValidation,
   };
 }

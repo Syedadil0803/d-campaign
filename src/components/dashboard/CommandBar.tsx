@@ -92,12 +92,14 @@ function IssueChip({
   const styles = CHIP_STYLES[issue.severity];
 
   return (
+    // min-w-0 + truncate: on a phone the chip is given the row's width and
+    // its message ends in an ellipsis, rather than running off the screen.
     <div
-      className={`flex items-center rounded-lg border ${styles.border} ${styles.bg} ${styles.text}`}
+      className={`flex min-w-0 max-w-full items-center rounded-lg border ${styles.border} ${styles.bg} ${styles.text}`}
       style={{ height: 34, padding: '4px 4px 4px 10px', gap: 8 }}
     >
       <span className="shrink-0 text-[13px] leading-none">{PRIORITY_CONFIG[issue.severity].icon}</span>
-      <span className="whitespace-nowrap font-medium text-xs leading-4">
+      <span className="min-w-0 truncate font-medium text-xs leading-4" title={issue.message}>
         {issue.message}
       </span>
       {issue.action && (
@@ -165,7 +167,8 @@ function FlyoutDrawer({
       className="absolute right-0 z-50 rounded-xl border border-white/10 bg-black/10 p-4 text-on-surface shadow-2xl backdrop-blur-md"
       style={{
         top: 'calc(100% + 6px)',
-        width: 440,
+        // Never wider than a phone screen, less a margin either side.
+        width: 'min(440px, calc(100vw - 32px))',
         animation: 'fadeSlideDown 150ms ease-out both',
       }}
     >
@@ -298,7 +301,11 @@ export function CommandBar({
       className={`relative ${className}`}
       style={{
         width: '100%',
-        height: 68,
+        // One row on desktop; on narrow screens the issues wrap under the
+        // status instead of running over it.
+        minHeight: 68,
+        flexWrap: 'wrap',
+        gap: 8,
         padding: '12px 24px',
         borderRadius: 12,
         border: '1px solid',
@@ -312,8 +319,10 @@ export function CommandBar({
       {/* LEFT ZONE */}
       <div
         style={{
-          minWidth: 360,
-          height: 44,
+          minWidth: 'min(360px, 100%)',
+          // At least, not exactly: on a phone the status line wraps, and a
+          // fixed height let it spill into the issues stacked underneath.
+          minHeight: 44,
           flexShrink: 0,
           display: 'flex',
           flexDirection: 'column',
@@ -346,11 +355,20 @@ export function CommandBar({
         </div>
       </div>
 
-      {/* DIVIDER */}
-      <div className="shrink-0 bg-border dark:bg-border" style={{ width: 1, height: 32, margin: '0 24px' }} />
+      {/* DIVIDER — only where the two zones are sure to share a row. Below
+          that, a wrapped right zone would leave it hanging at a line's end. */}
+      <div className="hidden shrink-0 bg-border dark:bg-border xl:block" style={{ width: 1, height: 32, margin: '0 24px' }} />
 
-      {/* RIGHT ZONE */}
-      <div className="flex min-w-0 flex-1 items-center justify-end" style={{ gap: 12 }}>
+      {/* RIGHT ZONE
+          Basis auto (its natural width), not 0: the bar wraps by flex basis, so
+          when the issues do not fit beside the status they drop onto their own
+          full-width row instead of being squeezed into the gap and spilling
+          back over the status text. Its own items wrap too, so on a phone the
+          label, the chip and "+N More" stack rather than overflow. */}
+      <div
+        className="flex min-w-0 flex-[1_1_auto] flex-wrap items-center justify-start md:justify-end"
+        style={{ gap: 12 }}
+      >
         <span
           className={`shrink-0 whitespace-nowrap font-bold uppercase tracking-[0.08em] text-[11px] leading-[14px] ${hasIssues ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
             }`}

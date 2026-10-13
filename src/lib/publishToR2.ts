@@ -6,13 +6,14 @@ import type { CampaignConfig } from '@/types/campaign';
 // scheduled-campaign promoter publishes down exactly the same path — two copies
 // of a publish is how the two drift apart.
 
-const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || 'devlinproject';
+export const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || 'devlinproject';
 const R2_CONFIG_KEY = 'campaign-config.json';
 
 // Lazily create the R2 client on first use (not at module load), so `next build`
 // doesn't need the R2 env vars.
+// Shared with the video upload route, which signs PUTs with the same client.
 let _r2Client: S3Client | null = null;
-function getR2Client(): S3Client {
+export function getR2Client(): S3Client {
   if (!_r2Client) {
     const accountId = (process.env.R2_ACCOUNT_ID || '').trim();
     const endpoint = `https://${accountId}.eu.r2.cloudflarestorage.com`;
@@ -38,6 +39,10 @@ function getR2Client(): S3Client {
     _r2Client = new S3Client({
       region: 'auto',
       endpoint,
+      // The SDK would otherwise sign a CRC32 of the (empty) body into every
+      // presigned PUT URL, and R2 rejects the real upload as a mismatch.
+      // Cloudflare's own presigned-URL guide sets this.
+      requestChecksumCalculation: 'WHEN_REQUIRED',
       credentials: {
         accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
         secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',

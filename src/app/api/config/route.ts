@@ -48,7 +48,17 @@ export async function PUT(request: NextRequest) {
     // Sync to R2 so the website widget can fetch the latest config. The DB is the
     // source of truth and already saved; we report R2's outcome separately instead
     // of silently claiming full success when the CDN copy didn't update.
-    const r2 = await syncToR2(config);
+    // What was stored, not just the body: a body without a videoStory (an
+    // older client, or any caller that only knows the card) leaves the stored
+    // one in place, and R2 must carry it too — syncing the body alone would
+    // take a live Video Story off the website while the database says it is
+    // on. Read from the repository, not the service: the service falls back
+    // to the blank defaults on a failed read, and those must never reach R2.
+    const stored = config.videoStory ? config : {
+      ...config,
+      videoStory: (await campaignRepository.getConfig())?.videoStory,
+    };
+    const r2 = await syncToR2(stored);
     console.log(
       `[CONFIG] PUT -> done db=ok r2=${r2.ok ? 'ok' : 'FAILED'} (${Date.now() - start}ms)`
     );

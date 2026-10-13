@@ -25,7 +25,8 @@ interface PromoFieldStylePanelProps {
   setCurrentField: (field: PromoField | null) => void;
   handlePromoToolbarFormat: (format: string, value?: string) => void;
   handlePromoToolbarColor: (color: string) => void;
-  setFieldAlignment: (align: 'left' | 'center' | 'right') => void;
+  /** Omitted for a field with nothing to align, which hides the buttons. */
+  setFieldAlignment?: (align: 'left' | 'center' | 'right') => void;
   updateFieldBg: (patch: Partial<GradientStyle>) => void;
   updateField: <K extends keyof PromoCard>(field: K, value: PromoCard[K]) => void;
   showFieldBgTypeDropdown: boolean;
@@ -40,6 +41,11 @@ interface PromoFieldStylePanelProps {
   setStyleWarning: (message: string | null) => void;
   /** Leave out the Field Background section — the Video Story countdown has no background. */
   hideBackground?: boolean;
+  /**
+   * Leave out bold, italic, size and button width — the Video Story's fields
+   * are plain text with no rich editor for those to act on. Colour stays.
+   */
+  hideTextFormatting?: boolean;
 }
 
 /**
@@ -74,6 +80,7 @@ export function PromoFieldStylePanel({
   styleWarning,
   setStyleWarning,
   hideBackground = false,
+  hideTextFormatting = false,
 }: PromoFieldStylePanelProps) {
   const isButton = field === 'button';
   const fbg = fieldStyle.background;
@@ -102,6 +109,7 @@ export function PromoFieldStylePanel({
                       <label className="text-xs font-semibold text-on-surface">
                         {fieldLabel}
                       </label>
+                      {setFieldAlignment && (
                       <div className="flex items-center gap-1">
                         <button
                           onMouseDown={(e) => {
@@ -164,6 +172,7 @@ export function PromoFieldStylePanel({
                           </svg>
                         </button>
                       </div>
+                      )}
                     </div>
 
                     {/* The app's own style bar drives every field,
@@ -176,7 +185,8 @@ export function PromoFieldStylePanel({
                       onFormat={handlePromoToolbarFormat}
                       onColorSelect={handlePromoToolbarColor}
                       showAlignment={false}
-                      showButtonWidth={isButton}
+                      showButtonWidth={isButton && !hideTextFormatting}
+                      colorOnly={hideTextFormatting}
                       buttonFullWidth={
                         config.promoCard.buttonFullWidth || false
                       }

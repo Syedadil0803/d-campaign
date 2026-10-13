@@ -6,7 +6,10 @@ import {
   Eye,
 } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
-import { stripHtml } from '@/lib/utils';
+import { stripHtml, toLocalISODate } from '@/lib/utils';
+import { hasCallToAction } from '@/lib/campaignCta';
+import { videoStoryHasContent } from '@/lib/configSignature';
+import { videoStoryStatus } from '@/lib/videoStory/videoStoryStatus';
 import {
   DAY,
   clamp,
@@ -15,8 +18,9 @@ import {
   timeAgo,
 } from '@/components/dashboard/dashboardFormat';
 import { DashboardLifecycleCards } from '@/components/dashboard/DashboardLifecycleCards';
-import { DashboardPopups } from '@/components/dashboard/DashboardPopups';
+import { DashboardPopups, type PendingAction } from '@/components/dashboard/DashboardPopups';
 import { CommandBar } from '@/components/dashboard/CommandBar';
+import { DashboardVideoStoryCard } from '@/components/dashboard/DashboardVideoStoryCard';
 
 interface DashboardProps {
   config: CampaignConfig;
@@ -50,6 +54,12 @@ interface DashboardProps {
   onDismissAnnouncementComposeRecovery?: () => void;
   elsewhereNotice?: { deviceLabel: string; at: string | null; hasUnsavedPromo: boolean; hasUnsavedAnnouncement: boolean } | null;
   onDismissElsewhere?: () => void;
+  /** When the Video Story's draft was saved, if it holds work not yet live. */
+  videoDraftSavedAt?: Date | null;
+  /** Opens the Campaigns tab on the Video Story. */
+  onEditVideoStory?: () => void;
+  onStopVideoStory?: () => void;
+  onGoOnAirVideoStory?: () => void;
 }
 
 /** No copy anywhere on the card — the operator hasn't created one yet. */
@@ -83,10 +93,14 @@ export function Dashboard({
   onDismissAnnouncementComposeRecovery,
   elsewhereNotice,
   onDismissElsewhere,
+  videoDraftSavedAt,
+  onEditVideoStory,
+  onStopVideoStory,
+  onGoOnAirVideoStory,
 }: DashboardProps) {
   const promoUncreated = isPromoUncreated(config.promoCard);
   // Stop / go-on-air both change the live website, so confirm first.
-  const [pending, setPending] = useState<{ kind: 'stop' | 'goOnAir'; target: 'promo' | 'announcement' } | null>(
+  const [pending, setPending] = useState<PendingAction | null>(
     null,
   );
   // Read-only preview popup for the promo, opened by hovering its thumbnail.
@@ -119,6 +133,14 @@ export function Dashboard({
 
   const promo = config.promoCard;
   const ann = config.announcementBar;
+  const video = config.videoStory;
+  // Before mount there is no "today" to judge an end date by (see `now`), so
+  // an ended story reads as live for that first paint, never the other way.
+  const videoStatus = videoStoryStatus(video, now ? toLocalISODate(now) : '');
+  // Live means showing on the site. An ended story is still switched on, but
+  // its dates keep it off the website, so it is not counted or labelled live —
+  // it has its own "Schedule ended" check below.
+  const videoOnAir = videoStatus === 'live';
 
   const startMs = parseDate(promo.startDate)?.getTime() ?? null;
   const endD = promo.endDate ? parseDate(promo.endDate) : null;
@@ -142,11 +164,7 @@ export function Dashboard({
   const annCount = ann.announcements.length;
 
   // Actionable readiness checks — what actually needs the operator's attention.
-  const hasCta =
-    promo.showButton &&
-    ((promo.ctaType === 'whatsapp' && !!promo.whatsappNumber) ||
-      (promo.ctaType === 'link' && !!promo.buttonUrl) ||
-      promo.ctaType === 'text');
+  const hasCta = hasCallToAction(promo);
   // Deliberately NOT listing "you have unpublished changes": the dashboard
   // mirrors what's live on the website only. Editor state is the editor's
   // business — the way back into unfinished work is My Draft below, which is
@@ -159,7 +177,7 @@ export function Dashboard({
   if (promo.active && !hasCta) {
     checks.push({
       ok: false,
-      text: 'Promo Card has no call-to-action',
+      text: 'Smart Card has no call-to-action',
       severity: 'high',
       action: { label: 'Fix', onClick: () => setActiveTab('promo') },
     });
@@ -189,7 +207,7 @@ export function Dashboard({
   if (!promo.active) {
     checks.push({
       ok: false,
-      text: 'Promo Card is turned OFF',
+      text: 'Smart Card is turned OFF',
       severity: 'medium',
       action: { label: 'Turn On', onClick: () => setPending({ kind: 'goOnAir', target: 'promo' }) },
     });
@@ -199,7 +217,7 @@ export function Dashboard({
   if (!ann.active) {
     checks.push({
       ok: false,
-      text: 'Announcement Bar is turned OFF',
+      text: 'Broadcasts are turned OFF',
       severity: 'medium',
       action: { label: 'Turn On', onClick: () => setPending({ kind: 'goOnAir', target: 'announcement' }) },
     });
@@ -212,6 +230,41 @@ export function Dashboard({
       text: 'Schedule ended for announcement',
       severity: 'medium',
       action: { label: 'Extend', onClick: () => setActiveTab('promo') },
+    });
+  }
+
+  // The Video Story's own checks, once one exists — a site that never made
+  // one has nothing to fix and must not be told it is "turned OFF".
+  if (video && videoOnAir && !videoStoryHasContent(video)) {
+    checks.push({
+      ok: false,
+      text: 'Video Story has no video',
+      severity: 'high',
+      action: { label: 'Fix', onClick: () => onEditVideoStory?.() },
+    });
+  }
+  if (video && videoOnAir && !hasCallToAction(video)) {
+    checks.push({
+      ok: false,
+      text: 'Video Story has no call-to-action',
+      severity: 'high',
+      action: { label: 'Fix', onClick: () => onEditVideoStory?.() },
+    });
+  }
+  if (videoStatus === 'off') {
+    checks.push({
+      ok: false,
+      text: 'Video Story is turned OFF',
+      severity: 'medium',
+      action: { label: 'Turn On', onClick: () => setPending({ kind: 'goOnAir', target: 'videoStory' }) },
+    });
+  }
+  if (videoStatus === 'ended') {
+    checks.push({
+      ok: false,
+      text: 'Schedule ended for Video Story',
+      severity: 'medium',
+      action: { label: 'Extend', onClick: () => onEditVideoStory?.() },
     });
   }
 
@@ -241,47 +294,62 @@ export function Dashboard({
   // The bar is on/off as a whole; each message can optionally carry its own schedule.
   const scheduledMsgs = ann.announcements.filter((a) => a.startDate || a.endDate).length;
 
-  const liveCount = (promo.active ? 1 : 0) + (ann.active ? 1 : 0);
-  const liveLabel = (() => {
+  const liveCount = (promo.active ? 1 : 0) + (ann.active ? 1 : 0) + (videoOnAir ? 1 : 0);
+  const cardAndBarLabel = (() => {
     const promoActive = promo.active;
     const annActive = ann.active;
 
     if (promoActive && annActive) {
-      return 'Promo Card & Announcement Bar are both Live';
+      return 'Smart Card & Broadcasts are both Live';
     }
     if (promoActive && !annActive) {
-      return 'Promo Card is Live  •  Announcement Bar is Off';
+      return 'Smart Card is Live  •  Broadcasts are Off';
     }
     if (!promoActive && annActive) {
-      return 'Announcement Bar is Live  •  Promo Card is Off';
+      return 'Broadcasts are Live  •  Smart Card is Off';
     }
     // Both Off
-    return 'All site campaigns are currently Paused';
+    return videoOnAir
+      ? 'Smart Card & Broadcasts are Off'
+      : 'All site campaigns are currently Paused';
   })();
+  const liveLabel = videoOnAir ? `${cardAndBarLabel}  •  Video Story is Live` : cardAndBarLabel;
   const issues = checks.filter((c) => !c.ok);
 
   const PENDING_COPY = {
     'promo-stop': {
-      title: 'Stop the promo card?',
+      title: 'Stop the Smart Card',
       body: 'It comes off your website right away — visitors will stop seeing it.',
-      cta: 'Stop promo',
+      cta: 'Stop card',
       danger: true,
     },
     'promo-goOnAir': {
-      title: 'Put the promo card live?',
+      title: 'Put the Smart Card on air',
       body: 'It goes live on your website now — visitors will start seeing it.',
       cta: 'Go on air',
       danger: false,
     },
     'announcement-stop': {
-      title: 'Switch off the announcement bar?',
+      title: 'Stop the Broadcasts',
       body: 'It stops showing on your website right away.',
       cta: 'Stop bar',
       danger: true,
     },
     'announcement-goOnAir': {
-      title: 'Put the announcement bar on air?',
+      title: 'Put the Broadcasts on air',
       body: 'It starts showing on your website now.',
+      cta: 'Go on air',
+      danger: false,
+    },
+    'videoStory-stop': {
+      title: 'Stop the Video Story',
+      body: 'It comes off your website right away — visitors stop seeing it.',
+      cta: 'Stop video',
+      danger: true,
+    },
+    'videoStory-goOnAir': {
+      title: 'Put the Video Story on air',
+      body: 'It goes live on your website now — visitors start seeing it.',
       cta: 'Go on air',
       danger: false,
     },
@@ -293,6 +361,9 @@ export function Dashboard({
     if (pending.target === 'promo') {
       if (pending.kind === 'stop') onStopPromo?.();
       else onGoOnAirPromo?.();
+    } else if (pending.target === 'videoStory') {
+      if (pending.kind === 'stop') onStopVideoStory?.();
+      else onGoOnAirVideoStory?.();
     } else {
       if (pending.kind === 'stop') onStopAnnouncement?.();
       else onGoOnAirAnnouncement?.();
@@ -315,7 +386,7 @@ export function Dashboard({
       <button
         type="button"
         onClick={() => setShowPromoPreview(true)}
-        aria-label="View promo card preview"
+        aria-label="View Smart Card preview"
         className={overlayAction}
       >
         <Eye className="h-4 w-4" />
@@ -325,7 +396,7 @@ export function Dashboard({
         <button
           type="button"
           onClick={() => onEditLivePromo?.()}
-          aria-label="Edit the live promo card"
+          aria-label="Edit the live Smart Card"
           className={overlayAction}
         >
           <Pencil className="h-4 w-4" />
@@ -393,6 +464,16 @@ export function Dashboard({
         announcementSavedAt={announcementSavedAt ? announcementSavedAt.toISOString() : undefined}
         elsewhereNotice={elsewhereNotice}
         onDismissElsewhere={onDismissElsewhere}
+        videoStoryCard={
+          <DashboardVideoStoryCard
+            vs={video}
+            status={videoStatus}
+            draftSavedAt={videoDraftSavedAt ? videoDraftSavedAt.toISOString() : null}
+            onEdit={() => onEditVideoStory?.()}
+            onStop={() => setPending({ kind: 'stop', target: 'videoStory' })}
+            onGoOnAir={() => setPending({ kind: 'goOnAir', target: 'videoStory' })}
+          />
+        }
       />
 
       <DashboardPopups

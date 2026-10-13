@@ -6,6 +6,7 @@ import {
   Palette,
   Sparkles,
 } from 'lucide-react';
+import { WidgetPositionControl } from '@/components/shared/WidgetPositionControl';
 
 interface PromoEditorToolbarProps {
   /** Absent when the AI flow is not available; the chip and its rule go too. */
@@ -17,6 +18,8 @@ interface PromoEditorToolbarProps {
   /** Card position controls */
   cardPositionPos: string | null;
   setCardPositionPos: (pos: string) => void;
+  /** cornerClash against the live Video Story; null when the corner is free. */
+  positionWarning: string | null;
   /** Styling popover trigger */
   customizeButtonRef: React.RefObject<HTMLButtonElement | null>;
   onShowStylingPopover?: () => void;
@@ -43,6 +46,7 @@ export function PromoEditorToolbar({
   setShowVersionsPopup,
   cardPositionPos,
   setCardPositionPos,
+  positionWarning,
   customizeButtonRef,
   onShowStylingPopover,
   stylingTriggerLabel = 'Customize',
@@ -92,7 +96,7 @@ export function PromoEditorToolbar({
           type="button"
           onClick={() => setShowVersionsPopup(true)}
           className="tool-chip relative inline-flex h-9 items-center gap-1.5 overflow-hidden whitespace-nowrap rounded-lg border border-on-surface-variant/40 px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:border-primary/70 hover:bg-primary/10 hover:text-primary"
-          title="Saved variants of this promo card"
+          title="Saved variants of this Smart Card"
         >
           <span aria-hidden="true" className="ai-sheen pointer-events-none absolute inset-0" />
           <History className="h-4 w-4" /> My Published
@@ -114,7 +118,7 @@ export function PromoEditorToolbar({
       </div>
 
       {/* Styling Studio Row — Styling controls on left, Card position on right */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">Styling Studio:</span>
           <button
@@ -143,18 +147,12 @@ export function PromoEditorToolbar({
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">Position:</span>
-          <select
-            value={cardPositionPos || 'bottom-right'}
-            onChange={(e) => setCardPositionPos(e.target.value)}
-            className="rounded-lg border border-border bg-surface-subtle px-2.5 py-1.5 text-xs font-medium text-on-surface transition-colors hover:border-primary/60"
-            title="Where the card sits on your website"
-          >
-            <option value="bottom-left">Bottom Left</option>
-            <option value="bottom-right">Bottom Right</option>
-          </select>
-        </div>
+        <WidgetPositionControl
+          label="Smart Card position"
+          value={cardPositionPos || 'bottom-right'}
+          onChange={setCardPositionPos}
+          warning={positionWarning}
+        />
       </div>
 
       {/* Position and card colour moved down to sit with Current in the Themes

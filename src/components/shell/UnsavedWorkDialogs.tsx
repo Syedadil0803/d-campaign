@@ -297,7 +297,7 @@ export function DashboardUnsavedDialog({
         <div className="relative z-10 w-full max-w-xl rounded-xl border border-white/10 bg-black/10 p-5 text-on-surface shadow-2xl backdrop-blur-md">
           <h2 className="text-base font-semibold">You have unsaved changes</h2>
           <p className="mt-2 text-sm text-on-surface-variant">
-            Your promo card has edits that aren&apos;t in{' '}
+            Your Smart Card has edits that aren&apos;t in{' '}
             <span className="font-semibold text-on-surface">My Draft</span>.{' '}
             {pendingDashboardAction === 'create'
               ? 'Starting a new campaign replaces them.'

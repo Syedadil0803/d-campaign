@@ -1,5 +1,6 @@
 'use client';
 
+import { DashboardCardsCarousel } from '@/components/dashboard/DashboardCardsCarousel';
 import type { ReactNode, RefObject } from 'react';
 import {
   Calendar,
@@ -19,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import type { CampaignConfig } from '@/types/campaign';
+import type { PendingAction } from '@/components/dashboard/DashboardPopups';
 import { stripHtml, getBackgroundStyle } from '@/lib/utils';
 import { fmtDate } from '@/components/dashboard/dashboardFormat';
 import { describeWhen } from '@/lib/auth/presenceClient';
@@ -44,7 +46,7 @@ interface DashboardLifecycleCardsProps {
   scheduledMsgs: number;
   setActiveTab: (tab: 'dashboard' | 'announcement' | 'promo') => void;
   setPending: (
-    pending: { kind: 'stop' | 'goOnAir'; target: 'promo' | 'announcement' } | null,
+    pending: PendingAction | null,
   ) => void;
   setScheduleFilter: (filter: 'all' | 'scheduled' | 'unscheduled') => void;
   setShowSchedule: (show: boolean) => void;
@@ -75,6 +77,8 @@ interface DashboardLifecycleCardsProps {
   /** Another device holds unsaved work for this account. */
   elsewhereNotice?: { deviceLabel: string; at: string | null; hasUnsavedPromo: boolean; hasUnsavedAnnouncement: boolean } | null;
   onDismissElsewhere?: () => void;
+  /** The Video Story's card, built by the dashboard — see DashboardVideoStoryCard. */
+  videoStoryCard: ReactNode;
 }
 
 /**
@@ -83,7 +87,8 @@ interface DashboardLifecycleCardsProps {
  *
  * They sit together because they are the same card twice — the same status
  * pill, the same preview stage, the same schedule bar, the same actions — and
- * reading them side by side is how anyone checks the two agree.
+ * reading them side by side is how anyone checks the two agree. The Video
+ * Story's card is handed in and comes third, a slide away.
  */
 export function DashboardLifecycleCards({
   promo,
@@ -115,11 +120,217 @@ export function DashboardLifecycleCards({
   onStartNewWithDraft = () => { },
   elsewhereNotice = null,
   onDismissElsewhere = () => { },
+  videoStoryCard,
 }: DashboardLifecycleCardsProps) {
   return (
-    <section className="grid grid-cols-2 gap-6 md:gap-6">
-      {/* Promo card */}
+    // Broadcasts, Smart Card, then Video Story — two at a time, same height.
+    <DashboardCardsCarousel
+      cards={[
+      // Announcement
       <div
+        key="broadcasts"
+        className="flex h-full min-h-[382px] flex-col justify-between gap-4 rounded-2xl border border-border campaign-card-surface p-6 shadow-sm">
+        {/* Header Zone */}
+        <div className="flex h-10 shrink-0 items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background">
+              <Megaphone className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <h3 className="text-base font-semibold text-on-surface">Broadcasts</h3>
+              <p className={`${MICRO} text-on-surface-variant`}>Sitewide header</p>
+            </div>
+          </div>
+          {ann.active && (
+            <button
+              type="button"
+              onClick={() => setPending({ kind: 'stop', target: 'announcement' })}
+              aria-label="Stop the live Broadcasts"
+              title="Stop the live Broadcasts"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface-elevated px-3 text-xs font-medium text-on-surface transition-colors hover:bg-surface-subtle hover:text-primary"
+            >
+              <CircleStop className="h-4 w-4" />
+              Stop
+            </button>
+          )}
+        </div>
+
+        {/* messages summary */}
+        <div className="flex h-7 shrink-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-[22px] font-bold tracking-tight tabular-nums text-on-surface">
+            {annCount}
+          </span>
+          <span className="text-[13px] text-on-surface-variant">
+            message{annCount === 1 ? '' : 's'} {ann.active ? 'showing now' : 'ready to show'}
+          </span>
+          {annCount > 0 && (
+            <>
+              <span className="text-[13px] text-on-surface-variant/40">·</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setScheduleFilter('all');
+                  setShowSchedule(true);
+                }}
+                className="group inline-flex items-center gap-0.5 text-[13px] font-medium text-primary transition-colors hover:opacity-80"
+              >
+                View schedule breakdown
+                <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* recessed preview stage */}
+        <div className="group relative">
+          <button
+            type="button"
+            onClick={() => setShowAnnPreview(true)}
+            aria-label="View Broadcasts preview"
+            className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl bg-black/0 text-transparent opacity-0 transition-all duration-200 group-hover:bg-black/45 group-hover:text-white group-hover:opacity-100 focus-visible:bg-black/45 focus-visible:text-white focus-visible:opacity-100"
+          >
+            <Eye className="h-5 w-5" />
+            <span className="text-sm font-semibold">View</span>
+          </button>
+          <div className="relative flex h-[180px] items-center overflow-hidden rounded-xl border border-border bg-surface-subtle p-3 text-border shadow-inner [background-image:radial-gradient(currentColor_1px,transparent_1px)] [background-size:16px_16px]">
+            <div
+              className="w-full overflow-hidden rounded-md"
+              style={{ background: getBackgroundStyle(ann.style.background) }}
+            >
+              <div
+                className="truncate px-3 py-2 text-center text-sm font-medium"
+                style={{ color: ann.style.textColor }}
+              >
+                {stripHtml(ann.announcements[0]?.text) || 'Your announcement shows here'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Helper/Alert Zone — grows when the elsewhere alert wraps */}
+        <div className={`flex shrink-0 items-center ${elsewhereNotice?.hasUnsavedAnnouncement ? 'min-h-[40px]' : 'h-10'}`}>
+          {elsewhereNotice?.hasUnsavedAnnouncement ? (
+            <div className="flex w-full items-start gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 dark:border-violet-800 dark:bg-violet-950">
+              <Monitor className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
+              <span className="flex-1 text-[12px] leading-snug text-violet-900 dark:text-violet-100">
+                We noticed you logged in from another device. Unsaved changes are on <span className="font-semibold">{elsewhereNotice.deviceLabel}</span> — use that device to recover them, or continue here.
+              </span>
+              <button type="button" onClick={onDismissElsewhere} className="mt-0.5 shrink-0 rounded p-0.5 text-violet-500 hover:bg-violet-100 dark:hover:bg-violet-900">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : announcementRecovered ? (
+            <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 dark:border-amber-800 dark:bg-amber-950">
+              <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span className="flex-1 text-[13px] font-medium text-amber-900 dark:text-amber-100">
+                Recovered changes
+              </span>
+              <button type="button" onClick={onDismissAnnouncementComposeRecovery} className="mt-0.5 shrink-0 rounded p-0.5 text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-900">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : /* Draft status - show only when announcement has unpublished changes and draft exists */
+          announcementUnpublished && announcementSavedAt ? (
+            <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 dark:border-blue-800 dark:bg-blue-950">
+              <InfoIcon className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+              <span className="text-[13px] font-medium text-blue-800 dark:text-blue-100">
+                Saved to cloud {describeWhen(announcementSavedAt)} • Draft pending
+              </span>
+            </div>
+          ) : annCount > 0 ? (
+            <div className="flex w-full gap-4 text-[13px] text-on-surface-variant">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 shrink-0" />
+                <span>
+                  <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                    {scheduledMsgs}
+                  </span>{' '}
+                  scheduled
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <InfinityIcon className="h-4 w-4 shrink-0" />
+                <span>
+                  <span className="font-semibold tabular-nums text-on-surface">
+                    {annCount - scheduledMsgs}
+                  </span>{' '}
+                  unscheduled
+                </span>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Action Zone */}
+        {announcementRecovered ? (
+          <div className="flex h-[42px] gap-2.5">
+            <button
+              type="button"
+              onClick={() => onRestoreRecovery('announcement')}
+              className={`${PRIMARY_BTN} flex-1`}
+            >
+              Save & Continue
+            </button>
+            <button
+              type="button"
+              onClick={() => onDismissRecovery('announcement')}
+              className={`${GHOST_BTN} flex-1`}
+            >
+              Discard & Start New
+            </button>
+          </div>
+        ) : announcementUnpublished && announcementSavedAt ? (
+          <div className="flex h-[42px] gap-2.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab('announcement')}
+              className={`${PRIMARY_BTN} flex-1`}
+            >
+              <FolderOpen className="h-4 w-4" />
+              Resume Draft
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('announcement')}
+              className={`${GHOST_BTN} flex-1`}
+            >
+              <Plus className="h-4 w-4" />
+              Add New
+            </button>
+          </div>
+        ) : (
+          <div className="flex h-[42px] gap-2.5">
+            <button
+              className={`${GHOST_BTN} flex-1`}
+              onClick={() => setActiveTab('announcement')}
+            >
+              <Pencil className="h-4 w-4" />
+              Edit
+            </button>
+            {ann.active ? (
+              <button
+                className={`${STOP_BTN} flex-1`}
+                onClick={() => setPending({ kind: 'stop', target: 'announcement' })}
+              >
+                <CircleStop className="h-4 w-4" />
+                Stop
+              </button>
+            ) : (
+              <button
+                className={`${PRIMARY_BTN} flex-1`}
+                onClick={() => setPending({ kind: 'goOnAir', target: 'announcement' })}
+              >
+                <Radio className="h-4 w-4" />
+                Go on air
+              </button>
+            )}
+          </div>
+        )}
+      </div>,
+
+      // Smart Card
+      <div
+        key="smart-card"
         ref={promoCardRef}
         className="flex h-full min-h-[382px] flex-col justify-between gap-4 rounded-2xl border border-border campaign-card-surface p-6 shadow-sm"
       >
@@ -130,16 +341,16 @@ export function DashboardLifecycleCards({
               <Gift className="h-5 w-5 text-primary" />
             </div>
             <div className="flex flex-col gap-0.5">
-              <h3 className="text-base font-semibold text-on-surface">Campaigns</h3>
-              <p className={`${MICRO} text-on-surface-variant`}>Floating widget</p>
+              <h3 className="text-base font-semibold text-on-surface">Smart Card</h3>
+              <p className={`${MICRO} text-on-surface-variant`}>Floating card</p>
             </div>
           </div>
           {(promo.active || promoUnpublished) && (
             <button
               type="button"
               onClick={() => setPending({ kind: 'stop', target: 'promo' })}
-              aria-label="Stop the live promo card"
-              title="Stop the live promo card"
+              aria-label="Stop the live Smart Card"
+              title="Stop the live Smart Card"
               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface-elevated px-3 text-xs font-medium text-on-surface transition-colors hover:bg-surface-subtle hover:text-primary"
             >
               <CircleStop className="h-4 w-4" />
@@ -288,7 +499,7 @@ export function DashboardLifecycleCards({
             </div>
           ) : promoUncreated ? (
             <span className="text-[13px] leading-snug text-on-surface-variant">
-              No promo card yet — create one to show it on your site.
+              No Smart Card yet — create one to show it on your site.
             </span>
           ) : null}
         </div>
@@ -336,7 +547,7 @@ export function DashboardLifecycleCards({
             onClick={() => (onCreatePromo ? onCreatePromo() : setActiveTab('promo'))}
           >
             <Plus className="h-4 w-4" />
-            Create promo card
+            Create Smart Card
           </button>
         ) : promo.active ? (
           /* Case 3 / live: + Start New (create handler) */
@@ -368,207 +579,9 @@ export function DashboardLifecycleCards({
             </button>
           </div>
         )}
-      </div>
-
-      {/* Announcement */}
-      <div className="flex h-full min-h-[382px] flex-col justify-between gap-4 rounded-2xl border border-border campaign-card-surface p-6 shadow-sm">
-        {/* Header Zone */}
-        <div className="flex h-10 shrink-0 items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background">
-              <Megaphone className="h-5 w-5 text-primary" />
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <h3 className="text-base font-semibold text-on-surface">Broadcasts</h3>
-              <p className={`${MICRO} text-on-surface-variant`}>Sitewide header</p>
-            </div>
-          </div>
-          {ann.active && (
-            <button
-              type="button"
-              onClick={() => setPending({ kind: 'stop', target: 'announcement' })}
-              aria-label="Stop the live announcement bar"
-              title="Stop the live announcement bar"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-surface-elevated px-3 text-xs font-medium text-on-surface transition-colors hover:bg-surface-subtle hover:text-primary"
-            >
-              <CircleStop className="h-4 w-4" />
-              Stop
-            </button>
-          )}
-        </div>
-
-        {/* messages summary */}
-        <div className="flex h-7 shrink-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-[22px] font-bold tracking-tight tabular-nums text-on-surface">
-            {annCount}
-          </span>
-          <span className="text-[13px] text-on-surface-variant">
-            message{annCount === 1 ? '' : 's'} {ann.active ? 'showing now' : 'ready to show'}
-          </span>
-          {annCount > 0 && (
-            <>
-              <span className="text-[13px] text-on-surface-variant/40">·</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setScheduleFilter('all');
-                  setShowSchedule(true);
-                }}
-                className="group inline-flex items-center gap-0.5 text-[13px] font-medium text-primary transition-colors hover:opacity-80"
-              >
-                View schedule breakdown
-                <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* recessed preview stage */}
-        <div className="group relative">
-          <button
-            type="button"
-            onClick={() => setShowAnnPreview(true)}
-            aria-label="View announcement bar preview"
-            className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl bg-black/0 text-transparent opacity-0 transition-all duration-200 group-hover:bg-black/45 group-hover:text-white group-hover:opacity-100 focus-visible:bg-black/45 focus-visible:text-white focus-visible:opacity-100"
-          >
-            <Eye className="h-5 w-5" />
-            <span className="text-sm font-semibold">View</span>
-          </button>
-          <div className="relative flex h-[180px] items-center overflow-hidden rounded-xl border border-border bg-surface-subtle p-3 text-border shadow-inner [background-image:radial-gradient(currentColor_1px,transparent_1px)] [background-size:16px_16px]">
-            <div
-              className="w-full overflow-hidden rounded-md"
-              style={{ background: getBackgroundStyle(ann.style.background) }}
-            >
-              <div
-                className="truncate px-3 py-2 text-center text-sm font-medium"
-                style={{ color: ann.style.textColor }}
-              >
-                {stripHtml(ann.announcements[0]?.text) || 'Your announcement shows here'}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Helper/Alert Zone — grows when the elsewhere alert wraps */}
-        <div className={`flex shrink-0 items-center ${elsewhereNotice?.hasUnsavedAnnouncement ? 'min-h-[40px]' : 'h-10'}`}>
-          {elsewhereNotice?.hasUnsavedAnnouncement ? (
-            <div className="flex w-full items-start gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 dark:border-violet-800 dark:bg-violet-950">
-              <Monitor className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
-              <span className="flex-1 text-[12px] leading-snug text-violet-900 dark:text-violet-100">
-                We noticed you logged in from another device. Unsaved changes are on <span className="font-semibold">{elsewhereNotice.deviceLabel}</span> — use that device to recover them, or continue here.
-              </span>
-              <button type="button" onClick={onDismissElsewhere} className="mt-0.5 shrink-0 rounded p-0.5 text-violet-500 hover:bg-violet-100 dark:hover:bg-violet-900">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ) : announcementRecovered ? (
-            <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 dark:border-amber-800 dark:bg-amber-950">
-              <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span className="flex-1 text-[13px] font-medium text-amber-900 dark:text-amber-100">
-                Recovered changes
-              </span>
-              <button type="button" onClick={onDismissAnnouncementComposeRecovery} className="mt-0.5 shrink-0 rounded p-0.5 text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-900">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ) : /* Draft status - show only when announcement has unpublished changes and draft exists */
-          announcementUnpublished && announcementSavedAt ? (
-            <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 dark:border-blue-800 dark:bg-blue-950">
-              <InfoIcon className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-              <span className="text-[13px] font-medium text-blue-800 dark:text-blue-100">
-                Saved to cloud {describeWhen(announcementSavedAt)} • Draft pending
-              </span>
-            </div>
-          ) : annCount > 0 ? (
-            <div className="flex w-full gap-4 text-[13px] text-on-surface-variant">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 shrink-0" />
-                <span>
-                  <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
-                    {scheduledMsgs}
-                  </span>{' '}
-                  scheduled
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <InfinityIcon className="h-4 w-4 shrink-0" />
-                <span>
-                  <span className="font-semibold tabular-nums text-on-surface">
-                    {annCount - scheduledMsgs}
-                  </span>{' '}
-                  unscheduled
-                </span>
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        {/* Action Zone */}
-        {announcementRecovered ? (
-          <div className="flex h-[42px] gap-2.5">
-            <button
-              type="button"
-              onClick={() => onRestoreRecovery('announcement')}
-              className={`${PRIMARY_BTN} flex-1`}
-            >
-              Save & Continue
-            </button>
-            <button
-              type="button"
-              onClick={() => onDismissRecovery('announcement')}
-              className={`${GHOST_BTN} flex-1`}
-            >
-              Discard & Start New
-            </button>
-          </div>
-        ) : announcementUnpublished && announcementSavedAt ? (
-          <div className="flex h-[42px] gap-2.5">
-            <button
-              type="button"
-              onClick={() => setActiveTab('announcement')}
-              className={`${PRIMARY_BTN} flex-1`}
-            >
-              <FolderOpen className="h-4 w-4" />
-              Resume Draft
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('announcement')}
-              className={`${GHOST_BTN} flex-1`}
-            >
-              <Plus className="h-4 w-4" />
-              Add New
-            </button>
-          </div>
-        ) : (
-          <div className="flex h-[42px] gap-2.5">
-            <button
-              className={`${GHOST_BTN} flex-1`}
-              onClick={() => setActiveTab('announcement')}
-            >
-              <Pencil className="h-4 w-4" />
-              Edit
-            </button>
-            {ann.active ? (
-              <button
-                className={`${STOP_BTN} flex-1`}
-                onClick={() => setPending({ kind: 'stop', target: 'announcement' })}
-              >
-                <CircleStop className="h-4 w-4" />
-                Stop
-              </button>
-            ) : (
-              <button
-                className={`${PRIMARY_BTN} flex-1`}
-                onClick={() => setPending({ kind: 'goOnAir', target: 'announcement' })}
-              >
-                <Radio className="h-4 w-4" />
-                Go on air
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </section>
+      </div>,
+      videoStoryCard,
+      ]}
+    />
   );
 }

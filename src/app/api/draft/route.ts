@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 // GET → the single saved draft, or null when there is none. Also carries the
-// two independent per-card save timestamps (promoCard and announcementBar
-// share this one row, but are saved separately — see savePromoDraft /
+// independent per-widget save timestamps (promoCard, announcementBar and
+// videoStory share this one row, but are saved separately — see savePromoDraft /
 // saveAnnouncementDraft — so each needs its own "last saved" time).
 export async function GET() {
   return withUser('[DRAFT] GET', 'Failed to load draft', async (userId, start) => {
@@ -20,6 +20,7 @@ export async function GET() {
       draft: result?.config ?? null,
       promoLastUpdated: result?.promoLastUpdated ?? null,
       announcementLastUpdated: result?.announcementLastUpdated ?? null,
+      videoStoryLastUpdated: result?.videoStoryLastUpdated ?? null,
     });
   });
 }

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, type RefObject } from 'react';
-import { ArrowRight, Palette, Pause, Repeat } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { Palette, Pause } from 'lucide-react';
 import type { BarMotion, CampaignConfig, GradientStyle } from '@/types/campaign';
 import { BAR_MOTIONS, dwellSeconds } from '@/lib/announcement/barMotion';
 import { AnnouncementRotator } from '@/components/announcement/AnnouncementRotator';
@@ -9,7 +9,16 @@ import { getBackgroundStyle } from '@/lib/utils';
 import { SPEED_PRESETS, DEFAULT_PX_PER_SEC } from '@/lib/announcement/scrollSpeed';
 import { announcementThemes } from '@/lib/announcement/announcementThemes';
 import { BarAppearancePopover } from '@/components/announcement/BarAppearancePopover';
+import { PopupDropdown } from '@/components/shared/PopupDropdown';
+import { useAnchoredPopover } from '@/hooks/useAnchoredPopover';
 import { useAnnouncementEditor } from './AnnouncementEditorContext';
+
+const ANIM_MENU_WIDTH = 170;
+const ANIMATION_OPTIONS = [
+  { value: 'scroll-loop', label: 'Scroll · Loop' },
+  { value: 'scroll-once', label: 'Scroll · Single' },
+  ...BAR_MOTIONS.filter((m) => m.value !== 'scroll').map((m) => ({ value: m.value, label: m.label })),
+];
 
 interface AnnouncementPreviewProps {
   config: CampaignConfig;
@@ -18,44 +27,11 @@ interface AnnouncementPreviewProps {
   loopCopies: number;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
   loop: boolean;
-  onLoopChange: (next: boolean) => void;
   speed: number;
   onSpeedChange: (next: number) => void;
   motion: BarMotion;
-  onMotionChange: (next: BarMotion) => void;
-}
-
-function SegmentedControl<T>({
-  options,
-  value,
-  onChange,
-  label,
-}: {
-  options: { value: T; label: React.ReactNode; title: string }[];
-  value: T;
-  onChange: (next: T) => void;
-  label: string;
-}) {
-  return (
-    <div role="group" aria-label={label} className="flex rounded-lg border border-border bg-surface-subtle p-0.5">
-      {options.map((opt) => {
-        const active = opt.value === value;
-        return (
-          <button
-            key={String(opt.value)}
-            type="button"
-            title={opt.title}
-            aria-pressed={active}
-            onClick={() => onChange(opt.value)}
-            className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${active ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
-              }`}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
-  );
+  /** loop is given only for the two Scroll entries. */
+  onMotionChange: (motion: BarMotion, loop?: boolean) => void;
 }
 
 function appearanceTriggerLabel(bg: GradientStyle, textColor: string, activeThemeId: string | null, isThemeMode: boolean): string {
@@ -74,7 +50,6 @@ export function AnnouncementPreview({
   loopCopies,
   scrollContainerRef,
   loop,
-  onLoopChange,
   speed,
   onSpeedChange,
   motion,
@@ -88,6 +63,18 @@ export function AnnouncementPreview({
   const togglePause = () => onSpeedChange(isPaused ? lastSpeedRef.current || DEFAULT_PX_PER_SEC : 0);
 
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [animOpen, setAnimOpen] = useState(false);
+  const animBtnRef = useRef<HTMLButtonElement>(null);
+  const animMenuRef = useRef<HTMLDivElement>(null);
+  const closeAnim = useCallback(() => setAnimOpen(false), []);
+  const animPos = useAnchoredPopover({
+    open: animOpen,
+    triggerRef: animBtnRef,
+    popoverRef: animMenuRef,
+    width: ANIM_MENU_WIDTH,
+    gap: 6,
+    onClose: closeAnim,
+  });
   const appearanceBtnRef = useRef<HTMLButtonElement>(null);
 
   const bg = config.announcementBar.style.background;
@@ -130,32 +117,26 @@ export function AnnouncementPreview({
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">Motion:</span>
-            <SegmentedControl
-              label="Motion"
-              value={motion}
-              onChange={onMotionChange}
-              options={BAR_MOTIONS.map((m) => ({ value: m.value, label: m.label, title: m.hint }))}
-            />
-          </div>
-
-          {/* Single / Loop only means something for the marquee. It stays in
-              place, greyed out, for the other motions — removing it made the
-              whole row jump each time the motion changed. */}
-          <div
-            className={`flex items-center gap-2 transition-opacity ${motion === 'scroll' ? '' : 'pointer-events-none opacity-40'}`}
-            aria-disabled={motion !== 'scroll'}
-            title={motion === 'scroll' ? undefined : 'Flow applies to Scroll only'}
-          >
-            <span className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">FLOW:</span>
-            <SegmentedControl
-              label="Loop mode"
-              value={loop}
-              onChange={onLoopChange}
-              options={[
-                { value: false, label: (<><ArrowRight className="h-3 w-3" aria-hidden="true" />Single</>), title: 'Keeps your message as a single line with open space between passes.' },
-                { value: true, label: (<><Repeat className="h-3 w-3" aria-hidden="true" />Loop</>), title: 'Repeats your message end-to-end to fill every inch of the banner.' },
-              ]}
+            <span className="text-xs font-bold uppercase tracking-[0.08em] text-on-surface-variant">Animation style:</span>
+            {/* Flow (Scroll · Loop / Scroll · Single) only exists for Scroll, so
+                it lives inside this list as two Scroll entries instead of a
+                control of its own. */}
+            <PopupDropdown
+              labelClassName="sr-only"
+              label="Animation style"
+              value={motion === 'scroll' ? (loop ? 'scroll-loop' : 'scroll-once') : motion}
+              options={ANIMATION_OPTIONS}
+              open={animOpen}
+              onOpen={() => setAnimOpen((o) => !o)}
+              onSelect={(v) => {
+                setAnimOpen(false);
+                if (v === 'scroll-loop' || v === 'scroll-once') onMotionChange('scroll', v === 'scroll-loop');
+                else onMotionChange(v as BarMotion);
+              }}
+              buttonRef={animBtnRef}
+              menuRef={animMenuRef}
+              menuPosition={animPos && { ...animPos, width: ANIM_MENU_WIDTH }}
+              buttonClassName="flex h-7 items-center gap-1.5 rounded-lg border border-border bg-surface-subtle px-2.5 text-xs font-medium text-on-surface transition-colors hover:border-primary/60"
             />
           </div>
 

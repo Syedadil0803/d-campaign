@@ -7,7 +7,7 @@ import {
   clearRecovery,
 } from '@/lib/recovery';
 import { isInvalidRange, anyInvalidRange } from '@/lib/dateRange';
-import { CampaignConfig } from '@/types/campaign';
+import { CampaignConfig, defaultVideoStory, type CampaignKind } from '@/types/campaign';
 import { cardIsNotUserWork } from '@/lib/promo/promoAuthorship';
 import { forgetVisit } from '@/lib/promo/blankLooks';
 import { isBlankLook } from '@/lib/promo/lookSignature';
@@ -35,6 +35,7 @@ import {
   normalizePromoForCompare,
   getPromoSignature,
   htmlHasVisibleText,
+  videoStoryDiffers,
 } from '@/lib/configSignature';
 import {
   reportUnsaved,
@@ -62,6 +63,13 @@ import {
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'announcement' | 'promo'>('dashboard');
+  /**
+   * Which widget the Campaigns tab is editing. Here rather than in the editor
+   * because the header's Publish and the on-air chip act on it, and it should
+   * survive the editor remounting.
+   */
+  const [campaignKind, setCampaignKind] = useState<CampaignKind>('card');
+  const editingVideo = campaignKind === 'video';
   const [hasRecoveredWork, setHasRecoveredWork] = useState(false);
   const [recoveryReason, setRecoveryReason] = useState<'idle' | 'crash' | null>(null);
   // Which card the recovered-but-unsaved content actually belongs to —
@@ -307,6 +315,9 @@ export default function Home() {
     draftSavedAt,
     promoSavedAt,
     announcementSavedAt,
+    videoDraft,
+    videoSavedAt,
+    videoWorkNotInDraftRef,
   } = draft;
 
   const campaign = useCampaignConfig({
@@ -366,6 +377,11 @@ export default function Home() {
    * content to genuinely differ from what is live, not just that a draft
    * exists.
    */
+  // The video's counterpart: a saved draft only counts while it holds
+  // something live does not.
+  const videoDraftDiffersFromLive =
+    videoDraft !== null && videoStoryDiffers(videoDraft, publishedConfig.videoStory);
+
   const promoDraftDiffersFromLive = draftPromoCard
     ? JSON.stringify(normalizePromoForCompare(draftPromoCard as unknown as Record<string, unknown>)) !==
       JSON.stringify(normalizePromoForCompare(publishedConfig.promoCard as unknown as Record<string, unknown>))
@@ -444,6 +460,7 @@ export default function Home() {
     configLoadedSignal,
     configRef,
     promoWorkNotInDraftRef,
+    videoWorkNotInDraftRef,
     hasAnnouncementChangesRef,
     hasPromoChangesRef,
     draftSignatureRef,
@@ -558,6 +575,8 @@ export default function Home() {
   const announcementDateRangeInvalid = anyInvalidRange(
     config.announcementBar.announcements,
   );
+  const editorVideo = config.videoStory ?? defaultVideoStory;
+  const videoDateRangeInvalid = isInvalidRange(editorVideo.startDate, editorVideo.endDate);
   const [promoDateErrorPing, setPromoDateErrorPing] = useState(0);
 
   const {
@@ -568,7 +587,9 @@ export default function Home() {
     removeLivePromo,
     goOnAirPromoNow,
     handlePublishPromoWithValidation,
+    handlePublishVideoStoryWithValidation,
     handlePublishAnnouncementWithValidation,
+    setLiveActive,
   } = useCampaignPublishing({
     config,
     configRef,
@@ -848,6 +869,8 @@ export default function Home() {
     announcementCanReactivate,
     promoWorthPublishing,
     promoCanReactivate,
+    videoWorthPublishing,
+    videoCanReactivate,
     editorWorkAtRisk,
   } = useEditorWorkStatus({
     config,
@@ -861,6 +884,8 @@ export default function Home() {
     promoVariants,
     promoWorkNotInDraftRef,
     announcementComposeTextRef,
+    videoDraft,
+    videoWorkNotInDraftRef,
   });
 
 
@@ -871,15 +896,23 @@ export default function Home() {
           activeTab={activeTab}
           setActiveTab={handleTabSwitch}
           hasAnnouncementChanges={hasAnnouncementChanges}
-          hasPromoChanges={promoWorthPublishing}
-          promoDateInvalid={promoDateRangeInvalid}
+          // The Campaigns tab publishes whichever widget is open.
+          hasPromoChanges={editingVideo ? videoWorthPublishing : promoWorthPublishing}
+          promoDateInvalid={editingVideo ? videoDateRangeInvalid : promoDateRangeInvalid}
           announcementDateInvalid={announcementDateRangeInvalid}
           isPublishing={isPublishing}
           isDarkMode={isDarkMode}
           toggleDarkMode={toggleDarkMode}
           handlePublishAnnouncement={handlePublishAnnouncementWithValidation}
-          handlePublishPromo={handlePublishPromoWithValidation}
+          handlePublishPromo={
+            editingVideo ? handlePublishVideoStoryWithValidation : handlePublishPromoWithValidation
+          }
           handleLogout={handleLogout}
+          campaignKind={campaignKind}
+          onSelectCampaign={(kind) => {
+            setCampaignKind(kind);
+            handleTabSwitch('promo');
+          }}
         />
 
         <main
@@ -890,15 +923,27 @@ export default function Home() {
           <div className={`max-w-[1840px] mx-auto ${activeTab === 'promo' || activeTab === 'dashboard' ? '' : 'space-y-8 pb-12'}`}>
             {activeTab === 'dashboard' && (
               <Dashboard
-                key={`dashboard-${publishedConfig.announcementBar.active}-${publishedConfig.promoCard.active}`}
+                key={`dashboard-${publishedConfig.announcementBar.active}-${publishedConfig.promoCard.active}-${Boolean(publishedConfig.videoStory?.active)}`}
                 config={publishedConfig}
                 draftConfig={config}
                 draftSavedAt={draftSavedAt}
                 promoSavedAt={promoSavedAt}
                 announcementSavedAt={announcementSavedAt}
-                setActiveTab={handleDashboardTabSwitch}
-                onCreatePromo={handleCreatePromo}
-                onEditLivePromo={handleOpenPublishedPromo}
+                // The Smart Card's actions open the Smart Card page, whichever
+                // Campaigns page was open last; the Video Story's own Edit
+                // below opens its page.
+                setActiveTab={(tab) => {
+                  if (tab === 'promo') setCampaignKind('card');
+                  handleDashboardTabSwitch(tab);
+                }}
+                onCreatePromo={() => {
+                  setCampaignKind('card');
+                  handleCreatePromo();
+                }}
+                onEditLivePromo={() => {
+                  setCampaignKind('card');
+                  handleOpenPublishedPromo();
+                }}
                 onStopPromo={stopPromoNow}
                 onGoOnAirPromo={goOnAirPromoNow}
                 onStopAnnouncement={stopAnnouncementNow}
@@ -907,6 +952,7 @@ export default function Home() {
                 announcementUnpublished={hasAnnouncementChanges}
                 promoDraftExists={draftPromoCard !== null}
                 onOpenDraft={() => {
+                  setCampaignKind('card');
                   setPromoEntryStep('editor');
                   setActiveTab('promo');
                 }}
@@ -921,6 +967,13 @@ export default function Home() {
                 onDismissAnnouncementComposeRecovery={() => setAnnouncementComposeTextRecovered(false)}
                 elsewhereNotice={elsewhereNotice}
                 onDismissElsewhere={dismissElsewhere}
+                videoDraftSavedAt={videoDraftDiffersFromLive ? videoSavedAt : null}
+                onEditVideoStory={() => {
+                  setCampaignKind('video');
+                  handleDashboardTabSwitch('promo');
+                }}
+                onStopVideoStory={() => setLiveActive('videoStory', false)}
+                onGoOnAirVideoStory={() => setLiveActive('videoStory', true)}
               />
             )}
 
@@ -971,11 +1024,15 @@ export default function Home() {
                 markChanged={markPromoChanged}
                 toast={toast}
                 onSelectedVersionChange={setSelectedPromoVersionId}
-                canReactivate={promoCanReactivate}
+                campaignKind={campaignKind}
+                onCampaignKindChange={setCampaignKind}
+                // The on-air chip acts on the widget whose tab is open.
+                canReactivate={editingVideo ? videoCanReactivate : promoCanReactivate}
                 livePromoCard={publishedConfig.promoCard}
+                liveVideoStory={publishedConfig.videoStory}
                 draftPromoCard={draftPromoCard}
-                onStop={stopPromoNow}
-                onGoOnAir={goOnAirPromoNow}
+                onStop={editingVideo ? () => setLiveActive('videoStory', false) : stopPromoNow}
+                onGoOnAir={editingVideo ? () => setLiveActive('videoStory', true) : goOnAirPromoNow}
                 dateErrorPing={promoDateErrorPing}
                 hasUnsavedChanges={hasPromoChanges}
                 onSaveDraft={handleSaveAsDraft}
@@ -985,9 +1042,11 @@ export default function Home() {
                 onSaveDraftDirect={writeDraftNow}
                 savingDraft={savingDraft}
                 onDeleteDraft={handleDeleteDraft}
+                // The video half is taken from the saved baseline, so a
+                // video-only edit never reads as unsaved work on the card.
                 draftUpToDate={
                   savedDraftSignature !== null &&
-                  savedDraftSignature === getConfigSignature(config)
+                  savedDraftSignature === mergedSavedSignature(config, ['promo', 'announcement'])
                 }
                 draftExists={savedDraftSignature !== null}
                 onRemoveLive={removeLivePromo}

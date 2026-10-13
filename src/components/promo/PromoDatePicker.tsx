@@ -35,6 +35,8 @@ interface PromoDatePickerProps {
    */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** For a <label htmlFor>, so the field is announced by its label. */
+  id?: string;
 }
 
 
@@ -48,6 +50,7 @@ export function PromoDatePicker({
   invalid,
   open: controlledOpen,
   onOpenChange,
+  id,
 }: PromoDatePickerProps) {
   // Kept regardless, so the field still works when the caller does not care.
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
@@ -103,6 +106,7 @@ export function PromoDatePicker({
   return (
     <div ref={rootRef} className="relative">
       <button
+        id={id}
         type="button"
         onMouseDown={(e) => {
           e.preventDefault();
