@@ -1,10 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import {
-  Pencil,
-  Eye,
-} from 'lucide-react';
+import { Clapperboard, Eye, Gift, Megaphone, Pencil } from 'lucide-react';
 import { CampaignConfig } from '@/types/campaign';
 import { stripHtml, toLocalISODate } from '@/lib/utils';
 import { hasCallToAction } from '@/lib/campaignCta';
@@ -17,10 +14,29 @@ import {
   fmtRemaining,
   timeAgo,
 } from '@/components/dashboard/dashboardFormat';
-import { DashboardLifecycleCards } from '@/components/dashboard/DashboardLifecycleCards';
+import {
+  BroadcastsLifecycleCard,
+  SmartCardLifecycleCard,
+  type LifecycleCardProps,
+} from '@/components/dashboard/DashboardLifecycleCards';
 import { DashboardPopups, type PendingAction } from '@/components/dashboard/DashboardPopups';
 import { CommandBar } from '@/components/dashboard/CommandBar';
 import { DashboardVideoStoryCard } from '@/components/dashboard/DashboardVideoStoryCard';
+import { DashboardSummaryTile } from '@/components/dashboard/DashboardSummaryTile';
+import { DashboardCardOverlay } from '@/components/dashboard/DashboardCardOverlay';
+import {
+  broadcastsFact,
+  broadcastsStatus,
+  lastSavedLine,
+  needsAttention,
+  smartCardFact,
+  smartCardStatus,
+  tileAction,
+  tilePill,
+  type TileAction,
+  videoStoryFact,
+  type DashboardWidget,
+} from '@/lib/dashboard/tileSummary';
 
 interface DashboardProps {
   config: CampaignConfig;
@@ -112,7 +128,11 @@ export function Dashboard({
   const [scheduleFilter, setScheduleFilter] = useState<'all' | 'scheduled' | 'unscheduled'>('all');
   const [cardSize, setCardSize] = useState<{ width: number; height: number } | null>(null);
   const promoCardRef = useRef<HTMLDivElement>(null);
+  // The full card shown over the tiles, and the tile it grew out of.
+  const [openCard, setOpenCard] = useState<{ widget: DashboardWidget; tile: HTMLElement } | null>(null);
 
+  // The Smart Card only exists while its overlay is open, so measure it again
+  // each time one opens — the preview popup is sized from it.
   useEffect(() => {
     const el = promoCardRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
@@ -121,7 +141,7 @@ export function Dashboard({
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [openCard?.widget]);
 
   // Date-derived values must wait for mount to avoid SSR/CSR hydration drift.
   const [now, setNow] = useState<Date | null>(null);
@@ -171,13 +191,16 @@ export function Dashboard({
   // always available rather than appearing as an alert.
   // Actionable readiness checks — what actually needs the operator's attention.
   // Actionable readiness checks — what actually needs the operator's attention.
-  const checks: { ok: boolean; text: string; severity?: 'high' | 'medium' | 'low'; action?: { label: string; onClick: () => void } }[] = [];
+  // Each check names its widget so that widget's tile can say it needs attention
+  // without re-deriving the rule.
+  const checks: { ok: boolean; text: string; widget?: DashboardWidget; severity?: 'high' | 'medium' | 'low'; action?: { label: string; onClick: () => void } }[] = [];
 
   // P0 (Critical) - Live Promo missing CTA link
   if (promo.active && !hasCta) {
     checks.push({
       ok: false,
       text: 'Smart Card has no call-to-action',
+      widget: 'promo',
       severity: 'high',
       action: { label: 'Fix', onClick: () => setActiveTab('promo') },
     });
@@ -188,6 +211,7 @@ export function Dashboard({
     checks.push({
       ok: false,
       text: 'Unsaved local edits (Promo)',
+      widget: 'promo',
       severity: 'high',
       action: { label: 'Resume', onClick: () => setActiveTab('promo') },
     });
@@ -198,6 +222,7 @@ export function Dashboard({
     checks.push({
       ok: false,
       text: 'Unsaved local edits (Bar)',
+      widget: 'announcement',
       severity: 'high',
       action: { label: 'Resume', onClick: () => setActiveTab('announcement') },
     });
@@ -208,6 +233,7 @@ export function Dashboard({
     checks.push({
       ok: false,
       text: 'Smart Card is turned OFF',
+      widget: 'promo',
       severity: 'medium',
       action: { label: 'Turn On', onClick: () => setPending({ kind: 'goOnAir', target: 'promo' }) },
     });
@@ -218,6 +244,7 @@ export function Dashboard({
     checks.push({
       ok: false,
       text: 'Broadcasts are turned OFF',
+      widget: 'announcement',
       severity: 'medium',
       action: { label: 'Turn On', onClick: () => setPending({ kind: 'goOnAir', target: 'announcement' }) },
     });
@@ -228,6 +255,7 @@ export function Dashboard({
     checks.push({
       ok: false,
       text: 'Schedule ended for announcement',
+      widget: 'promo',
       severity: 'medium',
       action: { label: 'Extend', onClick: () => setActiveTab('promo') },
     });
@@ -239,6 +267,7 @@ export function Dashboard({
     checks.push({
       ok: false,
       text: 'Video Story has no video',
+      widget: 'videoStory',
       severity: 'high',
       action: { label: 'Fix', onClick: () => onEditVideoStory?.() },
     });
@@ -247,6 +276,7 @@ export function Dashboard({
     checks.push({
       ok: false,
       text: 'Video Story has no call-to-action',
+      widget: 'videoStory',
       severity: 'high',
       action: { label: 'Fix', onClick: () => onEditVideoStory?.() },
     });
@@ -255,6 +285,7 @@ export function Dashboard({
     checks.push({
       ok: false,
       text: 'Video Story is turned OFF',
+      widget: 'videoStory',
       severity: 'medium',
       action: { label: 'Turn On', onClick: () => setPending({ kind: 'goOnAir', target: 'videoStory' }) },
     });
@@ -263,6 +294,7 @@ export function Dashboard({
     checks.push({
       ok: false,
       text: 'Schedule ended for Video Story',
+      widget: 'videoStory',
       severity: 'medium',
       action: { label: 'Extend', onClick: () => onEditVideoStory?.() },
     });
@@ -273,6 +305,7 @@ export function Dashboard({
     checks.push({
       ok: false,
       text: 'Saved draft ready (Promo)',
+      widget: 'promo',
       severity: 'low',
       action: {
         label: 'Review',
@@ -406,6 +439,100 @@ export function Dashboard({
     </div>
   );
 
+  const promoRecovered = Boolean(hasRecoveredWork && recoveredAffectsPromo);
+  const announcementRecovered = Boolean((hasRecoveredWork && recoveredAffectsAnnouncement) || announcementComposeTextRecovered);
+  const cardProps: LifecycleCardProps = {
+    promo,
+    ann,
+    endMs,
+    ended,
+    promoUncreated,
+    promoCardRef,
+    promoViewOverlay,
+    annCount,
+    scheduledMsgs,
+    setActiveTab,
+    setPending,
+    setScheduleFilter,
+    setShowSchedule,
+    setShowAnnPreview,
+    onCreatePromo,
+    remainingLabel,
+    progressPct,
+    promoRecovered,
+    announcementRecovered,
+    onRestoreRecovery,
+    onDismissRecovery,
+    onDismissAnnouncementComposeRecovery,
+    promoUnpublished,
+    announcementUnpublished,
+    onOpenDraft,
+    onStartNewWithDraft,
+    draftSavedAt: draftSavedAt ? draftSavedAt.toISOString() : undefined,
+    promoSavedAt: promoSavedAt ? promoSavedAt.toISOString() : undefined,
+    announcementSavedAt: announcementSavedAt ? announcementSavedAt.toISOString() : undefined,
+    elsewhereNotice,
+    onDismissElsewhere,
+  };
+  const todayIso = now ? toLocalISODate(now) : '';
+  const promoStatus = smartCardStatus(promoUncreated, promo.active, ended);
+  // Broadcasts, Smart Card, Video Story — the order the cards have always had.
+  const tiles = [
+    {
+      widget: 'announcement' as const,
+      icon: Megaphone,
+      title: 'Broadcasts',
+      subtitle: 'Sitewide header',
+      status: broadcastsStatus(ann),
+      fact: broadcastsFact(ann),
+      // The same draft the full card offers Resume Draft / Save & Continue for.
+      hasDraft: announcementRecovered || Boolean(announcementUnpublished),
+      savedAt: cardProps.announcementSavedAt,
+      // Resume Draft on the full card does exactly this too.
+      go: () => setActiveTab('announcement'),
+      card: <BroadcastsLifecycleCard {...cardProps} />,
+    },
+    {
+      widget: 'promo' as const,
+      icon: Gift,
+      title: 'Smart Card',
+      subtitle: 'Floating card',
+      status: promoStatus,
+      fact: smartCardFact(promo, promoStatus, todayIso),
+      hasDraft: promoRecovered || Boolean(promoUnpublished),
+      savedAt: cardProps.promoSavedAt,
+      // The full card's own handlers: Resume Draft, the thumbnail's Edit, Create.
+      go: (action: TileAction) => {
+        const handler = { Resume: onOpenDraft, Open: onEditLivePromo, Create: onCreatePromo }[action];
+        if (handler) handler();
+        else setActiveTab('promo');
+      },
+      card: <SmartCardLifecycleCard {...cardProps} />,
+    },
+    {
+      widget: 'videoStory' as const,
+      icon: Clapperboard,
+      title: 'Video Story',
+      subtitle: 'Floating video',
+      status: videoStatus,
+      fact: videoStoryFact(video),
+      hasDraft: Boolean(videoDraftSavedAt),
+      savedAt: videoDraftSavedAt?.toISOString(),
+      go: () => onEditVideoStory?.(),
+      card: (
+        <DashboardVideoStoryCard
+          vs={video}
+          status={videoStatus}
+          draftSavedAt={videoDraftSavedAt ? videoDraftSavedAt.toISOString() : null}
+          onEdit={() => onEditVideoStory?.()}
+          onStop={() => setPending({ kind: 'stop', target: 'videoStory' })}
+          onGoOnAir={() => setPending({ kind: 'goOnAir', target: 'videoStory' })}
+        />
+      ),
+    },
+  ];
+  const openTile = tiles.find((t) => t.widget === openCard?.widget);
+
   return (
     <div className="mx-auto max-w-[1200px] flex flex-col gap-4 px-8 py-8">
       {/* NEW COMMAND BAR - Replaces the old command bar and attention strip */}
@@ -431,50 +558,37 @@ export function Dashboard({
         }}
       />
 
-      {/* Lifecycle cards — Studio layout: recessed preview stage + schedule/meta + actions */}
-      <DashboardLifecycleCards
-        promo={promo}
-        ann={ann}
-        endMs={endMs}
-        ended={ended}
-        promoUncreated={promoUncreated}
-        promoCardRef={promoCardRef}
-        promoViewOverlay={promoViewOverlay}
-        annCount={annCount}
-        scheduledMsgs={scheduledMsgs}
-        setActiveTab={setActiveTab}
-        setPending={setPending}
-        setScheduleFilter={setScheduleFilter}
-        setShowSchedule={setShowSchedule}
-        setShowAnnPreview={setShowAnnPreview}
-        onCreatePromo={onCreatePromo}
-        remainingLabel={remainingLabel}
-        progressPct={progressPct}
-        promoRecovered={Boolean(hasRecoveredWork && recoveredAffectsPromo)}
-        announcementRecovered={Boolean(hasRecoveredWork && recoveredAffectsAnnouncement || announcementComposeTextRecovered)}
-        onRestoreRecovery={onRestoreRecovery}
-        onDismissRecovery={onDismissRecovery}
-        onDismissAnnouncementComposeRecovery={onDismissAnnouncementComposeRecovery}
-        promoUnpublished={promoUnpublished}
-        announcementUnpublished={announcementUnpublished}
-        onOpenDraft={onOpenDraft}
-        onStartNewWithDraft={onStartNewWithDraft}
-        draftSavedAt={draftSavedAt ? draftSavedAt.toISOString() : undefined}
-        promoSavedAt={promoSavedAt ? promoSavedAt.toISOString() : undefined}
-        announcementSavedAt={announcementSavedAt ? announcementSavedAt.toISOString() : undefined}
-        elsewhereNotice={elsewhereNotice}
-        onDismissElsewhere={onDismissElsewhere}
-        videoStoryCard={
-          <DashboardVideoStoryCard
-            vs={video}
-            status={videoStatus}
-            draftSavedAt={videoDraftSavedAt ? videoDraftSavedAt.toISOString() : null}
-            onEdit={() => onEditVideoStory?.()}
-            onStop={() => setPending({ kind: 'stop', target: 'videoStory' })}
-            onGoOnAir={() => setPending({ kind: 'goOnAir', target: 'videoStory' })}
+      {/* One tile per widget; the full card opens over them (DashboardCardOverlay).
+          auto-fit at 280px: three across on a laptop, two on a tablet, one on a phone. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6">
+        {tiles.map((t, i) => (
+          <DashboardSummaryTile
+            key={t.widget}
+            index={i}
+            icon={t.icon}
+            title={t.title}
+            subtitle={t.subtitle}
+            pill={tilePill(t.status, needsAttention(issues, t.widget))}
+            issues={issues.filter((i) => i.widget === t.widget).map((i) => i.text)}
+            fact={t.fact}
+            lastSaved={lastSavedLine(t.savedAt)}
+            actionLabel={tileAction(t.status, t.hasDraft)}
+            onOpen={(tile) => setOpenCard({ widget: t.widget, tile })}
+            onAction={() => t.go(tileAction(t.status, t.hasDraft))}
           />
-        }
-      />
+        ))}
+      </div>
+
+      {openTile && openCard && (
+        <DashboardCardOverlay
+          tile={openCard.tile}
+          title={openTile.title}
+          suspended={Boolean(pending) || showSchedule || showAnnPreview || showPromoPreview}
+          onClosed={() => setOpenCard(null)}
+        >
+          {openTile.card}
+        </DashboardCardOverlay>
+      )}
 
       <DashboardPopups
         promo={promo}

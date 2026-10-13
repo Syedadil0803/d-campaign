@@ -105,13 +105,16 @@ function alreadySeen(elsewhere: ElsewhereUnsaved): boolean {
   return new Date(elsewhere.at).getTime() <= new Date(seenAt).getTime();
 }
 
-/** "Today at 2:15 PM", "Yesterday at 9:04 AM", or a dated form for older work. */
-export function describeWhen(iso: string | null | undefined): string {
+/**
+ * "today at 2:15:09 PM", "yesterday at 9:04:30 AM", or a dated form for older
+ * work. Seconds can be dropped where the line is a glance (the dashboard tiles).
+ */
+export function describeWhen(iso: string | null | undefined, withSeconds = true): string {
   if (!iso) return 'recently';
   const when = new Date(iso);
   if (Number.isNaN(when.getTime())) return 'recently';
 
-  const time = when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second : '2-digit' });
+  const time = when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', ...(withSeconds && { second: '2-digit' }) });
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const startOfYesterday = new Date(startOfToday);

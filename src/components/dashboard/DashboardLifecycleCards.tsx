@@ -1,6 +1,5 @@
 'use client';
 
-import { DashboardCardsCarousel } from '@/components/dashboard/DashboardCardsCarousel';
 import type { ReactNode, RefObject } from 'react';
 import {
   Calendar,
@@ -31,7 +30,7 @@ import {
   STOP_BTN,
 } from '@/components/dashboard/dashboardStyles';
 
-interface DashboardLifecycleCardsProps {
+export interface LifecycleCardProps {
   promo: CampaignConfig['promoCard'];
   ann: CampaignConfig['announcementBar'];
   /** End of the promo's last day, in ms. Null when it has no end date. */
@@ -77,27 +76,18 @@ interface DashboardLifecycleCardsProps {
   /** Another device holds unsaved work for this account. */
   elsewhereNotice?: { deviceLabel: string; at: string | null; hasUnsavedPromo: boolean; hasUnsavedAnnouncement: boolean } | null;
   onDismissElsewhere?: () => void;
-  /** The Video Story's card, built by the dashboard — see DashboardVideoStoryCard. */
-  videoStoryCard: ReactNode;
 }
 
 /**
  * The two cards the dashboard is really about: the promo and the announcement
  * bar, each showing what is on air, how long it has left, and the two ways in.
  *
- * They sit together because they are the same card twice — the same status
- * pill, the same preview stage, the same schedule bar, the same actions — and
- * reading them side by side is how anyone checks the two agree. The Video
- * Story's card is handed in and comes third, a slide away.
+ * They share one props shape because they are the same card twice — the same
+ * status pill, the same preview stage, the same schedule bar, the same actions.
+ * Each renders alone, inside the overlay its summary tile opens.
  */
-export function DashboardLifecycleCards({
-  promo,
+export function BroadcastsLifecycleCard({
   ann,
-  endMs,
-  ended,
-  promoUncreated,
-  promoCardRef,
-  promoViewOverlay,
   annCount,
   scheduledMsgs,
   setActiveTab,
@@ -105,31 +95,18 @@ export function DashboardLifecycleCards({
   setScheduleFilter,
   setShowSchedule,
   setShowAnnPreview,
-  onCreatePromo,
-  remainingLabel,
-  promoRecovered = false,
   announcementRecovered = false,
   onRestoreRecovery = () => { },
   onDismissRecovery = () => { },
   onDismissAnnouncementComposeRecovery = () => { },
-  promoUnpublished = false,
   announcementUnpublished = false,
-  onOpenDraft = () => { },
-  promoSavedAt = null,
   announcementSavedAt = null,
-  onStartNewWithDraft = () => { },
   elsewhereNotice = null,
   onDismissElsewhere = () => { },
-  videoStoryCard,
-}: DashboardLifecycleCardsProps) {
+}: LifecycleCardProps) {
   return (
-    // Broadcasts, Smart Card, then Video Story — two at a time, same height.
-    <DashboardCardsCarousel
-      cards={[
-      // Announcement
       <div
-        key="broadcasts"
-        className="flex h-full min-h-[382px] flex-col justify-between gap-4 rounded-2xl border border-border campaign-card-surface p-6 shadow-sm">
+        className="flex h-full flex-col justify-between gap-4 rounded-2xl border border-border campaign-card-surface p-6 shadow-sm">
         {/* Header Zone */}
         <div className="flex h-10 shrink-0 items-center justify-between">
           <div className="flex items-center gap-3">
@@ -326,13 +303,35 @@ export function DashboardLifecycleCards({
             )}
           </div>
         )}
-      </div>,
+      </div>
+  );
+}
 
-      // Smart Card
+export function SmartCardLifecycleCard({
+  promo,
+  endMs,
+  ended,
+  promoUncreated,
+  promoCardRef,
+  promoViewOverlay,
+  setActiveTab,
+  setPending,
+  onCreatePromo,
+  remainingLabel,
+  promoRecovered = false,
+  onRestoreRecovery = () => { },
+  onDismissRecovery = () => { },
+  promoUnpublished = false,
+  onOpenDraft = () => { },
+  promoSavedAt = null,
+  onStartNewWithDraft = () => { },
+  elsewhereNotice = null,
+  onDismissElsewhere = () => { },
+}: LifecycleCardProps) {
+  return (
       <div
-        key="smart-card"
         ref={promoCardRef}
-        className="flex h-full min-h-[382px] flex-col justify-between gap-4 rounded-2xl border border-border campaign-card-surface p-6 shadow-sm"
+        className="flex h-full flex-col justify-between gap-4 rounded-2xl border border-border campaign-card-surface p-6 shadow-sm"
       >
         {/* [HEADER ZONE] 40px */}
         <div className="flex h-10 shrink-0 items-center justify-between">
@@ -579,9 +578,6 @@ export function DashboardLifecycleCards({
             </button>
           </div>
         )}
-      </div>,
-      videoStoryCard,
-      ]}
-    />
+      </div>
   );
 }

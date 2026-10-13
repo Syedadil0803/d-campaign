@@ -44,7 +44,7 @@ export function DashboardVideoStoryCard({
   const line = status === 'notCreated' ? null : STATUS_LINE[status];
 
   return (
-    <div className="flex h-full min-h-[382px] flex-col justify-between gap-4 rounded-2xl border border-border campaign-card-surface p-6 shadow-sm">
+    <div className="flex h-full flex-col justify-between gap-4 rounded-2xl border border-border campaign-card-surface p-6 shadow-sm">
       {/* Header */}
       <div className="flex h-10 shrink-0 items-center justify-between">
         <div className="flex items-center gap-3">

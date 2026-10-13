@@ -653,3 +653,24 @@ select {
   .bar-slide-in, .bar-rollup-in, .bar-fade-in { animation: barFadeIn 200ms both; }
   .bar-slide-out, .bar-rollup-out, .bar-fade-out { animation: barFadeOut 200ms both; }
 }
+
+/*
+ * Dashboard summary tiles fade up one after another on load (staggered by
+ * --tile-delay, set per tile). `backwards` holds the hidden first frame through the
+ * delay so a later tile does not flash in early, and lets go after, so hover can lift it.
+ */
+@keyframes tileIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dashboard-tile {
+    animation: tileIn 300ms ease-out var(--tile-delay, 0ms) backwards;
+  }
+}
