@@ -1,5 +1,7 @@
 # Video Story: where to host the videos
 
+Prices for UK visitors (the providers' Europe rates).
+
 Per user: one 150 MB video + a 1 MB widget preview, about 160 MB stored.
 
 ## The services
@@ -8,8 +10,8 @@ Per user: one 150 MB video + a 1 MB widget preview, about 160 MB stored.
 |---|---|---|---|
 | Cloudflare | **R2**: first 10 GB free, then $0.015 per GB a month | **Cloudflare CDN with Smart Tiered Cache**: free, no limit | none |
 | Cloudflare Stream | **Stream**: $5 per 1,000 minutes stored | **Stream**: $1 per 1,000 minutes watched | $5 a month |
-| Bunny | **Bunny Storage**: $0.01 per GB a month | **Bunny CDN**: $0.01 per GB | $1 a month |
-| AWS | **S3**: $0.023 per GB a month (5 GB free for the first 12 months only) | **CloudFront**: first 1 TB a month free, then $0.085 per GB | none |
+| Bunny | **Bunny Storage**: $0.01 per GB a month (one region) | **Bunny CDN**: $0.01 per GB in Europe, or $0.005 per GB on the Volume network (fewer locations) | $1 a month |
+| AWS | **S3**: $0.023 per GB a month (5 GB free for the first 12 months only) | **CloudFront**: first 1 TB a month free, then $0.085 per GB in Europe | none |
 
 ## Cloudflare Smart Tiered Cache
 

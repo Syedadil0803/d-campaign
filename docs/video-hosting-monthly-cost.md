@@ -1,5 +1,7 @@
 # Video Story: monthly hosting cost
 
+Prices for UK visitors (the providers' Europe rates).
+
 Per user: one 150 MB video + a 1 MB widget preview, about 160 MB stored.
 
 Storage is a fixed monthly cost. Delivery depends on how many visitors each
