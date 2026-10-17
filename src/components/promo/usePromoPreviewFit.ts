@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useFitZoom } from '@/hooks/useFitZoom';
 import type { CampaignConfig } from '@/types/campaign';
 
 interface UsePromoPreviewFitArgs {
@@ -25,49 +26,8 @@ export function usePromoPreviewFit({ config, setConfig }: UsePromoPreviewFitArgs
   const [cardWidth, setCardWidth] = useState(config.promoCard.cardWidth || 400);
   // Auto-fit: scale the preview card down so a tall card (or a short/zoomed
   // window) always shows the FULL card in the frame — never clipped or scrolled.
-  const [previewZoom, setPreviewZoom] = useState(1);
-  const previewZoomRef = useRef(1);
-  useEffect(() => { previewZoomRef.current = previewZoom; }, [previewZoom]);
-
-  useEffect(() => {
-    const card = promoCardRef.current;
-    const frame = card?.closest('.campaign-card-surface') as HTMLElement | null;
-    if (!card || !frame) return;
-    let raf = 0;
-    const measure = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const applied = previewZoomRef.current || 1;
-        // getBoundingClientRect reflects the applied zoom; divide it out to get
-        // the card's natural (un-zoomed) height.
-        const natural = card.getBoundingClientRect().height / applied;
-        const avail = frame.clientHeight - 40; // frame padding (p-5 = 20px each)
-        let z = 1;
-        if (avail > 0 && natural > avail) z = Math.max(0.5, avail / natural);
-        z = Math.round(z * 1000) / 1000;
-        setPreviewZoom((prev) => (Math.abs(prev - z) > 0.005 ? z : prev));
-      });
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(frame);
-    // Observe an ancestor too so a window/zoom change that resizes the layout
-    // (but not the frame's own box synchronously) still triggers a re-fit.
-    const outer = frame.parentElement;
-    if (outer) ro.observe(outer);
-    window.addEventListener('resize', measure);
-    // visualViewport fires on browser zoom (Cmd +/-), which a plain resize
-    // listener can miss — this is the case that left the card overflowing.
-    const vv = window.visualViewport;
-    if (vv) vv.addEventListener('resize', measure);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', measure);
-      if (vv) vv.removeEventListener('resize', measure);
-      cancelAnimationFrame(raf);
-    };
-
-  }, [config.promoCard, cardWidth]);
+  // The frame's padding is p-5, 20px top and bottom.
+  const previewZoom = useFitZoom(promoCardRef, [config.promoCard, cardWidth], { inset: 40 });
 
   // The preview renders at the local `cardWidth`, but only `config.promoCard.cardWidth`
   // gets persisted and published to R2 (and read by the live widget). Those can drift:

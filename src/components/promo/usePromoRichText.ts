@@ -15,8 +15,7 @@ import {
 } from "@/lib/promo/promoAuthorship";
 
 import { useRichTextEditor } from '@/hooks/useRichTextEditor';
-import { rgbToHex } from '@/lib/editor/colorUtils';
-import { wrapBareTextWithFontSize, fontSizeToLabel } from '@/lib/editor/fontSizeUtils';
+import { wrapBareTextWithFontSize } from '@/lib/editor/fontSizeUtils';
 import {
 } from "@/lib/promo/promoVersions";
 import {
@@ -34,11 +33,11 @@ import {
   selectionIsInsideEditor,
   hasVisibleContent,
   getEditorFallbackColor,
-  unwrapInlineTags,
 } from '@/lib/promo/promoEditorSelection';
 import {
 } from "@/components/timer-lexical/lineMeasure";
-import { collectTextNodes } from '@/lib/editor/textNodes';
+import { applyToWholeField, longestFittingPrefix, toggleWholeStyle } from '@/lib/editor/richTextFormats';
+import { readFormatsFromHtml } from '@/lib/editor/readFormatsFromHtml';
 
 type RichTextApi = ReturnType<typeof useRichTextEditor>;
 type Editor = RefObject<HTMLDivElement | null>;
@@ -183,80 +182,17 @@ export function usePromoRichText({
     format: "bold" | "italic",
     enable: boolean,
   ) {
-    if (enable) {
-      formatText(format);
-      return;
-    }
-    if (format === "bold") {
-      unwrapInlineTags(editor, "b,strong");
-      return;
-    }
-    unwrapInlineTags(editor, "i,em");
+    toggleWholeStyle(editor, format, enable, formatText);
   }
+
 
   function detectPromoFormatsFromHTML(
     html: string,
     fallbackColor = PROMO_EDITOR_DEFAULT_COLOR,
   ) {
-    const container = document.createElement("div");
-    container.innerHTML = html;
-
-    const textNodes = collectTextNodes(container);
-
-    if (textNodes.length === 0) {
-      setActiveFormats({
-        bold: false,
-        italic: false,
-        size: "md",
-        color: fallbackColor,
-      });
-      return;
-    }
-
-    const sizes = new Set<string>();
-    const colors = new Set<string>();
-    let allBold = true;
-    let allItalic = true;
-
-    textNodes.forEach((textNode) => {
-      let foundSize = false;
-      let isBold = false;
-      let isItalic = false;
-      let effectiveColor = fallbackColor;
-      let node: HTMLElement | null = textNode.parentElement;
-
-      while (node && node !== container) {
-        if (!foundSize && node.style.fontSize) {
-          // Snaps to the nearest preset — template sizes like 1.6rem aren't in
-          // the six-value map and used to fall through, showing "md".
-          const label = fontSizeToLabel(node.style.fontSize);
-          if (label) {
-            sizes.add(label);
-            foundSize = true;
-          }
-        }
-        if (node.style.color) {
-          const color = node.style.color;
-          effectiveColor = color.startsWith("rgb") ? rgbToHex(color) : color;
-        }
-        const tag = node.tagName;
-        if (tag === "B" || tag === "STRONG") isBold = true;
-        if (tag === "I" || tag === "EM") isItalic = true;
-        node = node.parentElement;
-      }
-
-      colors.add(effectiveColor);
-      if (!isBold) allBold = false;
-      if (!isItalic) allItalic = false;
-    });
-
-    setActiveFormats({
-      bold: allBold,
-      italic: allItalic,
-      size: sizes.size === 1 ? [...sizes][0] : sizes.size === 0 ? "md" : "",
-      color: colors.size === 1 ? [...colors][0] : "",
-    });
+    setActiveFormats(readFormatsFromHtml(html, fallbackColor));
   }
+
 
   /**
    * Write the stored card back into the editors.
@@ -336,20 +272,8 @@ export function usePromoRichText({
       return;
     }
 
-    // Binary search for max that fits
-    let low = 0;
-    let high = text.length;
-    let best = 0;
-    while (low <= high) {
-      const mid = Math.floor((low + high) / 2);
-      const testHtml = buildTestHtml(text.slice(0, mid));
-      if (!measureOverflow(testHtml, field)) {
-        best = mid;
-        low = mid + 1;
-      } else {
-        high = mid - 1;
-      }
-    }
+    // The longest start of the text that still fits.
+    const best = longestFittingPrefix(text, (prefix) => !measureOverflow(buildTestHtml(prefix), field));
 
     if (best > 0) {
       document.execCommand('insertText', false, text.slice(0, best));
@@ -625,26 +549,12 @@ export function usePromoRichText({
   }
 
   function applyPromoFormatToAll(editor: HTMLDivElement, action: () => void) {
-    const hasContent = editor.textContent?.replace(/\u200B/g, "").trim();
-    if (!hasContent) return;
-    const wasFocused = document.activeElement === editor;
-    editor.focus();
-    const selection = window.getSelection();
-    if (selection) {
-      selection.removeAllRanges();
-      const range = document.createRange();
-      range.selectNodeContents(editor);
-      selection.addRange(range);
-      saveSelection();
-    }
-    action();
-    onFieldInput(currentFieldRef.current as PromoField);
-    window.getSelection()?.removeAllRanges();
-    if (!wasFocused) editor.blur();
-    detectPromoFormatsFromHTML(
-      editor.innerHTML,
-      getEditorFallbackColor(editor),
+    const applied = applyToWholeField(editor, saveSelection, action, () =>
+      onFieldInput(currentFieldRef.current as PromoField),
     );
+    if (applied) {
+      detectPromoFormatsFromHTML(editor.innerHTML, getEditorFallbackColor(editor));
+    }
   }
 
   // Show the transient style-warning toast (single owner of its lifecycle).
@@ -683,7 +593,7 @@ export function usePromoRichText({
       testHtml = `<i>${wrapBareTextWithFontSize(editor.innerHTML)}</i>`;
     }
 
-    if (testHtml && measureOverflow(testHtml, field as 'title' | 'subtitle' | 'description')) {
+    if (testHtml && measureOverflow(testHtml, field as MeasuredField)) {
       showStyleWarning('This style exceeds the field limit — try a smaller size or shorter text');
       return true;
     }

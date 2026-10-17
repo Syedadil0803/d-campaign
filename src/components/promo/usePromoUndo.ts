@@ -451,6 +451,9 @@ export function usePromoUndo({
       // own business — the browser's undo is the right one there.
       const el = document.activeElement;
       if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
+      // An editor that keeps its own undo (the Video Story title) is left to
+      // the browser's, so Ctrl+Z there never undoes the Smart Card.
+      if (el instanceof HTMLElement && el.closest('[data-own-undo]')) return;
 
       e.preventDefault();
       if (isUndo) undoPromo();

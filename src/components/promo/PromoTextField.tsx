@@ -4,7 +4,9 @@ import type { ClipboardEvent, KeyboardEvent, ReactNode, RefObject } from 'react'
 import { Palette } from 'lucide-react';
 import type { MeasuredField } from '@/lib/promo/promoMeasure';
 import { FieldInfoNote } from '@/components/promo/FieldInfoNote';
-import { FieldLimitNote } from '@/components/promo/FieldLimitNote';
+import { CharCount } from '@/components/promo/CharCount';
+import { useFillOnMount } from '@/components/promo/useMirroredHtml';
+import { PALETTE_BTN, richFieldBox } from '@/components/promo/fieldStyles';
 
 type TextField = 'title' | 'subtitle' | 'description';
 
@@ -83,6 +85,7 @@ export function PromoTextField({
   className = '',
   headerClassName = 'flex items-center justify-between',
 }: PromoTextFieldProps) {
+  useFillOnMount(editorRef, html);
   return (
     <div className={className}>
       <div className={headerClassName}>
@@ -95,7 +98,7 @@ export function PromoTextField({
             e.preventDefault();
             openFieldStylePopup(field, editorRef, e.currentTarget as HTMLElement);
           }}
-          className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
+          className={PALETTE_BTN}
           title={`Open ${label.toLowerCase()} style`}
           aria-label={`Open ${label.toLowerCase()} style`}
         >
@@ -123,16 +126,14 @@ export function PromoTextField({
         onMouseUp={() => refreshPromoToolbarFormats(editorRef.current)}
         onKeyUp={() => refreshPromoToolbarFormats(editorRef.current)}
         onPaste={(e) => smartPaste(e, field)}
-        className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-none overflow-y-auto outline-none break-words transition-colors ${
-          currentField === field ? 'border-primary/70' : 'border-border'
-        } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
+        className={richFieldBox(currentField === field)}
         style={{
           background,
           paddingTop: '10px',
           paddingBottom: '10px',
         }}
       />
-      <FieldLimitNote html={html} field={field} />
+      <CharCount html={html} />
     </div>
   );
 }

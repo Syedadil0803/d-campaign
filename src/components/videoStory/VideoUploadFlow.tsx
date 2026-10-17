@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, type DragEvent, type ReactNode } from 'react';
-import { CheckCircle2, ExternalLink, Upload } from 'lucide-react';
-import { formatMB } from '@/lib/videoStory/videoUpload';
+import { AlertTriangle, CheckCircle2, Upload } from 'lucide-react';
+import { formatMB, shapeTip, VIDEO_UPLOADS_ENABLED } from '@/lib/videoStory/videoUpload';
+import { VIDEO_SPECS } from '@/lib/videoStory/videoRules';
+import { EditYourselfButton } from '@/components/videoStory/EditYourselfDialog';
 import { useVideoStory } from '@/components/videoStory/VideoStoryContext';
 
 const PRIMARY = 'inline-flex h-8 items-center rounded-lg bg-primary px-3 text-xs font-semibold text-on-primary shadow-sm transition-opacity hover:opacity-95';
@@ -11,33 +13,6 @@ const SECONDARY = 'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bord
 // never jumps in shape as the clip moves from picked to uploaded.
 const BOX = 'rounded-xl border p-4 text-sm';
 
-const SPECS = ['MP4', 'Up to 15 s', 'Up to 10 MB', 'Vertical 9:16'];
-
-/** Free editors that export a widget-ready clip; HandBrake gets its preset named. */
-const EDITORS = [
-  { name: 'CapCut', href: 'https://www.capcut.com' },
-  { name: 'Canva video editor', href: 'https://www.canva.com/video-editor/' },
-  { name: 'HandBrake', href: 'https://handbrake.fr', hint: 'preset: Fast 720p30' },
-];
-
-/** What to make and where to make it — the floor under every failure, and the "Edit it yourself" content. */
-function EditorHelp() {
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-semibold text-on-surface">MP4 · under 15 seconds · under 10 MB · 720p is plenty</p>
-      <ul className="space-y-1.5 text-xs">
-        {EDITORS.map((e) => (
-          <li key={e.name}>
-            <a href={e.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
-              {e.name} <ExternalLink className="h-3 w-3" />
-            </a>
-            {e.hint && <span className="text-on-surface-variant"> — {e.hint}</span>}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 function Panel({ children, tone = 'plain' }: { children: ReactNode; tone?: 'plain' | 'warn' }) {
   return (
@@ -64,16 +39,18 @@ export function VideoUploadFlow() {
 
   let body: ReactNode;
   switch (step.name) {
-    case 'compressing':
+    // Both are a label and a bar; the MP4 conversion comes first, then the upload.
+    case 'converting':
     case 'uploading': {
       const pct = Math.round(step.progress * 100);
+      // One word for every re-wrap and re-encode: the owner only needs to know the video is nearly ready.
+      const label = step.name === 'uploading' ? 'Uploading…' : 'Preparing your video…';
       body = (
         <Panel>
-          <div className="flex items-center justify-between text-xs font-medium text-on-surface">
-            <span className="tabular-nums">{step.name === 'compressing' ? 'Making it smaller…' : 'Uploading…'} {pct}%</span>
-            {step.name === 'compressing' && (
-              <button type="button" onClick={draft.cancel} className="text-on-surface-variant hover:text-primary hover:underline">Cancel</button>
-            )}
+          <div className="flex items-center justify-between gap-3 text-xs font-medium text-on-surface">
+            <span className="tabular-nums">{label} {pct}%</span>
+            {/* Re-encoding can take minutes; reset stops it and brings back the dropzone. */}
+            {step.name === 'converting' && <button type="button" onClick={draft.reset} className={SECONDARY}>Cancel</button>}
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-border" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
             <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${pct}%` }} />
@@ -100,18 +77,18 @@ export function VideoUploadFlow() {
             <p className="text-on-surface">{step.reason}</p>
             {another}
           </div>
-          <EditorHelp />
+          <div><EditYourselfButton className={SECONDARY} /></div>
           {step.detail && (
-            <details className="text-[11px] text-on-surface-variant">
-              <summary className="cursor-pointer">Technical detail</summary>
-              <code className="mt-1 block break-words">{step.detail}</code>
+            <details className="text-xs text-on-surface-variant">
+              <summary className="cursor-pointer select-none">Technical detail</summary>
+              <p className="mt-1 break-words font-mono">{step.detail}</p>
             </details>
           )}
         </Panel>
       );
       break;
     case 'idle':
-      body = draft.previewUrl || videoStory.videoUrl ? <ResultCard another={another} /> : <Dropzone />;
+      body = draft.localUrl || videoStory.videoUrl ? <ResultCard another={another} /> : <Dropzone />;
   }
 
   return <div className="!mt-4">{body}</div>;
@@ -149,11 +126,10 @@ function Dropzone() {
         <span className="text-on-surface-variant"> or drag a file here</span>
       </span>
       <span className="flex flex-wrap justify-center gap-1.5">
-        {SPECS.map((s) => (
+        {VIDEO_SPECS.map((s) => (
           <span key={s} className="rounded-full border border-border bg-surface-elevated px-2 py-0.5 text-[11px] font-medium text-on-surface-variant">{s}</span>
         ))}
       </span>
-      <span className="text-xs text-on-surface-variant">Bigger or longer clips are shrunk and trimmed for you.</span>
     </button>
   );
 }
@@ -164,6 +140,7 @@ function Dropzone() {
  */
 function ResultCard({ another }: { another: ReactNode }) {
   const { info } = useVideoStory().draft;
+  const shape = info && shapeTip(info.width ?? 0, info.height ?? 0);
   return (
     <Panel>
       <div className="flex items-center justify-between gap-3">
@@ -180,13 +157,23 @@ function ResultCard({ another }: { another: ReactNode }) {
             </span>
             <span className="truncate" title={info.name}>{info.name}</span>
           </p>
-          {info.note && <p>{info.note}</p>}
+          {/* Said because, unlike the quiet MP4 conversion, it changes what the owner hears. */}
+          {info.soundRemoved && <p>Audio removed (unsupported format).</p>}
         </div>
       )}
-      <details className="text-xs">
-        <summary className="cursor-pointer font-medium text-on-surface-variant hover:text-primary">Edit it yourself</summary>
-        <div className="mt-2"><EditorHelp /></div>
-      </details>
+      {/* Accepted, but said loudly: a wide video loses its sides in the vertical widget. */}
+      {shape && (
+        <div role="alert" className="flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/[0.08] p-3 text-sm text-amber-800 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <p>{shape}</p>
+        </div>
+      )}
+      {!VIDEO_UPLOADS_ENABLED && (
+        <p className="text-xs text-amber-700 dark:text-amber-400">
+          Preview only. Uploads aren&apos;t enabled yet.
+        </p>
+      )}
+      <div><EditYourselfButton className={SECONDARY} /></div>
     </Panel>
   );
 }

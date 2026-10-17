@@ -6,7 +6,7 @@ import type { VideoStoryStatus } from '@/lib/videoStory/videoStoryStatus';
 import { fmtDate } from '@/components/dashboard/dashboardFormat';
 import { isOpenEnded } from '@/lib/promo/promoSchedule';
 import { describeWhen } from '@/lib/auth/presenceClient';
-import { GHOST_BTN, MICRO, PRIMARY_BTN, STOP_BTN } from '@/components/dashboard/dashboardStyles';
+import { ACTION_ROW, GHOST_BTN, MICRO, PRIMARY_BTN, STOP_BTN } from '@/components/dashboard/dashboardStyles';
 
 interface DashboardVideoStoryCardProps {
   /** The PUBLISHED Video Story — the dashboard mirrors the site, not the editor. */
@@ -132,7 +132,7 @@ export function DashboardVideoStoryCard({
           Create Video Story
         </button>
       ) : (
-        <div className="flex h-[42px] gap-2.5">
+        <div className={ACTION_ROW}>
           <button type="button" className={`${GHOST_BTN} flex-1`} onClick={onEdit}>
             <Pencil className="h-4 w-4" />
             Edit

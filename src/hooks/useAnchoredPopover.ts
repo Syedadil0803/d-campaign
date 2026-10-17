@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type DependencyList, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type DependencyList, type RefObject } from 'react';
 
 /**
  * A popover pinned under its trigger: placed on open (kept inside the window),
@@ -79,4 +79,18 @@ export function useCenterSelected(
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, ...deps]);
+}
+
+/**
+ * A dropdown menu under a button: its open state, the two refs and its
+ * position, set up once. The menus that open from a button (Campaigns,
+ * position, countdown colour) each wrote these same four lines.
+ */
+export function useAnchoredMenu({ width, gap = 6 }: { width: number; gap?: number }) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  const position = useAnchoredPopover({ open, triggerRef, popoverRef: menuRef, width, gap, onClose: close });
+  return { open, setOpen, close, triggerRef, menuRef, position };
 }

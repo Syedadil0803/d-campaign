@@ -178,7 +178,17 @@ function sortKeys(value: unknown): unknown {
  * Its fields are plain values, not editor HTML, so nothing else needs stripping.
  */
 function normalizeVideoStoryForCompare(vs: VideoStory): unknown {
-  const { active: _active, stoppedByUser: _stopped, endDate, ...content } = vs;
+  const { active: _active, stoppedByUser: _stopped, endDate, title, titleColor, titleAlign, previewUrl, ...rest } = vs;
+  // The title's defaults sign as absent, so a story saved before the title
+  // existed and the same story with an empty white title are one content,
+  // and every signature taken before it existed stays the same.
+  const content = {
+    ...rest,
+    ...(title ? { title } : {}),
+    ...(previewUrl ? { previewUrl } : {}),
+    ...(titleAlign && titleAlign !== 'center' ? { titleAlign } : {}),
+    ...(titleColor && titleColor !== 'white' ? { titleColor } : {}),
+  };
   // An open-ended story has no end date by definition, and publishing sends
   // it as null while the editor holds '' (or whatever end was picked before
   // switching mode). Kept, that difference left "Unpublished changes" lit

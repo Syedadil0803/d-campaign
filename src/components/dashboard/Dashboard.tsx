@@ -83,6 +83,12 @@ function isPromoUncreated(promo: CampaignConfig['promoCard']): boolean {
   return !stripHtml(promo.title) && !stripHtml(promo.subtitle) && !stripHtml(promo.description);
 }
 
+/**
+ * How many widgets the dashboard shows as full cards. Beyond this the cards
+ * switch to compact summary tiles, so a 4th+ widget never squeezes the row.
+ */
+const FULL_CARD_LIMIT = 3;
+
 export function Dashboard({
   config,
   draftSavedAt,
@@ -210,7 +216,7 @@ export function Dashboard({
   if (promoUnpublished) {
     checks.push({
       ok: false,
-      text: 'Unsaved local edits (Promo)',
+      text: 'Unsaved local edits (Smart Card)',
       widget: 'promo',
       severity: 'high',
       action: { label: 'Resume', onClick: () => setActiveTab('promo') },
@@ -221,7 +227,7 @@ export function Dashboard({
   if (announcementUnpublished) {
     checks.push({
       ok: false,
-      text: 'Unsaved local edits (Bar)',
+      text: 'Unsaved local edits (Broadcasts)',
       widget: 'announcement',
       severity: 'high',
       action: { label: 'Resume', onClick: () => setActiveTab('announcement') },
@@ -254,7 +260,7 @@ export function Dashboard({
   if (promo.active && promo.scheduleMode !== 'openEnded' && endMs && now && now.getTime() > endMs) {
     checks.push({
       ok: false,
-      text: 'Schedule ended for announcement',
+      text: 'Schedule ended for Smart Card',
       widget: 'promo',
       severity: 'medium',
       action: { label: 'Extend', onClick: () => setActiveTab('promo') },
@@ -304,7 +310,7 @@ export function Dashboard({
   if (promoDraftExists) {
     checks.push({
       ok: false,
-      text: 'Saved draft ready (Promo)',
+      text: 'Saved draft ready (Smart Card)',
       widget: 'promo',
       severity: 'low',
       action: {
@@ -477,7 +483,7 @@ export function Dashboard({
   const todayIso = now ? toLocalISODate(now) : '';
   const promoStatus = smartCardStatus(promoUncreated, promo.active, ended);
   // Broadcasts, Smart Card, Video Story — the order the cards have always had.
-  const tiles = [
+  const allTiles = [
     {
       widget: 'announcement' as const,
       icon: Megaphone,
@@ -531,10 +537,21 @@ export function Dashboard({
       ),
     },
   ];
+  // A Video Story nobody has started (not published, no saved draft) gets no
+  // card: the dashboard stays the two-card screen until one exists. It is
+  // created from the Campaigns menu.
+  const tiles = allTiles.filter(
+    (t) => t.widget !== 'videoStory' || videoStatus !== 'notCreated' || Boolean(videoDraftSavedAt),
+  );
   const openTile = tiles.find((t) => t.widget === openCard?.widget);
+  // Up to FULL_CARD_LIMIT widgets show as full cards side by side; past that
+  // they switch to compact tiles that open the full card on click.
+  const showFullCards = tiles.length <= FULL_CARD_LIMIT;
 
   return (
-    <div className="mx-auto max-w-[1200px] flex flex-col gap-4 px-8 py-8">
+    // 1200 for the two-card screen; wider with a third card so three full
+    // cards fit in one row.
+    <div className={`mx-auto ${tiles.length > 2 ? 'max-w-[1400px]' : 'max-w-[1200px]'} flex flex-col gap-4 px-8 py-8`}>
       {/* NEW COMMAND BAR - Replaces the old command bar and attention strip */}
       <CommandBar
         lastPublished={now ? `Last published ${timeAgo(config.lastUpdated, now)}` : 'Not yet published'}
@@ -558,8 +575,19 @@ export function Dashboard({
         }}
       />
 
-      {/* One tile per widget; the full card opens over them (DashboardCardOverlay).
-          auto-fit at 280px: three across on a laptop, two on a tablet, one on a phone. */}
+      {showFullCards ? (
+        // Full cards in one row from a small laptop up (1024px), one per row
+        // below that, so a third card never sits alone on a second row. A
+        // row's cards stretch to the tallest so they line up; a card too
+        // narrow for its two buttons side by side stacks them instead.
+        <div className={`grid grid-cols-1 gap-6 ${tiles.length > 2 ? 'lg:grid-cols-3' : 'md:grid-cols-2'}`}>
+          {tiles.map((t) => (
+            <div key={t.widget} className="flex [&>*]:w-full">{t.card}</div>
+          ))}
+        </div>
+      ) : (
+      /* One tile per widget; the full card opens over them (DashboardCardOverlay).
+          auto-fit at 280px: three across on a laptop, two on a tablet, one on a phone. */
       <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6">
         {tiles.map((t, i) => (
           <DashboardSummaryTile
@@ -578,6 +606,7 @@ export function Dashboard({
           />
         ))}
       </div>
+      )}
 
       {openTile && openCard && (
         <DashboardCardOverlay

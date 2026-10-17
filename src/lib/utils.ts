@@ -1,6 +1,7 @@
 import { GradientStyle } from '@/types/campaign';
 
 export function getBackgroundStyle(background: GradientStyle): string {
+  if (background.type === 'transparent') return 'transparent';
   if (background.type === 'solid') {
     return background.startColor;
   }

@@ -8,7 +8,9 @@ import { getBackgroundStyle } from '@/lib/utils';
 import { whatsAppLooksShort, maxNationalDigits } from '@/lib/whatsapp';
 import { CountryFlag, COUNTRY_CODES } from '@/components/shared/CountryFlag';
 import { PopupDropdown } from '@/components/shared/PopupDropdown';
-import { FieldLimitNote } from '@/components/promo/FieldLimitNote';
+import { CharCount } from '@/components/promo/CharCount';
+import { useFillOnMount } from '@/components/promo/useMirroredHtml';
+import { PALETTE_BTN, richFieldBox } from '@/components/promo/fieldStyles';
 
 interface PromoCtaSettingsProps {
   config: CampaignConfig;
@@ -58,6 +60,7 @@ export function PromoCtaSettings({
   closeAllPromoDropdowns,
   getDropdownPosition,
 }: PromoCtaSettingsProps) {
+  useFillOnMount(buttonRef, config.promoCard.buttonText);
   return (
       <div className={`space-y-5 ${!config.promoCard.showButton ? "opacity-50 pointer-events-none" : ""}`}>
           {/* CTA Type Selector */}
@@ -255,7 +258,7 @@ export function PromoCtaSettings({
                   e.preventDefault();
                   openFieldStylePopup("button", buttonRef, e.currentTarget as HTMLElement);
                 }}
-                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
+                className={PALETTE_BTN}
                 title="Open button style"
                 aria-label="Open button style"
               >
@@ -278,11 +281,7 @@ export function PromoCtaSettings({
               // Was a plain insert with no cap, so pasting was the one way
               // to get more than a line into the button.
               onPaste={(e) => smartPaste(e, 'button')}
-              className={`rich-editor promo-standard-editor block w-full rounded-md px-2 border min-h-[44px] max-h-[360px] resize-none overflow-y-auto outline-none break-words transition-colors ${
-                currentField === "button"
-                  ? "border-primary/70"
-                  : "border-border"
-              } focus:ring-primary/60 focus:border-primary/80 hover:border-primary/70`}
+              className={richFieldBox(currentField === "button")}
               style={{
                 background: getBackgroundStyle(
                   config.promoCard.style.buttonStyle?.background ||
@@ -292,7 +291,7 @@ export function PromoCtaSettings({
                 paddingBottom: '10px',
               }}
             />
-            <FieldLimitNote html={config.promoCard.buttonText} field="button" />
+            <CharCount html={config.promoCard.buttonText} />
           </div>
         </div>
   );

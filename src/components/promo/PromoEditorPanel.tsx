@@ -222,11 +222,15 @@ export function PromoEditorPanel() {
           Campaign Schedule
         </h4>
         
-        {openEndedSchedule && (
-          <p className="mt-1 text-sm text-on-surface-variant">
-            Set when the card goes live below.
-          </p>
-        )}
+        {/* Every section heading has a line under it, like Content and Call To
+        
+            Action; without one, the heading sat right on the toggle. */}
+        
+        <p className="mt-2 text-sm text-on-surface-variant">
+        
+          Choose when the card shows on your site.
+        
+        </p>
       </div>
 
       {/* Toggle sits directly under the title so it holds its place when the

@@ -1,8 +1,7 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
 import { PopupDropdown } from '@/components/shared/PopupDropdown';
-import { useAnchoredPopover } from '@/hooks/useAnchoredPopover';
+import { useAnchoredMenu } from '@/hooks/useAnchoredPopover';
 
 const MENU_WIDTH = 150;
 const OPTIONS = [
@@ -29,11 +28,7 @@ export function WidgetPositionControl({
   /** From cornerClash; null when the corner is free. */
   warning: string | null;
 }) {
-  const [open, setOpen] = useState(false);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const close = useCallback(() => setOpen(false), []);
-  const pos = useAnchoredPopover({ open, triggerRef: btnRef, popoverRef: menuRef, width: MENU_WIDTH, gap: 6, onClose: close });
+  const { open, setOpen, triggerRef: btnRef, menuRef, position: pos } = useAnchoredMenu({ width: MENU_WIDTH });
 
   return (
     <div className="flex flex-col items-end gap-1">

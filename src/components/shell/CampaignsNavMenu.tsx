@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Clapperboard, Gift } from 'lucide-react';
 import type { CampaignKind } from '@/types/campaign';
-import { useAnchoredPopover } from '@/hooks/useAnchoredPopover';
+import { useAnchoredMenu } from '@/hooks/useAnchoredPopover';
 
 /**
  * The campaign types, in menu order. Adding a type is one entry here: the
@@ -35,10 +35,7 @@ export function CampaignsNavMenu({
   kind: CampaignKind;
   onSelect: (kind: CampaignKind) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const close = useCallback(() => setOpen(false), []);
+  const { open, setOpen, triggerRef, menuRef, position } = useAnchoredMenu({ width: MENU_WIDTH });
 
   // Opens on hover; click and tap open it too (touch, keyboard). It never
   // toggles shut on click, since hover has already opened it by then. Leaving
@@ -58,14 +55,6 @@ export function CampaignsNavMenu({
     leaveTimer.current = setTimeout(() => setOpen(false), 150);
   };
   useEffect(() => cancelLeave, []);
-  const position = useAnchoredPopover({
-    open,
-    triggerRef,
-    popoverRef: menuRef,
-    width: MENU_WIDTH,
-    gap: 6,
-    onClose: close,
-  });
 
   // Keyboard: a click or Enter puts focus on the first type, the arrows move
   // between types, Escape closes back onto "Campaigns", and Tab closes and
@@ -85,7 +74,7 @@ export function CampaignsNavMenu({
     if (!open || !position || !focusFirstOnOpen.current) return;
     focusFirstOnOpen.current = false;
     menuItems(menuRef.current)[0]?.focus();
-  }, [open, position]);
+  }, [open, position, menuRef]);
   useEffect(() => {
     if (!open) focusFirstOnOpen.current = false;
   }, [open]);

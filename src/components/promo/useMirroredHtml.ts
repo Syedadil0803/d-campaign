@@ -28,3 +28,17 @@ export function useMirroredHtml(
     }
   }, [ref, html, remountKey]);
 }
+
+/**
+ * Fills a panel editor from the stored HTML when it mounts. Switching to the
+ * Video Story and back unmounts the Smart Card's editors, and usePromoEditorSync
+ * only writes them when the card's content changes, so they came back empty.
+ * Mount only, so it never writes over the user's typing.
+ */
+export function useFillOnMount(ref: RefObject<HTMLDivElement | null>, html: string | undefined) {
+  useEffect(() => {
+    const el = ref.current;
+    if (el && el.innerHTML !== (html || '')) el.innerHTML = html || '';
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}

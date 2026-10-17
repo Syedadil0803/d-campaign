@@ -35,8 +35,32 @@ interface VideoStory extends CampaignCta, CampaignSchedule {
   position: 'bottom-left' | 'bottom-right';
   timerTextColor: string;      // the countdown is plain text, no background
   buttonStyle: FieldStyle;     // same shape as the card's button style
+  title?: string;              // plain text over the top of the clip
+  titleColor?: 'white' | 'black';
 }
 ```
+
+## Title
+
+The title mirrors the countdown: plain text along the top edge of the clip,
+same type as the countdown, centred, two lines at most. Its rules live in
+`src/lib/videoStory/videoTitle.ts`, which the editor, the preview and the
+embed all import.
+
+- **Two lines at most, no character count.** As on the Smart Card's
+  subtitle, the limit is the space itself: the title is measured at the
+  video's size (both lines 128px wide, clear of the hover buttons), and typing, pasting
+  or a style that would need a third line is refused with the Smart Card's
+  "exceeds the field limit" warning. It is rich text (bold, italic, sizes,
+  colours, alignment) set from the Smart Card's style popup.
+- **Any colour, with an automatic shade.** It sits on moving footage, so a
+  soft shade fades in from the top edge: a dark one behind a light title, a
+  light one behind a dark title. Colouring the whole title picks the shade.
+- **Old stories.** Both fields are optional. A story saved before the title
+  existed reads as empty and white, and the signature leaves both out while
+  they hold those defaults, so no existing story reads as edited.
+- **Plain text.** The embed renders it as text, never HTML. The phone bubble
+  shows no title; its expanded overlay does.
 
 ## Rule: opposite corners
 
@@ -89,6 +113,20 @@ helper, so there is no second copy of the rule.
      than an either/or switch.
 3. **Video upload.** An upload-pass route, the file sent straight to R2, and
    the address stored in `videoStory.videoUrl`. My Published for video.
+   Clip rules (`lib/videoStory/videoRules.ts`): MP4, MOV, M4V, WebM, MKV or
+   MTS, up to 150 MB, no length cap (the widget loops). Everything is stored
+   as an H.264 MP4, converted in the browser before upload (`decideMov` in
+   `lib/videoStory/videoUpload.ts`, `components/videoStory/movToMp4.ts`):
+   H.264 in another box is re-wrapped, the same frames copied; HEVC, VP8,
+   VP9 and AV1 are re-encoded when the browser can (`decideHevc`), otherwise
+   refused with a suggestion to try another browser or export as MP4.
+   ProRes, RAW and MJPEG are refused. A horizontal or square video is
+   accepted with a notice that its sides will be cut off. Each upload also
+   gets a widget preview: a 270×480 silent copy of about 1 MB that the
+   widget plays, while the full video loads only in the large view.
+   Server conversion later will cover every browser. The screen only ever
+   says "Preparing your video…". Uploads stay off
+   (`VIDEO_UPLOADS_ENABLED`) until R2's public address and CORS are set.
 4. **Website.** The Svelte embed renders both widgets (see
    `campaign-widget-plan.md`).
 

@@ -3,13 +3,14 @@
 import { Palette } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { CampaignCta } from '@/types/campaign';
-import { getBackgroundStyle } from '@/lib/utils';
 import { whatsAppLooksShort, maxNationalDigits } from '@/lib/whatsapp';
 import { CountryFlag, COUNTRY_CODES } from '@/components/shared/CountryFlag';
 import { PopupDropdown } from '@/components/shared/PopupDropdown';
 import { usePromoEditor } from '@/components/promo/PromoEditorContext';
 import { SegmentedToggle } from '@/components/promo/SegmentedToggle';
 import { useVideoStory } from '@/components/videoStory/VideoStoryContext';
+import { PALETTE_BTN } from '@/components/promo/fieldStyles';
+import { CharCount } from '@/components/promo/CharCount';
 
 /** The card's own icons (PromoCtaSettings), so the two pickers match. */
 const CTA_TYPES: { type: NonNullable<CampaignCta['ctaType']>; label: string; icon: ReactNode }[] = [
@@ -225,7 +226,7 @@ export function VideoStoryCta() {
                 setCurrentField('button');
               }}
               onClick={() => setCurrentField('button')}
-              className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
+              className={PALETTE_BTN}
               title="Open button style"
               aria-label="Open button style"
             >
@@ -239,8 +240,8 @@ export function VideoStoryCta() {
             onChange={(e) => updateVideoStory({ buttonText: e.target.value })}
             placeholder="Your button text"
             className={`${inputClass} ${currentField === 'button' ? '!border-primary/70' : ''}`}
-            style={{ background: getBackgroundStyle(vs.buttonStyle.background), color: vs.buttonStyle.textColor }}
           />
+          <CharCount html={vs.buttonText} />
         </div>
       </div>
     </>

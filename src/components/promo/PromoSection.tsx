@@ -905,6 +905,7 @@ export function PromoSection(props: PromoSectionProps) {
     setActiveFormats,
     styleWarning,
     setStyleWarning,
+    showStyleWarning,
     popupEditableFields,
     panelFieldRefs: PANEL_FIELD_REFS,
     buttonRef,

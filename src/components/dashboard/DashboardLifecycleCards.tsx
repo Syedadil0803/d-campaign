@@ -23,12 +23,7 @@ import type { PendingAction } from '@/components/dashboard/DashboardPopups';
 import { stripHtml, getBackgroundStyle } from '@/lib/utils';
 import { fmtDate } from '@/components/dashboard/dashboardFormat';
 import { describeWhen } from '@/lib/auth/presenceClient';
-import {
-  GHOST_BTN,
-  MICRO,
-  PRIMARY_BTN,
-  STOP_BTN,
-} from '@/components/dashboard/dashboardStyles';
+import { ACTION_ROW, GHOST_BTN, MICRO, PRIMARY_BTN, STOP_BTN } from '@/components/dashboard/dashboardStyles';
 
 export interface LifecycleCardProps {
   promo: CampaignConfig['promoCard'];
@@ -240,7 +235,7 @@ export function BroadcastsLifecycleCard({
 
         {/* Action Zone */}
         {announcementRecovered ? (
-          <div className="flex h-[42px] gap-2.5">
+          <div className={ACTION_ROW}>
             <button
               type="button"
               onClick={() => onRestoreRecovery('announcement')}
@@ -257,7 +252,7 @@ export function BroadcastsLifecycleCard({
             </button>
           </div>
         ) : announcementUnpublished && announcementSavedAt ? (
-          <div className="flex h-[42px] gap-2.5">
+          <div className={ACTION_ROW}>
             <button
               type="button"
               onClick={() => setActiveTab('announcement')}
@@ -276,7 +271,7 @@ export function BroadcastsLifecycleCard({
             </button>
           </div>
         ) : (
-          <div className="flex h-[42px] gap-2.5">
+          <div className={ACTION_ROW}>
             <button
               className={`${GHOST_BTN} flex-1`}
               onClick={() => setActiveTab('announcement')}
@@ -505,7 +500,7 @@ export function SmartCardLifecycleCard({
 
         {/* [ACTION ZONE] 42px */}
         {promoRecovered ? (
-          <div className="flex h-[42px] gap-2.5">
+          <div className={ACTION_ROW}>
             <button
               type="button"
               onClick={() => onRestoreRecovery('promo')}
@@ -522,7 +517,7 @@ export function SmartCardLifecycleCard({
             </button>
           </div>
         ) : promoUnpublished && promoSavedAt ? (
-          <div className="flex h-[42px] gap-2.5">
+          <div className={ACTION_ROW}>
             <button
               type="button"
               onClick={onOpenDraft}
@@ -550,7 +545,7 @@ export function SmartCardLifecycleCard({
           </button>
         ) : promo.active ? (
           /* Case 3 / live: + Start New (create handler) */
-          <div className="flex h-[42px] gap-2.5">
+          <div className={ACTION_ROW}>
             <button
               className={`${PRIMARY_BTN} flex-1`}
               onClick={() => (onCreatePromo ? onCreatePromo() : setActiveTab('promo'))}
@@ -561,7 +556,7 @@ export function SmartCardLifecycleCard({
           </div>
         ) : (
           /* Non-live, configured */
-          <div className="flex h-[42px] gap-2.5">
+          <div className={ACTION_ROW}>
             <button
               className={`${PRIMARY_BTN} flex-1`}
               onClick={() => (onCreatePromo ? onCreatePromo() : setActiveTab('promo'))}

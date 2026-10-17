@@ -83,8 +83,10 @@ export function DashboardSummaryTile({
 
       {/* Chip and fact share a line. If the tile is too narrow the fact wraps
           under the chip, and its leading dot — drawn in the gap before it — is
-          then pulled off the left edge and clipped, so no line starts with "·". */}
-      <div className="overflow-hidden py-0.5">
+          then pulled off the left edge and clipped, so no line starts with "·".
+          px-px: the chip's border is a ring drawn 1px outside it, which the
+          clip would otherwise cut off on the left. */}
+      <div className="overflow-hidden px-px py-0.5">
         <div className="-ml-4 flex flex-wrap items-center gap-y-1.5 text-[13px]">
           <span className={`ml-4 inline-flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1 text-xs ring-1 ${CHIP_CLASS[pill.tone]}`}>
             <span className="font-semibold">Status:</span> {pill.label}

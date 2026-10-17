@@ -41,6 +41,8 @@ interface PromoFieldStylePanelProps {
   setStyleWarning: (message: string | null) => void;
   /** Leave out the Field Background section — the Video Story countdown has no background. */
   hideBackground?: boolean;
+  /** Adds a Transparent background type. Off by default, so the Smart Card's choices are unchanged. */
+  allowTransparent?: boolean;
   /**
    * Leave out bold, italic, size and button width — the Video Story's fields
    * are plain text with no rich editor for those to act on. Colour stays.
@@ -80,6 +82,7 @@ export function PromoFieldStylePanel({
   styleWarning,
   setStyleWarning,
   hideBackground = false,
+  allowTransparent = false,
   hideTextFormatting = false,
 }: PromoFieldStylePanelProps) {
   const isButton = field === 'button';
@@ -240,6 +243,7 @@ export function PromoFieldStylePanel({
                               { value: "solid", label: "Solid" },
                               { value: "linear", label: "Linear" },
                               { value: "radial", label: "Radial" },
+                              ...(allowTransparent ? [{ value: "transparent", label: "Transparent" }] : []),
                             ]}
                             open={showFieldBgTypeDropdown}
                             onOpen={() => {
@@ -285,6 +289,8 @@ export function PromoFieldStylePanel({
                           )}
                         </div>
                       </div>
+                      {/* No colours to pick for a see-through button. */}
+                      {fbg.type !== "transparent" && (
                       <div className="mt-2 min-h-[56px]">
                         <GradientControls
                           background={fbg}
@@ -292,6 +298,7 @@ export function PromoFieldStylePanel({
                           keyPrefix="field"
                         />
                       </div>
+                      )}
                     </div>
                     )}
                   </div>

@@ -67,6 +67,8 @@ export interface PromoEditorApi
   /** Style warning and the popups that sit over the card. */
   styleWarning: string | null;
   setStyleWarning: (message: string | null) => void;
+  /** Shows a style warning for three seconds; the one timer every editor shares. */
+  showStyleWarning: (message: string) => void;
   showCardBgPopup: boolean;
   setShowCardBgPopup: (open: boolean) => void;
   cardBgPopupRef: Editor;

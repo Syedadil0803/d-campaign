@@ -106,7 +106,10 @@ export function PromoCanvas() {
           Website Content Area
         </div>
 
-        <div className="relative z-10 w-full h-full min-h-[228px] grid">
+        {/* Exactly the frame's height. A fixed minimum (228px) used to sit
+            here; on a short window it was taller than the frame, so the card
+            hung below it however far useFitZoom shrank it. */}
+        <div className="relative z-10 w-full h-full grid">
           {/* Preview popup is ALWAYS rendered (even when the campaign is
               stopped) so editing stays visible; `active` only controls the
               live website output, not this editor preview. */}

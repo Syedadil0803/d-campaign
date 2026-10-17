@@ -8,6 +8,7 @@ import { toLocalISODate } from '@/lib/utils';
 import { isOpenEnded } from '@/lib/promo/promoSchedule';
 import { PromoDatePicker } from '@/components/promo/PromoDatePicker';
 import { SegmentedToggle } from '@/components/promo/SegmentedToggle';
+import { PALETTE_BTN } from '@/components/promo/fieldStyles';
 
 interface PromoScheduleAndTimerProps {
   config: CampaignConfig;
@@ -245,7 +246,7 @@ export function PromoScheduleAndTimer({
               e.preventDefault();
               openFieldStylePopup('timer', timerRef, e.currentTarget as HTMLElement);
             }}
-            className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
+            className={PALETTE_BTN}
             title="Open timer style"
             aria-label="Open timer style"
           >

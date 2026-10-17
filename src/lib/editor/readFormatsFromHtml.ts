@@ -9,7 +9,10 @@ import { collectTextNodes } from '@/lib/editor/textNodes';
  * Walks every text node up to its ancestors and reports a format only when
  * EVERY run agrees on it: mixed sizes or colours report as empty, which is how
  * the toolbar shows "no single value". Bold and italic are all-or-nothing for
- * the same reason.
+ * the same reason. A run's colour is its closest coloured ancestor; a run with
+ * none counts as the default colour, so a half-coloured field reads as mixed.
+ *
+ * Shared by Broadcasts, the Smart Card and the Video Story title.
  *
  * Pure — it reads a string and returns a value. It lived in the section as a
  * seventy-line function ending in a setState, which made a piece of analysis
@@ -55,6 +58,7 @@ export function readFormatsFromHtml(html: string, defaultColor: string): ActiveF
       node = node.parentElement;
     }
 
+    if (!foundColor) colors.add(defaultColor);
     if (!isBold) allBold = false;
     if (!isItalic) allItalic = false;
   });

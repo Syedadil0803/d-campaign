@@ -1,6 +1,6 @@
 'use client';
 
-import { Info, Palette } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { toLocalISODate } from '@/lib/utils';
 import { isInvalidRange } from '@/lib/dateRange';
 import { isOpenEnded } from '@/lib/promo/promoSchedule';
@@ -8,6 +8,8 @@ import { usePromoEditor } from '@/components/promo/PromoEditorContext';
 import { PromoDatePicker } from '@/components/promo/PromoDatePicker';
 import { SegmentedToggle } from '@/components/promo/SegmentedToggle';
 import { useVideoStory } from '@/components/videoStory/VideoStoryContext';
+import { OverlayColorPicker } from '@/components/videoStory/OverlayColorPicker';
+import { VIDEO_TITLE_LOOK, videoTimerColor } from '@/lib/videoStory/videoTitle';
 
 /**
  * The Video Story's Campaign Schedule section, bound to config.videoStory.
@@ -26,7 +28,6 @@ export function VideoStorySchedule() {
     setShowStartDatePicker,
     showEndDatePicker,
     setShowEndDatePicker,
-    setCurrentField,
   } = usePromoEditor();
   const openEnded = isOpenEnded(vs);
   const rangeInvalid = isInvalidRange(vs.startDate, vs.endDate);
@@ -39,11 +40,11 @@ export function VideoStorySchedule() {
         <h4 className="text-2xl font-semibold leading-8 text-on-surface">
           Campaign Schedule
         </h4>
-        {openEnded && (
-          <p className="mt-1 text-sm text-on-surface-variant">
-            Set when the video goes live below.
-          </p>
-        )}
+        {/* Every section heading has a line under it, like Content and Call To
+            Action; without one, the heading sat right on the toggle. */}
+        <p className="mt-2 text-sm text-on-surface-variant">
+          Choose when the video shows on your site.
+        </p>
       </div>
 
       <div className="!mt-4 flex rounded-lg border border-border bg-surface-subtle p-0.5">
@@ -195,28 +196,15 @@ export function VideoStorySchedule() {
             }`}
           >
             <div className="flex items-center justify-between mb-2">
-              {/* Not a <label>: the colour is set in the popup, not a field here. */}
+              {/* Not a <label>: the colour is picked from the menu, not typed. */}
               <span className="block text-sm font-semibold text-on-surface">
                 Countdown Colour
               </span>
-              {/* Opens the Timer Style popup on the preview; there is no editor
-                  to focus, so selecting the field is all openFieldStylePopup
-                  would have done. */}
-              <button
-                type="button"
-                // mousedown keeps focus where it is; click is what a
-                // keyboard's Enter / Space sends.
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  setCurrentField('timer');
-                }}
-                onClick={() => setCurrentField('timer')}
-                className="p-1 rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors"
-                title="Open timer style"
-                aria-label="Open timer style"
-              >
-                <Palette className="w-3.5 h-3.5" />
-              </button>
+              <OverlayColorPicker
+                label="Countdown colour"
+                value={videoTimerColor(vs)}
+                onChange={(c) => updateVideoStory({ timerTextColor: VIDEO_TITLE_LOOK[c].color })}
+              />
             </div>
             <p className="text-[11px] text-on-surface-variant leading-relaxed">
               The countdown shows the time left only, over the bottom of the video.

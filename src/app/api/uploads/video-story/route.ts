@@ -5,7 +5,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { withUser } from '@/lib/auth/withUser';
 import { getR2Client, R2_BUCKET_NAME } from '@/lib/publishToR2';
 import { checkUploadRequest } from '@/lib/videoStory/videoUpload';
-import { VIDEO_ACCEPT } from '@/lib/videoStory/videoRules';
+import { videoExtension } from '@/lib/videoStory/videoRules';
 
 // Hands the browser a one-off, 5-minute PUT link so the clip goes straight
 // to R2 — the video never passes through this server.
@@ -27,12 +27,13 @@ export async function POST(request: NextRequest) {
 
     // A fresh random name per upload: nothing to guess, nothing overwritten,
     // and the address can be cached forever.
-    const key = `video-story/${randomUUID()}.mp4`;
-    // Type and length are signed, so the link only accepts this one MP4 of
+    // The extension follows the signed type so the stored file says what it is.
+    const key = `video-story/${randomUUID()}${videoExtension(checked.contentType)}`;
+    // Type and length are signed, so the link only accepts this one clip of
     // exactly the size checked above — not a bigger file swapped in later.
     const uploadUrl = await getSignedUrl(
       getR2Client(),
-      new PutObjectCommand({ Bucket: R2_BUCKET_NAME, Key: key, ContentType: VIDEO_ACCEPT, ContentLength: checked.size }),
+      new PutObjectCommand({ Bucket: R2_BUCKET_NAME, Key: key, ContentType: checked.contentType, ContentLength: checked.size }),
       { expiresIn: 300, signableHeaders: new Set(['content-type', 'content-length']) },
     );
     console.log(`[UPLOAD/VIDEO] POST -> signed ${key} ${checked.size}B (${Date.now() - start}ms)`);

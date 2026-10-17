@@ -12,3 +12,8 @@ const PILL_BTN =
 export const PRIMARY_BTN = `${PILL_BTN} bg-primary text-on-primary hover:opacity-90`;
 export const GHOST_BTN = `${PILL_BTN} border border-border text-on-surface hover:bg-surface-subtle`;
 export const STOP_BTN = `${PILL_BTN} border border-border text-on-surface hover:text-red-600 hover:border-red-300 dark:hover:text-red-400 dark:hover:border-red-500/40`;
+/**
+ * A card's action buttons: side by side, each at least as wide as its label,
+ * dropping onto two rows when the card is too narrow, so a label never wraps.
+ */
+export const ACTION_ROW = 'flex flex-wrap gap-2.5 [&>*]:h-[42px] [&>*]:min-w-max';

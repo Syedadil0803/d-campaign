@@ -3,8 +3,10 @@
 import { createContext, useCallback, useContext, useRef, type ReactNode } from 'react';
 import { defaultVideoStory, type CampaignKind, type PromoCard, type VideoStory } from '@/types/campaign';
 import { cornerClash } from '@/lib/videoStory/placeWidgets';
+import { VIDEO_PICKER_ACCEPT } from '@/lib/videoStory/videoRules';
 import { usePromoEditor } from '@/components/promo/PromoEditorContext';
 import { useVideoStoryDraft } from '@/components/videoStory/useVideoStoryDraft';
+import { useVideoTitleEditing } from '@/components/videoStory/useVideoTitleEditing';
 
 interface VideoStoryProviderProps {
   /** Owned by the page, which needs it to decide what Publish publishes. */
@@ -23,9 +25,13 @@ interface VideoStoryProviderProps {
  */
 function useVideoStoryState({ kind, setKind, livePromoCard }: Omit<VideoStoryProviderProps, 'children'>) {
   const { config, setConfig } = usePromoEditor();
-  // The upload's last step stores the clip's address, which is what drafts,
+  // The upload's last steps store the clip's addresses, which is what drafts,
   // Publish and validateVideoStory read.
-  const draft = useVideoStoryDraft((videoUrl) => updateVideoStory({ videoUrl }));
+  // A new clip clears the old preview copy; its own arrives a moment later.
+  const draft = useVideoStoryDraft(
+    (videoUrl) => updateVideoStory({ videoUrl, previewUrl: '' }),
+    (previewUrl) => updateVideoStory({ previewUrl }),
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const openPicker = useCallback(() => inputRef.current?.click(), []);
 
@@ -52,7 +58,15 @@ function useVideoStoryState({ kind, setKind, livePromoCard }: Omit<VideoStoryPro
     'Smart Card',
   );
 
-  return { kind, setKind, draft, inputRef, openPicker, videoStory, updateVideoStory, positionWarning };
+  // The title's editor and its style popup, shared by the panel and the preview.
+  // Its "limit reached" warning is the Smart Card's showStyleWarning: the
+  // same box, the same three seconds, one timer.
+  const { setCurrentField, showStyleWarning } = usePromoEditor();
+  const title = useVideoTitleEditing(videoStory, updateVideoStory, showStyleWarning);
+  /** One style popup at a time: opening the title's closes the button's, and the other way round. */
+  const closeOtherPopups = () => setCurrentField(null);
+
+  return { kind, setKind, draft, inputRef, openPicker, videoStory, updateVideoStory, positionWarning, title, closeOtherPopups };
 }
 
 const VideoStoryContext = createContext<ReturnType<typeof useVideoStoryState> | null>(null);
@@ -61,13 +75,12 @@ export function VideoStoryProvider({ children, ...props }: VideoStoryProviderPro
   const value = useVideoStoryState(props);
   return (
     <VideoStoryContext.Provider value={value}>
-      {/* One file input for every "Upload a video" control. Any video is
-          accepted: one that is not MP4, too big or too long is offered a
-          re-encode rather than turned away. */}
+      {/* One file input for every "Upload a video" control. The picker
+          offers MP4 and MOV only; a drop skips it and is checked in pick. */}
       <input
         ref={value.inputRef}
         type="file"
-        accept="video/*"
+        accept={VIDEO_PICKER_ACCEPT}
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];

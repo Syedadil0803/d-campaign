@@ -114,6 +114,8 @@
     "active": true,
     "videoUrl": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
     "position": "bottom-right",
+    "title": "Winter sale, <b>new arrivals</b>",
+    "titleColor": "white",
     "buttonText": "Chat on WhatsApp",
     "buttonUrl": "",
     "ctaType": "whatsapp",

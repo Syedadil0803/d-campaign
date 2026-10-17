@@ -7,7 +7,8 @@
  */
 
 export interface GradientStyle {
-  type: 'solid' | 'linear' | 'radial';
+  /** transparent: no fill at all; offered for the Video Story's button only. */
+  type: 'solid' | 'linear' | 'radial' | 'transparent';
   startColor: string;
   endColor: string;
   direction?: string;

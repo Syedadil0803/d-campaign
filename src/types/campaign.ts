@@ -112,10 +112,27 @@ export interface VideoStory extends CampaignCta, CampaignSchedule {
   stoppedByUser?: boolean;
   /** Stored address of the clip, once uploads exist. Empty means no clip. */
   videoUrl: string;
+  /**
+   * A small silent copy of the clip, about 270×480 and under 1 MB, made in
+   * the owner's browser at upload. The widget plays it; the full clip at
+   * videoUrl loads only when a visitor opens the large view. Optional: older
+   * stories, and browsers that can't encode it, fall back to videoUrl.
+   */
+  previewUrl?: string;
   position: 'bottom-left' | 'bottom-right';
   /** The countdown is plain text over the video, so it has a colour, no background. */
   timerTextColor: string;
   buttonStyle: PromoStyle['buttonStyle'];
+  /**
+   * Plain text over the top of the clip, the countdown's mirror. Optional
+   * because stories saved before it existed have neither field; videoTitle
+   * (src/lib/videoStory/videoTitle.ts) reads both with their defaults.
+   */
+  title?: string;
+  /** The title's alignment, as on the Smart Card's fields. Absent means centred. */
+  titleAlign?: 'left' | 'center' | 'right';
+  /** Only two choices: the title sits on footage, not on a chosen background. */
+  titleColor?: 'white' | 'black';
 }
 
 /**
@@ -193,6 +210,8 @@ export const defaultVideoStory: VideoStory = {
   scheduleMode: 'range',
   showTimer: false,
   timerTextColor: '#ffffff',
+  title: '',
+  titleColor: 'white',
   // The card's blank button, so a new widget's button matches the card's.
   buttonStyle: structuredClone(FIRST_BLANK_LOOK.buttonStyle),
 };

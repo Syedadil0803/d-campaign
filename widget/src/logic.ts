@@ -157,15 +157,22 @@ export function sanitize(html: string | undefined | null): string {
 export const hasText = (html: string | undefined | null) =>
   !!(html ?? '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
 
-// ---- Close, remembered for the session ----
+// ---- Close, remembered in the visitor's browser ----
 
 const closedKey = (kind: string) => `cw-closed:${kind}`;
 /** Which campaign was closed — a new one (other dates or content) shows again. */
 export const campaignId = (s: CampaignSchedule, extra: string) => `${s.startDate}|${s.endDate}|${extra}`;
 
+/**
+ * Where a close is remembered. A closed Video Story stays closed in that
+ * browser for good (localStorage), until the owner publishes a different
+ * video or dates. The Smart Card keeps its close for the browsing session.
+ */
+const closeStore = (kind: string): Storage => (kind === 'video' ? localStorage : sessionStorage);
+
 export function isClosed(kind: string, id: string): boolean {
-  try { return sessionStorage.getItem(closedKey(kind)) === id; } catch { return false; }
+  try { return closeStore(kind).getItem(closedKey(kind)) === id; } catch { return false; }
 }
 export function rememberClosed(kind: string, id: string): void {
-  try { sessionStorage.setItem(closedKey(kind), id); } catch { /* private mode: closes for this page only */ }
+  try { closeStore(kind).setItem(closedKey(kind), id); } catch { /* private mode: closes for this page only */ }
 }
